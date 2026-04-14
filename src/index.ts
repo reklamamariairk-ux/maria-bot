@@ -138,8 +138,8 @@ app.post("/api/chat", async (req, res) => {
       messages,
     });
 
-    const text =
-      response.content[0].type === "text" ? response.content[0].text : "";
+    const block = response.content[0];
+    const text = block && block.type === "text" ? (block as { type: "text"; text: string }).text : "";
     res.json({ text });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Unknown error";
