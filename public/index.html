@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Кондитерская «Мария»</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+  <!-- ─── HEADER ─── -->
+  <header class="header">
+    <div class="header__logo">
+      <span class="header__icon">🍰</span>
+      <span class="header__title">Мария</span>
+    </div>
+    <span class="header__subtitle">Кондитерская</span>
+  </header>
+
+  <!-- ─── MAIN CONTENT ─── -->
+  <main class="main" id="main">
+
+    <!-- HOME TAB -->
+    <section class="tab active" id="tab-home">
+      <div class="hero">
+        <div class="hero__emoji">🎂</div>
+        <h1 class="hero__title">Добро пожаловать!</h1>
+        <p class="hero__desc">Свежая выпечка, торты на заказ и&nbsp;сладкие игры — всё в одном месте.</p>
+      </div>
+
+      <div class="cards-grid">
+        <div class="card card--pink" onclick="switchTab('games')">
+          <div class="card__icon">🎮</div>
+          <div class="card__name">Игры</div>
+          <div class="card__desc">Мемори и Поймай торт</div>
+        </div>
+        <div class="card card--gold" onclick="switchTab('chat')">
+          <div class="card__icon">🤖</div>
+          <div class="card__name">ИИ-чат</div>
+          <div class="card__desc">Спроси кондитера</div>
+        </div>
+        <div class="card card--light" onclick="showSales()">
+          <div class="card__icon">🌟</div>
+          <div class="card__name">Акции</div>
+          <div class="card__desc">Скидки этой недели</div>
+        </div>
+        <div class="card card--light" onclick="showContacts()">
+          <div class="card__icon">📞</div>
+          <div class="card__name">Контакты</div>
+          <div class="card__desc">Адрес и телефон</div>
+        </div>
+      </div>
+
+      <!-- Акции -->
+      <div class="section" id="sales-section" style="display:none">
+        <h2 class="section__title">🌟 Акции недели</h2>
+        <div class="sale-item"><span class="sale-badge">-19%</span> Торт «Наполеон» 1 кг — <b>890 ₽</b></div>
+        <div class="sale-item"><span class="sale-badge">-19%</span> Набор макаронс 12 шт — <b>650 ₽</b></div>
+        <div class="sale-item"><span class="sale-badge">🎁</span> Капкейки в подарок от 1 500 ₽</div>
+        <div class="sale-item"><span class="sale-badge">🚚</span> Бесплатная доставка от 2 000 ₽</div>
+      </div>
+
+      <!-- Контакты -->
+      <div class="section" id="contacts-section" style="display:none">
+        <h2 class="section__title">📞 Контакты</h2>
+        <div class="contact-row">📍 г. Москва, ул. Пушкина, 12</div>
+        <div class="contact-row">🕐 Пн–Пт 9:00–20:00 | Сб–Вс 10:00–19:00</div>
+        <div class="contact-row">📱 <a href="tel:+74951234567">+7 (495) 123-45-67</a></div>
+        <div class="contact-row">✉️ <a href="mailto:maria@pastry.ru">maria@pastry.ru</a></div>
+      </div>
+    </section>
+
+    <!-- GAMES TAB -->
+    <section class="tab" id="tab-games">
+      <h2 class="section__title">🎮 Игры</h2>
+
+      <div class="game-selector">
+        <button class="game-btn active" id="btn-memory" onclick="showGame('memory')">🃏 Мемори</button>
+        <button class="game-btn" id="btn-catch" onclick="showGame('catch')">🎂 Поймай торт</button>
+      </div>
+
+      <!-- Memory Game -->
+      <div id="game-memory">
+        <div class="score-bar">
+          <span>Ходов: <b id="memory-moves">0</b></span>
+          <span>Пар: <b id="memory-pairs">0</b>/8</span>
+          <button class="btn-restart" onclick="initMemory()">↺ Заново</button>
+        </div>
+        <div class="memory-grid" id="memory-grid"></div>
+      </div>
+
+      <!-- Catch Game -->
+      <div id="game-catch" style="display:none">
+        <div class="score-bar">
+          <span>Очки: <b id="catch-score">0</b></span>
+          <span>Жизни: <b id="catch-lives">3</b></span>
+          <button class="btn-restart" onclick="startCatch()">▶ Старт</button>
+        </div>
+        <div class="catch-arena" id="catch-arena">
+          <div class="catch-player" id="catch-player">🧺</div>
+          <div class="catch-start-msg" id="catch-start-msg">Нажмите «Старт»</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CHAT TAB -->
+    <section class="tab" id="tab-chat">
+      <div class="chat-wrap">
+        <div class="chat-messages" id="chat-messages">
+          <div class="msg msg--bot fade-in">
+            <div class="msg__bubble">
+              👋 Привет! Я ИИ-кондитер Мария. Спросите меня о тортах, рецептах, составе или заказе — с удовольствием помогу! 🍰
+            </div>
+          </div>
+        </div>
+        <div class="chat-input-row">
+          <input
+            class="chat-input"
+            id="chat-input"
+            type="text"
+            placeholder="Напишите сообщение…"
+            autocomplete="off"
+            onkeydown="handleChatKey(event)"
+          />
+          <button class="chat-send" id="chat-send" onclick="sendMessage()">➤</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ─── BOTTOM NAV ─── -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" id="nav-home" onclick="switchTab('home')">
+      <span class="nav-icon">🏠</span>
+      <span class="nav-label">Главная</span>
+    </button>
+    <button class="nav-btn" id="nav-games" onclick="switchTab('games')">
+      <span class="nav-icon">🎮</span>
+      <span class="nav-label">Игры</span>
+    </button>
+    <button class="nav-btn" id="nav-chat" onclick="switchTab('chat')">
+      <span class="nav-icon">🤖</span>
+      <span class="nav-label">ИИ-чат</span>
+    </button>
+  </nav>
+
+  <script src="/js/app.js"></script>
+  <script src="/js/game.js"></script>
+  <script src="/js/chat.js"></script>
+</body>
+</html>
