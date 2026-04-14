@@ -305,7 +305,7 @@ b, strong { font-weight: 600; }
 }
 .partner-info  { flex: 1; }
 .partner-name  { font-size: 15px; font-weight: 700; }
-.partner-desc  { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.partner-desc  { font-size: 12px; color: var(--text-muted); margin-top: 2px; line-height: 1.5; white-space: pre-line; }
 .partner-badge {
   background: var(--red); color: #fff;
   font-size: 12px; font-weight: 700;
