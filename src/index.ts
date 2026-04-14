@@ -3,18 +3,18 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import path from "path";
-import Anthropic from "@anthropic-ai/sdk";
+import https from "https";
 import { Bot, webhookCallback, InlineKeyboard } from "grammy";
 
 // ─── Env ────────────────────────────────────────────────────────────────────
 const BOT_TOKEN   = process.env.BOT_TOKEN   ?? "";
-const ANTHROPIC_KEY = process.env.ANTHROPIC_KEY ?? "";
+const GROQ_KEY    = process.env.GROQ_KEY    ?? "";
 const WEBHOOK_URL = process.env.WEBHOOK_URL ?? "";   // https://<your-app>.onrender.com
 const PORT        = Number(process.env.PORT ?? 3000);
 const MINI_APP_URL = process.env.MINI_APP_URL ?? WEBHOOK_URL;
 
-if (!BOT_TOKEN)    throw new Error("BOT_TOKEN is required");
-if (!ANTHROPIC_KEY) throw new Error("ANTHROPIC_KEY is required");
+if (!BOT_TOKEN) throw new Error("BOT_TOKEN is required");
+if (!GROQ_KEY)  throw new Error("GROQ_KEY is required");
 
 // ─── Telegram Bot ───────────────────────────────────────────────────────────
 const bot = new Bot(BOT_TOKEN);
@@ -114,12 +114,58 @@ app.use(express.json({ limit: "1mb" }));
 // 1. Статика из /public
 app.use(express.static(path.join(__dirname, "..", "public")));
 
-// 2. Прокси к Anthropic API
-const anthropic = new Anthropic({ apiKey: ANTHROPIC_KEY });
+// 2. Прокси к Groq API
+function groqChat(messages: { role: string; content: string }[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({
+      model: "llama-3.1-8b-instant",
+      max_tokens: 1024,
+      messages: [
+        {
+          role: "system",
+          content: `Ты — дружелюбный ИИ-ассистент кондитерской «Мария» в Иркутске.
+Помогаешь клиентам выбрать сладости, рассказываешь о составе,
+рекомендуешь рецепты, отвечаешь на вопросы о заказе и доставке.
+Отвечай коротко, по делу, с эмодзи. Язык: русский.`,
+        },
+        ...messages,
+      ],
+    });
+
+    const opts: https.RequestOptions = {
+      hostname: "api.groq.com",
+      path: "/openai/v1/chat/completions",
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${GROQ_KEY}`,
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(body),
+      },
+    };
+
+    const req = https.request(opts, (r) => {
+      let d = "";
+      r.on("data", (c) => (d += c));
+      r.on("end", () => {
+        try {
+          const json = JSON.parse(d);
+          const text: string = json.choices?.[0]?.message?.content ?? "";
+          if (!text) reject(new Error(json.error?.message ?? "Empty response"));
+          else resolve(text);
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+    req.on("error", reject);
+    req.write(body);
+    req.end();
+  });
+}
 
 app.post("/api/chat", async (req, res) => {
   const { messages } = req.body as {
-    messages: { role: "user" | "assistant"; content: string }[];
+    messages: { role: string; content: string }[];
   };
 
   if (!Array.isArray(messages) || messages.length === 0) {
@@ -128,23 +174,12 @@ app.post("/api/chat", async (req, res) => {
   }
 
   try {
-    const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 1024,
-      system: `Ты — дружелюбный ИИ-ассистент кондитерской «Мария».
-Помогаешь клиентам выбрать сладости, рассказываешь о составе,
-рекомендуешь рецепты, отвечаешь на вопросы о заказе и доставке.
-Отвечай коротко, по делу, с эмодзи. Язык: русский.`,
-      messages,
-    });
-
-    const block = response.content[0];
-    const text = block && block.type === "text" ? (block as { type: "text"; text: string }).text : "";
+    const text = await groqChat(messages);
     res.json({ text });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Unknown error";
-    console.error("Anthropic error:", msg);
-    res.status(502).json({ error: "AI недоступен, попробуйте позже" });
+    console.error("Groq error:", msg);
+    res.status(502).json({ error: "ИИ недоступен, попробуйте позже" });
   }
 });
 

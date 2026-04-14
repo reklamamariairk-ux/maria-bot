@@ -8,18 +8,18 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const path_1 = __importDefault(require("path"));
-const sdk_1 = __importDefault(require("@anthropic-ai/sdk"));
+const https_1 = __importDefault(require("https"));
 const grammy_1 = require("grammy");
 // ─── Env ────────────────────────────────────────────────────────────────────
 const BOT_TOKEN = process.env.BOT_TOKEN ?? "";
-const ANTHROPIC_KEY = process.env.ANTHROPIC_KEY ?? "";
+const GROQ_KEY = process.env.GROQ_KEY ?? "";
 const WEBHOOK_URL = process.env.WEBHOOK_URL ?? ""; // https://<your-app>.onrender.com
 const PORT = Number(process.env.PORT ?? 3000);
 const MINI_APP_URL = process.env.MINI_APP_URL ?? WEBHOOK_URL;
 if (!BOT_TOKEN)
     throw new Error("BOT_TOKEN is required");
-if (!ANTHROPIC_KEY)
-    throw new Error("ANTHROPIC_KEY is required");
+if (!GROQ_KEY)
+    throw new Error("GROQ_KEY is required");
 // ─── Telegram Bot ───────────────────────────────────────────────────────────
 const bot = new grammy_1.Bot(BOT_TOKEN);
 /** Клавиатура с кнопкой Web App */
@@ -101,8 +101,55 @@ app.use((0, cors_1.default)());
 app.use(express_1.default.json({ limit: "1mb" }));
 // 1. Статика из /public
 app.use(express_1.default.static(path_1.default.join(__dirname, "..", "public")));
-// 2. Прокси к Anthropic API
-const anthropic = new sdk_1.default({ apiKey: ANTHROPIC_KEY });
+// 2. Прокси к Groq API
+function groqChat(messages) {
+    return new Promise((resolve, reject) => {
+        const body = JSON.stringify({
+            model: "llama-3.1-8b-instant",
+            max_tokens: 1024,
+            messages: [
+                {
+                    role: "system",
+                    content: `Ты — дружелюбный ИИ-ассистент кондитерской «Мария» в Иркутске.
+Помогаешь клиентам выбрать сладости, рассказываешь о составе,
+рекомендуешь рецепты, отвечаешь на вопросы о заказе и доставке.
+Отвечай коротко, по делу, с эмодзи. Язык: русский.`,
+                },
+                ...messages,
+            ],
+        });
+        const opts = {
+            hostname: "api.groq.com",
+            path: "/openai/v1/chat/completions",
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${GROQ_KEY}`,
+                "Content-Type": "application/json",
+                "Content-Length": Buffer.byteLength(body),
+            },
+        };
+        const req = https_1.default.request(opts, (r) => {
+            let d = "";
+            r.on("data", (c) => (d += c));
+            r.on("end", () => {
+                try {
+                    const json = JSON.parse(d);
+                    const text = json.choices?.[0]?.message?.content ?? "";
+                    if (!text)
+                        reject(new Error(json.error?.message ?? "Empty response"));
+                    else
+                        resolve(text);
+                }
+                catch (e) {
+                    reject(e);
+                }
+            });
+        });
+        req.on("error", reject);
+        req.write(body);
+        req.end();
+    });
+}
 app.post("/api/chat", async (req, res) => {
     const { messages } = req.body;
     if (!Array.isArray(messages) || messages.length === 0) {
@@ -110,23 +157,13 @@ app.post("/api/chat", async (req, res) => {
         return;
     }
     try {
-        const response = await anthropic.messages.create({
-            model: "claude-haiku-4-5-20251001",
-            max_tokens: 1024,
-            system: `Ты — дружелюбный ИИ-ассистент кондитерской «Мария».
-Помогаешь клиентам выбрать сладости, рассказываешь о составе,
-рекомендуешь рецепты, отвечаешь на вопросы о заказе и доставке.
-Отвечай коротко, по делу, с эмодзи. Язык: русский.`,
-            messages,
-        });
-        const block = response.content[0];
-        const text = block && block.type === "text" ? block.text : "";
+        const text = await groqChat(messages);
         res.json({ text });
     }
     catch (err) {
         const msg = err instanceof Error ? err.message : "Unknown error";
-        console.error("Anthropic error:", msg);
-        res.status(502).json({ error: "AI недоступен, попробуйте позже" });
+        console.error("Groq error:", msg);
+        res.status(502).json({ error: "ИИ недоступен, попробуйте позже" });
     }
 });
 // Health-check для Render
