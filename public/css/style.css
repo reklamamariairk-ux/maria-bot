@@ -312,6 +312,62 @@ b, strong { font-weight: 600; }
   padding: 4px 10px; border-radius: 20px; white-space: nowrap;
 }
 
+/* ─── СЛАДКИЙ ЧЕК ───────────────────────────────────────────────────────── */
+.check-hero {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  color: #fff; text-align: center; padding: 28px 20px 24px;
+}
+.check-hero__label {
+  display: inline-block; background: rgba(255,215,0,.2);
+  color: #ffd700; border-radius: 20px;
+  padding: 4px 12px; font-size: 12px; font-weight: 600;
+  margin-bottom: 10px; letter-spacing: .5px;
+}
+.check-hero__title { font-size: 28px; font-weight: 800; margin-bottom: 6px; }
+.check-hero__sub   { font-size: 14px; opacity: .8; }
+
+.prizes-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 8px; padding: 0 16px;
+}
+.prize-card {
+  border-radius: var(--radius-sm); padding: 16px 12px;
+  text-align: center; position: relative;
+}
+.prize-card:first-child { grid-column: 1 / -1; } /* iPhone на всю ширину */
+.prize--gold   { background: linear-gradient(135deg, #ffd700, #ffaa00); color: #3d2600; }
+.prize--silver { background: linear-gradient(135deg, #e8e8e8, #c0c0c0); color: #2a2a2a; }
+.prize--bronze { background: linear-gradient(135deg, #f0c080, #c88040); color: #3d2000; }
+.prize__icon   { font-size: 32px; margin-bottom: 6px; }
+.prize__name   { font-size: 13px; font-weight: 700; }
+
+.steps-list { padding: 0 16px; display: flex; flex-direction: column; gap: 0; }
+.step {
+  display: flex; gap: 14px; align-items: flex-start;
+  padding: 14px 0; border-bottom: 1px solid var(--border);
+}
+.step:last-child { border-bottom: none; }
+.step__num {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--red); color: #fff;
+  font-size: 15px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.step__text { font-size: 14px; line-height: 1.4; }
+.step__sub  { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+
+.check-rules {
+  margin: 0 16px;
+  background: var(--surface); border-radius: var(--radius-sm);
+  padding: 12px 16px; box-shadow: var(--shadow-sm);
+}
+.rule-item {
+  padding: 8px 0; font-size: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.rule-item:last-child { border-bottom: none; }
+
 /* ─── SUB TABS ───────────────────────────────────────────────────────────── */
 .sub-tabs {
   display: flex; gap: 0;
@@ -506,5 +562,5 @@ b, strong { font-weight: 600; }
   transition: color var(--t); padding: 0;
 }
 .nav-btn.active { color: var(--red); }
-.nav-icon  { font-size: 22px; }
-.nav-label { font-size: 10px; font-weight: 600; letter-spacing: .2px; }
+.nav-icon  { font-size: 20px; }
+.nav-label { font-size: 9px; font-weight: 600; letter-spacing: .1px; }

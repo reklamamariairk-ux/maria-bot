@@ -80,9 +80,9 @@ function startCatch() {
   const overlay = document.getElementById('catch-overlay');
   if (overlay) overlay.classList.add('hidden');
 
-  const arena = document.getElementById('catch-arena');
-  arena.addEventListener('touchmove', onTouch, { passive: false });
-  arena.addEventListener('mousemove', onMouse);
+  // Вешаем на document — работает даже если палец вышел за арену
+  document.addEventListener('touchmove', onTouch, { passive: false });
+  document.addEventListener('mousemove', onMouse);
 
   dropLoop();
 }
@@ -91,11 +91,8 @@ function stopCatch() {
   catchRunning = false;
   catchTimers.forEach(clearTimeout); catchTimers = [];
   document.getElementById('catch-arena')?.querySelectorAll('.catch-item').forEach(e => e.remove());
-  const arena = document.getElementById('catch-arena');
-  if (arena) {
-    arena.removeEventListener('touchmove', onTouch);
-    arena.removeEventListener('mousemove', onMouse);
-  }
+  document.removeEventListener('touchmove', onTouch);
+  document.removeEventListener('mousemove', onMouse);
 }
 
 function dropLoop() {
@@ -151,13 +148,17 @@ function loseLife() {
 
 function onMouse(e) {
   if (!catchRunning) return;
-  const r = e.currentTarget.getBoundingClientRect();
+  const arena = document.getElementById('catch-arena');
+  if (!arena) return;
+  const r = arena.getBoundingClientRect();
   movePlayer((e.clientX - r.left) / r.width * 100);
 }
 function onTouch(e) {
   if (!catchRunning) return;
   e.preventDefault();
-  const r = e.currentTarget.getBoundingClientRect();
+  const arena = document.getElementById('catch-arena');
+  if (!arena) return;
+  const r = arena.getBoundingClientRect();
   movePlayer((e.touches[0].clientX - r.left) / r.width * 100);
 }
 function movePlayer(pct) {

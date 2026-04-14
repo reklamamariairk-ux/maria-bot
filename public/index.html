@@ -71,9 +71,9 @@
           <div class="quick-icon">🎮</div>
           <div class="quick-label">Игры</div>
         </div>
-        <div class="quick-card" onclick="switchTab('fun'); showSubTab('chat')">
-          <div class="quick-icon">🤖</div>
-          <div class="quick-label">ИИ-чат</div>
+        <div class="quick-card" onclick="switchTab('check')">
+          <div class="quick-icon">🧾</div>
+          <div class="quick-label">Сладкий чек</div>
         </div>
       </div>
 
@@ -267,6 +267,93 @@
 
     </section>
 
+    <!-- ══════════ СЛАДКИЙ ЧЕК ══════════ -->
+    <section class="tab" id="tab-check">
+
+      <div class="check-hero">
+        <div class="check-hero__label">Розыгрыш призов</div>
+        <h2 class="check-hero__title">🧾 Сладкий чек</h2>
+        <p class="check-hero__sub">Каждый чек — шанс выиграть технику мечты</p>
+      </div>
+
+      <!-- Призы -->
+      <div class="section-title">🏆 Призы розыгрыша</div>
+      <div class="prizes-grid">
+        <div class="prize-card prize--gold">
+          <div class="prize__icon">📱</div>
+          <div class="prize__name">iPhone 17 Pro Max</div>
+        </div>
+        <div class="prize-card prize--silver">
+          <div class="prize__icon">💻</div>
+          <div class="prize__name">MacBook</div>
+        </div>
+        <div class="prize-card prize--silver">
+          <div class="prize__icon">🎮</div>
+          <div class="prize__name">PlayStation 5</div>
+        </div>
+        <div class="prize-card prize--bronze">
+          <div class="prize__icon">⌚</div>
+          <div class="prize__name">Apple Watch</div>
+        </div>
+        <div class="prize-card prize--bronze">
+          <div class="prize__icon">🔊</div>
+          <div class="prize__name">JBL Speaker</div>
+        </div>
+      </div>
+
+      <!-- Как участвовать -->
+      <div class="section-title">Как участвовать</div>
+      <div class="steps-list">
+        <div class="step">
+          <div class="step__num">1</div>
+          <div class="step__text">
+            <b>Сделайте покупку</b>
+            <div class="step__sub">В любом из 18 магазинов «Мария» в Иркутске и Ангарске</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step__num">2</div>
+          <div class="step__text">
+            <b>Сохраните чек</b>
+            <div class="step__sub">Каждый чек — одна попытка в розыгрыше. Чем больше покупок, тем больше шансов!</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step__num">3</div>
+          <div class="step__text">
+            <b>Выполняйте задания</b>
+            <div class="step__sub">Еженедельные задания увеличивают количество ваших попыток</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step__num">4</div>
+          <div class="step__text">
+            <b>Ждите розыгрыша</b>
+            <div class="step__sub">Розыгрыш проводится каждый квартал среди всех участников</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Условия -->
+      <div class="section-title">📋 Условия</div>
+      <div class="check-rules">
+        <div class="rule-item">✅ Участвуют все покупатели с картой «Мария для своих»</div>
+        <div class="rule-item">✅ Один чек = одна попытка в розыгрыше</div>
+        <div class="rule-item">✅ Еженедельные задания дают дополнительные шансы</div>
+        <div class="rule-item">✅ Победитель определяется случайным образом</div>
+        <div class="rule-item">✅ Розыгрыш — каждый квартал</div>
+      </div>
+
+      <div class="info-box" style="margin-top:12px">
+        🎯 Чем активнее вы покупаете — тем больше шансов выиграть технику мечты!
+      </div>
+
+      <button class="btn-primary btn-full" onclick="openSite('https://www.maria-irk.ru/club/')">
+        Подробнее на сайте →
+      </button>
+
+    </section>
+
     <!-- ══════════ ИГРЫ + ЧАТ ══════════ -->
     <section class="tab" id="tab-fun">
 
@@ -352,6 +439,9 @@
     </button>
     <button class="nav-btn" id="nav-club" onclick="switchTab('club')">
       <span class="nav-icon">💎</span><span class="nav-label">Клуб</span>
+    </button>
+    <button class="nav-btn" id="nav-check" onclick="switchTab('check')">
+      <span class="nav-icon">🧾</span><span class="nav-label">Чек</span>
     </button>
     <button class="nav-btn" id="nav-fun" onclick="switchTab('fun')">
       <span class="nav-icon">🎮</span><span class="nav-label">Игры</span>
