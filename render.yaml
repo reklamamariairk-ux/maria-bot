@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: maria-bot
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: BOT_TOKEN
+        sync: false
+      - key: GROQ_KEY
+        sync: false
+      - key: WEBHOOK_URL
+        sync: false
+      - key: MINI_APP_URL
+        sync: false

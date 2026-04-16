@@ -114,6 +114,19 @@ app.use(express.json({ limit: "1mb" }));
 // 1. Статика из /public
 app.use(express.static(path.join(__dirname, "..", "public")));
 
+// Прокси логотипа (обходит CORS браузера)
+function proxyAsset(url: string, contentType: string) {
+  return (_req: express.Request, res: express.Response) => {
+    https.get(url, { headers: { "User-Agent": "Mozilla/5.0" } }, (r) => {
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      r.pipe(res);
+    }).on("error", () => res.status(502).end());
+  };
+}
+app.get("/logo.svg", proxyAsset("https://www.maria-irk.ru/local/templates/maria/img/logo_new.svg", "image/svg+xml"));
+app.get("/logo.png", proxyAsset("https://www.maria-irk.ru/local/templates/maria/img/mobile_logo.png", "image/png"));
+
 // 2. Прокси к Groq API
 function groqChat(messages: { role: string; content: string }[]): Promise<string> {
   return new Promise((resolve, reject) => {

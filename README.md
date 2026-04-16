@@ -8,7 +8,7 @@ Telegram-бот с Mini App (игры + ИИ-чат) для кондитерск
 |------|-----------|
 | Бот | [grammY](https://grammy.dev/) |
 | Сервер | Express.js |
-| ИИ | Anthropic Claude (Haiku) |
+| ИИ | [Groq](https://groq.com/) (llama-3.1-8b-instant) |
 | Mini App | Vanilla JS / HTML / CSS |
 | Деплой | [Render.com](https://render.com) |
 
@@ -46,7 +46,7 @@ npm install
 
 # 3. Копируем конфиг окружения
 cp .env.example .env
-# → заполняем BOT_TOKEN и ANTHROPIC_KEY
+# → заполняем BOT_TOKEN и GROQ_KEY
 
 # 4. Запускаем в режиме разработки (long polling)
 npm run dev
@@ -84,7 +84,7 @@ npm run dev
 | Ключ | Значение |
 |------|---------|
 | `BOT_TOKEN` | токен от @BotFather |
-| `ANTHROPIC_KEY` | ключ из console.anthropic.com |
+| `GROQ_KEY` | ключ из console.groq.com |
 | `WEBHOOK_URL` | `https://<your-app>.onrender.com` |
 | `MINI_APP_URL` | `https://<your-app>.onrender.com` |
 

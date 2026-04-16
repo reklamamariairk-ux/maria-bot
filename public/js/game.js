@@ -14,7 +14,7 @@ function initMemory() {
   document.getElementById('memory-pairs').textContent = '0';
 
   const deck = [...MEMORY_ICONS, ...MEMORY_ICONS].sort(() => Math.random() - .5);
-  deck.forEach((icon, i) => {
+  deck.forEach((icon) => {
     const card = document.createElement('div');
     card.className = 'memory-card';
     card.dataset.icon = icon;
@@ -55,114 +55,238 @@ function checkMatch() {
 }
 
 /* ═══════════════════════════════════════════════════════
-   CATCH GAME
+   GAME SELECTOR
 ═══════════════════════════════════════════════════════ */
-const GOOD_ITEMS = ['🎂','🍰','🧁','🍩','🍪','🎁'];
-const BAD_ITEMS  = ['💣','🐛'];
-
-let catchScore = 0, catchLives = 3, catchRunning = false;
-let catchTimers = [], playerPct = 50;
-
 function showGame(name) {
   document.getElementById('game-memory').style.display = name === 'memory' ? '' : 'none';
-  document.getElementById('game-catch').style.display  = name === 'catch'  ? '' : 'none';
+  document.getElementById('game-flappy').style.display = name === 'flappy' ? '' : 'none';
   document.getElementById('btn-memory').classList.toggle('active', name === 'memory');
-  document.getElementById('btn-catch').classList.toggle('active', name === 'catch');
-  if (name !== 'catch') stopCatch();
+  document.getElementById('btn-flappy').classList.toggle('active', name === 'flappy');
+  if (name !== 'flappy') flappyStop();
 }
 
-function startCatch() {
-  stopCatch();
-  catchScore = 0; catchLives = 3; catchRunning = true;
-  document.getElementById('catch-score').textContent = '0';
-  document.getElementById('catch-lives').textContent = '3';
+/* ═══════════════════════════════════════════════════════
+   FLAPPY CAKE
+═══════════════════════════════════════════════════════ */
+const FLAPPY_CAKE  = '🎂';
+const FLAPPY_GAP   = 120;   // высота зазора между трубами
+const FLAPPY_SPEED = 2.2;   // скорость труб (px/frame)
+const FLAPPY_GRAV  = 0.38;  // сила притяжения
+const FLAPPY_JUMP  = -7;    // импульс прыжка
+const PIPE_W       = 52;    // ширина трубы
+const PIPE_DIST    = 220;   // расстояние между трубами
 
-  const overlay = document.getElementById('catch-overlay');
-  if (overlay) overlay.classList.add('hidden');
+let flappyCvs, flappyCtx;
+let flappyRAF = null;
+let flappyState = 'idle'; // idle | playing | dead
 
-  // Вешаем на document — работает даже если палец вышел за арену
-  document.addEventListener('touchmove', onTouch, { passive: false });
-  document.addEventListener('mousemove', onMouse);
+let cake, pipes, flappyScore, flappyBest;
 
-  dropLoop();
+function flappyInit() {
+  flappyCvs = document.getElementById('flappy-canvas');
+  if (!flappyCvs) return;
+
+  // Растягиваем canvas под реальный размер элемента
+  const rect = flappyCvs.getBoundingClientRect();
+  flappyCvs.width  = rect.width  || 320;
+  flappyCvs.height = rect.height || 340;
+  flappyCtx = flappyCvs.getContext('2d');
+
+  flappyBest = Number(localStorage.getItem('flappy_best') || 0);
+  document.getElementById('flappy-best').textContent = flappyBest;
+
+  flappyCvs.addEventListener('click',      flappyTap);
+  flappyCvs.addEventListener('touchstart', flappyTap, { passive: true });
+
+  flappyReset();
+  flappyLoop();
 }
 
-function stopCatch() {
-  catchRunning = false;
-  catchTimers.forEach(clearTimeout); catchTimers = [];
-  document.getElementById('catch-arena')?.querySelectorAll('.catch-item').forEach(e => e.remove());
-  document.removeEventListener('touchmove', onTouch);
-  document.removeEventListener('mousemove', onMouse);
+function flappyReset() {
+  const W = flappyCvs.width, H = flappyCvs.height;
+  cake = { x: W * 0.22, y: H / 2, vy: 0, r: 20 };
+  pipes = [];
+  flappyScore = 0;
+  document.getElementById('flappy-score').textContent = '0';
+  flappyState = 'idle';
+  spawnPipe();
 }
 
-function dropLoop() {
-  if (!catchRunning) return;
-  spawnItem();
-  const delay = Math.max(500, 1400 - catchScore * 10);
-  catchTimers.push(setTimeout(dropLoop, delay));
+function flappyStart() {
+  if (!flappyCvs) { flappyInit(); return; }
+  flappyReset();
+  if (!flappyRAF) flappyLoop();
 }
 
-function spawnItem() {
-  const arena = document.getElementById('catch-arena');
-  if (!arena) return;
-  const isBad = Math.random() < .15;
-  const icon  = isBad
-    ? BAD_ITEMS[Math.floor(Math.random() * BAD_ITEMS.length)]
-    : GOOD_ITEMS[Math.floor(Math.random() * GOOD_ITEMS.length)];
-  const speed = Math.max(1000, 2800 - catchScore * 12);
-  const left  = 5 + Math.random() * 85;
+function flappyStop() {
+  if (flappyRAF) { cancelAnimationFrame(flappyRAF); flappyRAF = null; }
+}
 
-  const el = document.createElement('div');
-  el.className = 'catch-item';
-  el.textContent = icon;
-  el.style.cssText = `left:${left}%;animation-duration:${speed}ms`;
-  arena.appendChild(el);
+function flappyTap(e) {
+  e.stopPropagation();
+  if (flappyState === 'dead') { flappyReset(); return; }
+  flappyState = 'playing';
+  cake.vy = FLAPPY_JUMP;
+}
 
-  const timer = setTimeout(() => {
-    if (!el.parentNode) return;
-    const ir = el.getBoundingClientRect();
-    const pr = document.getElementById('catch-player')?.getBoundingClientRect();
-    if (pr && ir.bottom >= pr.top && ir.left < pr.right && ir.right > pr.left) {
-      if (isBad) loseLife();
-      else { catchScore++; document.getElementById('catch-score').textContent = catchScore; }
-    } else {
-      if (!isBad) loseLife();
+function spawnPipe() {
+  const W = flappyCvs.width, H = flappyCvs.height;
+  const minTop = 40, maxTop = H - FLAPPY_GAP - 40;
+  const topH = minTop + Math.random() * (maxTop - minTop);
+  pipes.push({ x: W + 10, topH, passed: false });
+}
+
+function flappyLoop() {
+  flappyRAF = requestAnimationFrame(flappyLoop);
+  flappyDraw();
+  if (flappyState === 'playing') flappyUpdate();
+}
+
+function flappyUpdate() {
+  const W = flappyCvs.width, H = flappyCvs.height;
+
+  // Физика торта
+  cake.vy += FLAPPY_GRAV;
+  cake.y  += cake.vy;
+
+  // Трубы
+  for (let i = pipes.length - 1; i >= 0; i--) {
+    pipes[i].x -= FLAPPY_SPEED;
+
+    // Новая труба
+    if (i === pipes.length - 1 && pipes[i].x < W - PIPE_DIST) spawnPipe();
+
+    // Счёт
+    if (!pipes[i].passed && pipes[i].x + PIPE_W < cake.x) {
+      pipes[i].passed = true;
+      flappyScore++;
+      document.getElementById('flappy-score').textContent = flappyScore;
+      if (flappyScore > flappyBest) {
+        flappyBest = flappyScore;
+        localStorage.setItem('flappy_best', flappyBest);
+        document.getElementById('flappy-best').textContent = flappyBest;
+      }
     }
-    el.remove();
-  }, speed);
-  catchTimers.push(timer);
-}
 
-function loseLife() {
-  catchLives--;
-  document.getElementById('catch-lives').textContent = catchLives;
-  if (catchLives <= 0) {
-    stopCatch();
-    const overlay = document.getElementById('catch-overlay');
-    if (overlay) {
-      overlay.classList.remove('hidden');
-      overlay.querySelector('.catch-overlay__text').textContent = `Очки: ${catchScore}`;
+    // Удалить за экраном
+    if (pipes[i].x + PIPE_W < 0) { pipes.splice(i, 1); continue; }
+
+    // Коллизия
+    const bottomY = pipes[i].topH + FLAPPY_GAP;
+    if (
+      cake.x + cake.r - 6 > pipes[i].x &&
+      cake.x - cake.r + 6 < pipes[i].x + PIPE_W &&
+      (cake.y - cake.r + 4 < pipes[i].topH || cake.y + cake.r - 4 > bottomY)
+    ) {
+      flappyDie();
+      return;
     }
+  }
+
+  // Пол / потолок
+  if (cake.y + cake.r > H || cake.y - cake.r < 0) {
+    flappyDie();
   }
 }
 
-function onMouse(e) {
-  if (!catchRunning) return;
-  const arena = document.getElementById('catch-arena');
-  if (!arena) return;
-  const r = arena.getBoundingClientRect();
-  movePlayer((e.clientX - r.left) / r.width * 100);
+function flappyDie() {
+  flappyState = 'dead';
 }
-function onTouch(e) {
-  if (!catchRunning) return;
-  e.preventDefault();
-  const arena = document.getElementById('catch-arena');
-  if (!arena) return;
-  const r = arena.getBoundingClientRect();
-  movePlayer((e.touches[0].clientX - r.left) / r.width * 100);
+
+function flappyDraw() {
+  const W = flappyCvs.width, H = flappyCvs.height;
+  const ctx = flappyCtx;
+
+  // Фон — небо
+  const sky = ctx.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, '#87CEEB');
+  sky.addColorStop(1, '#c9eeff');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, H);
+
+  // Земля
+  ctx.fillStyle = '#8B6914';
+  ctx.fillRect(0, H - 18, W, 18);
+  ctx.fillStyle = '#5a8f3c';
+  ctx.fillRect(0, H - 22, W, 6);
+
+  // Трубы
+  ctx.fillStyle = '#5cba2e';
+  ctx.strokeStyle = '#3d8a1a';
+  ctx.lineWidth = 2;
+  pipes.forEach(p => {
+    const capH = 14, capW = PIPE_W + 8;
+    const capX = p.x - 4;
+
+    // Верхняя труба
+    ctx.fillStyle = '#5cba2e';
+    ctx.fillRect(p.x, 0, PIPE_W, p.topH);
+    ctx.fillStyle = '#4da024';
+    ctx.fillRect(capX, p.topH - capH, capW, capH);
+    ctx.strokeRect(p.x, 0, PIPE_W, p.topH);
+    ctx.strokeRect(capX, p.topH - capH, capW, capH);
+
+    // Нижняя труба
+    const botY = p.topH + FLAPPY_GAP;
+    ctx.fillStyle = '#5cba2e';
+    ctx.fillRect(p.x, botY, PIPE_W, H - botY);
+    ctx.fillStyle = '#4da024';
+    ctx.fillRect(capX, botY, capW, capH);
+    ctx.strokeStyle = '#3d8a1a';
+    ctx.strokeRect(p.x, botY, PIPE_W, H - botY);
+    ctx.strokeRect(capX, botY, capW, capH);
+  });
+
+  // Торт (emoji)
+  ctx.font = `${cake.r * 2}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  // Небольшой наклон по скорости
+  ctx.save();
+  ctx.translate(cake.x, cake.y);
+  ctx.rotate(Math.max(-0.4, Math.min(0.4, cake.vy * 0.05)));
+  ctx.fillText(FLAPPY_CAKE, 0, 0);
+  ctx.restore();
+
+  // Оверлей при смерти
+  if (flappyState === 'dead') {
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 22px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Игра окончена', W / 2, H / 2 - 28);
+    ctx.font = '16px Inter, sans-serif';
+    ctx.fillText(`Счёт: ${flappyScore}`, W / 2, H / 2 + 4);
+    ctx.fillStyle = '#fce8eb';
+    ctx.font = '13px Inter, sans-serif';
+    ctx.fillText('Нажмите, чтобы начать заново', W / 2, H / 2 + 34);
+  }
+
+  // Подсказка до старта
+  if (flappyState === 'idle') {
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 18px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Нажмите, чтобы начать!', W / 2, H / 2);
+    ctx.font = '14px Inter, sans-serif';
+    ctx.fillText('Тапайте, чтобы лететь 🎂', W / 2, H / 2 + 28);
+  }
 }
-function movePlayer(pct) {
-  playerPct = Math.max(4, Math.min(92, pct));
-  const p = document.getElementById('catch-player');
-  if (p) p.style.left = playerPct + '%';
-}
+
+// Автоинициализация при загрузке игры
+document.addEventListener('DOMContentLoaded', () => {
+  // Инициализируем flappy только когда секция показана
+  const observer = new MutationObserver(() => {
+    const canvas = document.getElementById('flappy-canvas');
+    if (canvas && canvas.offsetParent !== null && !flappyCvs) {
+      flappyInit();
+    }
+  });
+  const funTab = document.getElementById('tab-fun');
+  if (funTab) observer.observe(funTab, { attributes: true, attributeFilter: ['class'] });
+});

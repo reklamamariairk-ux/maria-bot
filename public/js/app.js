@@ -1,130 +1,70 @@
-/* ─── Telegram WebApp ───────────────────────────────────────────────────── */
+/* ── Telegram ────────────────────────────────────────────────────────────── */
 const tg = window.Telegram?.WebApp;
 if (tg) { tg.ready(); tg.expand(); }
 
 function openSite(url) {
-  if (tg) {
-    tg.openLink(url);
-  } else {
-    window.open(url, '_blank');
-  }
+  if (tg) tg.openLink(url);
+  else window.open(url, '_blank');
 }
 
-/* ─── Tab switching ─────────────────────────────────────────────────────── */
+/* ── Tabs ────────────────────────────────────────────────────────────────── */
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-
-  const tab = document.getElementById('tab-' + name);
-  const btn = document.getElementById('nav-' + name);
-  if (tab) tab.classList.add('active');
-  if (btn) btn.classList.add('active');
-
+  document.querySelectorAll('.nb').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name)?.classList.add('active');
+  document.getElementById('nav-' + name)?.classList.add('active');
   if (name === 'fun' && !window._gamesInited) {
     window._gamesInited = true;
     initMemory();
+    flappyInit();
   }
   window.scrollTo(0, 0);
 }
 
-/* ─── Sub-tabs (inside Fun tab) ─────────────────────────────────────────── */
+/* ── Sub-tabs ────────────────────────────────────────────────────────────── */
 function showSubTab(name) {
-  ['games', 'chat'].forEach(n => {
-    const el = document.getElementById('subtab-content-' + n);
+  ['games','chat'].forEach(n => {
+    const el  = document.getElementById('subtab-content-' + n);
     const btn = document.getElementById('subtab-' + n);
-    if (el)  el.style.display  = n === name ? '' : 'none';
+    if (el)  el.style.display = n === name ? '' : 'none';
     if (btn) btn.classList.toggle('active', n === name);
   });
-  if (name === 'chat') {
-    setTimeout(() => document.getElementById('chat-input')?.focus(), 100);
-  }
+  if (name === 'chat') setTimeout(() => document.getElementById('chat-input')?.focus(), 120);
 }
 
-/* ─── Suggestion chips ──────────────────────────────────────────────────── */
-function sendSuggestion(btn) {
-  const input = document.getElementById('chat-input');
-  if (!input) return;
-  input.value = btn.textContent;
-  btn.parentElement?.classList.add('hidden-suggestions');
+/* ── Chat chips ──────────────────────────────────────────────────────────── */
+function usechip(btn) {
+  const inp = document.getElementById('chat-input');
+  if (!inp) return;
+  inp.value = btn.textContent;
+  document.getElementById('chat-chips').style.display = 'none';
   sendMessage();
 }
 
-/* ─── Partners (вызывается когда данные придут от владельца) ────────────── */
-function renderPartners(partners) {
-  const container = document.getElementById('partners-list');
-  if (!container || !partners?.length) return;
-  container.innerHTML = partners.map(p => `
-    <div class="partner-card">
-      <div class="partner-logo">${p.emoji || '🤝'}</div>
-      <div class="partner-info">
-        <div class="partner-name">${p.name}</div>
-        <div class="partner-desc">${p.desc}</div>
-      </div>
-      <div class="partner-badge">${p.perk}</div>
-    </div>
-  `).join('');
-}
-
-/* ─── Partners data ─────────────────────────────────────────────────────── */
+/* ── Partners ────────────────────────────────────────────────────────────── */
 const PARTNERS = [
-  {
-    emoji: '🔬',
-    name: 'Лука Лаб',
-    desc: 'Комплексная программа «ЧЕК АП от ЛукаЛаб» — лабораторная диагностика.\nСпециальная стоимость для клуба: 6 200 ₽ (вместо 9 539 ₽)',
-    perk: '−35%',
-  },
-  {
-    emoji: '✨',
-    name: 'Деница',
-    desc: 'Процедуры на аппарате ENDYMED — выгода от 7 500 до 16 000 ₽.\nЭксклюзивно для клуба «Мария для своих». При переходе к администратору — 3 варианта процедур.',
-    perk: 'до −16 000 ₽',
-  },
-  {
-    emoji: '💅',
-    name: 'Гардо',
-    desc: 'При записи на маникюр и педикюр — оформление и окрашивание бровей в подарок!\nСпециально для клуба «Мария для своих».',
-    perk: '🎁 Брови',
-  },
-  {
-    emoji: '🍣',
-    name: 'Пряников',
-    desc: 'При заказе на 1 600 ₽ — ролл «Филадельфия Фреш» в подарок!\nПромокод: «Вкус». Для клуба «Мария для своих».',
-    perk: '🎁 Ролл',
-  },
-  {
-    emoji: '🔧',
-    name: 'СТО Просто',
-    desc: 'Замена масла и масляного фильтра — работа бесплатно (обычная стоимость 1 450 ₽).\n* Запасные части и расходные материалы — по стоимости подрядчика.',
-    perk: '−1 450 ₽',
-  },
-  {
-    emoji: '🏨',
-    name: 'Азатай',
-    desc: 'Скидка на проживание для участников клуба «Мария для своих».',
-    perk: '−10%',
-  },
-  {
-    emoji: '🥊',
-    name: 'Real Victory',
-    desc: 'Скидка для участников клуба «Мария для своих» в понедельник–пятницу.',
-    perk: '−30% пн–пт',
-  },
-  {
-    emoji: '🌲',
-    name: 'Тайга',
-    desc: 'Постоянная скидка на номера, а также на сауну или хаммам (до 17:00).',
-    perk: 'Номера −15%, сауна −10%',
-  },
+  { emoji:'🔬', name:'Лука Лаб',     perk:'−35%',           desc:'Комплексная программа «ЧЕК АП от ЛукаЛаб»\nСтоимость для клуба: 6 200 ₽ (вместо 9 539 ₽)' },
+  { emoji:'✨', name:'Деница',        perk:'до −16 000 ₽',   desc:'Процедуры на аппарате ENDYMED\nЭксклюзивно для клуба «Мария для своих»' },
+  { emoji:'💅', name:'Гардо',         perk:'🎁 Брови',        desc:'При записи на маникюр и педикюр — оформление и окрашивание бровей в подарок' },
+  { emoji:'🍣', name:'Пряников',      perk:'🎁 Ролл',         desc:'При заказе от 1 600 ₽ — ролл «Филадельфия Фреш» в подарок\nПромокод: «Вкус»' },
+  { emoji:'🔧', name:'СТО Просто',   perk:'−1 450 ₽',        desc:'Замена масла и масляного фильтра — работа бесплатно\n* Запчасти по стоимости подрядчика' },
+  { emoji:'🏨', name:'Азатай',        perk:'−10%',            desc:'Скидка на проживание для участников клуба' },
+  { emoji:'🥊', name:'Real Victory', perk:'−30% пн–пт',      desc:'Скидка для участников клуба «Мария для своих» в будние дни' },
+  { emoji:'🌲', name:'Тайга',         perk:'−15% / −10%',    desc:'Постоянная скидка на номера, сауну или хаммам (до 17:00)' },
 ];
 
-/* ─── Init ──────────────────────────────────────────────────────────────── */
-document.addEventListener('DOMContentLoaded', () => {
-  renderPartners(PARTNERS);
+function renderPartners(list) {
+  const el = document.getElementById('partners-list');
+  if (!el) return;
+  el.innerHTML = list.map(p => `
+    <div class="pcard">
+      <div class="pcard__logo">${p.emoji}</div>
+      <div class="pcard__info">
+        <div class="pcard__name">${p.name}</div>
+        <div class="pcard__desc">${p.desc}</div>
+      </div>
+      <div class="pcard__badge">${p.perk}</div>
+    </div>`).join('');
+}
 
-  const suggestions = document.querySelector('.chat-suggestions');
-  if (suggestions) {
-    document.getElementById('chat-send')?.addEventListener('click', () => {
-      setTimeout(() => suggestions.style.display = 'none', 300);
-    });
-  }
-});
+document.addEventListener('DOMContentLoaded', () => renderPartners(PARTNERS));
