@@ -11,6 +11,7 @@ const path_1 = __importDefault(require("path"));
 const https_1 = __importDefault(require("https"));
 const grammy_1 = require("grammy");
 const scraper_1 = require("./scraper");
+const loyalty_1 = require("./loyalty");
 // ─── Env ────────────────────────────────────────────────────────────────────
 const BOT_TOKEN = process.env.BOT_TOKEN ?? "";
 const GROQ_KEY = process.env.GROQ_KEY ?? "";
@@ -192,6 +193,25 @@ app.post("/api/chat", async (req, res) => {
         console.error("Groq error:", err.message);
         res.status(502).json({ error: "ИИ недоступен, попробуйте позже" });
     }
+});
+// ─── Loyalty endpoints ────────────────────────────────────────────────────────
+app.post("/api/loyalty/send-code", async (req, res) => {
+    const { phone } = req.body;
+    if (!phone) {
+        res.status(400).json({ ok: false, message: "Укажите номер телефона" });
+        return;
+    }
+    const result = await (0, loyalty_1.sendCode)(phone);
+    res.json(result);
+});
+app.post("/api/loyalty/verify-code", async (req, res) => {
+    const { phone, code } = req.body;
+    if (!phone || !code) {
+        res.status(400).json({ ok: false, message: "Укажите телефон и код" });
+        return;
+    }
+    const result = await (0, loyalty_1.verifyCode)(phone, code);
+    res.json(result);
 });
 // Ручное обновление каталога (для отладки)
 app.post("/api/refresh-catalog", async (_req, res) => {

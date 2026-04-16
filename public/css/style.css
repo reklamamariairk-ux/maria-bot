@@ -451,3 +451,42 @@ b,strong{font-weight:600}
 .nb.active{color:var(--red)}
 .nb__ic{font-size:20px}
 .nb__lb{font-size:9px;font-weight:600;letter-spacing:.2px}
+
+/* ── LOYALTY ─────────────────────────────────────────────────────────────── */
+.loyalty-block{padding:0 16px 8px}
+.loy-step{display:flex;flex-direction:column;gap:10px}
+.loy-hint{font-size:13px;color:var(--muted);text-align:center}
+.loy-row{display:flex;gap:8px}
+.loy-input{
+  flex:1;padding:11px 14px;
+  border:1.5px solid var(--border);border-radius:var(--r-sm);
+  font-size:15px;font-family:'Inter',sans-serif;
+  background:var(--surface);outline:none;transition:border-color var(--t);
+}
+.loy-input:focus{border-color:var(--red)}
+.loy-input--sm{max-width:130px;text-align:center;letter-spacing:4px;font-size:18px;font-weight:600}
+.loy-btn{
+  white-space:nowrap;padding:11px 16px;
+  background:var(--red);color:#fff;border:none;border-radius:var(--r-sm);
+  font-size:14px;font-weight:600;cursor:pointer;transition:opacity var(--t);
+}
+.loy-btn:disabled{opacity:.5;cursor:default}
+.loy-back{
+  font-size:13px;color:var(--muted);background:none;border:none;
+  cursor:pointer;padding:0;text-align:left;
+}
+.loy-error{
+  font-size:13px;color:var(--red);
+  background:var(--red-l);border-radius:8px;padding:8px 12px;
+}
+.loy-card{
+  background:linear-gradient(135deg,var(--red-d),var(--red));
+  color:#fff;border-radius:var(--r);padding:20px;
+  display:flex;flex-direction:column;gap:4px;
+  box-shadow:var(--shadow);
+}
+.loy-card__name{font-size:17px;font-weight:700}
+.loy-card__level{font-size:12px;opacity:.8}
+.loy-card__bal-label{font-size:12px;opacity:.8;margin-top:10px}
+.loy-card__bal{font-size:32px;font-weight:800;letter-spacing:-1px}
+.loy-card__cashback{font-size:13px;opacity:.8}

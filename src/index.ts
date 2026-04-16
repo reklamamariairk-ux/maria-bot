@@ -6,6 +6,7 @@ import path from "path";
 import https from "https";
 import { Bot, webhookCallback, InlineKeyboard } from "grammy";
 import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, Product } from "./scraper";
+import { sendCode, verifyCode } from "./loyalty";
 
 // ─── Env ────────────────────────────────────────────────────────────────────
 const BOT_TOKEN    = process.env.BOT_TOKEN    ?? "";
@@ -205,6 +206,21 @@ app.post("/api/chat", async (req, res) => {
     console.error("Groq error:", (err as Error).message);
     res.status(502).json({ error: "ИИ недоступен, попробуйте позже" });
   }
+});
+
+// ─── Loyalty endpoints ────────────────────────────────────────────────────────
+app.post("/api/loyalty/send-code", async (req, res) => {
+  const { phone } = req.body as { phone?: string };
+  if (!phone) { res.status(400).json({ ok: false, message: "Укажите номер телефона" }); return; }
+  const result = await sendCode(phone);
+  res.json(result);
+});
+
+app.post("/api/loyalty/verify-code", async (req, res) => {
+  const { phone, code } = req.body as { phone?: string; code?: string };
+  if (!phone || !code) { res.status(400).json({ ok: false, message: "Укажите телефон и код" }); return; }
+  const result = await verifyCode(phone, code);
+  res.json(result);
 });
 
 // Ручное обновление каталога (для отладки)
