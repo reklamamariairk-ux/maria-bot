@@ -34,10 +34,10 @@ b,strong{font-weight:600}
 .header{
   position:sticky;top:0;z-index:200;
   height:var(--hh);
-  background:var(--dark);
+  background:var(--red);
   display:flex;align-items:center;justify-content:space-between;
   padding:0 18px;
-  backdrop-filter:blur(20px);
+  box-shadow:0 2px 16px rgba(214,31,55,.35);
 }
 .header__logo{
   height:32px;max-width:130px;
@@ -57,7 +57,7 @@ b,strong{font-weight:600}
 .header__phone:hover{background:rgba(255,255,255,.18);color:#fff}
 
 /* ── MAIN ────────────────────────────────────────────────────────────────── */
-.main{min-height:calc(100vh - var(--hh) - var(--nh));padding-bottom:calc(var(--nh)+8px)}
+.main{min-height:calc(100vh - var(--hh) - var(--nh));padding-bottom:calc(var(--nh) + 16px + env(safe-area-inset-bottom))}
 
 /* ── TABS ────────────────────────────────────────────────────────────────── */
 .tab{display:none;animation:fadeUp .24s ease}
@@ -66,13 +66,13 @@ b,strong{font-weight:600}
 
 /* ── HERO ────────────────────────────────────────────────────────────────── */
 .hero{
-  background:linear-gradient(150deg,var(--dark) 0%,#3a0015 60%,var(--red-d) 100%);
+  background:linear-gradient(150deg,var(--red-d) 0%,var(--red) 60%,#e8304a 100%);
   color:#fff;text-align:center;padding:36px 20px 28px;
   position:relative;overflow:hidden;
 }
 .hero::before{
   content:'';position:absolute;inset:0;
-  background:radial-gradient(ellipse at 70% 20%,rgba(214,31,55,.35) 0%,transparent 60%);
+  background:radial-gradient(ellipse at 70% 20%,rgba(255,255,255,.08) 0%,transparent 60%);
 }
 .hero>*{position:relative}
 .hero--sm{padding:22px 20px 18px}
@@ -118,8 +118,8 @@ b,strong{font-weight:600}
 }
 .hcard--dark{
   grid-column:2;
-  background:linear-gradient(135deg,#1a0a1e,#2d0d30);color:#fff;
-  box-shadow:0 4px 20px rgba(0,0,0,.2);
+  background:linear-gradient(135deg,var(--red-d),#8a0020);color:#fff;
+  box-shadow:var(--shadow);
 }
 .hcard--light{
   background:var(--surface);box-shadow:var(--shadow-sm);
@@ -139,20 +139,23 @@ b,strong{font-weight:600}
 .section-desc{font-size:13px;color:var(--muted);padding:0 14px 10px;line-height:1.5}
 
 /* ── PROMOS ──────────────────────────────────────────────────────────────── */
-.promos{display:flex;gap:10px;padding:0 14px 4px;overflow-x:auto;scrollbar-width:none}
+.promos{display:flex;gap:8px;padding:0 14px 4px;overflow-x:auto;scrollbar-width:none}
 .promos::-webkit-scrollbar{display:none}
-.promo{min-width:220px;border-radius:var(--r);padding:16px;flex-shrink:0;position:relative}
+.promo{min-width:160px;max-width:190px;border-radius:var(--r);padding:12px;flex-shrink:0;position:relative}
 .promo--red {background:linear-gradient(135deg,var(--red),var(--red-d));color:#fff}
 .promo--gold{background:linear-gradient(135deg,var(--gold),#c07010);color:#fff}
 .promo--dark{background:linear-gradient(135deg,#1e1e2e,#0d0d1a);color:#fff}
 .promo__badge{
-  display:inline-block;background:rgba(255,255,255,.2);
-  border-radius:20px;padding:3px 10px;
-  font-size:11px;font-weight:700;margin-bottom:8px;
+  display:inline-block;background:rgba(255,255,255,.22);
+  border-radius:20px;padding:2px 9px;
+  font-size:11px;font-weight:700;margin-bottom:6px;
 }
-.promo__name{font-size:15px;font-weight:700;margin-bottom:5px}
-.promo__desc{font-size:12px;opacity:.85;line-height:1.5;margin-bottom:6px}
-.promo__note{font-size:11px;opacity:.7}
+.promo__name{font-size:13px;font-weight:700;margin-bottom:4px;line-height:1.3}
+.promo__desc{
+  font-size:11px;opacity:.85;line-height:1.4;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.promo__note{font-size:10px;opacity:.7;margin-top:4px}
 
 /* ── CONTACTS ────────────────────────────────────────────────────────────── */
 .contacts-wrap{margin:0 14px;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow-sm)}
@@ -208,7 +211,7 @@ b,strong{font-weight:600}
 
 /* ── CLUB ────────────────────────────────────────────────────────────────── */
 .club-hero{
-  background:linear-gradient(135deg,var(--dark),#2d0015);
+  background:linear-gradient(135deg,var(--red-d),var(--red));
   padding:28px 20px 22px;text-align:center;color:#fff;
 }
 .club-hero__logo{height:38px;filter:brightness(0) invert(1);margin-bottom:12px}
@@ -274,15 +277,15 @@ b,strong{font-weight:600}
 
 /* ── СЛАДКИЙ ЧЕК ─────────────────────────────────────────────────────────── */
 .check-hero{
-  background:linear-gradient(150deg,#0d0d1a 0%,#1a0a2e 60%,#2d1060 100%);
+  background:linear-gradient(150deg,var(--red-d) 0%,var(--red) 60%,#c0392b 100%);
   color:#fff;text-align:center;padding:32px 20px 26px;position:relative;overflow:hidden;
 }
 .check-hero::before{
   content:'';position:absolute;inset:0;
-  background:radial-gradient(ellipse at 50% 80%,rgba(120,60,200,.3),transparent 70%);
+  background:radial-gradient(ellipse at 50% 80%,rgba(255,255,255,.08),transparent 70%);
 }
 .check-hero>*{position:relative}
-.check-hero__stars{font-size:18px;letter-spacing:8px;color:#ffd700;margin-bottom:10px;opacity:.8}
+.check-hero__stars{font-size:18px;letter-spacing:8px;color:rgba(255,255,255,.7);margin-bottom:10px}
 .check-hero__h{
   font-family:'Playfair Display',serif;
   font-size:28px;font-weight:800;margin-bottom:8px;
