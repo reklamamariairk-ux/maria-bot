@@ -683,3 +683,202 @@ b,strong{font-weight:600}
 }
 .lk-ticket__name{font-size:14px;font-weight:600;flex:1}
 .lk-ticket__date{font-size:12px;color:var(--muted)}
+
+/* ── HAMSTER KOMBAT BAKERY ───────────────────────────────────────────────── */
+
+/* Top HUD */
+.hk-top{
+  background:linear-gradient(150deg,#1a0a2e 0%,#2d1054 60%,#3d1a6e 100%);
+  color:#fff;padding:14px 16px 10px;text-align:center;
+}
+.hk-top__rank{font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;opacity:.7;margin-bottom:2px}
+.hk-top__coins{font-size:32px;font-weight:800;letter-spacing:-1px;line-height:1.1}
+.hk-top__pph{font-size:12px;opacity:.65;margin-top:2px;margin-bottom:8px}
+.hk-rank-bar{
+  height:6px;background:rgba(255,255,255,.15);border-radius:3px;overflow:hidden;margin:0 4px;
+}
+.hk-rank-bar__fill{
+  height:100%;background:linear-gradient(90deg,#fbbf24,#f59e0b);
+  border-radius:3px;transition:width .4s ease;width:0%;
+}
+.hk-rank-bar__next{font-size:11px;opacity:.5;margin-top:4px}
+
+/* Inner nav */
+.hk-nav{
+  display:flex;background:#fff;border-bottom:2px solid var(--border);
+  overflow-x:auto;scrollbar-width:none;
+}
+.hk-nav::-webkit-scrollbar{display:none}
+.hk-nb{
+  flex:1;min-width:80px;border:none;background:transparent;
+  padding:10px 4px;font-size:11px;font-weight:600;color:var(--muted);
+  cursor:pointer;white-space:nowrap;transition:color var(--t);
+  font-family:'Inter',sans-serif;border-bottom:2px solid transparent;margin-bottom:-2px;
+}
+.hk-nb--active{color:var(--red);border-bottom-color:var(--red)}
+
+/* Cake tap area */
+.hk-cake-area{
+  position:relative;height:220px;overflow:hidden;
+  background:linear-gradient(180deg,#fce8eb 0%,#fff5f6 100%);
+  display:flex;align-items:center;justify-content:center;
+}
+.hk-cake{
+  width:120px;height:120px;border-radius:50%;border:none;
+  background:radial-gradient(circle at 40% 35%,#fff5f0,#fce8eb);
+  box-shadow:0 8px 40px rgba(214,31,55,.3),0 2px 12px rgba(0,0,0,.1);
+  font-size:64px;cursor:pointer;user-select:none;
+  transition:transform .08s ease;display:flex;align-items:center;justify-content:center;
+  position:relative;z-index:2;
+}
+.hk-cake:active{transform:scale(.92)}
+@keyframes hkPop{0%{transform:scale(1)}40%{transform:scale(.88)}70%{transform:scale(1.06)}100%{transform:scale(1)}}
+.hk-pop{animation:hkPop .18s ease forwards}
+@keyframes hkShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.hk-shake{animation:hkShake .25s ease forwards}
+
+/* Steam */
+.hk-steam{
+  position:absolute;bottom:20px;width:8px;border-radius:4px;
+  background:linear-gradient(180deg,transparent,rgba(214,31,55,.15));
+  animation:hkSteam 2s ease-in-out infinite;
+}
+.hk-steam--1{left:38%;height:40px;animation-delay:0s}
+.hk-steam--2{left:50%;height:55px;animation-delay:.5s}
+.hk-steam--3{left:62%;height:35px;animation-delay:1s}
+@keyframes hkSteam{0%,100%{opacity:0;transform:translateY(0) scaleX(1)}50%{opacity:1;transform:translateY(-30px) scaleX(1.6)}}
+
+/* Floating +N */
+.hk-float{
+  position:absolute;pointer-events:none;
+  font-size:18px;font-weight:800;color:var(--red);
+  text-shadow:0 1px 6px rgba(0,0,0,.2);
+  animation:hkFloat .8s ease forwards;z-index:10;
+}
+@keyframes hkFloat{0%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-60px) scale(.8)}}
+
+/* Energy bar */
+.hk-energy-wrap{
+  display:flex;align-items:center;gap:8px;padding:10px 16px;
+  background:#fff;border-bottom:1px solid var(--border);
+}
+.hk-energy-ic{font-size:16px}
+.hk-energy-bar{flex:1;height:10px;background:#f3e8ff;border-radius:5px;overflow:hidden}
+.hk-energy-fill{
+  height:100%;background:linear-gradient(90deg,#a78bfa,#7c3aed);
+  border-radius:5px;transition:width .2s ease;width:100%;
+}
+.hk-energy-txt{font-size:12px;font-weight:600;color:#7c3aed;min-width:80px;text-align:right}
+
+/* Combo banner */
+.hk-combo-banner{
+  margin:12px 16px 8px;
+  background:linear-gradient(135deg,#fef3c7,#fde68a);
+  border:1px solid #f59e0b;border-radius:var(--r-sm);
+  padding:10px 14px;font-size:13px;color:#92400e;line-height:1.4;
+}
+.hk-combo-banner--done{background:linear-gradient(135deg,#d1fae5,#a7f3d0);border-color:#34d399;color:#065f46}
+
+/* Category tabs */
+.hk-cats{
+  display:flex;gap:6px;padding:8px 16px;overflow-x:auto;scrollbar-width:none;
+}
+.hk-cats::-webkit-scrollbar{display:none}
+.hk-cat{
+  flex-shrink:0;padding:6px 12px;border-radius:20px;
+  border:1.5px solid var(--border);background:#fff;
+  font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;
+  transition:all var(--t);font-family:'Inter',sans-serif;
+}
+.hk-cat--active{background:var(--red);color:#fff;border-color:var(--red)}
+
+/* Cards grid */
+.hk-cards{
+  display:grid;grid-template-columns:1fr 1fr;gap:10px;
+  padding:8px 16px 20px;
+}
+.hk-card{
+  background:#fff;border-radius:var(--r-sm);
+  border:1.5px solid var(--border);padding:12px;
+  position:relative;transition:all var(--t);box-shadow:var(--shadow-sm);
+}
+.hk-card--can{border-color:rgba(214,31,55,.35);box-shadow:0 2px 12px rgba(214,31,55,.15)}
+.hk-card--combo{border-color:#f59e0b;box-shadow:0 2px 16px rgba(245,158,11,.25)}
+.hk-card__combo-tag{
+  position:absolute;top:-1px;right:-1px;
+  background:#f59e0b;color:#fff;font-size:9px;font-weight:700;
+  border-radius:0 var(--r-sm) 0 6px;padding:2px 6px;
+}
+.hk-card__top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.hk-card__emoji{font-size:28px}
+.hk-card__lv{font-size:10px;font-weight:700;color:var(--muted);background:var(--bg);padding:2px 6px;border-radius:8px}
+.hk-card__name{font-size:13px;font-weight:700;line-height:1.2;margin-bottom:2px}
+.hk-card__pph{font-size:11px;color:#059669;font-weight:600;margin-bottom:8px}
+.hk-card__btn{
+  width:100%;padding:7px;border-radius:8px;border:none;
+  background:var(--bg);color:var(--muted);
+  font-size:12px;font-weight:700;cursor:not-allowed;
+  font-family:'Inter',sans-serif;transition:all var(--t);
+}
+.hk-card__btn--on{background:var(--red);color:#fff;cursor:pointer}
+.hk-card__btn--on:active{opacity:.8}
+
+/* Section title */
+.hk-section-title{
+  font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+  color:var(--muted);padding:12px 16px 4px;
+}
+
+/* Boost rows */
+.hk-boost-row{
+  display:flex;align-items:center;gap:12px;
+  padding:14px 16px;border-bottom:1px solid var(--border);
+  background:#fff;transition:background var(--t);
+}
+.hk-boost-row--can{background:#fffbf0}
+.hk-boost-row__ic{font-size:28px;flex-shrink:0}
+.hk-boost-row__info{flex:1;min-width:0}
+.hk-boost-row__name{font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px}
+.hk-boost-row__desc{font-size:12px;color:var(--muted);margin-top:1px}
+.hk-lv-tag{font-size:10px;background:var(--bg);color:var(--muted);padding:1px 5px;border-radius:6px;font-weight:600}
+.hk-boost-row__btn{
+  flex-shrink:0;padding:8px 12px;border-radius:10px;border:none;
+  background:var(--bg);color:var(--muted);font-size:12px;font-weight:700;
+  cursor:not-allowed;font-family:'Inter',sans-serif;white-space:nowrap;
+}
+.hk-boost-row__btn--on{background:var(--red);color:#fff;cursor:pointer}
+.hk-boost-row__btn--on:active{opacity:.8}
+
+/* Tasks */
+.hk-task{
+  display:flex;align-items:center;gap:12px;
+  padding:14px 16px;border-bottom:1px solid var(--border);
+  background:#fff;transition:background var(--t);
+}
+.hk-task--ready{background:#fff8f0}
+.hk-task--done{background:#f0fdf4;opacity:.7}
+.hk-task__ic{font-size:28px;flex-shrink:0}
+.hk-task__info{flex:1;min-width:0}
+.hk-task__name{font-size:14px;font-weight:700;line-height:1.3}
+.hk-task__reward{font-size:12px;color:var(--gold);font-weight:600;margin-top:2px}
+.hk-task__bar{
+  height:4px;background:var(--bg);border-radius:2px;overflow:hidden;margin-top:6px;
+}
+.hk-task__bar div{height:100%;background:var(--red);border-radius:2px;transition:width .3s}
+.hk-task__btn{
+  flex-shrink:0;padding:9px 14px;border-radius:10px;border:none;
+  background:var(--red);color:#fff;font-size:13px;font-weight:700;
+  cursor:pointer;font-family:'Inter',sans-serif;
+}
+.hk-task__btn:active{opacity:.8}
+.hk-task__check{font-size:20px;flex-shrink:0}
+
+/* Toast */
+.hk-toast{
+  position:absolute;bottom:20px;left:50%;transform:translateX(-50%);
+  background:rgba(20,20,30,.9);color:#fff;
+  padding:10px 20px;border-radius:20px;
+  font-size:14px;font-weight:600;white-space:nowrap;z-index:20;
+  animation:hkToast 3s ease forwards;pointer-events:none;
+}
+@keyframes hkToast{0%{opacity:0;transform:translateX(-50%) translateY(10px)}10%{opacity:1;transform:translateX(-50%) translateY(0)}85%{opacity:1}100%{opacity:0}}

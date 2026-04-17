@@ -66,7 +66,7 @@ function showGame(name) {
   });
   if (name !== 'flappy') flappyStop();
   if (name === '2048') { g2InitTouch(); if (!g2.board.length) g2048New(); else g2Render(); }
-  if (name === 'bakery') bkRender();
+  if (name === 'bakery') hkBoot();
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -915,7 +915,6 @@ function bkStartTick() {
 document.addEventListener('DOMContentLoaded', () => {
   initMemory();
   g2.best = Number(localStorage.getItem('g2best')||0);
-  bkLoad(); bkStartTick();
 
   const observer = new MutationObserver(() => {
     const canvas = document.getElementById('flappy-canvas');
