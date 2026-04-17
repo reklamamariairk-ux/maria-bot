@@ -728,6 +728,7 @@ b,strong{font-weight:600}
   background:radial-gradient(circle at 40% 35%,#fff5f0,#fce8eb);
   box-shadow:0 8px 40px rgba(214,31,55,.3),0 2px 12px rgba(0,0,0,.1);
   font-size:64px;cursor:pointer;user-select:none;
+  touch-action:manipulation;
   transition:transform .08s ease;display:flex;align-items:center;justify-content:center;
   position:relative;z-index:2;
 }
