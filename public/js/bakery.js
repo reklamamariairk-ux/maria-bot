@@ -486,6 +486,27 @@ function hkShowToast(msg) {
   setTimeout(() => t.remove(), 3000);
 }
 
+// ─ Passive income floating bubble ───────────────────
+function hkSpawnPassive() {
+  const area = document.getElementById('hk-cake-area');
+  if (!area) return;
+  const perSec = hk.pph / 3600;
+  if (perSec < 0.01) return;
+
+  const label = '+' + hkFmt(Math.max(1, Math.round(perSec)));
+  const fl = document.createElement('div');
+  fl.className = 'hk-float hk-float--passive';
+  fl.textContent = label;
+  // random position across the whole area, avoid center (cake button)
+  const side = Math.random() < 0.5 ? 'left' : 'right';
+  fl.style.left = side === 'left'
+    ? (5  + Math.random() * 30) + '%'
+    : (65 + Math.random() * 25) + '%';
+  fl.style.top  = (30 + Math.random() * 50) + '%';
+  area.appendChild(fl);
+  setTimeout(() => fl.remove(), 1200);
+}
+
 // ─ Tick ─────────────────────────────────────────────
 function hkStartTick() {
   if (hk.interval) return;
@@ -503,6 +524,8 @@ function hkStartTick() {
     }
     tick++;
     if (tick % 4  === 0) { hkUpdateTop(); hkUpdateEnergy(); }
+    // Passive bubbles: 1 per second when PPH > 0
+    if (tick % 20 === 0 && hk.pph > 0) hkSpawnPassive();
     if (tick % 80 === 0) hkSave();
   }, 50);
 }

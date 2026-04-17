@@ -749,7 +749,7 @@ b,strong{font-weight:600}
 .hk-steam--3{left:62%;height:35px;animation-delay:1s}
 @keyframes hkSteam{0%,100%{opacity:0;transform:translateY(0) scaleX(1)}50%{opacity:1;transform:translateY(-30px) scaleX(1.6)}}
 
-/* Floating +N */
+/* Floating +N (tap) */
 .hk-float{
   position:absolute;pointer-events:none;
   font-size:18px;font-weight:800;color:var(--red);
@@ -757,6 +757,19 @@ b,strong{font-weight:600}
   animation:hkFloat .8s ease forwards;z-index:10;
 }
 @keyframes hkFloat{0%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-60px) scale(.8)}}
+
+/* Floating +N (passive PPH) */
+.hk-float--passive{
+  font-size:13px;font-weight:700;color:#7c3aed;
+  text-shadow:0 1px 4px rgba(124,58,237,.25);
+  animation:hkFloatPassive 1.2s ease forwards;
+}
+@keyframes hkFloatPassive{
+  0%  {opacity:0;transform:translateY(0) scale(.8)}
+  15% {opacity:.9;transform:translateY(-8px) scale(1)}
+  80% {opacity:.7;transform:translateY(-40px) scale(.95)}
+  100%{opacity:0;transform:translateY(-55px) scale(.85)}
+}
 
 /* Energy bar */
 .hk-energy-wrap{
