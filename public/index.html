@@ -285,14 +285,37 @@
 
     <!-- Пекарня -->
     <div id="game-bakery" style="display:none">
-      <div class="bk-counter">
-        <div class="bk-count" id="bk-count">0</div>
-        <div class="bk-cps">+<span id="bk-cps">0</span> тортов/сек</div>
+
+      <!-- Шапка со счётчиком -->
+      <div class="bk-header">
+        <div class="bk-header__title">🏪 Кондитерская «Мария»</div>
+        <div class="bk-header__count" id="bk-count">0 🎂</div>
+        <div class="bk-header__row">
+          <div class="bk-stat"><span class="bk-stat__ic">⚡</span><span id="bk-cps-val">0</span><span class="bk-stat__lb">/сек</span></div>
+          <div class="bk-stat"><span class="bk-stat__ic">👆</span><span id="bk-cpc-val">1</span><span class="bk-stat__lb">/клик</span></div>
+          <div class="bk-stat"><span class="bk-stat__ic">🌟</span><span id="bk-mult-val">×1.0</span><span class="bk-stat__lb">бонус</span></div>
+        </div>
       </div>
-      <div class="bk-tap-wrap">
-        <button class="bk-tap-btn" id="bk-tap" onclick="bkTap()">🎂</button>
-        <div class="bk-tap-hint">Тапайте чтобы печь!</div>
+
+      <!-- Зона тапа -->
+      <div class="bk-arena" id="bk-arena">
+        <div class="bk-arena__bg">
+          <div class="bk-steam bk-steam--1"></div>
+          <div class="bk-steam bk-steam--2"></div>
+          <div class="bk-steam bk-steam--3"></div>
+        </div>
+        <button class="bk-cake-btn" id="bk-tap" onclick="bkTap()">🎂</button>
+        <div class="bk-arena__hint" id="bk-arena-hint">Нажмите чтобы печь!</div>
       </div>
+
+      <!-- Достижения -->
+      <div class="bk-miles-wrap">
+        <div class="bk-section-title">Достижения</div>
+        <div class="bk-miles" id="bk-miles"></div>
+      </div>
+
+      <!-- Улучшения -->
+      <div class="bk-section-title" style="margin-top:8px">Улучшения</div>
       <div class="bk-upgrades" id="bk-upgrades"></div>
     </div>
   </div>

@@ -633,127 +633,281 @@ function g2InitTouch() {
 }
 
 /* ═══════════════════════════════════════════════════════
-   ПЕКАРНЯ (IDLE CLICKER)
+   ПЕКАРНЯ v2 — полная переработка
+   • Исправлен баг с Infinity ценами
+   • 9 улучшений с правильным масштабированием
+   • Бонусы ×2/×5 за серии покупок (10/25 штук)
+   • Достижения за общий выпуск
+   • Красивый дизайн
 ═══════════════════════════════════════════════════════ */
+
 const BK_UPG = [
-  { id:'click2', name:'Скалка',      emoji:'🥄', base:50,    cps:0,   cpc:1,  desc:'+1 за клик' },
-  { id:'oven',   name:'Духовка',     emoji:'🔥', base:100,   cps:1,   cpc:0,  desc:'+1 торт/сек' },
-  { id:'mixer',  name:'Миксер',      emoji:'🌀', base:400,   cps:4,   cpc:0,  desc:'+4 торта/сек' },
-  { id:'chef',   name:'Кондитер',    emoji:'👨‍🍳', base:1500,  cps:15,  cpc:0,  desc:'+15 тортов/сек' },
-  { id:'store',  name:'Витрина',     emoji:'🏪', base:6000,  cps:60,  cpc:0,  desc:'+60 тортов/сек' },
-  { id:'factory',name:'Кондитерская',emoji:'🏭', base:25000, cps:250, cpc:0,  desc:'+250 тортов/сек' },
+  { id:'rolling', name:'Скалка',        emoji:'🥄', base:15,       cps:0,     cpc:1,   flavor:'Раскатываешь тесто быстрее' },
+  { id:'oven',    name:'Духовка',        emoji:'🔥', base:80,       cps:0.4,   cpc:0,   flavor:'Пахнет ванилью и корицей' },
+  { id:'mixer',   name:'Миксер',         emoji:'🌀', base:400,      cps:2,     cpc:0,   flavor:'Взбивает крем до пиков' },
+  { id:'chef',    name:'Кондитер',       emoji:'👨‍🍳', base:2000,     cps:10,    cpc:0,   flavor:'Умеет делать шоколадные розочки' },
+  { id:'coffee',  name:'Кофейня',        emoji:'☕', base:10000,    cps:40,    cpc:0,   flavor:'Торты к кофе разлетаются мгновенно' },
+  { id:'lab',     name:'Лаборатория',    emoji:'🔬', base:50000,    cps:160,   cpc:0,   flavor:'Молекулярная гастрономия' },
+  { id:'factory', name:'Кондитерская',   emoji:'🏭', base:250000,   cps:640,   cpc:0,   flavor:'Работает круглосуточно' },
+  { id:'chain',   name:'Сеть «Мария»',  emoji:'🏪', base:1250000,  cps:2560,  cpc:0,   flavor:'18 магазинов по всему Иркутску' },
+  { id:'empire',  name:'Сладкая империя',emoji:'👑', base:6250000,  cps:10240, cpc:0,   flavor:'Торты по всему миру' },
 ];
 
-let bk = { cookies:0, cpc:1, cps:0, counts:{}, interval:null };
+// Достижения (по total испечённых)
+const BK_MILES = [
+  { need:50,       emoji:'🥄', title:'Стажёр',           reward:'+2 за клик',       cpc:2 },
+  { need:500,      emoji:'🥐', title:'Подмастерье',       reward:'×1.1 производство', mult:1.1 },
+  { need:5000,     emoji:'🧁', title:'Пекарь',            reward:'+5 за клик',       cpc:5 },
+  { need:50000,    emoji:'🍰', title:'Кондитер',          reward:'×1.25 производство',mult:1.25 },
+  { need:500000,   emoji:'🎂', title:'Шеф-повар',         reward:'+20 за клик',      cpc:20 },
+  { need:5e6,      emoji:'🏅', title:'Мастер',            reward:'×1.5 производство', mult:1.5 },
+  { need:50e6,     emoji:'🌟', title:'Виртуоз',           reward:'+100 за клик',     cpc:100 },
+  { need:500e6,    emoji:'👑', title:'Легенда',           reward:'×2 производство',  mult:2 },
+  { need:5e9,      emoji:'🏆', title:'Сладкая Империя',  reward:'×5 производство',  mult:5 },
+];
+
+// Бонусы за количество одного улучшения
+const BK_COUNT_BONUS = [
+  { at:10, mult:2,  label:'×2' },
+  { at:25, mult:5,  label:'×5' },
+  { at:50, mult:10, label:'×10' },
+  { at:100,mult:25, label:'×25' },
+];
+
+let bk = {
+  cookies: 0,    // текущий баланс
+  total:   0,    // всего испечено за всё время
+  cpc:     1,    // клик (итоговый)
+  cps:     0,    // производство (итоговое)
+  mult:    1,    // общий множитель от достижений
+  counts:  {},   // сколько куплено каждого улучшения
+  achieved:{},   // какие достижения получены
+  interval:null,
+  renderTimer: 0,
+};
+
+// ─ Сохранение/загрузка ──────────────────────────────
+function bkSave() {
+  localStorage.setItem('bakery3', JSON.stringify({
+    cookies: bk.cookies, total: bk.total,
+    counts: bk.counts, achieved: bk.achieved,
+  }));
+}
 
 function bkLoad() {
   try {
-    const s = JSON.parse(localStorage.getItem('bakery2')||'{}');
-    bk.cookies = s.cookies||0;
-    bk.counts  = s.counts||{};
+    const s = JSON.parse(localStorage.getItem('bakery3') || '{}');
+    bk.cookies  = s.cookies  || 0;
+    bk.total    = s.total    || 0;
+    bk.counts   = s.counts   || {};
+    bk.achieved = s.achieved || {};
   } catch {}
   bkCalc();
 }
 
-function bkSave() {
-  localStorage.setItem('bakery2', JSON.stringify({ cookies: Math.floor(bk.cookies), counts: bk.counts }));
-}
-
+// ─ Расчёт параметров ────────────────────────────────
 function bkCalc() {
-  bk.cpc = 1;
-  bk.cps = 0;
-  BK_UPG.forEach(u => {
-    const n = bk.counts[u.id]||0;
-    bk.cpc += u.cpc * n;
-    bk.cps += u.cps * n;
+  // Множитель от достижений
+  let mult = 1, bonusCpc = 0;
+  BK_MILES.forEach(m => {
+    if (bk.achieved[m.title]) {
+      if (m.mult) mult *= m.mult;
+      if (m.cpc)  bonusCpc += m.cpc;
+    }
   });
+  bk.mult = mult;
+
+  // Базовые cpc/cps от улучшений
+  let baseCpc = 1, baseCps = 0;
+  BK_UPG.forEach(u => {
+    const n = bk.counts[u.id] || 0;
+    if (u.cpc) baseCpc += u.cpc * n;
+    if (u.cps) {
+      // Бонус за серии
+      let countMult = 1;
+      BK_COUNT_BONUS.forEach(b => { if (n >= b.at) countMult = b.mult; });
+      baseCps += u.cps * n * countMult;
+    }
+  });
+
+  bk.cpc = baseCpc + bonusCpc;
+  bk.cps = baseCps * bk.mult;
 }
 
+// ─ Цена улучшения (без Infinity) ────────────────────
 function bkPrice(upg) {
-  return Math.floor(upg.base * Math.pow(1.15, bk.counts[upg.id]||0));
+  const n = Math.min(bk.counts[upg.id] || 0, 350);
+  const p = upg.base * Math.pow(1.15, n);
+  return isFinite(p) ? Math.ceil(p) : Number.MAX_SAFE_INTEGER;
 }
 
+// ─ Форматирование чисел ─────────────────────────────
 function bkFmt(n) {
+  if (typeof n !== 'number' || !isFinite(n)) return '∞';
   n = Math.floor(n);
-  if (n >= 1e9) return (n/1e9).toFixed(1)+'Г';
-  if (n >= 1e6) return (n/1e6).toFixed(1)+'М';
-  if (n >= 1e3) return (n/1e3).toFixed(1)+'К';
+  if (n >= 1e12) return (n/1e12).toFixed(1) + 'Т';
+  if (n >= 1e9)  return (n/1e9).toFixed(1)  + 'Г';
+  if (n >= 1e6)  return (n/1e6).toFixed(1)  + 'М';
+  if (n >= 1e3)  return (n/1e3).toFixed(1)  + 'К';
   return n.toString();
 }
 
+// ─ Тап ─────────────────────────────────────────────
 function bkTap() {
   bk.cookies += bk.cpc;
-  bkUpdateCounter();
-  bkRenderUpgrades();
-  // Tap animation
+  bk.total   += bk.cpc;
+  bkCheckMilestones();
+
+  // Анимация кнопки
   const btn = document.getElementById('bk-tap');
-  if (btn) { btn.style.transform='scale(0.88)'; setTimeout(()=>btn.style.transform='',120); }
-  // Floating +N
-  const wrap = document.querySelector('.bk-tap-wrap');
-  if (wrap) {
+  if (btn) {
+    btn.classList.remove('bk-cake-pop');
+    void btn.offsetWidth;
+    btn.classList.add('bk-cake-pop');
+  }
+
+  // Плавающее число
+  const arena = document.getElementById('bk-arena');
+  if (arena) {
     const fl = document.createElement('div');
     fl.className = 'bk-float';
-    fl.textContent = '+' + bk.cpc;
-    fl.style.cssText = `left:${45+Math.random()*10}%;top:30%`;
-    wrap.appendChild(fl);
-    setTimeout(()=>fl.remove(), 800);
+    fl.textContent = '+' + bkFmt(bk.cpc);
+    fl.style.left = (35 + Math.random() * 30) + '%';
+    arena.appendChild(fl);
+    setTimeout(() => fl.remove(), 900);
   }
+
+  bkUpdateHUD();
 }
 
+// ─ Покупка ─────────────────────────────────────────
 function bkBuy(id) {
-  const upg = BK_UPG.find(u=>u.id===id);
+  const upg = BK_UPG.find(u => u.id === id);
   if (!upg) return;
   const price = bkPrice(upg);
-  if (bk.cookies < price) return;
+  if (!isFinite(price) || bk.cookies < price) return;
   bk.cookies -= price;
-  bk.counts[id] = (bk.counts[id]||0) + 1;
-  bkCalc(); bkSave(); bkRender();
+  bk.counts[id] = (bk.counts[id] || 0) + 1;
+  bkCalc();
+  bkSave();
+  bkRenderUpgrades();
+  bkUpdateHUD();
 }
 
-function bkUpdateCounter() {
-  const el = document.getElementById('bk-count');
-  if (el) el.textContent = bkFmt(bk.cookies) + ' 🎂';
-  const cpsEl = document.getElementById('bk-cps');
+// ─ Достижения ──────────────────────────────────────
+function bkCheckMilestones() {
+  let changed = false;
+  BK_MILES.forEach(m => {
+    if (!bk.achieved[m.title] && bk.total >= m.need) {
+      bk.achieved[m.title] = true;
+      changed = true;
+      bkShowToast(m.emoji + ' ' + m.title + ': ' + m.reward);
+    }
+  });
+  if (changed) { bkCalc(); bkRenderMilestones(); }
+}
+
+function bkShowToast(msg) {
+  const arena = document.getElementById('bk-arena');
+  if (!arena) return;
+  const t = document.createElement('div');
+  t.className = 'bk-toast';
+  t.textContent = msg;
+  arena.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+// ─ Рендер HUD ──────────────────────────────────────
+function bkUpdateHUD() {
+  const countEl = document.getElementById('bk-count');
+  if (countEl) countEl.textContent = bkFmt(bk.cookies) + ' 🎂';
+  const cpsEl = document.getElementById('bk-cps-val');
   if (cpsEl) cpsEl.textContent = bkFmt(bk.cps);
+  const cpcEl = document.getElementById('bk-cpc-val');
+  if (cpcEl) cpcEl.textContent = bkFmt(bk.cpc);
+  const multEl = document.getElementById('bk-mult-val');
+  if (multEl) multEl.textContent = '×' + bk.mult.toFixed(1);
+  const hint = document.getElementById('bk-arena-hint');
+  if (hint && bk.cps > 0) hint.textContent = bkFmt(bk.cps) + ' тортов/сек';
 }
 
+// ─ Рендер улучшений ─────────────────────────────────
 function bkRenderUpgrades() {
   const wrap = document.getElementById('bk-upgrades');
   if (!wrap) return;
-  wrap.innerHTML = '<div class="bk-upg-title">Улучшения</div>';
+  wrap.innerHTML = '';
   BK_UPG.forEach(u => {
-    const n = bk.counts[u.id]||0;
+    const n     = bk.counts[u.id] || 0;
     const price = bkPrice(u);
-    const canBuy = bk.cookies >= price;
+    const can   = isFinite(price) && bk.cookies >= price;
+
+    // Следующий бонусный порог
+    const nextBonus = BK_COUNT_BONUS.find(b => n < b.at);
+    const progress  = nextBonus ? Math.round((n / nextBonus.at) * 100) : 100;
+
     const div = document.createElement('div');
-    div.className = 'bk-upg' + (canBuy ? ' bk-upg--on' : '');
+    div.className = 'bk-upg' + (can ? ' bk-upg--can' : '');
     div.innerHTML = `
-      <div class="bk-upg__emoji">${u.emoji}</div>
-      <div class="bk-upg__info">
-        <div class="bk-upg__name">${u.name} <span class="bk-upg__cnt">${n>0?'×'+n:''}</span></div>
-        <div class="bk-upg__desc">${u.desc}</div>
+      <div class="bk-upg__left">
+        <div class="bk-upg__emoji">${u.emoji}</div>
+        <div class="bk-upg__cnt">${n > 0 ? n : ''}</div>
       </div>
-      <button class="bk-upg__btn" onclick="bkBuy('${u.id}')" ${canBuy?'':'disabled'}>
-        ${bkFmt(price)} 🎂
+      <div class="bk-upg__mid">
+        <div class="bk-upg__name">${u.name}
+          ${n >= 10 ? '<span class="bk-upg__tag">×' + BK_COUNT_BONUS.slice().reverse().find(b=>n>=b.at)?.mult + '</span>' : ''}
+        </div>
+        <div class="bk-upg__flavor">${u.flavor}</div>
+        ${nextBonus ? `<div class="bk-upg__bar"><div class="bk-upg__fill" style="width:${progress}%"></div></div>
+        <div class="bk-upg__next">до ${nextBonus.label} бонуса: ${n}/${nextBonus.at}</div>` : '<div class="bk-upg__next">Максимальный бонус!</div>'}
+      </div>
+      <button class="bk-upg__btn ${can?'bk-upg__btn--on':''}" onclick="bkBuy('${u.id}')" ${can?'':'disabled'}>
+        <div class="bk-upg__price">${bkFmt(price)}</div>
+        <div class="bk-upg__priceic">🎂</div>
       </button>`;
     wrap.appendChild(div);
   });
 }
 
-function bkRender() {
-  bkUpdateCounter();
-  bkRenderUpgrades();
+// ─ Рендер достижений ────────────────────────────────
+function bkRenderMilestones() {
+  const wrap = document.getElementById('bk-miles');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  BK_MILES.forEach(m => {
+    const done = !!bk.achieved[m.title];
+    const div = document.createElement('div');
+    div.className = 'bk-mile' + (done ? ' bk-mile--done' : '');
+    div.title = m.title + ': ' + m.reward;
+    div.innerHTML = `<div class="bk-mile__ic">${m.emoji}</div><div class="bk-mile__name">${m.title}</div>`;
+    if (!done) {
+      const pct = Math.min(100, Math.floor((bk.total / m.need) * 100));
+      div.innerHTML += `<div class="bk-mile__prog"><div style="width:${pct}%"></div></div>`;
+    }
+    wrap.appendChild(div);
+  });
 }
 
+function bkRender() {
+  bkUpdateHUD();
+  bkRenderUpgrades();
+  bkRenderMilestones();
+}
+
+// ─ Тик ─────────────────────────────────────────────
 function bkStartTick() {
   if (bk.interval) return;
+  let tick = 0;
   bk.interval = setInterval(() => {
     if (bk.cps > 0) {
-      bk.cookies += bk.cps / 20; // 20 ticks/sec
-      bkUpdateCounter();
-      bkRenderUpgrades();
+      const gain = bk.cps / 20;
+      bk.cookies += gain;
+      bk.total   += gain;
+      bkCheckMilestones();
     }
-    bkSave();
+    tick++;
+    if (tick % 4 === 0) bkUpdateHUD();       // HUD 5/сек
+    if (tick % 20 === 0) bkRenderUpgrades(); // улучшения 1/сек
+    if (tick % 40 === 0) bkSave();            // сохранение 2/сек
   }, 50);
 }
 
