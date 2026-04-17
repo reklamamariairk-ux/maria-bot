@@ -453,6 +453,8 @@ b,strong{font-weight:600}
 .nb__lb{font-size:9px;font-weight:600;letter-spacing:.2px}
 
 /* ── LOYALTY ─────────────────────────────────────────────────────────────── */
+.loy-personal{padding:0 16px 8px;display:flex;flex-direction:column;gap:10px}
+.loy-personal__text{font-size:14px;color:var(--muted);text-align:center;line-height:1.5}
 .loyalty-block{padding:0 16px 8px}
 .loy-step{display:flex;flex-direction:column;gap:10px}
 .loy-hint{font-size:13px;color:var(--muted);text-align:center}
