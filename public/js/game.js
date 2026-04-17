@@ -65,6 +65,9 @@ function showGame(name) {
     if (btn) btn.classList.toggle('active', name === id);
   });
   if (name !== 'flappy') flappyStop();
+  if (name === 'flappy') requestAnimationFrame(() => {
+    if (!fc.cvs) flappyInit(); else fcResize();
+  });
   if (name === 'bakery') hkBoot();
 }
 
@@ -95,28 +98,34 @@ let fc = {
   lastTime: 0,
 };
 
+// ─ Resize (can be called any time canvas is visible) ─
+function fcResize() {
+  if (!fc.cvs) return;
+  const rect = fc.cvs.getBoundingClientRect();
+  const W = rect.width  || (window.innerWidth - 28);
+  const H = rect.height || Math.round(W * 1.15);
+  fc.dpr = Math.min(window.devicePixelRatio || 1, 3);
+  fc.cvs.width  = W * fc.dpr;
+  fc.cvs.height = H * fc.dpr;
+  if (fc.ctx) { fc.ctx = fc.cvs.getContext('2d'); fc.ctx.scale(fc.dpr, fc.dpr); }
+  fcBuildClouds();
+}
+
 // ─ Init ─────────────────────────────────────────────
 function flappyInit() {
   fc.cvs = document.getElementById('flappy-canvas');
   if (!fc.cvs) return;
 
-  fc.dpr = Math.min(window.devicePixelRatio || 1, 3);
-  const rect = fc.cvs.getBoundingClientRect();
-  const W = rect.width  || 320;
-  const H = rect.height || 380;
-
-  fc.cvs.width  = W * fc.dpr;
-  fc.cvs.height = H * fc.dpr;
-  fc.cvs.style.width  = W + 'px';
-  fc.cvs.style.height = H + 'px';
-
+  fcResize();
   fc.ctx = fc.cvs.getContext('2d');
   fc.ctx.scale(fc.dpr, fc.dpr);
 
   fc.best = Number(localStorage.getItem('flappy_best2') || 0);
   document.getElementById('flappy-best').textContent = fc.best;
 
-  fc.cvs.addEventListener('pointerdown', fcTap);
+  // touchstart with preventDefault stops the follow-up click on mobile
+  fc.cvs.addEventListener('touchstart', e => { e.preventDefault(); fcTap(e); }, { passive: false });
+  fc.cvs.addEventListener('click', fcTap);
 
   fcBuildClouds();
   fcReset();
@@ -913,13 +922,6 @@ function bkStartTick() {
 document.addEventListener('DOMContentLoaded', () => {
   initMemory();
   g2.best = Number(localStorage.getItem('g2best')||0);
-
-  const observer = new MutationObserver(() => {
-    const canvas = document.getElementById('flappy-canvas');
-    if (canvas && canvas.offsetParent !== null && !fc.cvs) flappyInit();
-  });
-  const funTab = document.getElementById('tab-fun');
-  if (funTab) observer.observe(funTab, { attributes: true, attributeFilter: ['class'] });
 
   // Pause when page hidden
   document.addEventListener('visibilitychange', () => {

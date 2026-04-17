@@ -382,7 +382,7 @@ b,strong{font-weight:600}
 
 /* Flappy */
 .flappy-canvas{
-  display:block;width:calc(100% - 28px);margin:0 14px;
+  display:block;width:calc(100% - 28px);height:380px;margin:0 14px;
   border-radius:var(--r);box-shadow:var(--shadow);
   background:#87CEEB;touch-action:none;cursor:pointer;
 }
