@@ -55,7 +55,7 @@ function checkMatch() {
 /* ═══════════════════════════════════════════════════════
    GAME SELECTOR
 ═══════════════════════════════════════════════════════ */
-const GAME_IDS = ['memory','flappy','2048','bakery'];
+const GAME_IDS = ['memory','flappy','bakery'];
 
 function showGame(name) {
   GAME_IDS.forEach(id => {
@@ -65,7 +65,6 @@ function showGame(name) {
     if (btn) btn.classList.toggle('active', name === id);
   });
   if (name !== 'flappy') flappyStop();
-  if (name === '2048') { g2InitTouch(); if (!g2.board.length) g2048New(); else g2Render(); }
   if (name === 'bakery') hkBoot();
 }
 
@@ -117,8 +116,7 @@ function flappyInit() {
   fc.best = Number(localStorage.getItem('flappy_best2') || 0);
   document.getElementById('flappy-best').textContent = fc.best;
 
-  fc.cvs.addEventListener('click',      fcTap);
-  fc.cvs.addEventListener('touchstart', fcTap, { passive: true });
+  fc.cvs.addEventListener('pointerdown', fcTap);
 
   fcBuildClouds();
   fcReset();
