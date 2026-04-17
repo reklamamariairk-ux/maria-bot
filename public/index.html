@@ -244,7 +244,9 @@
   <div id="subtab-content-games">
     <div class="game-selector">
       <button class="gbtn active" id="btn-memory" onclick="showGame('memory')">🃏 Мемори</button>
-      <button class="gbtn" id="btn-flappy" onclick="showGame('flappy')">🎂 Flappy Cake</button>
+      <button class="gbtn" id="btn-flappy"  onclick="showGame('flappy')">🎂 Flappy</button>
+      <button class="gbtn" id="btn-2048"    onclick="showGame('2048')">🍬 2048</button>
+      <button class="gbtn" id="btn-bakery"  onclick="showGame('bakery')">🏪 Пекарня</button>
     </div>
 
     <!-- Memory -->
@@ -266,6 +268,32 @@
       </div>
       <canvas id="flappy-canvas" class="flappy-canvas"></canvas>
       <p class="game-tip">Нажмите / тапните чтобы лететь 🎂</p>
+    </div>
+
+    <!-- 2048 Сладости -->
+    <div id="game-2048" style="display:none">
+      <div class="score-bar">
+        <span>Счёт: <b id="g2048-score">0</b></span>
+        <span>Рекорд: <b id="g2048-best">0</b></span>
+        <button class="btn-sm" onclick="g2048New()">↺</button>
+      </div>
+      <div class="g2048-wrap">
+        <div class="g2048-grid" id="g2048-grid"></div>
+      </div>
+      <p class="game-tip">Свайпайте чтобы объединять сладости 🍬</p>
+    </div>
+
+    <!-- Пекарня -->
+    <div id="game-bakery" style="display:none">
+      <div class="bk-counter">
+        <div class="bk-count" id="bk-count">0</div>
+        <div class="bk-cps">+<span id="bk-cps">0</span> тортов/сек</div>
+      </div>
+      <div class="bk-tap-wrap">
+        <button class="bk-tap-btn" id="bk-tap" onclick="bkTap()">🎂</button>
+        <div class="bk-tap-hint">Тапайте чтобы печь!</div>
+      </div>
+      <div class="bk-upgrades" id="bk-upgrades"></div>
     </div>
   </div>
 

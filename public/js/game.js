@@ -55,12 +55,18 @@ function checkMatch() {
 /* ═══════════════════════════════════════════════════════
    GAME SELECTOR
 ═══════════════════════════════════════════════════════ */
+const GAME_IDS = ['memory','flappy','2048','bakery'];
+
 function showGame(name) {
-  document.getElementById('game-memory').style.display = name === 'memory' ? '' : 'none';
-  document.getElementById('game-flappy').style.display = name === 'flappy' ? '' : 'none';
-  document.getElementById('btn-memory').classList.toggle('active', name === 'memory');
-  document.getElementById('btn-flappy').classList.toggle('active', name === 'flappy');
+  GAME_IDS.forEach(id => {
+    const el = document.getElementById('game-' + id);
+    if (el) el.style.display = name === id ? '' : 'none';
+    const btn = document.getElementById('btn-' + id);
+    if (btn) btn.classList.toggle('active', name === id);
+  });
   if (name !== 'flappy') flappyStop();
+  if (name === '2048') { g2InitTouch(); if (!g2.board.length) g2048New(); else g2Render(); }
+  if (name === 'bakery') bkRender();
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -507,9 +513,255 @@ function fcLoop(ts) {
   fcDraw();
 }
 
+/* ═══════════════════════════════════════════════════════
+   2048 СЛАДОСТИ
+═══════════════════════════════════════════════════════ */
+const G2_EMO = {
+  2:'🍬', 4:'🍭', 8:'🍪', 16:'🍩',
+  32:'🧁', 64:'🍰', 128:'🎂', 256:'🌟',
+  512:'🎆', 1024:'👑', 2048:'🏆',
+};
+
+let g2 = { board:[], score:0, best:0, over:false };
+
+function g2048New() {
+  g2.board = Array(4).fill(null).map(() => Array(4).fill(0));
+  g2.score = 0; g2.over = false;
+  document.getElementById('g2048-score').textContent = '0';
+  g2Add(); g2Add(); g2Render();
+}
+
+function g2Add() {
+  const empty = [];
+  for (let r=0;r<4;r++) for (let c=0;c<4;c++) if (!g2.board[r][c]) empty.push([r,c]);
+  if (!empty.length) return;
+  const [r,c] = empty[Math.floor(Math.random()*empty.length)];
+  g2.board[r][c] = Math.random() < 0.85 ? 2 : 4;
+}
+
+function g2Render() {
+  const grid = document.getElementById('g2048-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  for (let r=0;r<4;r++) for (let c=0;c<4;c++) {
+    const v = g2.board[r][c];
+    const cell = document.createElement('div');
+    const lvl = v ? Math.min(v, 2048) : 0;
+    cell.className = 'g2c' + (lvl ? ' g2c-'+lvl : '');
+    if (v) cell.innerHTML = `<span class="g2e">${G2_EMO[v]||'🏆'}</span><span class="g2n">${v>=1000?(v/1000).toFixed(1)+'K':v}</span>`;
+    grid.appendChild(cell);
+  }
+  document.getElementById('g2048-score').textContent = g2.score;
+  if (g2.score > g2.best) {
+    g2.best = g2.score;
+    localStorage.setItem('g2best', g2.best);
+    document.getElementById('g2048-best').textContent = g2.best;
+  }
+  if (g2.over) {
+    const ov = document.createElement('div');
+    ov.className = 'g2-over';
+    ov.innerHTML = `<div class="g2-over__box"><div>Игра окончена</div><div class="g2-over__score">Счёт: ${g2.score}</div><button onclick="g2048New()">Заново</button></div>`;
+    grid.appendChild(ov);
+  }
+}
+
+function g2Transpose(b) { return b[0].map((_,c) => b.map(r=>r[c])); }
+
+function g2SlideLeft(b) {
+  let moved = false;
+  const nb = b.map(row => {
+    const orig = row.join();
+    let r = row.filter(v=>v);
+    for (let i=0;i<r.length-1;i++) {
+      if (r[i]===r[i+1]) {
+        r[i]*=2; g2.score+=r[i];
+        if (r[i]===2048) setTimeout(()=>alert('🏆 Вы собрали 2048! Поздравляем!'),100);
+        r.splice(i+1,1);
+      }
+    }
+    while (r.length<4) r.push(0);
+    if (r.join()!==orig) moved=true;
+    return r;
+  });
+  return {b:nb, moved};
+}
+
+function g2Move(dir) {
+  if (g2.over) return;
+  let b = g2.board.map(r=>[...r]);
+  if (dir==='right') b = b.map(r=>[...r].reverse());
+  else if (dir==='up') b = g2Transpose(b);
+  else if (dir==='down') { b = g2Transpose(b); b = b.map(r=>[...r].reverse()); }
+  const {b:nb, moved} = g2SlideLeft(b);
+  b = nb;
+  if (dir==='right') b = b.map(r=>[...r].reverse());
+  else if (dir==='up') b = g2Transpose(b);
+  else if (dir==='down') { b = b.map(r=>[...r].reverse()); b = g2Transpose(b); }
+  if (moved) {
+    g2.board = b; g2Add(); g2Render();
+    if (g2IsOver()) { g2.over = true; g2Render(); }
+  }
+}
+
+function g2IsOver() {
+  for (let r=0;r<4;r++) for (let c=0;c<4;c++) {
+    if (!g2.board[r][c]) return false;
+    if (c<3 && g2.board[r][c]===g2.board[r][c+1]) return false;
+    if (r<3 && g2.board[r][c]===g2.board[r+1][c]) return false;
+  }
+  return true;
+}
+
+// Touch swipe for 2048
+let g2tx=0, g2ty=0;
+function g2InitTouch() {
+  const wrap = document.getElementById('g2048-grid');
+  if (!wrap || wrap.dataset.touch) return;
+  wrap.dataset.touch = '1';
+  wrap.addEventListener('touchstart', e=>{ g2tx=e.touches[0].clientX; g2ty=e.touches[0].clientY; }, {passive:true});
+  wrap.addEventListener('touchend', e=>{
+    const dx = e.changedTouches[0].clientX - g2tx;
+    const dy = e.changedTouches[0].clientY - g2ty;
+    if (Math.abs(dx)<25 && Math.abs(dy)<25) return;
+    if (Math.abs(dx)>Math.abs(dy)) g2Move(dx>0?'right':'left');
+    else g2Move(dy>0?'down':'up');
+  });
+  document.addEventListener('keydown', e=>{
+    const map = {ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'};
+    if (map[e.key]) { e.preventDefault(); g2Move(map[e.key]); }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════
+   ПЕКАРНЯ (IDLE CLICKER)
+═══════════════════════════════════════════════════════ */
+const BK_UPG = [
+  { id:'click2', name:'Скалка',      emoji:'🥄', base:50,    cps:0,   cpc:1,  desc:'+1 за клик' },
+  { id:'oven',   name:'Духовка',     emoji:'🔥', base:100,   cps:1,   cpc:0,  desc:'+1 торт/сек' },
+  { id:'mixer',  name:'Миксер',      emoji:'🌀', base:400,   cps:4,   cpc:0,  desc:'+4 торта/сек' },
+  { id:'chef',   name:'Кондитер',    emoji:'👨‍🍳', base:1500,  cps:15,  cpc:0,  desc:'+15 тортов/сек' },
+  { id:'store',  name:'Витрина',     emoji:'🏪', base:6000,  cps:60,  cpc:0,  desc:'+60 тортов/сек' },
+  { id:'factory',name:'Кондитерская',emoji:'🏭', base:25000, cps:250, cpc:0,  desc:'+250 тортов/сек' },
+];
+
+let bk = { cookies:0, cpc:1, cps:0, counts:{}, interval:null };
+
+function bkLoad() {
+  try {
+    const s = JSON.parse(localStorage.getItem('bakery2')||'{}');
+    bk.cookies = s.cookies||0;
+    bk.counts  = s.counts||{};
+  } catch {}
+  bkCalc();
+}
+
+function bkSave() {
+  localStorage.setItem('bakery2', JSON.stringify({ cookies: Math.floor(bk.cookies), counts: bk.counts }));
+}
+
+function bkCalc() {
+  bk.cpc = 1;
+  bk.cps = 0;
+  BK_UPG.forEach(u => {
+    const n = bk.counts[u.id]||0;
+    bk.cpc += u.cpc * n;
+    bk.cps += u.cps * n;
+  });
+}
+
+function bkPrice(upg) {
+  return Math.floor(upg.base * Math.pow(1.15, bk.counts[upg.id]||0));
+}
+
+function bkFmt(n) {
+  n = Math.floor(n);
+  if (n >= 1e9) return (n/1e9).toFixed(1)+'Г';
+  if (n >= 1e6) return (n/1e6).toFixed(1)+'М';
+  if (n >= 1e3) return (n/1e3).toFixed(1)+'К';
+  return n.toString();
+}
+
+function bkTap() {
+  bk.cookies += bk.cpc;
+  bkUpdateCounter();
+  bkRenderUpgrades();
+  // Tap animation
+  const btn = document.getElementById('bk-tap');
+  if (btn) { btn.style.transform='scale(0.88)'; setTimeout(()=>btn.style.transform='',120); }
+  // Floating +N
+  const wrap = document.querySelector('.bk-tap-wrap');
+  if (wrap) {
+    const fl = document.createElement('div');
+    fl.className = 'bk-float';
+    fl.textContent = '+' + bk.cpc;
+    fl.style.cssText = `left:${45+Math.random()*10}%;top:30%`;
+    wrap.appendChild(fl);
+    setTimeout(()=>fl.remove(), 800);
+  }
+}
+
+function bkBuy(id) {
+  const upg = BK_UPG.find(u=>u.id===id);
+  if (!upg) return;
+  const price = bkPrice(upg);
+  if (bk.cookies < price) return;
+  bk.cookies -= price;
+  bk.counts[id] = (bk.counts[id]||0) + 1;
+  bkCalc(); bkSave(); bkRender();
+}
+
+function bkUpdateCounter() {
+  const el = document.getElementById('bk-count');
+  if (el) el.textContent = bkFmt(bk.cookies) + ' 🎂';
+  const cpsEl = document.getElementById('bk-cps');
+  if (cpsEl) cpsEl.textContent = bkFmt(bk.cps);
+}
+
+function bkRenderUpgrades() {
+  const wrap = document.getElementById('bk-upgrades');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="bk-upg-title">Улучшения</div>';
+  BK_UPG.forEach(u => {
+    const n = bk.counts[u.id]||0;
+    const price = bkPrice(u);
+    const canBuy = bk.cookies >= price;
+    const div = document.createElement('div');
+    div.className = 'bk-upg' + (canBuy ? ' bk-upg--on' : '');
+    div.innerHTML = `
+      <div class="bk-upg__emoji">${u.emoji}</div>
+      <div class="bk-upg__info">
+        <div class="bk-upg__name">${u.name} <span class="bk-upg__cnt">${n>0?'×'+n:''}</span></div>
+        <div class="bk-upg__desc">${u.desc}</div>
+      </div>
+      <button class="bk-upg__btn" onclick="bkBuy('${u.id}')" ${canBuy?'':'disabled'}>
+        ${bkFmt(price)} 🎂
+      </button>`;
+    wrap.appendChild(div);
+  });
+}
+
+function bkRender() {
+  bkUpdateCounter();
+  bkRenderUpgrades();
+}
+
+function bkStartTick() {
+  if (bk.interval) return;
+  bk.interval = setInterval(() => {
+    if (bk.cps > 0) {
+      bk.cookies += bk.cps / 20; // 20 ticks/sec
+      bkUpdateCounter();
+      bkRenderUpgrades();
+    }
+    bkSave();
+  }, 50);
+}
+
 // ─ Auto-init ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   initMemory();
+  g2.best = Number(localStorage.getItem('g2best')||0);
+  bkLoad(); bkStartTick();
 
   const observer = new MutationObserver(() => {
     const canvas = document.getElementById('flappy-canvas');
