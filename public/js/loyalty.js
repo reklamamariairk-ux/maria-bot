@@ -1,122 +1,102 @@
-// ─── Loyalty: телефон → SMS → баланс ────────────────────────────────────────
+// ─── Личный кабинет ──────────────────────────────────────────────────────────
 
-let loyPhone = "";
-
-function loyFormatPhone(input) {
+function lkFormatPhone(input) {
   let v = input.value.replace(/\D/g, "");
   if (v.startsWith("8")) v = "7" + v.slice(1);
-  if (!v.startsWith("7") && v.length > 0) v = "7" + v;
+  if (v.length > 0 && !v.startsWith("7")) v = "7" + v;
   v = v.slice(0, 11);
   let out = "";
-  if (v.length > 0) out = "+7";
-  if (v.length > 1) out += " (" + v.slice(1, 4);
+  if (v.length > 0)  out = "+7";
+  if (v.length > 1)  out += " (" + v.slice(1, 4);
   if (v.length >= 4) out += ") " + v.slice(4, 7);
   if (v.length >= 7) out += "-" + v.slice(7, 9);
   if (v.length >= 9) out += "-" + v.slice(9, 11);
   input.value = out;
 }
 
-function loyShowError(id, msg) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.textContent = msg;
-  el.style.display = "block";
-}
-
-function loyHideError(id) {
-  const el = document.getElementById(id);
-  if (el) el.style.display = "none";
-}
-
-function loySetLoading(btnEl, loading) {
-  if (!btnEl) return;
-  btnEl.disabled = loading;
-  btnEl.textContent = loading ? "…" : btnEl.dataset.label || btnEl.textContent;
-}
-
-async function loyRequestCode() {
-  loyHideError("loy-error");
-  const raw = document.getElementById("loy-phone")?.value ?? "";
+async function lkLookup() {
+  const raw = document.getElementById("lk-phone")?.value ?? "";
   const digits = raw.replace(/\D/g, "");
+  const errEl = document.getElementById("lk-error");
+
   if (digits.length < 11) {
-    loyShowError("loy-error", "Введите полный номер телефона");
+    errEl.textContent = "Введите полный номер телефона";
+    errEl.style.display = "block";
     return;
   }
-  loyPhone = digits;
-  const btn = document.querySelector("#loy-step-phone .loy-btn");
-  if (btn) { btn.dataset.label = "Получить код"; btn.disabled = true; btn.textContent = "…"; }
+  errEl.style.display = "none";
+
+  const btn = document.getElementById("lk-btn");
+  btn.disabled = true;
+  btn.textContent = "…";
+
   try {
-    const res = await fetch("/api/loyalty/send-code", {
+    const res = await fetch("/api/loyalty/lookup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone: loyPhone }),
+      body: JSON.stringify({ phone: digits }),
     });
     const data = await res.json();
-    if (btn) { btn.disabled = false; btn.textContent = "Получить код"; }
-    if (data.ok) {
-      document.getElementById("loy-step-phone").style.display = "none";
-      document.getElementById("loy-step-code").style.display = "block";
-      setTimeout(() => document.getElementById("loy-code")?.focus(), 100);
-    } else {
-      loyShowError("loy-error", data.message || "Ошибка. Попробуйте ещё раз");
+    btn.disabled = false;
+    btn.textContent = "Найти";
+
+    if (data.found === false) {
+      errEl.textContent = "Номер не найден в программе лояльности";
+      errEl.style.display = "block";
+      return;
     }
+    if (data.error) {
+      errEl.textContent = data.error === "not_ready"
+        ? "Сервис временно недоступен — попробуйте позже"
+        : "Ошибка. Попробуйте позже";
+      errEl.style.display = "block";
+      return;
+    }
+
+    lkShowCabinet(data);
   } catch {
-    if (btn) { btn.disabled = false; btn.textContent = "Получить код"; }
-    loyShowError("loy-error", "Ошибка соединения. Попробуйте позже");
+    btn.disabled = false;
+    btn.textContent = "Найти";
+    errEl.textContent = "Ошибка соединения. Попробуйте позже";
+    errEl.style.display = "block";
   }
 }
 
-async function loyVerifyCode() {
-  loyHideError("loy-error2");
-  const code = (document.getElementById("loy-code")?.value ?? "").trim();
-  if (code.length < 4) {
-    loyShowError("loy-error2", "Введите код из СМС");
-    return;
-  }
-  const btn = document.querySelector("#loy-step-code .loy-btn");
-  if (btn) { btn.dataset.label = "Проверить"; btn.disabled = true; btn.textContent = "…"; }
-  try {
-    const res = await fetch("/api/loyalty/verify-code", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone: loyPhone, code }),
+function lkShowCabinet(data) {
+  document.getElementById("lk-enter").style.display = "none";
+  document.getElementById("lk-cabinet").style.display = "block";
+
+  document.getElementById("lk-name").textContent = data.name || "Участник клуба";
+  document.getElementById("lk-level").textContent = data.level || "Мария для своих";
+  document.getElementById("lk-balance").textContent =
+    data.balance != null ? data.balance + " баллов" : "—";
+
+  // Билеты
+  const list = document.getElementById("lk-tickets-list");
+  const empty = document.getElementById("lk-tickets-empty");
+  list.innerHTML = "";
+
+  const tickets = data.tickets || [];
+  if (tickets.length === 0) {
+    empty.style.display = "block";
+  } else {
+    empty.style.display = "none";
+    tickets.forEach((t, i) => {
+      const el = document.createElement("div");
+      el.className = "lk-ticket";
+      el.innerHTML = `
+        <div class="lk-ticket__num">Билет #${t.id || (i + 1)}</div>
+        <div class="lk-ticket__name">${t.name || "Сладкий чек"}</div>
+        <div class="lk-ticket__date">${t.date || ""}</div>
+      `;
+      list.appendChild(el);
     });
-    const data = await res.json();
-    if (btn) { btn.disabled = false; btn.textContent = "Проверить"; }
-    if (data.ok) {
-      loyShowResult(data.data || {});
-    } else {
-      loyShowError("loy-error2", data.message || "Неверный код");
-    }
-  } catch {
-    if (btn) { btn.disabled = false; btn.textContent = "Проверить"; }
-    loyShowError("loy-error2", "Ошибка соединения. Попробуйте позже");
   }
 }
 
-function loyShowResult(d) {
-  document.getElementById("loy-step-code").style.display = "none";
-  document.getElementById("loy-step-result").style.display = "block";
-  const nameEl = document.getElementById("loy-name");
-  const levelEl = document.getElementById("loy-level");
-  const balEl = document.getElementById("loy-balance");
-  const cashEl = document.getElementById("loy-cashback");
-  if (nameEl) nameEl.textContent = d.name || "";
-  if (levelEl) levelEl.textContent = d.level ? "Уровень: " + d.level : "";
-  if (balEl) balEl.textContent = d.balance || "Нет данных";
-  if (cashEl) cashEl.textContent = d.cashback ? "Кэшбэк: " + d.cashback : "";
-}
-
-function loyBack() {
-  loyHideError("loy-error2");
-  document.getElementById("loy-step-code").style.display = "none";
-  document.getElementById("loy-step-phone").style.display = "block";
-}
-
-function loyReset() {
-  loyPhone = "";
-  document.getElementById("loy-step-result").style.display = "none";
-  document.getElementById("loy-step-phone").style.display = "block";
-  const phoneInput = document.getElementById("loy-phone");
-  if (phoneInput) phoneInput.value = "";
+function lkReset() {
+  document.getElementById("lk-cabinet").style.display = "none";
+  document.getElementById("lk-enter").style.display = "block";
+  document.getElementById("lk-phone").value = "";
+  document.getElementById("lk-error").style.display = "none";
 }

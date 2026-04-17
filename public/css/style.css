@@ -452,43 +452,66 @@ b,strong{font-weight:600}
 .nb__ic{font-size:20px}
 .nb__lb{font-size:9px;font-weight:600;letter-spacing:.2px}
 
-/* ── LOYALTY ─────────────────────────────────────────────────────────────── */
-.loy-personal{padding:0 16px 8px;display:flex;flex-direction:column;gap:10px}
-.loy-personal__text{font-size:14px;color:var(--muted);text-align:center;line-height:1.5}
-.loyalty-block{padding:0 16px 8px}
-.loy-step{display:flex;flex-direction:column;gap:10px}
-.loy-hint{font-size:13px;color:var(--muted);text-align:center}
-.loy-row{display:flex;gap:8px}
-.loy-input{
-  flex:1;padding:11px 14px;
+/* ── ЛИЧНЫЙ КАБИНЕТ ──────────────────────────────────────────────────────── */
+.lk-form{display:flex;gap:8px;padding:0 16px 4px}
+.lk-input{
+  flex:1;padding:12px 14px;
   border:1.5px solid var(--border);border-radius:var(--r-sm);
-  font-size:15px;font-family:'Inter',sans-serif;
+  font-size:16px;font-family:'Inter',sans-serif;
   background:var(--surface);outline:none;transition:border-color var(--t);
 }
-.loy-input:focus{border-color:var(--red)}
-.loy-input--sm{max-width:130px;text-align:center;letter-spacing:4px;font-size:18px;font-weight:600}
-.loy-btn{
-  white-space:nowrap;padding:11px 16px;
+.lk-input:focus{border-color:var(--red)}
+.lk-btn{
+  padding:12px 20px;white-space:nowrap;
   background:var(--red);color:#fff;border:none;border-radius:var(--r-sm);
-  font-size:14px;font-weight:600;cursor:pointer;transition:opacity var(--t);
+  font-size:15px;font-weight:600;cursor:pointer;transition:opacity var(--t);
 }
-.loy-btn:disabled{opacity:.5;cursor:default}
-.loy-back{
-  font-size:13px;color:var(--muted);background:none;border:none;
-  cursor:pointer;padding:0;text-align:left;
-}
-.loy-error{
-  font-size:13px;color:var(--red);
+.lk-btn:disabled{opacity:.5;cursor:default}
+.lk-error{
+  margin:0 16px;font-size:13px;color:var(--red);
   background:var(--red-l);border-radius:8px;padding:8px 12px;
 }
-.loy-card{
-  background:linear-gradient(135deg,var(--red-d),var(--red));
-  color:#fff;border-radius:var(--r);padding:20px;
-  display:flex;flex-direction:column;gap:4px;
+
+/* Шапка кабинета */
+.lk-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 16px 0;
+}
+.lk-header__name{font-size:20px;font-weight:700}
+.lk-header__level{font-size:13px;color:var(--muted);margin-top:2px}
+.lk-exit{
+  font-size:13px;color:var(--muted);background:none;border:none;
+  cursor:pointer;padding:6px 10px;border-radius:8px;
+  border:1px solid var(--border);
+}
+
+/* Карточка баланса */
+.lk-balance-card{
+  margin:14px 16px 0;
+  background:linear-gradient(135deg,var(--red-d) 0%,var(--red) 60%,#e8304a 100%);
+  color:#fff;border-radius:var(--r);padding:20px 22px;
   box-shadow:var(--shadow);
 }
-.loy-card__name{font-size:17px;font-weight:700}
-.loy-card__level{font-size:12px;opacity:.8}
-.loy-card__bal-label{font-size:12px;opacity:.8;margin-top:10px}
-.loy-card__bal{font-size:32px;font-weight:800;letter-spacing:-1px}
-.loy-card__cashback{font-size:13px;opacity:.8}
+.lk-balance-card__label{font-size:13px;opacity:.85;margin-bottom:4px}
+.lk-balance-card__val{font-size:42px;font-weight:800;letter-spacing:-2px;line-height:1}
+.lk-balance-card__sub{font-size:12px;opacity:.75;margin-top:8px}
+
+/* Билеты */
+.lk-tickets-empty{
+  margin:0 16px;font-size:14px;color:var(--muted);
+  background:var(--bg);border-radius:var(--r-sm);
+  padding:14px;text-align:center;line-height:1.5;
+}
+.lk-tickets-list{display:flex;flex-direction:column;gap:8px;padding:0 16px}
+.lk-ticket{
+  background:var(--surface);border-radius:var(--r-sm);
+  padding:12px 14px;border:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;
+  box-shadow:var(--shadow-sm);
+}
+.lk-ticket__num{
+  font-size:11px;font-weight:700;color:var(--red);
+  background:var(--red-l);padding:4px 8px;border-radius:6px;white-space:nowrap;
+}
+.lk-ticket__name{font-size:14px;font-weight:600;flex:1}
+.lk-ticket__date{font-size:12px;color:var(--muted)}

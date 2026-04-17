@@ -11,7 +11,6 @@ const path_1 = __importDefault(require("path"));
 const https_1 = __importDefault(require("https"));
 const grammy_1 = require("grammy");
 const scraper_1 = require("./scraper");
-const loyalty_1 = require("./loyalty");
 // ─── Env ────────────────────────────────────────────────────────────────────
 const BOT_TOKEN = process.env.BOT_TOKEN ?? "";
 const GROQ_KEY = process.env.GROQ_KEY ?? "";
@@ -194,24 +193,43 @@ app.post("/api/chat", async (req, res) => {
         res.status(502).json({ error: "ИИ недоступен, попробуйте позже" });
     }
 });
-// ─── Loyalty endpoints ────────────────────────────────────────────────────────
-app.post("/api/loyalty/send-code", async (req, res) => {
+// ─── Loyalty lookup ───────────────────────────────────────────────────────────
+const LOYALTY_API = process.env.LOYALTY_API ?? ""; // https://www.maria-irk.ru/local/api/loyalty.php
+const LOYALTY_TOKEN = process.env.LOYALTY_TOKEN ?? "maria2026";
+app.post("/api/loyalty/lookup", async (req, res) => {
     const { phone } = req.body;
     if (!phone) {
-        res.status(400).json({ ok: false, message: "Укажите номер телефона" });
+        res.status(400).json({ error: "no_phone" });
         return;
     }
-    const result = await (0, loyalty_1.sendCode)(phone);
-    res.json(result);
-});
-app.post("/api/loyalty/verify-code", async (req, res) => {
-    const { phone, code } = req.body;
-    if (!phone || !code) {
-        res.status(400).json({ ok: false, message: "Укажите телефон и код" });
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length < 10) {
+        res.status(400).json({ error: "bad_phone" });
         return;
     }
-    const result = await (0, loyalty_1.verifyCode)(phone, code);
-    res.json(result);
+    if (!LOYALTY_API) {
+        // API ещё не подключён — возвращаем заглушку
+        res.json({ error: "not_ready" });
+        return;
+    }
+    try {
+        const url = `${LOYALTY_API}?token=${LOYALTY_TOKEN}&phone=${digits}`;
+        const data = await new Promise((resolve, reject) => {
+            const mod = require("https");
+            const r = mod.get(url, { rejectUnauthorized: false }, (resp) => {
+                let body = "";
+                resp.on("data", (c) => (body += c));
+                resp.on("end", () => resolve(body));
+            });
+            r.on("error", reject);
+            r.setTimeout(10000, () => { r.destroy(); reject(new Error("Timeout")); });
+        });
+        res.json(JSON.parse(data));
+    }
+    catch (e) {
+        console.error("Loyalty API error:", e.message);
+        res.status(502).json({ error: "service_error" });
+    }
 });
 // Ручное обновление каталога (для отладки)
 app.post("/api/refresh-catalog", async (_req, res) => {

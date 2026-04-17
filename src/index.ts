@@ -208,19 +208,40 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-// ─── Loyalty endpoints ────────────────────────────────────────────────────────
-app.post("/api/loyalty/send-code", async (req, res) => {
-  const { phone } = req.body as { phone?: string };
-  if (!phone) { res.status(400).json({ ok: false, message: "Укажите номер телефона" }); return; }
-  const result = await sendCode(phone);
-  res.json(result);
-});
+// ─── Loyalty lookup ───────────────────────────────────────────────────────────
+const LOYALTY_API = process.env.LOYALTY_API ?? "";  // https://www.maria-irk.ru/local/api/loyalty.php
+const LOYALTY_TOKEN = process.env.LOYALTY_TOKEN ?? "maria2026";
 
-app.post("/api/loyalty/verify-code", async (req, res) => {
-  const { phone, code } = req.body as { phone?: string; code?: string };
-  if (!phone || !code) { res.status(400).json({ ok: false, message: "Укажите телефон и код" }); return; }
-  const result = await verifyCode(phone, code);
-  res.json(result);
+app.post("/api/loyalty/lookup", async (req, res) => {
+  const { phone } = req.body as { phone?: string };
+  if (!phone) { res.status(400).json({ error: "no_phone" }); return; }
+
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 10) { res.status(400).json({ error: "bad_phone" }); return; }
+
+  if (!LOYALTY_API) {
+    // API ещё не подключён — возвращаем заглушку
+    res.json({ error: "not_ready" });
+    return;
+  }
+
+  try {
+    const url = `${LOYALTY_API}?token=${LOYALTY_TOKEN}&phone=${digits}`;
+    const data = await new Promise<string>((resolve, reject) => {
+      const mod = require("https") as typeof import("https");
+      const r = mod.get(url, { rejectUnauthorized: false }, (resp) => {
+        let body = "";
+        resp.on("data", (c: Buffer) => (body += c));
+        resp.on("end", () => resolve(body));
+      });
+      r.on("error", reject);
+      r.setTimeout(10_000, () => { r.destroy(); reject(new Error("Timeout")); });
+    });
+    res.json(JSON.parse(data));
+  } catch (e) {
+    console.error("Loyalty API error:", (e as Error).message);
+    res.status(502).json({ error: "service_error" });
+  }
 });
 
 // Ручное обновление каталога (для отладки)
