@@ -85,6 +85,7 @@ function hkSave() {
     dailyRefills: hk.dailyRefills, dailyTurbo: hk.dailyTurbo,
     lastDailyDate: hk.lastDailyDate,
     comboDate: hk.comboDate, comboDone: hk.comboDone,
+    achieved: hk.achieved || {},
   }));
 }
 
@@ -97,6 +98,7 @@ function hkLoad() {
       dailyRefills: s.dailyRefills || 0, dailyTurbo: s.dailyTurbo || 0,
       lastDailyDate: s.lastDailyDate || '',
       comboDate: s.comboDate || '', comboDone: s.comboDone || false,
+      achieved: s.achieved || {},
     });
   } catch {}
   // Reset daily limits
@@ -526,17 +528,28 @@ function hkStartTick() {
     if (tick % 4  === 0) { hkUpdateTop(); hkUpdateEnergy(); }
     // Passive bubbles: 1 per second when PPH > 0
     if (tick % 20 === 0 && hk.pph > 0) hkSpawnPassive();
-    if (tick % 80 === 0) hkSave();
+    if (tick % 40 === 0) hkSave();
   }, 50);
 }
 
 // ─ Boot ─────────────────────────────────────────────
 function hkBoot() {
+  if (hk.booted) {
+    hkUpdateTop();
+    hkUpdateEnergy();
+    hkUpdateComboBanner();
+    return;
+  }
+  hk.booted = true;
   hkLoad();
   hkUpdateTop();
   hkUpdateEnergy();
   hkUpdateComboBanner();
   hkStartTick();
+  // Save on app hide to not lose unsaved progress
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) hkSave();
+  });
   // Touch tap on cake
   const cake = document.getElementById('hk-cake');
   if (cake && !cake.dataset.bound) {
