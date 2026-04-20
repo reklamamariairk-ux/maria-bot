@@ -75,6 +75,7 @@ let hk = {
   comboDate: '', comboDone: false,
   currentCat: 'recipes',
   interval: null,
+  lastRankIdx: 0,
 };
 
 // ─ Save / Load ──────────────────────────────────────
@@ -282,6 +283,38 @@ function hkCat(cat) {
   hkRenderCards();
 }
 
+// ─ Cake tier ────────────────────────────────────────
+const HK_TIER_CROWNS = ['','','','','👑','💎','🔥','👑'];
+
+function hkGetTier() {
+  return HK_RANKS.findIndex(r => hk.total < r.need) - 1;
+}
+
+function hkUpdateCakeTier(animate) {
+  const wrap = document.getElementById('hk-cake-wrap');
+  if (!wrap) return;
+  const tier = Math.max(0, Math.min(7, hkGetTier() < 0 ? 7 : hkGetTier()));
+  const prev = parseInt(wrap.dataset.tier || '0');
+  wrap.dataset.tier = tier;
+  const crown = document.getElementById('hk-cake-crown');
+  if (crown) crown.textContent = HK_TIER_CROWNS[tier];
+  if (animate && tier > prev) hkLevelUpEffect(tier);
+}
+
+function hkLevelUpEffect(tier) {
+  const wrap = document.getElementById('hk-cake-wrap');
+  if (!wrap) return;
+  const burst = document.createElement('div');
+  burst.className = 'hk-levelup-burst';
+  wrap.appendChild(burst);
+  const txt = document.createElement('div');
+  txt.className = 'hk-levelup-text';
+  txt.textContent = HK_RANKS[tier]?.name ? '⬆ ' + HK_RANKS[tier].name + '!' : '⬆ LEVEL UP!';
+  wrap.appendChild(txt);
+  hkShowToast('🎉 Новый уровень: ' + (HK_RANKS[tier]?.name || ''));
+  setTimeout(() => { burst.remove(); txt.remove(); }, 1300);
+}
+
 // ─ Render: Top HUD ──────────────────────────────────
 function hkUpdateTop() {
   const rank = hkRank();
@@ -307,6 +340,11 @@ function hkUpdateTop() {
 
   const rankNextEl = document.getElementById('hk-rank-next');
   if (rankNextEl) rankNextEl.textContent = next ? 'до ' + hkFmt(next.need) : '🏆 Максимум!';
+
+  const curRankIdx = HK_RANKS.indexOf(rank);
+  const leveledUp = curRankIdx > hk.lastRankIdx;
+  hk.lastRankIdx = curRankIdx;
+  hkUpdateCakeTier(leveledUp);
 }
 
 // ─ Render: Energy ───────────────────────────────────

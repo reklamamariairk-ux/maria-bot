@@ -878,20 +878,233 @@ b,strong{font-weight:700}
 .hk-nb--active{color:var(--red);border-bottom-color:var(--red)}
 
 .hk-cake-area{
-  position:relative;height:230px;overflow:hidden;
+  position:relative;height:250px;overflow:visible;
   background:linear-gradient(180deg,#fce0e8 0%,#fff5f7 100%);
   display:flex;align-items:center;justify-content:center;
+  overflow:hidden;
 }
+
+/* ── CAKE WRAP & RINGS ───────────────────────────────── */
+.hk-cake-wrap{
+  position:relative;display:flex;align-items:center;justify-content:center;
+  width:170px;height:170px;
+}
+.hk-cake-glow{
+  position:absolute;border-radius:50%;
+  width:130px;height:130px;
+  pointer-events:none;z-index:1;
+  transition:all .6s ease;
+}
+.hk-ring{
+  position:absolute;border-radius:50%;
+  pointer-events:none;opacity:0;
+  transition:opacity .5s ease;
+}
+.hk-ring--a{width:148px;height:148px}
+.hk-ring--b{width:168px;height:168px}
+.hk-ring--c{width:188px;height:188px}
+
+.hk-cake-crown{
+  position:absolute;top:-22px;left:50%;transform:translateX(-50%);
+  font-size:22px;opacity:0;pointer-events:none;z-index:10;
+  transition:opacity .5s ease;filter:drop-shadow(0 2px 8px rgba(255,215,0,.6));
+}
+
+/* Base cake */
 .hk-cake{
-  width:124px;height:124px;border-radius:50%;border:none;
+  width:128px;height:128px;border-radius:50%;border:none;
   background:radial-gradient(circle at 38% 32%,#fff8f0,#fce8eb);
-  box-shadow:0 10px 50px rgba(214,31,55,.32),0 3px 16px rgba(0,0,0,.1),inset 0 1px 0 rgba(255,255,255,.6);
-  font-size:66px;cursor:pointer;user-select:none;
+  font-size:68px;cursor:pointer;user-select:none;
   touch-action:manipulation;
-  transition:transform .08s ease;display:flex;align-items:center;justify-content:center;
+  transition:transform .08s ease,box-shadow .5s ease,background .5s ease;
+  display:flex;align-items:center;justify-content:center;
   position:relative;z-index:2;
 }
 .hk-cake:active{transform:scale(.9)}
+
+/* ── TIER 0 — Стажёр ──────────────────────────────────── */
+[data-tier="0"] .hk-cake{
+  box-shadow:0 10px 40px rgba(214,31,55,.3),0 3px 16px rgba(0,0,0,.08),inset 0 1px 0 rgba(255,255,255,.6);
+}
+[data-tier="0"] .hk-cake-glow{
+  background:radial-gradient(circle,rgba(214,31,55,.15) 0%,transparent 70%);
+}
+
+/* ── TIER 1 — Ученик ──────────────────────────────────── */
+[data-tier="1"] .hk-cake{
+  background:radial-gradient(circle at 38% 32%,#fffaf0,#ffecd8);
+  box-shadow:0 10px 50px rgba(232,160,48,.45),0 3px 16px rgba(0,0,0,.1),inset 0 1px 0 rgba(255,255,255,.7);
+}
+[data-tier="1"] .hk-cake-glow{
+  background:radial-gradient(circle,rgba(232,160,48,.25) 0%,transparent 70%);
+  animation:hkGlowPulse 2.5s ease-in-out infinite;
+}
+[data-tier="1"] .hk-ring--a{
+  opacity:1;
+  border:1.5px dashed rgba(232,160,48,.5);
+  animation:hkRingSpin 8s linear infinite;
+}
+
+/* ── TIER 2 — Пекарь ──────────────────────────────────── */
+[data-tier="2"] .hk-cake{
+  background:radial-gradient(circle at 38% 32%,#f0f8ff,#e8f4ff);
+  box-shadow:0 12px 55px rgba(100,180,255,.5),0 3px 16px rgba(0,0,0,.1),inset 0 1px 0 rgba(255,255,255,.8);
+}
+[data-tier="2"] .hk-cake-glow{
+  background:radial-gradient(circle,rgba(100,180,255,.3) 0%,transparent 70%);
+  animation:hkGlowPulse 2s ease-in-out infinite;
+}
+[data-tier="2"] .hk-ring--a{
+  opacity:1;
+  border:2px solid rgba(120,200,255,.6);
+  animation:hkRingSpin 6s linear infinite;
+}
+[data-tier="2"] .hk-ring--b{
+  opacity:1;
+  border:1px dashed rgba(120,200,255,.3);
+  animation:hkRingSpin 10s linear infinite reverse;
+}
+
+/* ── TIER 3 — Кондитер ───────────────────────────────── */
+[data-tier="3"] .hk-cake{
+  background:radial-gradient(circle at 38% 32%,#fff8ff,#ffe8f5);
+  box-shadow:0 12px 60px rgba(200,80,255,.4),0 3px 16px rgba(0,0,0,.1),inset 0 1px 0 rgba(255,255,255,.8);
+}
+[data-tier="3"] .hk-cake::after{
+  content:'';position:absolute;inset:-3px;border-radius:50%;
+  background:conic-gradient(#ff6b9d,#c44fff,#4fc3ff,#4fffb0,#ffe04f,#ff6b9d);
+  z-index:-1;animation:hkRainbowSpin 3s linear infinite;
+  filter:blur(2px);opacity:.7;
+}
+[data-tier="3"] .hk-cake-glow{
+  width:150px;height:150px;
+  background:radial-gradient(circle,rgba(200,80,255,.25) 0%,transparent 70%);
+  animation:hkGlowPulse 1.8s ease-in-out infinite;
+}
+[data-tier="3"] .hk-ring--a{opacity:1;border:2px solid rgba(200,80,255,.5);animation:hkRingSpin 5s linear infinite}
+[data-tier="3"] .hk-ring--b{opacity:1;border:1.5px solid rgba(79,195,255,.4);animation:hkRingSpin 8s linear infinite reverse}
+
+/* ── TIER 4 — Шеф-кондитер ──────────────────────────── */
+[data-tier="4"] .hk-cake{
+  background:radial-gradient(circle at 38% 32%,#fffbe0,#fff3b0);
+  box-shadow:0 14px 70px rgba(255,200,0,.6),0 4px 20px rgba(0,0,0,.12),inset 0 2px 0 rgba(255,255,255,.9);
+}
+[data-tier="4"] .hk-cake::after{
+  content:'';position:absolute;inset:-4px;border-radius:50%;
+  background:conic-gradient(#ffd700,#ffb300,#ff8c00,#ffd700);
+  z-index:-1;animation:hkRainbowSpin 2s linear infinite;
+  filter:blur(3px);opacity:.8;
+}
+[data-tier="4"] .hk-cake-glow{
+  width:160px;height:160px;
+  background:radial-gradient(circle,rgba(255,200,0,.35) 0%,transparent 70%);
+  animation:hkGlowPulse 1.5s ease-in-out infinite;
+}
+[data-tier="4"] .hk-ring--a{opacity:1;border:3px solid rgba(255,200,0,.7);animation:hkRingSpin 4s linear infinite;box-shadow:0 0 12px rgba(255,200,0,.4)}
+[data-tier="4"] .hk-ring--b{opacity:1;border:2px dashed rgba(255,160,0,.5);animation:hkRingSpin 7s linear infinite reverse}
+[data-tier="4"] .hk-ring--c{opacity:1;border:1px solid rgba(255,140,0,.25);animation:hkRingSpin 12s linear infinite}
+[data-tier="4"] .hk-cake-crown{opacity:1;font-size:20px}
+
+/* ── TIER 5 — Мастер вкуса ───────────────────────────── */
+[data-tier="5"] .hk-cake{
+  background:radial-gradient(circle at 38% 32%,#f5f0ff,#e8d8ff);
+  box-shadow:0 16px 80px rgba(139,92,246,.6),0 4px 20px rgba(0,0,0,.12),inset 0 2px 0 rgba(255,255,255,.9);
+}
+[data-tier="5"] .hk-cake::after{
+  content:'';position:absolute;inset:-5px;border-radius:50%;
+  background:conic-gradient(#a855f7,#6366f1,#8b5cf6,#c084fc,#a855f7);
+  z-index:-1;animation:hkRainbowSpin 2.5s linear infinite;
+  filter:blur(4px);opacity:.85;
+}
+[data-tier="5"] .hk-cake-glow{
+  width:165px;height:165px;
+  background:radial-gradient(circle,rgba(139,92,246,.4) 0%,transparent 70%);
+  animation:hkGlowPulse 1.3s ease-in-out infinite;
+}
+[data-tier="5"] .hk-ring--a{opacity:1;border:3px solid rgba(139,92,246,.8);animation:hkRingSpin 3.5s linear infinite;box-shadow:0 0 18px rgba(139,92,246,.5)}
+[data-tier="5"] .hk-ring--b{opacity:1;border:2px solid rgba(99,102,241,.5);animation:hkRingSpin 6s linear infinite reverse;box-shadow:0 0 10px rgba(99,102,241,.3)}
+[data-tier="5"] .hk-ring--c{opacity:1;border:1.5px dashed rgba(192,132,252,.4);animation:hkRingSpin 10s linear infinite}
+[data-tier="5"] .hk-cake-crown{opacity:1;content:'💎';font-size:18px}
+
+/* ── TIER 6 — Легенда ────────────────────────────────── */
+[data-tier="6"] .hk-cake{
+  background:radial-gradient(circle at 38% 32%,#fff5e0,#ffe0b0);
+  box-shadow:0 18px 90px rgba(255,80,0,.65),0 5px 24px rgba(0,0,0,.15),inset 0 2px 0 rgba(255,255,255,.9);
+}
+[data-tier="6"] .hk-cake::after{
+  content:'';position:absolute;inset:-6px;border-radius:50%;
+  background:conic-gradient(#ff4500,#ff8c00,#ffd700,#ff4500,#ff2200,#ff4500);
+  z-index:-1;animation:hkRainbowSpin 1.5s linear infinite;
+  filter:blur(5px);opacity:.9;
+}
+[data-tier="6"] .hk-cake-glow{
+  width:170px;height:170px;
+  background:radial-gradient(circle,rgba(255,80,0,.4) 0%,rgba(255,150,0,.2) 50%,transparent 70%);
+  animation:hkGlowPulseFast 1s ease-in-out infinite;
+}
+[data-tier="6"] .hk-ring--a{opacity:1;border:3px solid rgba(255,80,0,.9);animation:hkRingSpin 2.5s linear infinite;box-shadow:0 0 20px rgba(255,80,0,.6)}
+[data-tier="6"] .hk-ring--b{opacity:1;border:2.5px solid rgba(255,140,0,.6);animation:hkRingSpin 4.5s linear infinite reverse;box-shadow:0 0 14px rgba(255,140,0,.4)}
+[data-tier="6"] .hk-ring--c{opacity:1;border:2px dashed rgba(255,200,0,.5);animation:hkRingSpin 7s linear infinite;box-shadow:0 0 8px rgba(255,200,0,.2)}
+[data-tier="6"] .hk-cake-crown{opacity:1;font-size:24px;top:-28px}
+
+/* ── TIER 7 — Сладкая Империя ───────────────────────── */
+[data-tier="7"] .hk-cake{
+  background:conic-gradient(#ff6b9d,#c44fff,#4fc3ff,#4fffb0,#ffe04f,#ff8c00,#ff6b9d);
+  box-shadow:0 20px 100px rgba(214,31,55,.8),0 0 60px rgba(139,92,246,.6),0 5px 24px rgba(0,0,0,.2),inset 0 2px 0 rgba(255,255,255,.5);
+  animation:hkImperialPulse 1s ease-in-out infinite;
+}
+[data-tier="7"] .hk-cake::before{
+  content:'🎂';position:absolute;font-size:68px;
+  background:radial-gradient(circle,#fffbe0,#fff5f0);
+  width:116px;height:116px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+}
+[data-tier="7"] .hk-cake::after{
+  content:'';position:absolute;inset:-8px;border-radius:50%;
+  background:conic-gradient(#ff6b9d,#c44fff,#4fc3ff,#4fffb0,#ffe04f,#ff6b9d);
+  z-index:-1;animation:hkRainbowSpin 1s linear infinite;
+  filter:blur(8px);opacity:1;
+}
+[data-tier="7"] .hk-cake-glow{
+  width:180px;height:180px;
+  background:radial-gradient(circle,rgba(255,100,150,.4) 0%,rgba(139,92,246,.3) 40%,transparent 70%);
+  animation:hkGlowPulseFast .8s ease-in-out infinite;
+}
+[data-tier="7"] .hk-ring--a{opacity:1;border:4px solid rgba(255,107,157,.9);animation:hkRingSpin 2s linear infinite;box-shadow:0 0 24px rgba(255,107,157,.7)}
+[data-tier="7"] .hk-ring--b{opacity:1;border:3px solid rgba(196,79,255,.7);animation:hkRingSpin 3.5s linear infinite reverse;box-shadow:0 0 18px rgba(196,79,255,.5)}
+[data-tier="7"] .hk-ring--c{opacity:1;border:2px solid rgba(79,195,255,.6);animation:hkRingSpin 5.5s linear infinite;box-shadow:0 0 12px rgba(79,195,255,.4)}
+[data-tier="7"] .hk-cake-crown{opacity:1;font-size:28px;top:-34px;animation:hkCrownBounce 1.5s ease-in-out infinite}
+
+/* ── RING / GLOW ANIMATIONS ─────────────────────────── */
+@keyframes hkRingSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes hkRainbowSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes hkGlowPulse{0%,100%{transform:scale(1);opacity:.7}50%{transform:scale(1.15);opacity:1}}
+@keyframes hkGlowPulseFast{0%,100%{transform:scale(1);opacity:.8}50%{transform:scale(1.2);opacity:1}}
+@keyframes hkImperialPulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.15)}}
+@keyframes hkCrownBounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-4px)}}
+
+/* ── LEVEL UP FLASH ─────────────────────────────────── */
+@keyframes hkLevelUp{
+  0%  {opacity:0;transform:scale(.5)}
+  20% {opacity:1;transform:scale(1.2)}
+  60% {opacity:1;transform:scale(1)}
+  100%{opacity:0;transform:scale(1.1)}
+}
+.hk-levelup-burst{
+  position:absolute;inset:0;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,255,255,.95) 0%,rgba(255,220,100,.6) 40%,transparent 70%);
+  pointer-events:none;z-index:20;
+  animation:hkLevelUp .8s ease forwards;
+}
+.hk-levelup-text{
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  font-size:16px;font-weight:800;color:#fff;
+  text-shadow:0 2px 12px rgba(0,0,0,.4);
+  white-space:nowrap;pointer-events:none;z-index:21;
+  animation:hkLevelUp 1.2s ease forwards;
+  letter-spacing:.5px;
+}
 @keyframes hkPop{0%{transform:scale(1)}40%{transform:scale(.86)}70%{transform:scale(1.08)}100%{transform:scale(1)}}
 .hk-pop{animation:hkPop .2s ease forwards}
 @keyframes hkShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
