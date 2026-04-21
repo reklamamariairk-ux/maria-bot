@@ -15,3 +15,5 @@ services:
         sync: false
       - key: MINI_APP_URL
         sync: false
+      - key: BITRIX_WEBHOOK
+        value: https://b24.maria-irk.ru/rest/4399/v5j4d5tofsxwrerz/
