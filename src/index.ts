@@ -262,18 +262,45 @@ app.get("/api/catalog-status", (_req, res) => {
 app.get("/health", (_req, res) => res.json({ status: "ok", catalog: catalog.length }));
 
 // ─── Запуск ──────────────────────────────────────────────────────────────────
+bot.catch((err) => {
+  const ctx = err.ctx;
+  console.error(`[BOT ERROR] update_id=${ctx.update.update_id}`);
+  console.error(`  type: ${err.constructor.name}`);
+  console.error(`  message: ${err.message}`);
+  if ((err as any).stack) console.error(err.stack);
+});
+
 async function main() {
+  console.log(`[STARTUP] BOT_TOKEN=${BOT_TOKEN ? "set" : "MISSING"}`);
+  console.log(`[STARTUP] GROQ_KEY=${GROQ_KEY ? "set" : "MISSING"}`);
+  console.log(`[STARTUP] WEBHOOK_URL=${WEBHOOK_URL || "(empty — long polling)"}`);
+  console.log(`[STARTUP] PORT=${PORT}`);
+
   if (WEBHOOK_URL) {
     const webhookPath = `/webhook/${BOT_TOKEN}`;
     app.use(webhookPath, webhookCallback(bot, "express"));
     app.listen(PORT, async () => {
-      await bot.api.setWebhook(`${WEBHOOK_URL}${webhookPath}`);
-      console.log(`🚀 Server on port ${PORT} | Webhook set`);
+      try {
+        await bot.api.setWebhook(`${WEBHOOK_URL}${webhookPath}`);
+        const info = await bot.api.getWebhookInfo();
+        console.log(`[STARTUP] Webhook set: ${info.url}`);
+        if (info.last_error_message) {
+          console.error(`[WEBHOOK] Last error: ${info.last_error_message} (${new Date((info.last_error_date ?? 0) * 1000).toISOString()})`);
+        }
+        console.log(`🚀 Server on port ${PORT} | Webhook set`);
+      } catch (e) {
+        console.error("[STARTUP] Failed to set webhook:", (e as Error).message);
+      }
     });
   } else {
     app.listen(PORT, () => console.log(`🚀 Server on port ${PORT} (long polling)`));
-    await bot.start();
+    try {
+      await bot.start();
+    } catch (e) {
+      console.error("[STARTUP] bot.start() failed:", (e as Error).message);
+      throw e;
+    }
   }
 }
 
-main().catch((err) => { console.error("Fatal:", err); process.exit(1); });
+main().catch((err) => { console.error("Fatal:", err.stack ?? err); process.exit(1); });
