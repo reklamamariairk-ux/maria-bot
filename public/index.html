@@ -56,6 +56,10 @@
       <div class="hcard__icon">🎮</div>
       <div class="hcard__title">Игры</div>
     </div>
+    <div class="hcard hcard--light" onclick="switchTab('order')">
+      <div class="hcard__icon">🛒</div>
+      <div class="hcard__title">Заказать</div>
+    </div>
     <div class="hcard hcard--light" onclick="document.getElementById('contacts-wrap').scrollIntoView({behavior:'smooth'})">
       <div class="hcard__icon">📍</div>
       <div class="hcard__title">Контакты</div>
@@ -233,6 +237,47 @@
   <button class="btn-full" onclick="openSite('https://www.maria-irk.ru/club/')">Подробнее на сайте →</button>
 </section>
 
+<!-- ═══ ЗАКАЗ ТОРТА ═══ -->
+<section class="tab" id="tab-order">
+  <div class="hero hero--sm">
+    <h2 class="hero__h1" style="font-size:24px">🎂 Заказать торт</h2>
+    <p class="hero__p">Оставьте заявку — менеджер свяжется с вами</p>
+  </div>
+
+  <form class="order-form" id="order-form" onsubmit="submitOrder(event)">
+    <div class="of-group">
+      <label class="of-label">Ваше имя *</label>
+      <input class="of-input" id="of-name" type="text" placeholder="Иван" required autocomplete="name"/>
+    </div>
+    <div class="of-group">
+      <label class="of-label">Телефон *</label>
+      <input class="of-input" id="of-phone" type="tel" placeholder="+7 (___) ___-__-__" required autocomplete="tel"/>
+    </div>
+    <div class="of-group">
+      <label class="of-label">Какой торт хотите?</label>
+      <input class="of-input" id="of-desc" type="text" placeholder="Например: «Три шоколада», торт на заказ…"/>
+    </div>
+    <div class="of-row">
+      <div class="of-group" style="flex:1">
+        <label class="of-label">Дата нужна</label>
+        <input class="of-input" id="of-date" type="date"/>
+      </div>
+      <div class="of-group" style="flex:1">
+        <label class="of-label">Порций</label>
+        <input class="of-input" id="of-portions" type="number" min="1" max="500" placeholder="8"/>
+      </div>
+    </div>
+    <div class="of-group">
+      <label class="of-label">Комментарий</label>
+      <textarea class="of-input of-textarea" id="of-comment" rows="3" placeholder="Пожелания по дизайну, надписи, особые требования…"></textarea>
+    </div>
+    <button class="btn-full" type="submit" id="of-submit">Отправить заявку →</button>
+    <div id="of-msg" class="of-msg" style="display:none"></div>
+  </form>
+
+  <div class="infobox" style="margin-top:16px">📞 Или позвоните: <a href="tel:+73952504080">+7 (3952) 50-40-80</a></div>
+</section>
+
 <!-- ═══ ИГРЫ + ЧАТ ═══ -->
 <section class="tab" id="tab-fun">
   <div class="sub-tabs">
@@ -386,9 +431,13 @@
   <button class="nb" id="nav-fun" onclick="switchTab('fun')">
     <span class="nb__ic">🎮</span><span class="nb__lb">Игры</span>
   </button>
+  <button class="nb" id="nav-order" onclick="switchTab('order')">
+    <span class="nb__ic">🛒</span><span class="nb__lb">Заказ</span>
+  </button>
 </nav>
 
 <script src="/js/app.js"></script>
+<script src="/js/order.js"></script>
 <script src="/js/game.js"></script>
 <script src="/js/bakery.js"></script>
 <script src="/js/chat.js"></script>

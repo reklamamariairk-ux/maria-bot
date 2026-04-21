@@ -1279,3 +1279,20 @@ b,strong{font-weight:700}
   border:1px solid rgba(255,255,255,.1);
 }
 @keyframes hkToast{0%{opacity:0;transform:translateX(-50%) translateY(12px)}10%{opacity:1;transform:translateX(-50%) translateY(0)}85%{opacity:1}100%{opacity:0;transform:translateX(-50%) translateY(-4px)}}
+
+/* ── ORDER FORM ──────────────────────────────────────────────────────────── */
+.order-form{padding:0 16px 24px;display:flex;flex-direction:column;gap:14px}
+.of-group{display:flex;flex-direction:column;gap:6px}
+.of-row{display:flex;gap:12px}
+.of-label{font-size:13px;font-weight:600;color:#555}
+.of-input{
+  width:100%;padding:13px 16px;border-radius:var(--r-sm);
+  border:1.5px solid var(--border);background:var(--surface);
+  font-family:'Inter',sans-serif;font-size:15px;color:#111;
+  outline:none;transition:border-color var(--t-fast);
+}
+.of-input:focus{border-color:var(--red)}
+.of-textarea{resize:vertical;min-height:80px}
+.of-msg{padding:13px 16px;border-radius:var(--r-sm);font-size:14px;font-weight:500;margin-top:4px}
+.of-msg--ok{background:#e6f9ee;color:#1a7a3c;border:1px solid #a8e6c0}
+.of-msg--err{background:var(--red-l);color:var(--red-d);border:1px solid rgba(214,31,55,.2)}

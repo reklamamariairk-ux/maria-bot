@@ -208,6 +208,75 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
+// ─── Bitrix24 lead ───────────────────────────────────────────────────────────
+const BITRIX_WEBHOOK = process.env.BITRIX_WEBHOOK ?? "";
+
+app.post("/api/order", async (req, res) => {
+  const { name, phone, description, date, portions, comment } = req.body as {
+    name?: string; phone?: string; description?: string;
+    date?: string; portions?: string; comment?: string;
+  };
+
+  if (!name || !phone) {
+    res.status(400).json({ error: "Имя и телефон обязательны" });
+    return;
+  }
+
+  const title = `Заказ торта — ${name} (Telegram Mini App)`;
+  const comments = [
+    description && `Торт: ${description}`,
+    date        && `Дата: ${date}`,
+    portions    && `Порций: ${portions}`,
+    comment     && `Комментарий: ${comment}`,
+  ].filter(Boolean).join("\n");
+
+  if (!BITRIX_WEBHOOK) {
+    console.warn("[ORDER] BITRIX_WEBHOOK not set, lead not created");
+    res.json({ ok: true, warn: "no_webhook" });
+    return;
+  }
+
+  try {
+    const body = JSON.stringify({
+      fields: {
+        TITLE: title,
+        NAME: name,
+        PHONE: [{ VALUE: phone, VALUE_TYPE: "WORK" }],
+        COMMENTS: comments,
+        SOURCE_ID: "WEB",
+      },
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      const url = new URL(`${BITRIX_WEBHOOK}crm.lead.add.json`);
+      const opts: https.RequestOptions = {
+        hostname: url.hostname,
+        path: url.pathname + url.search,
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) },
+      };
+      const r = https.request(opts, (resp) => {
+        let d = "";
+        resp.on("data", (c) => (d += c));
+        resp.on("end", () => {
+          const json = JSON.parse(d);
+          if (json.error) reject(new Error(json.error_description ?? json.error));
+          else resolve();
+        });
+      });
+      r.on("error", reject);
+      r.write(body);
+      r.end();
+    });
+
+    console.log(`[ORDER] Lead created: ${title}`);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[ORDER] Bitrix24 error:", (e as Error).message);
+    res.status(502).json({ error: "Не удалось создать заявку, попробуйте позже" });
+  }
+});
+
 // ─── Loyalty lookup ───────────────────────────────────────────────────────────
 const LOYALTY_API = process.env.LOYALTY_API ?? "";  // https://www.maria-irk.ru/local/api/loyalty.php
 const LOYALTY_TOKEN = process.env.LOYALTY_TOKEN ?? "maria2026";
