@@ -372,20 +372,7 @@ app.post("/api/loyalty/lookup", async (req, res) => {
 });
 
 // ─── Магазины ────────────────────────────────────────────────────────────────
-const STORES = [
-  { id: 1,  name: "Мария на Байкальской",    address: "ул. Байкальская, 174",        lat: 52.2784, lng: 104.3102, maps: "https://2gis.ru/irkutsk/search/Мария+Байкальская+174" },
-  { id: 2,  name: "Мария на Депутатской",    address: "ул. Депутатская, 2",          lat: 52.2697, lng: 104.2856, maps: "https://2gis.ru/irkutsk/search/Мария+кондитерская+Депутатская" },
-  { id: 3,  name: "Мария на Лермонтова",     address: "ул. Лермонтова, 81",          lat: 52.2612, lng: 104.2614, maps: "https://2gis.ru/irkutsk/search/Мария+кондитерская+Лермонтова" },
-  { id: 4,  name: "Мария на Академической",  address: "ул. Академическая, 14",       lat: 52.2903, lng: 104.3012, maps: "https://2gis.ru/irkutsk/search/Мария+кондитерская+Академическая" },
-  { id: 5,  name: "Мария на Розы Люксембург",address: "ул. Розы Люксембург, 184",   lat: 52.2748, lng: 104.2715, maps: "https://2gis.ru/irkutsk/search/Мария+кондитерская+Розы+Люксембург" },
-  { id: 6,  name: "Мария на Советской",      address: "ул. Советская, 183",          lat: 52.2661, lng: 104.2940, maps: "https://2gis.ru/irkutsk/search/Мария+кондитерская+Советская" },
-  { id: 7,  name: "Мария на Сурнова",        address: "ул. Сурнова, 23",             lat: 52.2550, lng: 104.2980, maps: "https://2gis.ru/irkutsk/search/Мария+кондитерская+Сурнова" },
-  { id: 8,  name: "Мария на Синюшиной горе", address: "мкр. Синюшина гора, 71",      lat: 52.2418, lng: 104.3156, maps: "https://2gis.ru/irkutsk/search/Мария+кондитерская+Синюшина" },
-  { id: 9,  name: "Мария на Ширямова",       address: "ул. Ширямова, 10",            lat: 52.3105, lng: 104.2834, maps: "https://2gis.ru/irkutsk/search/Мария+кондитерская+Ширямова" },
-  { id: 10, name: "Мария на Помяловского",   address: "ул. Помяловского, 5",         lat: 52.2835, lng: 104.2604, maps: "https://2gis.ru/irkutsk/search/Мария+кондитерская+Помяловского" },
-  { id: 11, name: "Мария в Ангарске (1)",    address: "Ангарск, 9 мкр., 2",          lat: 52.5391, lng: 103.9048, maps: "https://2gis.ru/angarsk/search/Мария+кондитерская" },
-  { id: 12, name: "Мария в Ангарске (2)",    address: "Ангарск, 30 мкр., 1",         lat: 52.5318, lng: 103.8924, maps: "https://2gis.ru/angarsk/search/Мария+кондитерская" },
-];
+const STORES: { id: number; name: string }[] = [];
 
 app.get("/api/stores", (_req, res) => {
   res.json(STORES);
