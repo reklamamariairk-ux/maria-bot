@@ -1296,3 +1296,16 @@ b,strong{font-weight:700}
 .of-msg{padding:13px 16px;border-radius:var(--r-sm);font-size:14px;font-weight:500;margin-top:4px}
 .of-msg--ok{background:#e6f9ee;color:#1a7a3c;border:1px solid #a8e6c0}
 .of-msg--err{background:var(--red-l);color:var(--red-d);border:1px solid rgba(214,31,55,.2)}
+
+/* ── STORES ──────────────────────────────────────────────────────────────── */
+.store-card{
+  background:var(--surface);border-radius:var(--r-sm);
+  border:1.5px solid var(--border);padding:14px 16px;
+  margin-bottom:10px;cursor:pointer;transition:box-shadow var(--t-fast);
+}
+.store-card:active{box-shadow:var(--shadow-card)}
+.store-card__top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.store-card__name{font-size:14px;font-weight:600;color:#111}
+.store-dist{font-size:13px;font-weight:700;color:var(--red);white-space:nowrap}
+.store-card__addr{font-size:13px;color:var(--muted);margin-top:4px}
+.store-card__link{font-size:13px;color:var(--red);margin-top:6px;font-weight:500}

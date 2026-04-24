@@ -278,6 +278,16 @@
   <div class="infobox" style="margin-top:16px">📞 Или позвоните: <a href="tel:+73952504080">+7 (3952) 50-40-80</a></div>
 </section>
 
+<!-- ═══ МАГАЗИНЫ ═══ -->
+<section class="tab" id="tab-stores">
+  <div class="hero hero--sm">
+    <h2 class="hero__h1" style="font-size:24px">📍 Наши магазины</h2>
+    <p class="hero__p">18 точек в Иркутске и Ангарске</p>
+  </div>
+  <button class="btn-full" id="stores-geo-btn" onclick="findNearestStores()">🗺 Найти ближайший магазин</button>
+  <div id="stores-list" style="margin-top:12px"></div>
+</section>
+
 <!-- ═══ ИГРЫ + ЧАТ ═══ -->
 <section class="tab" id="tab-fun">
   <div class="sub-tabs">
@@ -431,6 +441,9 @@
   <button class="nb" id="nav-fun" onclick="switchTab('fun')">
     <span class="nb__ic">🎮</span><span class="nb__lb">Игры</span>
   </button>
+  <button class="nb" id="nav-stores" onclick="switchTab('stores')">
+    <span class="nb__ic">📍</span><span class="nb__lb">Магазины</span>
+  </button>
   <button class="nb" id="nav-order" onclick="switchTab('order')">
     <span class="nb__ic">🛒</span><span class="nb__lb">Заказ</span>
   </button>
@@ -438,6 +451,7 @@
 
 <script src="/js/app.js"></script>
 <script src="/js/order.js"></script>
+<script src="/js/stores.js"></script>
 <script src="/js/game.js"></script>
 <script src="/js/bakery.js"></script>
 <script src="/js/chat.js"></script>

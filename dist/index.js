@@ -9,14 +9,17 @@ const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const path_1 = __importDefault(require("path"));
 const https_1 = __importDefault(require("https"));
+const node_cron_1 = __importDefault(require("node-cron"));
 const grammy_1 = require("grammy");
 const scraper_1 = require("./scraper");
+const db_1 = require("./db");
 // ─── Env ────────────────────────────────────────────────────────────────────
 const BOT_TOKEN = process.env.BOT_TOKEN ?? "";
 const GROQ_KEY = process.env.GROQ_KEY ?? "";
 const WEBHOOK_URL = process.env.WEBHOOK_URL ?? "";
 const PORT = Number(process.env.PORT ?? 3000);
 const MINI_APP_URL = process.env.MINI_APP_URL ?? WEBHOOK_URL;
+const ADMIN_IDS = (process.env.ADMIN_IDS ?? "").split(",").map(Number).filter(Boolean);
 if (!BOT_TOKEN)
     throw new Error("BOT_TOKEN is required");
 if (!GROQ_KEY)
@@ -85,11 +88,65 @@ const HELP_TEXT = `
 
 Пишите — ответим быстро! 💌
 `.trim();
-bot.command("start", async (ctx) => ctx.reply(WELCOME, { parse_mode: "Markdown", reply_markup: webAppButton(WELCOME) }));
+bot.command("start", async (ctx) => {
+    if (ctx.from) {
+        await (0, db_1.addSubscriber)(ctx.from.id, ctx.from.username, ctx.from.first_name).catch(() => { });
+    }
+    await ctx.reply(WELCOME, { parse_mode: "Markdown", reply_markup: webAppButton(WELCOME) });
+});
 bot.command("games", async (ctx) => ctx.reply(GAMES_TEXT, { parse_mode: "Markdown", reply_markup: webAppButton(GAMES_TEXT, "🎮 Играть") }));
 bot.command("sale", async (ctx) => ctx.reply(SALE_TEXT, { parse_mode: "Markdown", reply_markup: webAppButton(SALE_TEXT, "🛒 Акции") }));
 bot.command("help", async (ctx) => ctx.reply(HELP_TEXT, { parse_mode: "Markdown", reply_markup: webAppButton(HELP_TEXT, "📋 Открыть меню") }));
+// /broadcast <текст> — только для администраторов
+bot.command("broadcast", async (ctx) => {
+    if (!ctx.from || !ADMIN_IDS.includes(ctx.from.id)) {
+        await ctx.reply("⛔ Нет доступа");
+        return;
+    }
+    const text = ctx.match?.trim();
+    if (!text) {
+        await ctx.reply("Использование: /broadcast Текст сообщения");
+        return;
+    }
+    const subscribers = await (0, db_1.getAllSubscribers)();
+    await ctx.reply(`📤 Начинаю рассылку для ${subscribers.length} подписчиков…`);
+    let sent = 0, failed = 0;
+    for (const { chat_id } of subscribers) {
+        try {
+            await bot.api.sendMessage(chat_id, text, { parse_mode: "Markdown" });
+            sent++;
+        }
+        catch {
+            failed++;
+        }
+        await new Promise((r) => setTimeout(r, 50));
+    }
+    await ctx.reply(`✅ Готово: отправлено ${sent}, ошибок ${failed}`);
+});
+// /birthday ДД.ММ — сохранить день рождения
+bot.command("birthday", async (ctx) => {
+    const input = ctx.match?.trim();
+    if (!input) {
+        await ctx.reply("Укажите дату рождения: /birthday ДД.ММ\nНапример: /birthday 15.03");
+        return;
+    }
+    const match = input.match(/^(\d{1,2})\.(\d{1,2})$/);
+    if (!match) {
+        await ctx.reply("Неверный формат. Используйте: /birthday ДД.ММ");
+        return;
+    }
+    const [, day, month] = match;
+    const birthday = `2000-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+    if (!ctx.from)
+        return;
+    await (0, db_1.setUserBirthday)(ctx.from.id, birthday);
+    await (0, db_1.addSubscriber)(ctx.from.id, ctx.from.username, ctx.from.first_name).catch(() => { });
+    await ctx.reply(`🎂 Запомнила! Поздравлю вас ${day}.${month.padStart(2, "0")} со скидкой в день рождения 🎁`);
+});
 bot.on("message:text", async (ctx) => {
+    if (ctx.from) {
+        await (0, db_1.addSubscriber)(ctx.from.id, ctx.from.username, ctx.from.first_name).catch(() => { });
+    }
     await ctx.reply(`✨ Откройте наш Mini App — там игры, ИИ-кондитер и все акции!`, { reply_markup: webAppButton("") });
 });
 // ─── Express ─────────────────────────────────────────────────────────────────
@@ -292,6 +349,55 @@ app.post("/api/loyalty/lookup", async (req, res) => {
         res.status(502).json({ error: "service_error" });
     }
 });
+// ─── Магазины ────────────────────────────────────────────────────────────────
+const STORES = [
+    { id: 1, name: "Мария на Байкальской", address: "ул. Байкальская, 174", lat: 52.2784, lng: 104.3102, maps: "https://2gis.ru/irkutsk/search/Мария+Байкальская+174" },
+    { id: 2, name: "Мария на Депутатской", address: "ул. Депутатская, 2", lat: 52.2697, lng: 104.2856, maps: "https://2gis.ru/irkutsk/search/Мария+кондитерская+Депутатская" },
+    { id: 3, name: "Мария на Лермонтова", address: "ул. Лермонтова, 81", lat: 52.2612, lng: 104.2614, maps: "https://2gis.ru/irkutsk/search/Мария+кондитерская+Лермонтова" },
+    { id: 4, name: "Мария на Академической", address: "ул. Академическая, 14", lat: 52.2903, lng: 104.3012, maps: "https://2gis.ru/irkutsk/search/Мария+кондитерская+Академическая" },
+    { id: 5, name: "Мария на Розы Люксембург", address: "ул. Розы Люксембург, 184", lat: 52.2748, lng: 104.2715, maps: "https://2gis.ru/irkutsk/search/Мария+кондитерская+Розы+Люксембург" },
+    { id: 6, name: "Мария на Советской", address: "ул. Советская, 183", lat: 52.2661, lng: 104.2940, maps: "https://2gis.ru/irkutsk/search/Мария+кондитерская+Советская" },
+    { id: 7, name: "Мария на Сурнова", address: "ул. Сурнова, 23", lat: 52.2550, lng: 104.2980, maps: "https://2gis.ru/irkutsk/search/Мария+кондитерская+Сурнова" },
+    { id: 8, name: "Мария на Синюшиной горе", address: "мкр. Синюшина гора, 71", lat: 52.2418, lng: 104.3156, maps: "https://2gis.ru/irkutsk/search/Мария+кондитерская+Синюшина" },
+    { id: 9, name: "Мария на Ширямова", address: "ул. Ширямова, 10", lat: 52.3105, lng: 104.2834, maps: "https://2gis.ru/irkutsk/search/Мария+кондитерская+Ширямова" },
+    { id: 10, name: "Мария на Помяловского", address: "ул. Помяловского, 5", lat: 52.2835, lng: 104.2604, maps: "https://2gis.ru/irkutsk/search/Мария+кондитерская+Помяловского" },
+    { id: 11, name: "Мария в Ангарске (1)", address: "Ангарск, 9 мкр., 2", lat: 52.5391, lng: 103.9048, maps: "https://2gis.ru/angarsk/search/Мария+кондитерская" },
+    { id: 12, name: "Мария в Ангарске (2)", address: "Ангарск, 30 мкр., 1", lat: 52.5318, lng: 103.8924, maps: "https://2gis.ru/angarsk/search/Мария+кондитерская" },
+];
+app.get("/api/stores", (_req, res) => {
+    res.json(STORES);
+});
+// ─── Статистика подписчиков ───────────────────────────────────────────────────
+app.get("/api/subscribers/count", async (_req, res) => {
+    const subs = await (0, db_1.getAllSubscribers)();
+    res.json({ count: subs.length });
+});
+// ─── Рассылка через API (для будущей админ-панели) ────────────────────────────
+app.post("/api/broadcast", async (req, res) => {
+    const { token, text } = req.body;
+    if (!token || token !== process.env.ADMIN_TOKEN) {
+        res.status(403).json({ error: "forbidden" });
+        return;
+    }
+    if (!text?.trim()) {
+        res.status(400).json({ error: "text required" });
+        return;
+    }
+    const subscribers = await (0, db_1.getAllSubscribers)();
+    res.json({ status: "started", total: subscribers.length });
+    let sent = 0, failed = 0;
+    for (const { chat_id } of subscribers) {
+        try {
+            await bot.api.sendMessage(chat_id, text, { parse_mode: "Markdown" });
+            sent++;
+        }
+        catch {
+            failed++;
+        }
+        await new Promise((r) => setTimeout(r, 50));
+    }
+    console.log(`[BROADCAST] sent=${sent} failed=${failed}`);
+});
 // Ручное обновление каталога (для отладки)
 app.post("/api/refresh-catalog", async (_req, res) => {
     res.json({ status: "started" });
@@ -315,11 +421,31 @@ bot.catch((err) => {
     if (err.stack)
         console.error(err.stack);
 });
+async function sendBirthdayGreetings() {
+    const users = await (0, db_1.getTodayBirthdays)();
+    for (const { chat_id, first_name } of users) {
+        try {
+            const name = first_name ? `, ${first_name}` : "";
+            await bot.api.sendMessage(chat_id, `🎂 С днём рождения${name}!\n\nКондитерская «Мария» поздравляет вас и дарит скидку:\n🎁 *−5% вам* и *−10% детям* (действует ±5 дней от дня рождения)\n\nПриходите порадовать себя сладким! 🍰`, { parse_mode: "Markdown" });
+            await (0, db_1.markBirthdayNotified)(chat_id);
+            console.log(`[BIRTHDAY] Поздравили chat_id=${chat_id}`);
+        }
+        catch (e) {
+            console.error(`[BIRTHDAY] Ошибка для chat_id=${chat_id}:`, e.message);
+        }
+    }
+}
 async function main() {
+    await (0, db_1.initDb)();
     console.log(`[STARTUP] BOT_TOKEN=${BOT_TOKEN ? "set" : "MISSING"}`);
     console.log(`[STARTUP] GROQ_KEY=${GROQ_KEY ? "set" : "MISSING"}`);
     console.log(`[STARTUP] WEBHOOK_URL=${WEBHOOK_URL || "(empty — long polling)"}`);
     console.log(`[STARTUP] PORT=${PORT}`);
+    // Ежедневные поздравления с днём рождения в 10:00 по Иркутску (UTC+8 = 02:00 UTC)
+    node_cron_1.default.schedule("0 2 * * *", () => {
+        sendBirthdayGreetings().catch((e) => console.error("[BIRTHDAY CRON]", e));
+    });
+    console.log("[STARTUP] Birthday cron scheduled (daily 10:00 Irkutsk)");
     if (WEBHOOK_URL) {
         const webhookPath = `/webhook/${BOT_TOKEN}`;
         app.use(webhookPath, (0, grammy_1.webhookCallback)(bot, "express"));
