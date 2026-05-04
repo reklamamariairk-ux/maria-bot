@@ -7,8 +7,24 @@ import https from "https";
 import cron from "node-cron";
 import { Bot, webhookCallback, InlineKeyboard } from "grammy";
 import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, Product } from "./scraper";
-import { sendCode, verifyCode } from "./loyalty";
 import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified } from "./db";
+import {
+  initClubSchema,
+  getBalance,
+  isPhoneVerified,
+  verifyPhone,
+  claimDailyLogin,
+  convertStars,
+  getRewardsCatalog,
+  redeemReward,
+  getMyRewards,
+  recordGameResult,
+  getHistory,
+  getDailyStatus,
+  recordReferral,
+  CONVERSION_TIERS,
+} from "./club";
+import { requireTgUser, getTgUser } from "./auth";
 
 // ─── Env ────────────────────────────────────────────────────────────────────
 const BOT_TOKEN    = process.env.BOT_TOKEN    ?? "";
@@ -96,8 +112,42 @@ const HELP_TEXT = `
 bot.command("start", async (ctx) => {
   if (ctx.from) {
     await addSubscriber(ctx.from.id, ctx.from.username, ctx.from.first_name).catch(() => {});
+
+    // Referral payload: /start ref_12345
+    const payload = ctx.match?.trim();
+    if (payload && payload.startsWith("ref_")) {
+      const referrerId = Number(payload.slice(4));
+      if (referrerId && referrerId !== ctx.from.id) {
+        await recordReferral(referrerId, ctx.from.id).catch(() => {});
+      }
+    }
   }
   await ctx.reply(WELCOME, { parse_mode: "Markdown", reply_markup: webAppButton(WELCOME) });
+});
+
+// Phone share via WebApp.requestContact OR keyboard button
+bot.on(":contact", async (ctx) => {
+  const c = ctx.message?.contact;
+  if (!c || !ctx.from) return;
+  if (c.user_id !== ctx.from.id) {
+    await ctx.reply("Можно поделиться только своим номером 🙂");
+    return;
+  }
+  await addSubscriber(ctx.from.id, ctx.from.username, ctx.from.first_name).catch(() => {});
+  try {
+    const result = await verifyPhone(ctx.from.id, c.phone_number);
+    if (result.alreadyVerified) {
+      await ctx.reply("✅ Номер уже подтверждён");
+    } else {
+      await ctx.reply(
+        `✅ Номер подтверждён!\n\n💎 Тебе начислено +${result.bonusAwarded} баллов на счёт.\nОткрой Mini App, чтобы продолжить 👇`,
+        { reply_markup: webAppButton("") }
+      );
+    }
+  } catch (e) {
+    console.error("[VERIFY]", (e as Error).message);
+    await ctx.reply("⚠️ Не удалось сохранить номер, попробуй ещё раз позже");
+  }
 });
 
 bot.command("games",  async (ctx) => ctx.reply(GAMES_TEXT,  { parse_mode: "Markdown", reply_markup: webAppButton(GAMES_TEXT, "🎮 Играть") }));
@@ -335,42 +385,6 @@ app.post("/api/order", async (req, res) => {
   }
 });
 
-// ─── Loyalty lookup ───────────────────────────────────────────────────────────
-const LOYALTY_API = process.env.LOYALTY_API ?? "";  // https://www.maria-irk.ru/local/api/loyalty.php
-const LOYALTY_TOKEN = process.env.LOYALTY_TOKEN ?? "maria2026";
-
-app.post("/api/loyalty/lookup", async (req, res) => {
-  const { phone } = req.body as { phone?: string };
-  if (!phone) { res.status(400).json({ error: "no_phone" }); return; }
-
-  const digits = phone.replace(/\D/g, "");
-  if (digits.length < 10) { res.status(400).json({ error: "bad_phone" }); return; }
-
-  if (!LOYALTY_API) {
-    // API ещё не подключён — возвращаем заглушку
-    res.json({ error: "not_ready" });
-    return;
-  }
-
-  try {
-    const url = `${LOYALTY_API}?token=${LOYALTY_TOKEN}&phone=${digits}`;
-    const data = await new Promise<string>((resolve, reject) => {
-      const mod = require("https") as typeof import("https");
-      const r = mod.get(url, { rejectUnauthorized: false }, (resp) => {
-        let body = "";
-        resp.on("data", (c: Buffer) => (body += c));
-        resp.on("end", () => resolve(body));
-      });
-      r.on("error", reject);
-      r.setTimeout(10_000, () => { r.destroy(); reject(new Error("Timeout")); });
-    });
-    res.json(JSON.parse(data));
-  } catch (e) {
-    console.error("Loyalty API error:", (e as Error).message);
-    res.status(502).json({ error: "service_error" });
-  }
-});
-
 // ─── Магазины ────────────────────────────────────────────────────────────────
 const STORES: { id: number; name: string }[] = [];
 
@@ -423,6 +437,163 @@ app.get("/api/catalog-status", (_req, res) => {
   });
 });
 
+// ─── Club / Loyalty API ──────────────────────────────────────────────────────
+
+app.get("/api/me", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  try {
+    await addSubscriber(u.id, u.username, u.first_name).catch(() => {});
+    const [verified, balance, daily, myRewards] = await Promise.all([
+      isPhoneVerified(u.id),
+      getBalance(u.id),
+      getDailyStatus(u.id),
+      getMyRewards(u.id),
+    ]);
+    res.json({
+      user: { id: u.id, first_name: u.first_name, username: u.username },
+      phoneVerified: verified,
+      balance,
+      daily,
+      activeRewards: myRewards.length,
+    });
+  } catch (e) {
+    console.error("[API /me]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+app.post("/api/verify-phone", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  const { phone } = req.body as { phone?: string };
+  if (!phone || phone.replace(/\D/g, "").length < 10) {
+    res.status(400).json({ error: "bad_phone" });
+    return;
+  }
+  try {
+    const result = await verifyPhone(u.id, phone);
+    const balance = await getBalance(u.id);
+    res.json({ ok: true, ...result, balance });
+  } catch (e) {
+    console.error("[API /verify-phone]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+app.post("/api/daily/claim", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  try {
+    if (!(await isPhoneVerified(u.id))) {
+      res.status(403).json({ error: "phone_not_verified" });
+      return;
+    }
+    const result = await claimDailyLogin(u.id);
+    const balance = await getBalance(u.id);
+    res.json({ ...result, balance });
+  } catch (e) {
+    console.error("[API /daily/claim]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+app.get("/api/conversion-tiers", (_req, res) => {
+  res.json(CONVERSION_TIERS);
+});
+
+app.post("/api/convert", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  const { stars } = req.body as { stars?: number };
+  if (typeof stars !== "number") {
+    res.status(400).json({ error: "bad_stars" });
+    return;
+  }
+  try {
+    const result = await convertStars(u.id, stars);
+    const balance = await getBalance(u.id);
+    res.json({ ...result, balance });
+  } catch (e) {
+    console.error("[API /convert]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+app.get("/api/rewards", async (_req, res) => {
+  try {
+    const items = await getRewardsCatalog();
+    res.json(items);
+  } catch (e) {
+    console.error("[API /rewards]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+app.post("/api/redeem", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  const { rewardId } = req.body as { rewardId?: number };
+  if (typeof rewardId !== "number") {
+    res.status(400).json({ error: "bad_reward_id" });
+    return;
+  }
+  try {
+    if (!(await isPhoneVerified(u.id))) {
+      res.status(403).json({ error: "phone_not_verified" });
+      return;
+    }
+    const result = await redeemReward(u.id, rewardId);
+    const balance = await getBalance(u.id);
+    res.json({ ...result, balance });
+  } catch (e) {
+    console.error("[API /redeem]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+app.get("/api/my-rewards", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  try {
+    const items = await getMyRewards(u.id);
+    res.json(items);
+  } catch (e) {
+    console.error("[API /my-rewards]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+app.post("/api/game-result", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  const { game, score } = req.body as { game?: string; score?: number };
+  if (!game || typeof score !== "number" || score < 0) {
+    res.status(400).json({ error: "bad_input" });
+    return;
+  }
+  if (!["flappy_cake", "memory", "bakery"].includes(game)) {
+    res.status(400).json({ error: "unknown_game" });
+    return;
+  }
+  try {
+    if (!(await isPhoneVerified(u.id))) {
+      res.json({ starsAwarded: 0, recordBeaten: false, recordBonus: 0, capped: false, gated: true });
+      return;
+    }
+    const result = await recordGameResult(u.id, game, score);
+    const balance = await getBalance(u.id);
+    res.json({ ...result, balance });
+  } catch (e) {
+    console.error("[API /game-result]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+app.get("/api/history", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  try {
+    const rows = await getHistory(u.id, 30);
+    res.json(rows);
+  } catch (e) {
+    console.error("[API /history]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
+});
+
 app.get("/health", (_req, res) => res.json({ status: "ok", catalog: catalog.length }));
 
 // ─── Запуск ──────────────────────────────────────────────────────────────────
@@ -454,6 +625,7 @@ async function sendBirthdayGreetings() {
 
 async function main() {
   await initDb();
+  await initClubSchema();
 
   console.log(`[STARTUP] BOT_TOKEN=${BOT_TOKEN ? "set" : "MISSING"}`);
   console.log(`[STARTUP] GROQ_KEY=${GROQ_KEY ? "set" : "MISSING"}`);

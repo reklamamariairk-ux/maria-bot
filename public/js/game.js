@@ -41,8 +41,22 @@ function checkMatch() {
     memMatched++;
     document.getElementById('memory-pairs').textContent = memMatched;
     memFlipped = [];
-    if (memMatched === MEMORY_ICONS.length)
+    if (memMatched === MEMORY_ICONS.length) {
+      // Memory "score" = quality (100 if minimum 8 moves, lower otherwise)
+      const minMoves = MEMORY_ICONS.length; // perfect = 8
+      const quality = Math.max(0, Math.round(100 - Math.max(0, memMoves - minMoves) * 5));
+      if (typeof window.submitGameResult === 'function') {
+        window.submitGameResult('memory', quality).then((r) => {
+          if (r && r.starsAwarded > 0) {
+            const msg = `🎉 +${r.starsAwarded} ⭐` + (r.recordBonus ? ` (рекорд +${r.recordBonus} ⭐)` : '');
+            const t = document.createElement('div');
+            t.className = 'game-toast'; t.textContent = msg;
+            document.body.appendChild(t); setTimeout(() => t.remove(), 2400);
+          }
+        }).catch(() => {});
+      }
       setTimeout(() => alert(`🎉 Победа за ${memMoves} ходов!`), 200);
+    }
   } else {
     memLocked = true;
     setTimeout(() => {
@@ -275,6 +289,21 @@ function fcUpdate(dt) {
 
 function fcDie() {
   fc.state = 'dead';
+  // Submit score for stars (only if signed in & verified)
+  if (fc.score > 0 && typeof window.submitGameResult === 'function') {
+    window.submitGameResult('flappy_cake', fc.score).then((r) => {
+      if (r && r.starsAwarded > 0) {
+        const msg = `+${r.starsAwarded} ⭐` + (r.recordBonus ? ` (новый рекорд +${r.recordBonus} ⭐)` : '');
+        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.('success');
+        // Quick toast
+        const t = document.createElement('div');
+        t.className = 'game-toast';
+        t.textContent = msg;
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 2400);
+      }
+    }).catch(() => {});
+  }
   // Explosion particles
   for (let i = 0; i < 20; i++) {
     const ang = Math.random() * Math.PI * 2;

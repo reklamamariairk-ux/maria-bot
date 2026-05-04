@@ -1,0 +1,434 @@
+/* ── Club / Loyalty frontend ─────────────────────────────────────────────── */
+
+const initData = window.Telegram?.WebApp?.initData ?? "";
+
+async function api(path, opts = {}) {
+  const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
+  if (initData) headers["Authorization"] = "tma " + initData;
+  const res = await fetch(path, { ...opts, headers });
+  if (res.status === 401) {
+    return { __unauthorized: true };
+  }
+  return res.json();
+}
+
+// Cached state
+let CLUB_STATE = {
+  user: null,
+  phoneVerified: false,
+  balance: { stars: 0, points: 0 },
+  daily: { loginClaimedToday: false, currentStreak: 0, starsEarnedToday: 0, starCap: 300 },
+  catalog: [],
+  myRewards: [],
+};
+
+/* ── Header counters ─────────────────────────────────────────────────────── */
+function renderHeaderCounters() {
+  const el = document.getElementById("hdr-counters");
+  if (!el) return;
+  if (!CLUB_STATE.phoneVerified) {
+    el.style.display = "none";
+    return;
+  }
+  el.style.display = "flex";
+  document.getElementById("hdr-stars").textContent = CLUB_STATE.balance.stars;
+  document.getElementById("hdr-points").textContent = CLUB_STATE.balance.points;
+}
+
+function pulseCounter(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove("pulse");
+  void el.offsetWidth;
+  el.classList.add("pulse");
+}
+
+/* ── Init ────────────────────────────────────────────────────────────────── */
+async function clubInit() {
+  if (!initData) {
+    document.getElementById("club-no-tg").style.display = "block";
+    document.getElementById("club-content").style.display = "none";
+    return;
+  }
+  await refreshMe();
+  await loadCatalog();
+  renderClub();
+}
+
+async function refreshMe() {
+  const me = await api("/api/me");
+  if (me.__unauthorized || me.error) {
+    document.getElementById("club-no-tg").style.display = "block";
+    document.getElementById("club-content").style.display = "none";
+    return;
+  }
+  CLUB_STATE.user = me.user;
+  CLUB_STATE.phoneVerified = me.phoneVerified;
+  CLUB_STATE.balance = me.balance;
+  CLUB_STATE.daily = me.daily;
+  renderHeaderCounters();
+}
+
+async function loadCatalog() {
+  const items = await api("/api/rewards");
+  CLUB_STATE.catalog = Array.isArray(items) ? items : [];
+}
+
+async function loadMyRewards() {
+  const items = await api("/api/my-rewards");
+  CLUB_STATE.myRewards = Array.isArray(items) ? items : [];
+}
+
+/* ── Render ──────────────────────────────────────────────────────────────── */
+function renderClub() {
+  document.getElementById("club-no-tg").style.display = "none";
+  document.getElementById("club-content").style.display = "block";
+
+  // Verification banner vs. main UI
+  if (!CLUB_STATE.phoneVerified) {
+    document.getElementById("club-verify-banner").style.display = "block";
+    document.getElementById("club-main").style.display = "none";
+    return;
+  }
+  document.getElementById("club-verify-banner").style.display = "none";
+  document.getElementById("club-main").style.display = "block";
+
+  renderHero();
+  renderDaily();
+  renderShop();
+  renderMyRewardsBlock();
+  renderReferral();
+}
+
+function renderHero() {
+  const name = CLUB_STATE.user?.first_name || "Друг";
+  document.getElementById("hero-name").textContent = name;
+  document.getElementById("hero-stars").textContent = CLUB_STATE.balance.stars;
+  document.getElementById("hero-points").textContent = CLUB_STATE.balance.points;
+
+  const convertBtn = document.getElementById("hero-convert");
+  convertBtn.style.display = CLUB_STATE.balance.stars >= 50 ? "" : "none";
+}
+
+function renderDaily() {
+  const d = CLUB_STATE.daily;
+  document.getElementById("daily-streak").textContent = d.currentStreak;
+  const dots = document.getElementById("daily-dots");
+  dots.innerHTML = "";
+  const filled = Math.min(d.currentStreak % 7 || (d.currentStreak >= 7 ? 7 : 0), 7);
+  for (let i = 0; i < 7; i++) {
+    const dot = document.createElement("span");
+    dot.className = "ddot " + (i < filled ? "ddot--on" : "");
+    dots.appendChild(dot);
+  }
+  const btn = document.getElementById("daily-claim-btn");
+  if (d.loginClaimedToday) {
+    btn.disabled = true;
+    btn.textContent = "Сегодня уже получено ✓";
+  } else {
+    btn.disabled = false;
+    btn.textContent = "Получить +10 💎";
+  }
+}
+
+function renderShop() {
+  const wrap = document.getElementById("rewards-shop");
+  wrap.innerHTML = "";
+  const points = CLUB_STATE.balance.points;
+  CLUB_STATE.catalog.forEach((r) => {
+    const can = points >= r.cost_points;
+    const card = document.createElement("div");
+    card.className = "rcard" + (can ? "" : " rcard--locked");
+    card.innerHTML = `
+      <div class="rcard__title">${r.title}</div>
+      <div class="rcard__sub">${r.description ?? ""}</div>
+      <div class="rcard__min">от ${r.min_order} ₽</div>
+      <div class="rcard__cost">${r.cost_points} 💎</div>
+      <button class="rcard__btn" ${can ? "" : "disabled"} data-id="${r.id}">
+        ${can ? "Получить" : "Не хватает"}
+      </button>
+    `;
+    card.querySelector(".rcard__btn").addEventListener("click", () => openRedeemModal(r));
+    wrap.appendChild(card);
+  });
+}
+
+async function renderMyRewardsBlock() {
+  await loadMyRewards();
+  const wrap = document.getElementById("my-rewards");
+  const count = document.getElementById("my-rewards-count");
+  count.textContent = CLUB_STATE.myRewards.length;
+  if (CLUB_STATE.myRewards.length === 0) {
+    wrap.innerHTML = `<div class="my-rewards__empty">Пока нет промокодов — заработай и купи в магазине наград выше</div>`;
+    return;
+  }
+  wrap.innerHTML = CLUB_STATE.myRewards
+    .map((r) => {
+      const exp = new Date(r.expires_at).toLocaleDateString("ru-RU");
+      const used = r.used_at ? `<span class="prom__used">использован</span>` : "";
+      return `
+        <div class="prom">
+          <div class="prom__head">
+            <span class="prom__title">${r.title}</span>
+            <span class="prom__exp">до ${exp}</span>
+          </div>
+          <div class="prom__code">
+            <span class="prom__codetxt">${r.promo_code}</span>
+            <button class="prom__copy" data-code="${r.promo_code}">📋</button>
+          </div>
+          ${used}
+        </div>`;
+    })
+    .join("");
+  wrap.querySelectorAll(".prom__copy").forEach((b) =>
+    b.addEventListener("click", () => {
+      const code = b.dataset.code;
+      navigator.clipboard?.writeText(code);
+      b.textContent = "✓";
+      setTimeout(() => (b.textContent = "📋"), 1200);
+    })
+  );
+}
+
+function renderReferral() {
+  if (!CLUB_STATE.user) return;
+  const link = `https://t.me/mariatortik_bot?start=ref_${CLUB_STATE.user.id}`;
+  document.getElementById("ref-link").value = link;
+}
+
+/* ── Verification ────────────────────────────────────────────────────────── */
+function startVerification() {
+  const tg = window.Telegram?.WebApp;
+  if (!tg) {
+    alert("Откройте через Telegram");
+    return;
+  }
+  if (typeof tg.requestContact !== "function") {
+    tg.showAlert?.(
+      "Подтверждение через приложение требует Telegram 6.9+. Откройте /start в боте — там кнопка «Поделиться номером»"
+    );
+    return;
+  }
+  tg.requestContact(async (sent, response) => {
+    if (!sent && response?.status !== "sent") return;
+    // Phone arrives via bot's contact handler. Poll /api/me for verification.
+    document.getElementById("verify-status").textContent = "Сохраняем номер…";
+    for (let i = 0; i < 12; i++) {
+      await new Promise((r) => setTimeout(r, 1000));
+      await refreshMe();
+      if (CLUB_STATE.phoneVerified) break;
+    }
+    if (CLUB_STATE.phoneVerified) {
+      document.getElementById("verify-status").textContent = "";
+      tg.HapticFeedback?.notificationOccurred?.("success");
+      renderClub();
+    } else {
+      document.getElementById("verify-status").textContent =
+        "Не пришёл контакт от Telegram. Попробуй ещё раз или открой /start в боте.";
+    }
+  });
+}
+
+/* ── Daily claim ─────────────────────────────────────────────────────────── */
+async function claimDaily() {
+  const btn = document.getElementById("daily-claim-btn");
+  btn.disabled = true;
+  const r = await api("/api/daily/claim", { method: "POST" });
+  if (r.ok) {
+    CLUB_STATE.balance = r.balance;
+    CLUB_STATE.daily.loginClaimedToday = true;
+    CLUB_STATE.daily.currentStreak = r.streakDays || CLUB_STATE.daily.currentStreak;
+    pulseCounter("hdr-points");
+    let msg = `+${r.pointsAwarded} 💎`;
+    if (r.streakBonus) msg += ` (бонус за стрик: +${r.streakBonus} 💎)`;
+    window.Telegram?.WebApp?.showPopup?.({ title: "Награда дня", message: msg, buttons: [{ type: "ok" }] }) ||
+      alert(msg);
+    renderHeaderCounters();
+    renderHero();
+    renderDaily();
+    renderShop();
+  } else {
+    btn.textContent = r.reason === "already_claimed_today" ? "Сегодня уже получено ✓" : "Ошибка";
+  }
+}
+
+/* ── Conversion modal ────────────────────────────────────────────────────── */
+async function openConvertModal() {
+  const tiers = await api("/api/conversion-tiers");
+  const have = CLUB_STATE.balance.stars;
+  const modal = document.getElementById("convert-modal");
+  const optsWrap = document.getElementById("convert-options");
+  optsWrap.innerHTML = tiers
+    .map((t) => {
+      const can = have >= t.stars;
+      const ratio = t.stars > 0 ? Math.round((t.points / (t.stars * 0.1) - 100)) : 0; // % bonus over base 10:1
+      return `
+        <label class="ctier ${can ? "" : "ctier--off"}">
+          <input type="radio" name="ctier" value="${t.stars}" ${can ? "" : "disabled"}/>
+          <span class="ctier__txt">${t.stars} ⭐ → <b>${t.points} 💎</b>${ratio > 0 ? ` <em>+${ratio}%</em>` : ""}</span>
+        </label>`;
+    })
+    .join("");
+  document.getElementById("convert-have").textContent = have;
+  modal.style.display = "flex";
+}
+
+function closeConvertModal() {
+  document.getElementById("convert-modal").style.display = "none";
+}
+
+async function doConvert() {
+  const sel = document.querySelector('#convert-options input[name="ctier"]:checked');
+  if (!sel) return;
+  const stars = Number(sel.value);
+  const r = await api("/api/convert", { method: "POST", body: JSON.stringify({ stars }) });
+  if (r.ok) {
+    CLUB_STATE.balance = r.balance;
+    pulseCounter("hdr-points");
+    pulseCounter("hdr-stars");
+    closeConvertModal();
+    renderHeaderCounters();
+    renderHero();
+    renderShop();
+    window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("success");
+  } else {
+    alert(r.reason === "insufficient_stars" ? "Не хватает звёзд" : "Ошибка обмена");
+  }
+}
+
+/* ── Redeem modal ────────────────────────────────────────────────────────── */
+let CURRENT_REDEEM = null;
+function openRedeemModal(reward) {
+  CURRENT_REDEEM = reward;
+  const m = document.getElementById("redeem-modal");
+  document.getElementById("redeem-title").textContent = reward.title;
+  document.getElementById("redeem-desc").textContent = reward.description ?? "";
+  document.getElementById("redeem-min").textContent = `Мин. заказ: ${reward.min_order} ₽`;
+  document.getElementById("redeem-cost").textContent = `Спишется: ${reward.cost_points} 💎`;
+  document.getElementById("redeem-after").textContent =
+    `Останется: ${CLUB_STATE.balance.points - reward.cost_points} 💎`;
+  document.getElementById("redeem-result").style.display = "none";
+  document.getElementById("redeem-confirm").style.display = "";
+  m.style.display = "flex";
+}
+
+function closeRedeemModal() {
+  document.getElementById("redeem-modal").style.display = "none";
+  CURRENT_REDEEM = null;
+}
+
+async function doRedeem() {
+  if (!CURRENT_REDEEM) return;
+  const r = await api("/api/redeem", {
+    method: "POST",
+    body: JSON.stringify({ rewardId: CURRENT_REDEEM.id }),
+  });
+  if (r.ok) {
+    CLUB_STATE.balance = r.balance;
+    pulseCounter("hdr-points");
+    document.getElementById("redeem-confirm").style.display = "none";
+    document.getElementById("redeem-result").style.display = "";
+    document.getElementById("redeem-code").textContent = r.promoCode;
+    const exp = new Date(r.expiresAt).toLocaleDateString("ru-RU");
+    document.getElementById("redeem-code-exp").textContent = `Действует до ${exp}`;
+    renderHeaderCounters();
+    renderHero();
+    renderShop();
+    renderMyRewardsBlock();
+    window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("success");
+  } else {
+    alert(r.reason === "insufficient" ? "Не хватает баллов" : "Ошибка получения");
+  }
+}
+
+function copyRedeemCode() {
+  const code = document.getElementById("redeem-code").textContent;
+  navigator.clipboard?.writeText(code);
+  document.getElementById("redeem-copy").textContent = "Скопировано ✓";
+  setTimeout(() => (document.getElementById("redeem-copy").textContent = "Копировать"), 1500);
+}
+
+/* ── Referral ────────────────────────────────────────────────────────────── */
+function shareReferral() {
+  const link = document.getElementById("ref-link").value;
+  const text = `Заходи в Marию — бот кондитерской «Мария» в Иркутске. Игры, скидки, бонусы 🎂`;
+  const tg = window.Telegram?.WebApp;
+  if (tg?.openTelegramLink) {
+    tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
+  } else {
+    navigator.clipboard?.writeText(link);
+    alert("Ссылка скопирована");
+  }
+}
+
+/* ── History ─────────────────────────────────────────────────────────────── */
+async function toggleHistory() {
+  const wrap = document.getElementById("history-wrap");
+  const list = document.getElementById("history-list");
+  if (wrap.style.display === "none" || !wrap.style.display) {
+    wrap.style.display = "block";
+    list.innerHTML = "<div class='history-loading'>Загружаем…</div>";
+    const rows = await api("/api/history");
+    if (!Array.isArray(rows) || rows.length === 0) {
+      list.innerHTML = "<div class='history-empty'>Пока операций нет</div>";
+      return;
+    }
+    list.innerHTML = rows
+      .map((r) => {
+        const sign = r.amount > 0 ? "+" : "";
+        const icon = r.kind === "star" ? "⭐" : "💎";
+        const dt = new Date(r.created_at).toLocaleString("ru-RU", {
+          day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+        });
+        return `<div class="hrow"><span class="hrow__amt ${r.amount > 0 ? "pos" : "neg"}">${sign}${r.amount} ${icon}</span><span class="hrow__src">${SOURCE_LABELS[r.source] ?? r.source}</span><span class="hrow__dt">${dt}</span></div>`;
+      })
+      .join("");
+  } else {
+    wrap.style.display = "none";
+  }
+}
+
+const SOURCE_LABELS = {
+  daily_login: "Ежедневный вход",
+  streak_7: "Стрик 7 дней",
+  streak_30: "Стрик 30 дней",
+  phone_verification: "Подтверждение номера",
+  star_conversion: "Обмен звёзд",
+  reward: "Покупка награды",
+  referral: "Реферал",
+  flappy_cake: "Flappy Cake",
+  memory: "Memory",
+  bakery: "Пекарня",
+  record_bonus: "Новый рекорд",
+  conversion: "Обмен на баллы",
+};
+
+/* ── Game integration ────────────────────────────────────────────────────── */
+window.submitGameResult = async function (game, score) {
+  if (!CLUB_STATE.phoneVerified) return null;
+  const r = await api("/api/game-result", { method: "POST", body: JSON.stringify({ game, score }) });
+  if (r && !r.error && r.balance) {
+    CLUB_STATE.balance = r.balance;
+    renderHeaderCounters();
+    pulseCounter("hdr-stars");
+  }
+  return r;
+};
+
+/* ── Hooks ───────────────────────────────────────────────────────────────── */
+window.clubInit = clubInit;
+window.startVerification = startVerification;
+window.claimDaily = claimDaily;
+window.openConvertModal = openConvertModal;
+window.closeConvertModal = closeConvertModal;
+window.doConvert = doConvert;
+window.openRedeemModal = openRedeemModal;
+window.closeRedeemModal = closeRedeemModal;
+window.doRedeem = doRedeem;
+window.copyRedeemCode = copyRedeemCode;
+window.shareReferral = shareReferral;
+window.toggleHistory = toggleHistory;
+
+document.addEventListener("DOMContentLoaded", () => {
+  clubInit().catch((e) => console.error("[club init]", e));
+});

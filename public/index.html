@@ -18,6 +18,10 @@
        onerror="this.src='/logo.png'"
        onerror="this.style.display='none';document.getElementById('lf').style.display='block'"/>
   <span class="header__name" id="lf" style="display:none">Мария</span>
+  <div class="hdr-counters" id="hdr-counters" style="display:none" onclick="switchTab('club')">
+    <span class="hdr-c hdr-c--star">⭐ <b id="hdr-stars">0</b></span>
+    <span class="hdr-c hdr-c--point">💎 <b id="hdr-points">0</b></span>
+  </div>
   <a class="header__phone" href="tel:+73952504080">☎ 50-40-80</a>
 </header>
 
@@ -27,79 +31,58 @@
 <section class="tab active" id="tab-home">
 
   <div class="hero">
-    <div class="hero__tag">Иркутск · 18 магазинов</div>
+    <div class="hero__tag">Иркутск · с 1995 года</div>
     <h1 class="hero__h1">Свежая выпечка<br>каждый день</h1>
     <p class="hero__p">Торты, пироги, пирожные<br>и подарочные наборы</p>
-    <button class="btn-hero" onclick="switchTab('menu')">Смотреть меню</button>
+    <button class="btn-hero" onclick="switchTab('menu')">Смотреть меню →</button>
   </div>
 
-  <div class="home-grid">
-    <div class="hcard hcard--red" onclick="switchTab('check')">
-      <div class="hcard__sup">Розыгрыш призов</div>
-      <div class="hcard__title">🧾 Сладкий чек</div>
-      <div class="hcard__hint">iPhone 17, MacBook, PS5</div>
+  <!-- Bento -->
+  <div class="bento">
+    <div class="bento__big" onclick="switchTab('club')">
+      <div class="bento__eye">💎 Клуб «Мария для своих»</div>
+      <div class="bento__h">Получи 100 баллов<br>за подтверждение номера</div>
+      <div class="bento__sub">Кэшбэк до 10% · скидки у партнёров · бонусы за игры</div>
+      <div class="bento__cta">Открыть клуб →</div>
     </div>
-    <div class="hcard hcard--dark" onclick="switchTab('club')">
-      <div class="hcard__sup">Программа лояльности</div>
-      <div class="hcard__title">💎 Клуб Марии</div>
-      <div class="hcard__hint">Кэшбэк до 10%</div>
+    <div class="bento__sm bento__sm--gold" onclick="switchTab('club')">
+      <div class="bento__sm-ic">🧾</div>
+      <div class="bento__sm-t">Сладкий чек</div>
+      <div class="bento__sm-s">iPhone 17, MacBook, PS5</div>
     </div>
-    <div class="hcard hcard--light" onclick="switchTab('menu')">
-      <div class="hcard__icon">🎂</div>
-      <div class="hcard__title">Меню</div>
-    </div>
-    <div class="hcard hcard--light" onclick="switchTab('fun');showSubTab('chat')">
-      <div class="hcard__icon">🤖</div>
-      <div class="hcard__title">ИИ-чат</div>
-    </div>
-    <div class="hcard hcard--light" onclick="switchTab('fun')">
-      <div class="hcard__icon">🎮</div>
-      <div class="hcard__title">Игры</div>
-    </div>
-    <div class="hcard hcard--light" onclick="switchTab('order')">
-      <div class="hcard__icon">🛒</div>
-      <div class="hcard__title">Заказать</div>
-    </div>
-    <div class="hcard hcard--light" onclick="document.getElementById('contacts-wrap').scrollIntoView({behavior:'smooth'})">
-      <div class="hcard__icon">📍</div>
-      <div class="hcard__title">Контакты</div>
+    <div class="bento__sm bento__sm--light" onclick="openSite('https://www.maria-irk.ru/contacts/')">
+      <div class="bento__sm-ic">📍</div>
+      <div class="bento__sm-t">18 магазинов</div>
+      <div class="bento__sm-s">Иркутск и Ангарск</div>
     </div>
   </div>
 
   <!-- Акции -->
-  <div class="sh"><span class="sh__line"></span><span class="sh__text">Акции</span><span class="sh__line"></span></div>
+  <div class="sh"><span class="sh__line"></span><span class="sh__text">Акции месяца</span><span class="sh__line"></span></div>
   <div class="promos">
     <div class="promo promo--red">
       <div class="promo__badge">−20%</div>
-      <div class="promo__name">Торт месяца</div>
-      <div class="promo__desc">«Три шоколада» — три слоя мусса из тёмного, молочного и белого бельгийского шоколада</div>
+      <div class="promo__name">Торт месяца «Три шоколада»</div>
+      <div class="promo__desc">Три слоя мусса из тёмного, молочного и белого бельгийского шоколада</div>
       <div class="promo__note">🚚 Бесплатная доставка от 1 000 ₽</div>
     </div>
     <div class="promo promo--gold">
       <div class="promo__badge">🎁</div>
       <div class="promo__name">Упаковка в подарок</div>
-      <div class="promo__desc">Фирменная подарочная коробка с лентой бесплатно к любому заказу</div>
-    </div>
-    <div class="promo promo--dark">
-      <div class="promo__badge">🏆</div>
-      <div class="promo__name">Лотерея «Сладкий чек»</div>
-      <div class="promo__desc">Каждый чек — шанс выиграть iPhone 17 Pro Max, MacBook, PS5 и Apple Watch</div>
+      <div class="promo__desc">Фирменная коробка с лентой — бесплатно к любому заказу</div>
     </div>
   </div>
 
   <!-- Контакты -->
   <div class="sh"><span class="sh__line"></span><span class="sh__text">Контакты</span><span class="sh__line"></span></div>
-  <div class="contacts-wrap" id="contacts-wrap">
+  <div class="contacts-wrap">
     <a class="contact-row" href="tel:+73952504080">
       <span class="cr-icon">📱</span><span>+7 (3952) 50-40-80</span>
     </a>
     <div class="contact-row" onclick="openSite('https://www.maria-irk.ru')">
-      <span class="cr-icon">🌐</span><span>www.maria-irk.ru</span>
+      <span class="cr-icon">🌐</span><span>maria-irk.ru</span>
     </div>
-    <div class="contact-row">
-      <span class="cr-icon">📍</span><span>18 магазинов в Иркутске и Ангарске</span>
-    </div>
-    <button class="btn-outline" onclick="openSite('https://www.maria-irk.ru/contacts/')">Все адреса →</button>
+    <button class="btn-outline" onclick="openSite('https://www.maria-irk.ru/contacts/')">Все адреса магазинов →</button>
   </div>
 
 </section>
@@ -148,10 +131,92 @@
     <p class="club-hero__p">Программа лояльности</p>
   </div>
 
-  <div class="sh"><span class="sh__line"></span><span class="sh__text">Мои баллы</span><span class="sh__line"></span></div>
-  <div class="loy-personal">
-    <div class="loy-personal__text">Войдите в личный кабинет на сайте, чтобы узнать баланс бонусов и историю покупок</div>
-    <button class="btn-full" onclick="openSite('https://www.maria-irk.ru/personal/')">Открыть личный кабинет →</button>
+  <!-- Не открыто через Telegram -->
+  <div id="club-no-tg" style="display:none">
+    <div class="infobox">⚠️ Чтобы участвовать в программе, откройте бота @mariatortik_bot в Telegram</div>
+  </div>
+
+  <div id="club-content" style="display:none">
+
+    <!-- Верификация номера -->
+    <div id="club-verify-banner" style="display:none">
+      <div class="vbanner">
+        <div class="vbanner__ic">📱</div>
+        <h3 class="vbanner__h">Подтвердите номер телефона</h3>
+        <p class="vbanner__p">Чтобы копить и тратить баллы, нужно подтвердить номер. Это займёт секунду.</p>
+        <div class="vbanner__bonus">+ 100 💎 за подтверждение</div>
+        <button class="btn-full" onclick="startVerification()">Подтвердить номер</button>
+        <div class="vbanner__status" id="verify-status"></div>
+        <div class="vbanner__note">Номер видим только нам, не передаётся третьим лицам.</div>
+      </div>
+    </div>
+
+    <!-- Основной интерфейс -->
+    <div id="club-main" style="display:none">
+
+      <!-- Hero с балансами -->
+      <div class="loy-hero">
+        <div class="loy-hero__top">
+          <div>
+            <div class="loy-hero__hi">Привет,</div>
+            <div class="loy-hero__name" id="hero-name">Друг</div>
+          </div>
+        </div>
+        <div class="loy-hero__bals">
+          <div class="loy-bal loy-bal--star">
+            <span class="loy-bal__ic">⭐</span>
+            <span class="loy-bal__num" id="hero-stars">0</span>
+            <span class="loy-bal__lb">звёзд</span>
+          </div>
+          <div class="loy-bal loy-bal--point">
+            <span class="loy-bal__ic">💎</span>
+            <span class="loy-bal__num" id="hero-points">0</span>
+            <span class="loy-bal__lb">баллов</span>
+          </div>
+        </div>
+        <button class="btn-full" id="hero-convert" onclick="openConvertModal()" style="display:none">
+          Обменять звёзды на баллы →
+        </button>
+      </div>
+
+      <!-- Стрик и daily -->
+      <div class="sh"><span class="sh__line"></span><span class="sh__text">Сегодня</span><span class="sh__line"></span></div>
+      <div class="daily">
+        <div class="daily__top">
+          <span class="daily__fire">🔥</span>
+          <span class="daily__txt">Стрик: <b id="daily-streak">0</b> дней</span>
+        </div>
+        <div class="daily__dots" id="daily-dots"></div>
+        <button class="btn-full" id="daily-claim-btn" onclick="claimDaily()">Получить +10 💎</button>
+        <div class="daily__hint">7 дней подряд → +100💎 бонус. 30 дней → +400💎</div>
+      </div>
+
+      <!-- Магазин наград -->
+      <div class="sh"><span class="sh__line"></span><span class="sh__text">Магазин наград</span><span class="sh__line"></span></div>
+      <div class="rewards-shop" id="rewards-shop"></div>
+
+      <!-- Мои промокоды -->
+      <div class="sh"><span class="sh__line"></span><span class="sh__text">Мои промокоды (<span id="my-rewards-count">0</span>)</span><span class="sh__line"></span></div>
+      <div id="my-rewards"></div>
+
+      <!-- Реферал -->
+      <div class="sh"><span class="sh__line"></span><span class="sh__text">Пригласи друга</span><span class="sh__line"></span></div>
+      <div class="ref">
+        <div class="ref__txt">Когда друг зайдёт по ссылке и сделает первый заказ — тебе <b>+300 💎</b></div>
+        <div class="ref__row">
+          <input class="ref__inp" id="ref-link" readonly/>
+          <button class="ref__btn" onclick="shareReferral()">📤 Поделиться</button>
+        </div>
+      </div>
+
+      <!-- История -->
+      <div class="sh"><span class="sh__line"></span><span class="sh__text">История</span><span class="sh__line"></span></div>
+      <button class="btn-outline" onclick="toggleHistory()">Показать / скрыть</button>
+      <div id="history-wrap" style="display:none">
+        <div id="history-list"></div>
+      </div>
+
+    </div>
   </div>
 
   <div class="sh"><span class="sh__line"></span><span class="sh__text">Уровни</span><span class="sh__line"></span></div>
@@ -183,58 +248,19 @@
   <div class="infobox">ℹ️ Скидки и бонусы не суммируются — применяется максимальная выгода</div>
   <button class="btn-full" onclick="openSite('https://www.maria-irk.ru/club/')">Подробнее на сайте →</button>
 
+  <div class="sh" style="margin-top:20px"><span class="sh__line"></span><span class="sh__text">🧾 Сладкий чек — лотерея</span><span class="sh__line"></span></div>
+  <p class="section-desc">Каждый чек — шанс выиграть технику мечты. Розыгрыш каждый квартал.</p>
+  <div class="prizes">
+    <div class="prize prize--1"><div class="prize__place">🥇</div><div class="prize__icon">📱</div><div class="prize__name">iPhone 17 Pro Max</div></div>
+    <div class="prize prize--2"><div class="prize__place">🥈</div><div class="prize__icon">💻</div><div class="prize__name">MacBook</div></div>
+    <div class="prize prize--2"><div class="prize__place">🥈</div><div class="prize__icon">🎮</div><div class="prize__name">PlayStation 5</div></div>
+    <div class="prize prize--3"><div class="prize__place">🥉</div><div class="prize__icon">⌚</div><div class="prize__name">Apple Watch</div></div>
+    <div class="prize prize--3"><div class="prize__place">🥉</div><div class="prize__icon">🔊</div><div class="prize__name">JBL Speaker</div></div>
+  </div>
+
   <div class="sh" style="margin-top:20px"><span class="sh__line"></span><span class="sh__text">Партнёры клуба</span><span class="sh__line"></span></div>
   <p class="section-desc">По карте «Мария для своих» — привилегии у наших партнёров</p>
   <div id="partners-list"></div>
-</section>
-
-<!-- ═══ СЛАДКИЙ ЧЕК ═══ -->
-<section class="tab" id="tab-check">
-  <div class="check-hero">
-    <div class="check-hero__stars">★ ★ ★</div>
-    <h2 class="check-hero__h">🧾 Сладкий чек</h2>
-    <p class="check-hero__p">Каждый чек — шанс выиграть технику мечты</p>
-  </div>
-
-  <div class="sh"><span class="sh__line"></span><span class="sh__text">Призы</span><span class="sh__line"></span></div>
-  <div class="prizes">
-    <div class="prize prize--1">
-      <div class="prize__place">🥇</div>
-      <div class="prize__icon">📱</div>
-      <div class="prize__name">iPhone 17 Pro Max</div>
-    </div>
-    <div class="prize prize--2">
-      <div class="prize__place">🥈</div>
-      <div class="prize__icon">💻</div>
-      <div class="prize__name">MacBook</div>
-    </div>
-    <div class="prize prize--2">
-      <div class="prize__place">🥈</div>
-      <div class="prize__icon">🎮</div>
-      <div class="prize__name">PlayStation 5</div>
-    </div>
-    <div class="prize prize--3">
-      <div class="prize__place">🥉</div>
-      <div class="prize__icon">⌚</div>
-      <div class="prize__name">Apple Watch</div>
-    </div>
-    <div class="prize prize--3">
-      <div class="prize__place">🥉</div>
-      <div class="prize__icon">🔊</div>
-      <div class="prize__name">JBL Speaker</div>
-    </div>
-  </div>
-
-  <div class="sh"><span class="sh__line"></span><span class="sh__text">Как участвовать</span><span class="sh__line"></span></div>
-  <div class="steps">
-    <div class="step"><div class="step__n">1</div><div><b>Сделайте покупку</b><div class="step__s">В любом из 18 магазинов Марии</div></div></div>
-    <div class="step"><div class="step__n">2</div><div><b>Сохраните чек</b><div class="step__s">Каждый чек = одна попытка в розыгрыше</div></div></div>
-    <div class="step"><div class="step__n">3</div><div><b>Выполняйте задания</b><div class="step__s">Еженедельные задания — дополнительные шансы</div></div></div>
-    <div class="step"><div class="step__n">4</div><div><b>Выигрывайте!</b><div class="step__s">Розыгрыш каждый квартал среди всех участников</div></div></div>
-  </div>
-
-  <div class="infobox" style="margin-top:12px">🎯 Чем активнее покупаете — тем больше шансов!</div>
-  <button class="btn-full" onclick="openSite('https://www.maria-irk.ru/club/')">Подробнее на сайте →</button>
 </section>
 
 <!-- ═══ ЗАКАЗ ТОРТА ═══ -->
@@ -276,15 +302,6 @@
   </form>
 
   <div class="infobox" style="margin-top:16px">📞 Или позвоните: <a href="tel:+73952504080">+7 (3952) 50-40-80</a></div>
-</section>
-
-<!-- ═══ МАГАЗИНЫ ═══ -->
-<section class="tab" id="tab-stores">
-  <div class="hero hero--sm">
-    <h2 class="hero__h1" style="font-size:24px">📍 Наши магазины</h2>
-    <p class="hero__p">18 точек в Иркутске и Ангарске</p>
-  </div>
-  <div id="stores-list" style="margin-top:12px"></div>
 </section>
 
 <!-- ═══ ИГРЫ + ЧАТ ═══ -->
@@ -423,8 +440,48 @@
 
 </main>
 
+<!-- MODAL: Конвертация звёзд -->
+<div class="modal" id="convert-modal" style="display:none">
+  <div class="modal__sheet">
+    <div class="modal__h">Обмен звёзд на баллы</div>
+    <p class="modal__sub">У тебя: <b id="convert-have">0</b> ⭐</p>
+    <div id="convert-options" class="convert-options"></div>
+    <div class="modal__btns">
+      <button class="btn-outline" onclick="closeConvertModal()">Отмена</button>
+      <button class="btn-full" onclick="doConvert()">Обменять</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Получить награду -->
+<div class="modal" id="redeem-modal" style="display:none">
+  <div class="modal__sheet">
+    <div id="redeem-confirm">
+      <div class="modal__h" id="redeem-title"></div>
+      <p class="modal__sub" id="redeem-desc"></p>
+      <div class="modal__row" id="redeem-min"></div>
+      <div class="modal__row" id="redeem-cost"></div>
+      <div class="modal__row" id="redeem-after"></div>
+      <div class="modal__btns">
+        <button class="btn-outline" onclick="closeRedeemModal()">Отмена</button>
+        <button class="btn-full" onclick="doRedeem()">Получить промокод</button>
+      </div>
+    </div>
+    <div id="redeem-result" style="display:none">
+      <div class="modal__h">Промокод выдан 🎁</div>
+      <div class="redeem-code" id="redeem-code"></div>
+      <div class="modal__sub" id="redeem-code-exp"></div>
+      <div class="modal__btns">
+        <button class="btn-outline" id="redeem-copy" onclick="copyRedeemCode()">Копировать</button>
+        <button class="btn-full" onclick="closeRedeemModal()">Готово</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- BOTTOM NAV -->
 <nav class="bnav">
+  <span class="bnav__pill" id="bnav-pill"></span>
   <button class="nb active" id="nav-home" onclick="switchTab('home')">
     <span class="nb__ic">🏠</span><span class="nb__lb">Главная</span>
   </button>
@@ -434,14 +491,8 @@
   <button class="nb" id="nav-club" onclick="switchTab('club')">
     <span class="nb__ic">💎</span><span class="nb__lb">Клуб</span>
   </button>
-  <button class="nb" id="nav-check" onclick="switchTab('check')">
-    <span class="nb__ic">🧾</span><span class="nb__lb">Чек</span>
-  </button>
   <button class="nb" id="nav-fun" onclick="switchTab('fun')">
     <span class="nb__ic">🎮</span><span class="nb__lb">Игры</span>
-  </button>
-  <button class="nb" id="nav-stores" onclick="switchTab('stores')">
-    <span class="nb__ic">📍</span><span class="nb__lb">Магазины</span>
   </button>
   <button class="nb" id="nav-order" onclick="switchTab('order')">
     <span class="nb__ic">🛒</span><span class="nb__lb">Заказ</span>
@@ -450,9 +501,9 @@
 
 <script src="/js/app.js"></script>
 <script src="/js/order.js"></script>
-<script src="/js/stores.js"></script>
 <script src="/js/game.js"></script>
 <script src="/js/bakery.js"></script>
 <script src="/js/chat.js"></script>
+<script src="/js/club.js"></script>
 </body>
 </html>

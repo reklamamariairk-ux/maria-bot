@@ -12,14 +12,37 @@ function switchTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.nb').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + name)?.classList.add('active');
-  document.getElementById('nav-' + name)?.classList.add('active');
+  const navBtn = document.getElementById('nav-' + name);
+  navBtn?.classList.add('active');
+  positionNavPill(navBtn);
   if (name === 'fun' && !window._gamesInited) {
     window._gamesInited = true;
     initMemory();
     flappyInit();
   }
+  if (window.Telegram?.WebApp?.HapticFeedback?.selectionChanged) {
+    window.Telegram.WebApp.HapticFeedback.selectionChanged();
+  }
   window.scrollTo(0, 0);
 }
+
+function positionNavPill(activeBtn) {
+  const pill = document.getElementById('bnav-pill');
+  if (!pill || !activeBtn) return;
+  const navRect = activeBtn.parentElement.getBoundingClientRect();
+  const btnRect = activeBtn.getBoundingClientRect();
+  pill.style.width  = btnRect.width + 'px';
+  pill.style.transform = `translateX(${btnRect.left - navRect.left}px)`;
+}
+
+window.addEventListener('load', () => {
+  const active = document.querySelector('.bnav .nb.active');
+  positionNavPill(active);
+});
+window.addEventListener('resize', () => {
+  const active = document.querySelector('.bnav .nb.active');
+  positionNavPill(active);
+});
 
 /* ── Sub-tabs ────────────────────────────────────────────────────────────── */
 function showSubTab(name) {
