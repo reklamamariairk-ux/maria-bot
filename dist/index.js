@@ -13,6 +13,8 @@ const node_cron_1 = __importDefault(require("node-cron"));
 const grammy_1 = require("grammy");
 const scraper_1 = require("./scraper");
 const db_1 = require("./db");
+const club_1 = require("./club");
+const auth_1 = require("./auth");
 // ─── Env ────────────────────────────────────────────────────────────────────
 const BOT_TOKEN = process.env.BOT_TOKEN ?? "";
 const GROQ_KEY = process.env.GROQ_KEY ?? "";
@@ -91,8 +93,40 @@ const HELP_TEXT = `
 bot.command("start", async (ctx) => {
     if (ctx.from) {
         await (0, db_1.addSubscriber)(ctx.from.id, ctx.from.username, ctx.from.first_name).catch(() => { });
+        // Referral payload: /start ref_12345
+        const payload = ctx.match?.trim();
+        if (payload && payload.startsWith("ref_")) {
+            const referrerId = Number(payload.slice(4));
+            if (referrerId && referrerId !== ctx.from.id) {
+                await (0, club_1.recordReferral)(referrerId, ctx.from.id).catch(() => { });
+            }
+        }
     }
     await ctx.reply(WELCOME, { parse_mode: "Markdown", reply_markup: webAppButton(WELCOME) });
+});
+// Phone share via WebApp.requestContact OR keyboard button
+bot.on(":contact", async (ctx) => {
+    const c = ctx.message?.contact;
+    if (!c || !ctx.from)
+        return;
+    if (c.user_id !== ctx.from.id) {
+        await ctx.reply("Можно поделиться только своим номером 🙂");
+        return;
+    }
+    await (0, db_1.addSubscriber)(ctx.from.id, ctx.from.username, ctx.from.first_name).catch(() => { });
+    try {
+        const result = await (0, club_1.verifyPhone)(ctx.from.id, c.phone_number);
+        if (result.alreadyVerified) {
+            await ctx.reply("✅ Номер уже подтверждён");
+        }
+        else {
+            await ctx.reply(`✅ Номер подтверждён!\n\n💎 Тебе начислено +${result.bonusAwarded} баллов на счёт.\nОткрой Mini App, чтобы продолжить 👇`, { reply_markup: webAppButton("") });
+        }
+    }
+    catch (e) {
+        console.error("[VERIFY]", e.message);
+        await ctx.reply("⚠️ Не удалось сохранить номер, попробуй ещё раз позже");
+    }
 });
 bot.command("games", async (ctx) => ctx.reply(GAMES_TEXT, { parse_mode: "Markdown", reply_markup: webAppButton(GAMES_TEXT, "🎮 Играть") }));
 bot.command("sale", async (ctx) => ctx.reply(SALE_TEXT, { parse_mode: "Markdown", reply_markup: webAppButton(SALE_TEXT, "🛒 Акции") }));
@@ -311,44 +345,6 @@ app.post("/api/order", async (req, res) => {
         res.status(502).json({ error: "Не удалось создать заявку, попробуйте позже" });
     }
 });
-// ─── Loyalty lookup ───────────────────────────────────────────────────────────
-const LOYALTY_API = process.env.LOYALTY_API ?? ""; // https://www.maria-irk.ru/local/api/loyalty.php
-const LOYALTY_TOKEN = process.env.LOYALTY_TOKEN ?? "maria2026";
-app.post("/api/loyalty/lookup", async (req, res) => {
-    const { phone } = req.body;
-    if (!phone) {
-        res.status(400).json({ error: "no_phone" });
-        return;
-    }
-    const digits = phone.replace(/\D/g, "");
-    if (digits.length < 10) {
-        res.status(400).json({ error: "bad_phone" });
-        return;
-    }
-    if (!LOYALTY_API) {
-        // API ещё не подключён — возвращаем заглушку
-        res.json({ error: "not_ready" });
-        return;
-    }
-    try {
-        const url = `${LOYALTY_API}?token=${LOYALTY_TOKEN}&phone=${digits}`;
-        const data = await new Promise((resolve, reject) => {
-            const mod = require("https");
-            const r = mod.get(url, { rejectUnauthorized: false }, (resp) => {
-                let body = "";
-                resp.on("data", (c) => (body += c));
-                resp.on("end", () => resolve(body));
-            });
-            r.on("error", reject);
-            r.setTimeout(10000, () => { r.destroy(); reject(new Error("Timeout")); });
-        });
-        res.json(JSON.parse(data));
-    }
-    catch (e) {
-        console.error("Loyalty API error:", e.message);
-        res.status(502).json({ error: "service_error" });
-    }
-});
 // ─── Магазины ────────────────────────────────────────────────────────────────
 const STORES = [];
 app.get("/api/stores", (_req, res) => {
@@ -398,6 +394,161 @@ app.get("/api/catalog-status", (_req, res) => {
         sample: catalog.slice(0, 3),
     });
 });
+// ─── Club / Loyalty API ──────────────────────────────────────────────────────
+app.get("/api/me", auth_1.requireTgUser, async (req, res) => {
+    const u = (0, auth_1.getTgUser)(req);
+    try {
+        await (0, db_1.addSubscriber)(u.id, u.username, u.first_name).catch(() => { });
+        const [verified, balance, daily, myRewards] = await Promise.all([
+            (0, club_1.isPhoneVerified)(u.id),
+            (0, club_1.getBalance)(u.id),
+            (0, club_1.getDailyStatus)(u.id),
+            (0, club_1.getMyRewards)(u.id),
+        ]);
+        res.json({
+            user: { id: u.id, first_name: u.first_name, username: u.username },
+            phoneVerified: verified,
+            balance,
+            daily,
+            activeRewards: myRewards.length,
+        });
+    }
+    catch (e) {
+        console.error("[API /me]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
+});
+app.post("/api/verify-phone", auth_1.requireTgUser, async (req, res) => {
+    const u = (0, auth_1.getTgUser)(req);
+    const { phone } = req.body;
+    if (!phone || phone.replace(/\D/g, "").length < 10) {
+        res.status(400).json({ error: "bad_phone" });
+        return;
+    }
+    try {
+        const result = await (0, club_1.verifyPhone)(u.id, phone);
+        const balance = await (0, club_1.getBalance)(u.id);
+        res.json({ ok: true, ...result, balance });
+    }
+    catch (e) {
+        console.error("[API /verify-phone]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
+});
+app.post("/api/daily/claim", auth_1.requireTgUser, async (req, res) => {
+    const u = (0, auth_1.getTgUser)(req);
+    try {
+        if (!(await (0, club_1.isPhoneVerified)(u.id))) {
+            res.status(403).json({ error: "phone_not_verified" });
+            return;
+        }
+        const result = await (0, club_1.claimDailyLogin)(u.id);
+        const balance = await (0, club_1.getBalance)(u.id);
+        res.json({ ...result, balance });
+    }
+    catch (e) {
+        console.error("[API /daily/claim]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
+});
+app.get("/api/conversion-tiers", (_req, res) => {
+    res.json(club_1.CONVERSION_TIERS);
+});
+app.post("/api/convert", auth_1.requireTgUser, async (req, res) => {
+    const u = (0, auth_1.getTgUser)(req);
+    const { stars } = req.body;
+    if (typeof stars !== "number") {
+        res.status(400).json({ error: "bad_stars" });
+        return;
+    }
+    try {
+        const result = await (0, club_1.convertStars)(u.id, stars);
+        const balance = await (0, club_1.getBalance)(u.id);
+        res.json({ ...result, balance });
+    }
+    catch (e) {
+        console.error("[API /convert]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
+});
+app.get("/api/rewards", async (_req, res) => {
+    try {
+        const items = await (0, club_1.getRewardsCatalog)();
+        res.json(items);
+    }
+    catch (e) {
+        console.error("[API /rewards]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
+});
+app.post("/api/redeem", auth_1.requireTgUser, async (req, res) => {
+    const u = (0, auth_1.getTgUser)(req);
+    const { rewardId } = req.body;
+    if (typeof rewardId !== "number") {
+        res.status(400).json({ error: "bad_reward_id" });
+        return;
+    }
+    try {
+        if (!(await (0, club_1.isPhoneVerified)(u.id))) {
+            res.status(403).json({ error: "phone_not_verified" });
+            return;
+        }
+        const result = await (0, club_1.redeemReward)(u.id, rewardId);
+        const balance = await (0, club_1.getBalance)(u.id);
+        res.json({ ...result, balance });
+    }
+    catch (e) {
+        console.error("[API /redeem]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
+});
+app.get("/api/my-rewards", auth_1.requireTgUser, async (req, res) => {
+    const u = (0, auth_1.getTgUser)(req);
+    try {
+        const items = await (0, club_1.getMyRewards)(u.id);
+        res.json(items);
+    }
+    catch (e) {
+        console.error("[API /my-rewards]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
+});
+app.post("/api/game-result", auth_1.requireTgUser, async (req, res) => {
+    const u = (0, auth_1.getTgUser)(req);
+    const { game, score } = req.body;
+    if (!game || typeof score !== "number" || score < 0) {
+        res.status(400).json({ error: "bad_input" });
+        return;
+    }
+    if (!["flappy_cake", "memory", "bakery"].includes(game)) {
+        res.status(400).json({ error: "unknown_game" });
+        return;
+    }
+    try {
+        if (!(await (0, club_1.isPhoneVerified)(u.id))) {
+            res.json({ starsAwarded: 0, recordBeaten: false, recordBonus: 0, capped: false, gated: true });
+            return;
+        }
+        const result = await (0, club_1.recordGameResult)(u.id, game, score);
+        const balance = await (0, club_1.getBalance)(u.id);
+        res.json({ ...result, balance });
+    }
+    catch (e) {
+        console.error("[API /game-result]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
+});
+app.get("/api/history", auth_1.requireTgUser, async (req, res) => {
+    const u = (0, auth_1.getTgUser)(req);
+    try {
+        const rows = await (0, club_1.getHistory)(u.id, 30);
+        res.json(rows);
+    }
+    catch (e) {
+        console.error("[API /history]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
+});
 app.get("/health", (_req, res) => res.json({ status: "ok", catalog: catalog.length }));
 // ─── Запуск ──────────────────────────────────────────────────────────────────
 bot.catch((err) => {
@@ -424,6 +575,7 @@ async function sendBirthdayGreetings() {
 }
 async function main() {
     await (0, db_1.initDb)();
+    await (0, club_1.initClubSchema)();
     console.log(`[STARTUP] BOT_TOKEN=${BOT_TOKEN ? "set" : "MISSING"}`);
     console.log(`[STARTUP] GROQ_KEY=${GROQ_KEY ? "set" : "MISSING"}`);
     console.log(`[STARTUP] WEBHOOK_URL=${WEBHOOK_URL || "(empty — long polling)"}`);
