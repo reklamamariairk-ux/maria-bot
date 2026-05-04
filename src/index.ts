@@ -25,6 +25,7 @@ import {
   CONVERSION_TIERS,
 } from "./club";
 import { requireTgUser, getTgUser } from "./auth";
+import { getPartners, getPartnersMeta, syncPartners } from "./partners";
 
 // ─── Env ────────────────────────────────────────────────────────────────────
 const BOT_TOKEN    = process.env.BOT_TOKEN    ?? "";
@@ -594,7 +595,24 @@ app.get("/api/history", requireTgUser, async (req, res) => {
   }
 });
 
-app.get("/health", (_req, res) => res.json({ status: "ok", catalog: catalog.length }));
+// ─── Partners ────────────────────────────────────────────────────────────────
+app.get("/api/partners", (_req, res) => {
+  res.json({ partners: getPartners(), meta: getPartnersMeta() });
+});
+
+app.post("/api/partners/sync", async (req, res) => {
+  const { token } = req.body as { token?: string };
+  if (!token || token !== process.env.ADMIN_TOKEN) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  const result = await syncPartners();
+  res.json(result);
+});
+
+app.get("/health", (_req, res) =>
+  res.json({ status: "ok", catalog: catalog.length, partners: getPartnersMeta() })
+);
 
 // ─── Запуск ──────────────────────────────────────────────────────────────────
 bot.catch((err) => {
@@ -637,6 +655,17 @@ async function main() {
     sendBirthdayGreetings().catch((e) => console.error("[BIRTHDAY CRON]", e));
   });
   console.log("[STARTUP] Birthday cron scheduled (daily 10:00 Irkutsk)");
+
+  // Партнёры — синк с Bitrix раз в час (если PARTNERS_API задан)
+  if (process.env.PARTNERS_API) {
+    syncPartners().catch((e) => console.error("[PARTNERS] startup sync:", e));
+    cron.schedule("17 * * * *", () => {
+      syncPartners().catch((e) => console.error("[PARTNERS CRON]", e));
+    });
+    console.log("[STARTUP] Partners cron scheduled (hourly)");
+  } else {
+    console.log("[STARTUP] PARTNERS_API not set — partners served from data/partners.json");
+  }
 
   if (WEBHOOK_URL) {
     const webhookPath = `/webhook/${BOT_TOKEN}`;

@@ -65,29 +65,32 @@ function usechip(btn) {
 }
 
 /* ── Partners ────────────────────────────────────────────────────────────── */
-const PARTNERS = [
-  { emoji:'🔬', name:'Лука Лаб',     perk:'−35%',           desc:'Комплексная программа «ЧЕК АП от ЛукаЛаб»\nСтоимость для клуба: 6 200 ₽ (вместо 9 539 ₽)' },
-  { emoji:'✨', name:'Деница',        perk:'до −16 000 ₽',   desc:'Процедуры на аппарате ENDYMED\nЭксклюзивно для клуба «Мария для своих»' },
-  { emoji:'💅', name:'Гардо',         perk:'🎁 Брови',        desc:'При записи на маникюр и педикюр — оформление и окрашивание бровей в подарок' },
-  { emoji:'🍣', name:'Пряников',      perk:'🎁 Ролл',         desc:'При заказе от 1 600 ₽ — ролл «Филадельфия Фреш» в подарок\nПромокод: «Вкус»' },
-  { emoji:'🔧', name:'СТО Просто',   perk:'−1 450 ₽',        desc:'Замена масла и масляного фильтра — работа бесплатно\n* Запчасти по стоимости подрядчика' },
-  { emoji:'🏨', name:'Азатай',        perk:'−10%',            desc:'Скидка на проживание для участников клуба' },
-  { emoji:'🥊', name:'Real Victory', perk:'−30% пн–пт',      desc:'Скидка для участников клуба «Мария для своих» в будние дни' },
-  { emoji:'🌲', name:'Тайга',         perk:'−15% / −10%',    desc:'Постоянная скидка на номера, сауну или хаммам (до 17:00)' },
-];
-
 function renderPartners(list) {
   const el = document.getElementById('partners-list');
   if (!el) return;
+  if (!list.length) {
+    el.innerHTML = '<p style="text-align:center;color:var(--muted);padding:20px">Партнёры скоро появятся</p>';
+    return;
+  }
   el.innerHTML = list.map(p => `
     <div class="pcard">
       <div class="pcard__logo">${p.emoji}</div>
       <div class="pcard__info">
         <div class="pcard__name">${p.name}</div>
-        <div class="pcard__desc">${p.desc}</div>
+        <div class="pcard__desc">${(p.desc || '').replace(/</g,'&lt;')}</div>
       </div>
       <div class="pcard__badge">${p.perk}</div>
     </div>`).join('');
 }
 
-document.addEventListener('DOMContentLoaded', () => renderPartners(PARTNERS));
+async function loadPartners() {
+  try {
+    const res = await fetch('/api/partners', { cache: 'no-store' });
+    const data = await res.json();
+    renderPartners(data.partners || []);
+  } catch {
+    renderPartners([]);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', loadPartners);

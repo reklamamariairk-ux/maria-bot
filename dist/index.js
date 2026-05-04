@@ -15,6 +15,7 @@ const scraper_1 = require("./scraper");
 const db_1 = require("./db");
 const club_1 = require("./club");
 const auth_1 = require("./auth");
+const partners_1 = require("./partners");
 // ─── Env ────────────────────────────────────────────────────────────────────
 const BOT_TOKEN = process.env.BOT_TOKEN ?? "";
 const GROQ_KEY = process.env.GROQ_KEY ?? "";
@@ -549,7 +550,20 @@ app.get("/api/history", auth_1.requireTgUser, async (req, res) => {
         res.status(500).json({ error: "internal" });
     }
 });
-app.get("/health", (_req, res) => res.json({ status: "ok", catalog: catalog.length }));
+// ─── Partners ────────────────────────────────────────────────────────────────
+app.get("/api/partners", (_req, res) => {
+    res.json({ partners: (0, partners_1.getPartners)(), meta: (0, partners_1.getPartnersMeta)() });
+});
+app.post("/api/partners/sync", async (req, res) => {
+    const { token } = req.body;
+    if (!token || token !== process.env.ADMIN_TOKEN) {
+        res.status(403).json({ error: "forbidden" });
+        return;
+    }
+    const result = await (0, partners_1.syncPartners)();
+    res.json(result);
+});
+app.get("/health", (_req, res) => res.json({ status: "ok", catalog: catalog.length, partners: (0, partners_1.getPartnersMeta)() }));
 // ─── Запуск ──────────────────────────────────────────────────────────────────
 bot.catch((err) => {
     const ctx = err.ctx;
@@ -585,6 +599,17 @@ async function main() {
         sendBirthdayGreetings().catch((e) => console.error("[BIRTHDAY CRON]", e));
     });
     console.log("[STARTUP] Birthday cron scheduled (daily 10:00 Irkutsk)");
+    // Партнёры — синк с Bitrix раз в час (если PARTNERS_API задан)
+    if (process.env.PARTNERS_API) {
+        (0, partners_1.syncPartners)().catch((e) => console.error("[PARTNERS] startup sync:", e));
+        node_cron_1.default.schedule("17 * * * *", () => {
+            (0, partners_1.syncPartners)().catch((e) => console.error("[PARTNERS CRON]", e));
+        });
+        console.log("[STARTUP] Partners cron scheduled (hourly)");
+    }
+    else {
+        console.log("[STARTUP] PARTNERS_API not set — partners served from data/partners.json");
+    }
     if (WEBHOOK_URL) {
         const webhookPath = `/webhook/${BOT_TOKEN}`;
         app.use(webhookPath, (0, grammy_1.webhookCallback)(bot, "express"));
