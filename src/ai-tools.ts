@@ -35,7 +35,6 @@ export const TOOL_DEFS = [
             type: "string",
             description: "Опционально: ограничить категорией (Торты, Пироги, Пирожные и десерты, Наборы, Торты на заказ, Для праздника, Пасха).",
           },
-          limit: { type: "number", description: "Сколько вернуть (по умолчанию 5, максимум 10)" },
         },
         required: ["query"],
       },
@@ -82,12 +81,7 @@ export const TOOL_DEFS = [
       description:
           "Возвращает последние заказы пользователя с сайта (номер, дата, сумма, состав). " +
           "Работает только при верифицированном телефоне.",
-      parameters: {
-        type: "object",
-        properties: {
-          limit: { type: "number", description: "Сколько вернуть (по умолчанию 5)" },
-        },
-      },
+      parameters: { type: "object", properties: {} },
     },
   },
   {
