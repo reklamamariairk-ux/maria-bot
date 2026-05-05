@@ -7,6 +7,27 @@ function openSite(url) {
   else window.open(url, '_blank');
 }
 
+/* ── Магазины (модалка адресов) ─────────────────────────────────────────── */
+function openShopsModal() {
+  const m = document.getElementById('shops-modal');
+  if (!m) return;
+  m.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function closeShopsModal() {
+  const m = document.getElementById('shops-modal');
+  if (m) m.style.display = 'none';
+  document.body.style.overflow = '';
+}
+function openMaps() {
+  const url = 'https://yandex.ru/maps/?text=Мария кондитерская Иркутск';
+  if (tg?.openLink) tg.openLink(url);
+  else window.open(url, '_blank');
+}
+window.openShopsModal = openShopsModal;
+window.closeShopsModal = closeShopsModal;
+window.openMaps = openMaps;
+
 /* ── AI чат — плавающая кнопка ─────────────────────────────────────────── */
 function openAiChat() {
   switchTab('fun');

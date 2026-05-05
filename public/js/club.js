@@ -101,16 +101,43 @@ function renderClub() {
   renderReferral();
 }
 
+function renderSweetCheckMy(data) {
+  const wrap = document.getElementById('sc-my');
+  if (!wrap) return;
+  if (!data || !data.configured || !data.found) {
+    wrap.style.display = 'none';
+    return;
+  }
+  const tickets = Number(data.tickets_count || 0);
+  const nextThreshold = 1000;
+  // фейковый прогресс — ничего знаем про сумму до билета, ставим pseudo
+  const cardCls = tickets >= 5 ? 'sc-my sc-my--gold' : (tickets >= 1 ? 'sc-my' : 'sc-my sc-my--empty');
+  wrap.style.display = '';
+  wrap.innerHTML = `
+    <div class="${cardCls}">
+      <div class="sc-my__h">🎟 Ваши билеты</div>
+      <div class="sc-my__big">${tickets}</div>
+      <div class="sc-my__sub">${tickets > 0
+        ? `${tickets === 1 ? 'один билет уже' : tickets + ' билетов уже'} в розыгрыше`
+        : 'Сделайте первую покупку — получите первый билет'}</div>
+      ${tickets > 0 ? `
+        <div class="sc-my__chance">
+          ${tickets >= 10 ? '🔥 Высокий шанс' : tickets >= 3 ? '⭐ Хорошие шансы' : '💫 Шансы есть'}
+        </div>` : ''}
+    </div>`;
+}
+
 async function renderLk() {
   const section = document.getElementById('lk-section');
   const card = document.getElementById('lk-card');
   if (!section || !card) return;
 
-  card.innerHTML = '<div class="lk-card__loading">Загружаем данные с maria-irk.ru…</div>';
+  card.innerHTML = '<div class="lk-card__loading">Загружаем баланс…</div>';
   section.style.display = '';
 
   try {
     const data = await api('/api/lk');
+    renderSweetCheckMy(data);
     if (data.__unauthorized || data.error) {
       section.style.display = 'none';
       return;
@@ -122,9 +149,9 @@ async function renderLk() {
     }
     if (!data.found) {
       card.innerHTML = `
-        <div class="lk-card__title">Аккаунта на maria-irk.ru не нашли</div>
-        <div class="lk-card__sub">Зарегистрируйся на сайте по этому же номеру — и баллы синхронизируются.</div>
-        <button class="btn-outline" onclick="openSite('https://www.maria-irk.ru/auth/?register=yes')">Зарегистрироваться →</button>`;
+        <div class="lk-card__title">Пока без покупок 🍰</div>
+        <div class="lk-card__sub">Сделай первый заказ — и баллы появятся автоматически. Менеджер свяжется по подтверждённому номеру.</div>
+        <button class="btn-full" onclick="switchTab('menu')">Перейти в меню →</button>`;
       return;
     }
 
@@ -162,7 +189,7 @@ async function renderLk() {
           ${orders.slice(0, 5).map(renderOrderRow).join('')}
           ${orders.length > 5 ? `<div class="lk-ord-more">…и ещё ${orders.length - 5}</div>` : ''}
         </div>` : ''}
-      <button class="btn-outline" onclick="openSite('https://www.maria-irk.ru/personal/')">Открыть полный кабинет →</button>
+      <button class="btn-outline" onclick="toggleHistory()">📜 История начислений</button>
     `;
   } catch {
     section.style.display = 'none';

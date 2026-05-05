@@ -162,8 +162,7 @@ async function catOpenProduct(id) {
       ${props.length ? `<div class="cat-modal__props">${props.join('')}</div>` : ''}
       ${desc ? `<div class="cat-modal__desc">${escapeHtml(desc)}</div>` : ''}
       <div class="cat-modal__actions">
-        <button class="btn-full" onclick='cartAdd(${JSON.stringify({id:p.id,name:p.name,price:p.price,image:img}).replace(/"/g,"&quot;")})'>🛒 В корзину</button>
-        <button class="btn-outline" onclick="openSite('${escapeAttr(p.url || '')}')">Открыть на сайте</button>
+        <button class="btn-full" onclick='cartAdd(${JSON.stringify({id:p.id,name:p.name,price:p.price,image:img}).replace(/"/g,"&quot;")});catCloseProduct()'>🛒 В корзину</button>
       </div>
     `;
   } catch (e) {

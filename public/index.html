@@ -53,7 +53,7 @@
       <div class="bento__sm-t">Сладкий чек</div>
       <div class="bento__sm-s">iPhone 17, MacBook, PS5</div>
     </div>
-    <div class="bento__sm bento__sm--light" onclick="openSite('https://www.maria-irk.ru/contacts/')">
+    <div class="bento__sm bento__sm--light" onclick="openShopsModal()">
       <div class="bento__sm-ic">📍</div>
       <div class="bento__sm-t">18 магазинов</div>
       <div class="bento__sm-s">Иркутск и Ангарск</div>
@@ -82,10 +82,10 @@
     <a class="contact-row" href="tel:+73952504080">
       <span class="cr-icon">📱</span><span>+7 (3952) 50-40-80</span>
     </a>
-    <div class="contact-row" onclick="openSite('https://www.maria-irk.ru')">
+    <div class="contact-row">
       <span class="cr-icon">🌐</span><span>maria-irk.ru</span>
     </div>
-    <button class="btn-outline" onclick="openSite('https://www.maria-irk.ru/contacts/')">Все адреса магазинов →</button>
+    <button class="btn-outline" onclick="openShopsModal()">Все адреса магазинов →</button>
   </div>
 
 </section>
@@ -118,7 +118,6 @@
   <!-- Пусто -->
   <div class="cat-empty" id="menu-empty" style="display:none">Ничего не нашлось</div>
 
-  <button class="btn-outline" onclick="openSite('https://www.maria-irk.ru/catalog/')">Полный каталог на сайте →</button>
 </section>
 
 <!-- ═══ КЛУБ ═══ -->
@@ -250,16 +249,29 @@
   </div>
 
   <div class="infobox">ℹ️ Скидки и бонусы не суммируются — применяется максимальная выгода</div>
-  <button class="btn-full" onclick="openSite('https://www.maria-irk.ru/club/')">Подробнее на сайте →</button>
 
   <div class="sh" style="margin-top:20px"><span class="sh__line"></span><span class="sh__text">🧾 Сладкий чек — лотерея</span><span class="sh__line"></span></div>
   <p class="section-desc">Каждый чек — шанс выиграть технику мечты. Розыгрыш каждый квартал.</p>
+
+  <!-- Личные билеты юзера (заполнится из LK) -->
+  <div id="sc-my" style="display:none"></div>
+
   <div class="prizes">
     <div class="prize prize--1"><div class="prize__place">🥇</div><div class="prize__icon">📱</div><div class="prize__name">iPhone 17 Pro Max</div></div>
     <div class="prize prize--2"><div class="prize__place">🥈</div><div class="prize__icon">💻</div><div class="prize__name">MacBook</div></div>
     <div class="prize prize--2"><div class="prize__place">🥈</div><div class="prize__icon">🎮</div><div class="prize__name">PlayStation 5</div></div>
     <div class="prize prize--3"><div class="prize__place">🥉</div><div class="prize__icon">⌚</div><div class="prize__name">Apple Watch</div></div>
     <div class="prize prize--3"><div class="prize__place">🥉</div><div class="prize__icon">🔊</div><div class="prize__name">JBL Speaker</div></div>
+  </div>
+
+  <div class="sc-rules">
+    <h4>Как получить билет</h4>
+    <ul>
+      <li>За каждые 1 000 ₽ покупок — 1 билет</li>
+      <li>Билеты сохраняются между квартальными розыгрышами</li>
+      <li>Чем больше билетов — выше шанс на приз</li>
+      <li>Розыгрыш транслируется в нашем Telegram-канале</li>
+    </ul>
   </div>
 
   <div class="sh" style="margin-top:20px"><span class="sh__line"></span><span class="sh__text">Партнёры клуба</span><span class="sh__line"></span></div>
@@ -453,6 +465,48 @@
     <div class="modal__btns">
       <button class="btn-outline" onclick="closeConvertModal()">Отмена</button>
       <button class="btn-full" onclick="doConvert()">Обменять</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Магазины (адреса) -->
+<div class="cat-modal" id="shops-modal" style="display:none" onclick="if(event.target===this)closeShopsModal()">
+  <div class="cat-modal__sheet">
+    <button class="cat-modal__close" onclick="closeShopsModal()">×</button>
+    <div class="shops">
+      <div class="shops__h">📍 18 магазинов «Мария»</div>
+      <div class="shops__sub">Иркутск и Ангарск</div>
+
+      <div class="shops__group">
+        <div class="shops__city">Иркутск</div>
+        <div class="shop">ул. Байкальская, 206 <span class="shop__t">Бизнес-центр</span></div>
+        <div class="shop">ул. Дзержинского, 36</div>
+        <div class="shop">ул. Карла Маркса, 22</div>
+        <div class="shop">ул. Партизанская, 2А</div>
+        <div class="shop">ул. Седова, 24</div>
+        <div class="shop">ул. Сергеева, 3А</div>
+        <div class="shop">мкр. Ленинский, 22</div>
+        <div class="shop">мкр. Юбилейный, 20</div>
+        <div class="shop">бул. Рябикова, 31А</div>
+        <div class="shop">ТРК «Карамель»</div>
+        <div class="shop">ТРЦ «Сильвер Молл»</div>
+        <div class="shop">ТРЦ «Модный квартал»</div>
+        <div class="shop">ТРЦ «Сезон»</div>
+        <div class="shop">пос. Маркова</div>
+      </div>
+
+      <div class="shops__group">
+        <div class="shops__city">Ангарск</div>
+        <div class="shop">мкр. 18, дом 16</div>
+        <div class="shop">мкр. 22, дом 1</div>
+        <div class="shop">ул. Карла Маркса, 47</div>
+        <div class="shop">ТРЦ «Раздолье»</div>
+      </div>
+
+      <div class="shops__cta">
+        <button class="btn-outline" onclick="openMaps()">🗺 Открыть на карте</button>
+        <a class="btn-full" href="tel:+73952504080">☎ +7 (3952) 50-40-80</a>
+      </div>
     </div>
   </div>
 </div>

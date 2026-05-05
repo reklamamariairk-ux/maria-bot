@@ -402,6 +402,88 @@ b,strong{font-weight:700}
 }
 .cat-modal__actions{padding:6px 0 24px}
 
+/* ── SHOPS modal ────────────────────────────────────────────────────────── */
+.shops{padding:18px 20px 24px}
+.shops__h{
+  font-family:'Playfair Display',serif;font-size:24px;font-weight:700;
+  color:#111;text-align:center;margin-bottom:4px;
+}
+.shops__sub{text-align:center;color:var(--muted);font-size:13px;margin-bottom:18px}
+.shops__group{margin-bottom:18px}
+.shops__city{
+  font-family:'Inter',sans-serif;font-weight:800;font-size:13px;
+  color:var(--red);letter-spacing:1px;text-transform:uppercase;
+  padding:8px 0 6px;border-bottom:1px solid rgba(214,31,55,.18);margin-bottom:8px;
+}
+.shop{
+  font-size:13px;color:#222;padding:8px 0;line-height:1.4;
+  border-bottom:1px solid rgba(0,0,0,.05);
+}
+.shop:last-child{border-bottom:none}
+.shop__t{display:inline-block;color:var(--muted);font-size:11px;margin-left:6px}
+.shops__cta{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.shops__cta .btn-full{margin:0;display:flex;justify-content:center;align-items:center;text-decoration:none}
+
+/* ── SWEET CHECK — user tickets card ────────────────────────────────────── */
+.sc-my{
+  background:linear-gradient(135deg,#fff7e8 0%,#fff 100%);
+  border:1.5px solid rgba(232,160,48,.35);
+  border-radius:18px;padding:22px 20px 20px;text-align:center;
+  margin:14px 0 18px;
+  box-shadow:0 6px 22px rgba(232,160,48,.18);
+  position:relative;overflow:hidden;
+}
+.sc-my::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(circle at 80% 0%,rgba(255,215,80,.18) 0%,transparent 50%);
+  pointer-events:none;
+}
+.sc-my--gold{
+  background:linear-gradient(135deg,#fff5d4 0%,#fff8e7 100%);
+  border-color:#e8a030;
+  box-shadow:0 8px 28px rgba(232,160,48,.35);
+}
+.sc-my--empty{
+  background:#fafafa;border-color:rgba(0,0,0,.08);box-shadow:none;
+}
+.sc-my__h{
+  font-size:12px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;
+  color:var(--muted);margin-bottom:6px;
+}
+.sc-my__big{
+  font-family:'Playfair Display',serif;font-weight:900;
+  font-size:64px;line-height:1;color:var(--red);
+  text-shadow:0 4px 12px rgba(214,31,55,.18);
+  margin-bottom:6px;
+}
+.sc-my--empty .sc-my__big{color:var(--muted);text-shadow:none}
+.sc-my__sub{font-size:13px;color:#444;margin-bottom:8px}
+.sc-my__chance{
+  display:inline-block;padding:6px 14px;border-radius:20px;
+  background:linear-gradient(135deg,var(--red),var(--red-d));color:#fff;
+  font-size:12px;font-weight:700;letter-spacing:.4px;
+  box-shadow:0 4px 12px var(--red-glow);
+}
+
+/* Правила Сладкого чека */
+.sc-rules{
+  background:var(--surface);border-radius:14px;padding:14px 16px 12px;
+  margin-top:14px;border:1px solid rgba(0,0,0,.05);
+}
+.sc-rules h4{
+  font-family:'Inter',sans-serif;font-weight:800;font-size:13px;
+  letter-spacing:.4px;text-transform:uppercase;
+  color:var(--red);margin:0 0 8px;
+}
+.sc-rules ul{margin:0;padding-left:18px;list-style:none}
+.sc-rules li{
+  font-size:13px;color:#333;line-height:1.5;padding:4px 0;
+  position:relative;padding-left:18px;
+}
+.sc-rules li::before{
+  content:'•';position:absolute;left:0;color:var(--red);font-weight:900;
+}
+
 /* ── FAB AI чат ─────────────────────────────────────────────────────────── */
 .fab-ai{
   position:fixed;
@@ -419,6 +501,16 @@ b,strong{font-weight:700}
 }
 .fab-ai:active{transform:scale(.94)}
 .fab-ai:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(214,31,55,.28)}
+.fab-ai::before{
+  content:'';position:absolute;inset:-3px;border-radius:50%;
+  background:radial-gradient(circle,rgba(214,31,55,.45) 0%,transparent 70%);
+  animation:fabPulse 2.4s ease-in-out infinite;
+  z-index:-1;pointer-events:none;
+}
+@keyframes fabPulse{
+  0%,100%{transform:scale(.92);opacity:.45}
+  50%{transform:scale(1.18);opacity:0}
+}
 
 /* ── Header cart button ─────────────────────────────────────────────────── */
 .header__cart{

@@ -62,7 +62,8 @@ if (needsScrape) {
 }
 
 // Обновление каждые 24 часа
-setInterval(refreshCatalog, 24 * 60 * 60 * 1000);
+// Каталог обновляем каждый час — синхронизация с правками на сайте
+setInterval(refreshCatalog, 60 * 60 * 1000);
 
 // ─── Telegram Bot ───────────────────────────────────────────────────────────
 const bot = new Bot(BOT_TOKEN);
