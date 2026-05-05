@@ -16,6 +16,7 @@ const db_1 = require("./db");
 const club_1 = require("./club");
 const auth_1 = require("./auth");
 const partners_1 = require("./partners");
+const lk_1 = require("./lk");
 // ─── Env ────────────────────────────────────────────────────────────────────
 const BOT_TOKEN = process.env.BOT_TOKEN ?? "";
 const GROQ_KEY = process.env.GROQ_KEY ?? "";
@@ -583,6 +584,23 @@ app.get("/api/catalog/search", (req, res) => {
 // ─── Partners ────────────────────────────────────────────────────────────────
 app.get("/api/partners", (_req, res) => {
     res.json({ partners: (0, partners_1.getPartners)(), meta: (0, partners_1.getPartnersMeta)() });
+});
+// ─── LK (Личный кабинет на сайте) ────────────────────────────────────────────
+app.get("/api/lk", auth_1.requireTgUser, async (req, res) => {
+    const u = (0, auth_1.getTgUser)(req);
+    try {
+        const result = await (0, lk_1.fetchLk)(u.id);
+        if (!result.ok) {
+            const code = result.reason === "phone_not_verified" ? 403 : 502;
+            res.status(code).json({ error: result.reason });
+            return;
+        }
+        res.json(result.data);
+    }
+    catch (e) {
+        console.error("[API /lk]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
 });
 app.post("/api/partners/sync", async (req, res) => {
     const { token } = req.body;

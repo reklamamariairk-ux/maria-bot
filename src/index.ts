@@ -26,6 +26,7 @@ import {
 } from "./club";
 import { requireTgUser, getTgUser } from "./auth";
 import { getPartners, getPartnersMeta, syncPartners } from "./partners";
+import { fetchLk } from "./lk";
 
 // ─── Env ────────────────────────────────────────────────────────────────────
 const BOT_TOKEN    = process.env.BOT_TOKEN    ?? "";
@@ -632,6 +633,23 @@ app.get("/api/catalog/search", (req, res) => {
 // ─── Partners ────────────────────────────────────────────────────────────────
 app.get("/api/partners", (_req, res) => {
   res.json({ partners: getPartners(), meta: getPartnersMeta() });
+});
+
+// ─── LK (Личный кабинет на сайте) ────────────────────────────────────────────
+app.get("/api/lk", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  try {
+    const result = await fetchLk(u.id);
+    if (!result.ok) {
+      const code = result.reason === "phone_not_verified" ? 403 : 502;
+      res.status(code).json({ error: result.reason });
+      return;
+    }
+    res.json(result.data);
+  } catch (e) {
+    console.error("[API /lk]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
 });
 
 app.post("/api/partners/sync", async (req, res) => {

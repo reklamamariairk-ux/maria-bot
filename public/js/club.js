@@ -95,9 +95,73 @@ function renderClub() {
 
   renderHero();
   renderDaily();
+  renderLk();
   renderShop();
   renderMyRewardsBlock();
   renderReferral();
+}
+
+async function renderLk() {
+  const section = document.getElementById('lk-section');
+  const card = document.getElementById('lk-card');
+  if (!section || !card) return;
+
+  card.innerHTML = '<div class="lk-card__loading">Загружаем данные с maria-irk.ru…</div>';
+  section.style.display = '';
+
+  try {
+    const data = await api('/api/lk');
+    if (data.__unauthorized || data.error) {
+      section.style.display = 'none';
+      return;
+    }
+    if (!data.configured) {
+      // Эндпоинт ещё не настроен на сайте — секцию не показываем
+      section.style.display = 'none';
+      return;
+    }
+    if (!data.found) {
+      card.innerHTML = `
+        <div class="lk-card__title">Аккаунта на maria-irk.ru не нашли</div>
+        <div class="lk-card__sub">Зарегистрируйся на сайте по этому же номеру — и баллы синхронизируются.</div>
+        <button class="btn-outline" onclick="openSite('https://www.maria-irk.ru/auth/?register=yes')">Зарегистрироваться →</button>`;
+      return;
+    }
+
+    const tickets = (data.tickets || []).slice(0, 3);
+    card.innerHTML = `
+      <div class="lk-card__row">
+        <div>
+          <div class="lk-card__name">${escapeHtml(data.name || 'Участник клуба')}</div>
+          <div class="lk-card__level">${escapeHtml(data.level || 'Друзья')}</div>
+        </div>
+        <div class="lk-card__bal">
+          <div class="lk-card__bal-num">${data.balance.toLocaleString('ru-RU')}</div>
+          <div class="lk-card__bal-lb">баллов</div>
+        </div>
+      </div>
+      ${data.year_spent ? `<div class="lk-card__year">За 12 мес: <b>${data.year_spent.toLocaleString('ru-RU')} ₽</b></div>` : ''}
+      ${tickets.length ? `
+        <div class="lk-card__tickets">
+          <div class="lk-card__tt">🧾 Билеты «Сладкого чека»</div>
+          ${tickets.map((t) => `
+            <div class="lk-ti">
+              <span class="lk-ti__num">#${escapeHtml(String(t.id))}</span>
+              <span class="lk-ti__nm">${escapeHtml(t.name || 'Сладкий чек')}</span>
+              <span class="lk-ti__dt">${escapeHtml(String(t.date || '').slice(0, 10))}</span>
+            </div>`).join('')}
+        </div>` : ''}
+      <button class="btn-outline" onclick="openSite('https://www.maria-irk.ru/personal/')">Открыть полный кабинет →</button>
+    `;
+  } catch {
+    section.style.display = 'none';
+  }
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
+  );
 }
 
 function renderHero() {
