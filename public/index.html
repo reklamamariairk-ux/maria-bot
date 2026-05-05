@@ -22,6 +22,9 @@
     <span class="hdr-c hdr-c--star">⭐ <b id="hdr-stars">0</b></span>
     <span class="hdr-c hdr-c--point">💎 <b id="hdr-points">0</b></span>
   </div>
+  <button class="header__cart" id="hdr-cart" onclick="cartOpen()" style="display:none">
+    🛒 <b id="hdr-cart-count">0</b>
+  </button>
   <a class="header__phone" href="tel:+73952504080">☎ 50-40-80</a>
 </header>
 
@@ -459,6 +462,11 @@
   <div class="cat-modal__sheet" id="cat-product-body"></div>
 </div>
 
+<!-- MODAL: Корзина / оформление заказа -->
+<div class="cat-modal" id="cart-modal" style="display:none" onclick="if(event.target===this)cartClose()">
+  <div class="cat-modal__sheet" id="cart-body"></div>
+</div>
+
 <!-- MODAL: Получить награду -->
 <div class="modal" id="redeem-modal" style="display:none">
   <div class="modal__sheet">
@@ -512,5 +520,6 @@
 <script src="/js/chat.js"></script>
 <script src="/js/catalog.js"></script>
 <script src="/js/club.js"></script>
+<script src="/js/cart.js"></script>
 </body>
 </html>

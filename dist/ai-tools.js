@@ -77,6 +77,21 @@ exports.TOOL_DEFS = [
     {
         type: "function",
         function: {
+            name: "add_to_cart",
+            description: "Добавляет товар в корзину пользователя. Используй когда клиент явно просит «добавь в корзину», «возьму», «оформляю», «положи мне». " +
+                "ID берётся из результатов search_products или get_product.",
+            parameters: {
+                type: "object",
+                properties: {
+                    product_id: { type: "number", description: "ID товара (из каталога)" },
+                },
+                required: ["product_id"],
+            },
+        },
+    },
+    {
+        type: "function",
+        function: {
             name: "list_partners",
             description: "Возвращает партнёров клуба «Мария для своих» — заведения, дающие скидки/подарки участникам клуба.",
             parameters: {
@@ -98,6 +113,7 @@ async function runTool(name, args, ctx) {
             case "check_my_loyalty": return await handleLoyalty(ctx);
             case "get_my_orders": return await handleOrders(args, ctx);
             case "list_partners": return handlePartners(args);
+            case "add_to_cart": return await handleAddToCart(args, ctx);
             default: return JSON.stringify({ error: `unknown_tool:${name}` });
         }
     }
@@ -217,6 +233,35 @@ async function handleOrders(args, ctx) {
             items: Array.isArray(o.items) ? o.items.slice(0, 5).map(i => `${i.qty}× ${i.name}`).join(", ") : "",
         })),
     });
+}
+async function handleAddToCart(args, ctx) {
+    const id = Number(args.product_id ?? args.id ?? 0);
+    if (!id)
+        return JSON.stringify({ ok: false, error: "bad_id" });
+    // Загружаем актуальные данные товара (если не из памяти)
+    let name;
+    let price = null;
+    let image;
+    const inMem = ctx.catalog.find((p) => p.id === id);
+    if (inMem) {
+        name = inMem.name;
+        price = inMem.priceNumber ?? null;
+        image = inMem.image;
+    }
+    else {
+        const remote = await (0, scraper_1.fetchProductById)(id);
+        if (remote) {
+            name = String(remote.name ?? "");
+            price = remote.price != null ? Number(remote.price) : null;
+            const imgs = remote.images;
+            image = Array.isArray(imgs) ? imgs[0] : undefined;
+        }
+    }
+    if (!name)
+        return JSON.stringify({ ok: false, error: "not_found" });
+    ctx.cartActions.push({ action: "add", id, qty: 1, name });
+    ctx.surfacedProducts.set(id, { id, name, price, image, hit: false });
+    return JSON.stringify({ ok: true, added: { id, name, qty: 1 } });
 }
 function handlePartners(args) {
     const cat = args.category ? String(args.category).trim().toLowerCase() : "";

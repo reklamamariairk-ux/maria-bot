@@ -42,6 +42,22 @@ async function sendMessage() {
     const reply = data.text ?? '';
     chatHistory.push({ role: 'assistant', content: reply });
     appendMessage('bot', reply, data.products);
+
+    // Если AI добавил товары в корзину — применяем
+    if (Array.isArray(data.cart_actions) && data.cart_actions.length && window.cartAdd) {
+      for (const a of data.cart_actions) {
+        if (a.action === 'add' && a.id) {
+          // Найдём детали в products чтобы добавить корректно
+          const fromList = (data.products || []).find(p => Number(p.id) === Number(a.id));
+          window.cartAdd({
+            id:    a.id,
+            name:  a.name || fromList?.name || `Товар #${a.id}`,
+            price: fromList?.price || 0,
+            image: fromList?.image || null,
+          });
+        }
+      }
+    }
   } catch {
     typing.remove();
     appendMessage('bot', '⚠️ Нет соединения. Проверьте интернет.');

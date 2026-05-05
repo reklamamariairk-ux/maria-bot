@@ -17,6 +17,7 @@ const club_1 = require("./club");
 const auth_1 = require("./auth");
 const partners_1 = require("./partners");
 const lk_1 = require("./lk");
+const order_1 = require("./order");
 // ─── Env ────────────────────────────────────────────────────────────────────
 const BOT_TOKEN = process.env.BOT_TOKEN ?? "";
 const GROQ_KEY = process.env.GROQ_KEY ?? "";
@@ -297,6 +298,7 @@ async function chatAgent(userMessages, ctx) {
             return {
                 text: (msg.content ?? "").trim(),
                 products: [...ctx.surfacedProducts.values()],
+                cart_actions: ctx.cartActions,
             };
         }
         // Иначе — запускаем все tool_calls параллельно
@@ -321,6 +323,7 @@ async function chatAgent(userMessages, ctx) {
     return {
         text: (finalChoice?.message?.content ?? "Извини, не получилось разобраться. Попробуй переформулировать.").trim(),
         products: [...ctx.surfacedProducts.values()],
+        cart_actions: ctx.cartActions,
     };
 }
 app.post("/api/chat", async (req, res) => {
@@ -338,9 +341,10 @@ app.post("/api/chat", async (req, res) => {
             chatId,
             catalog,
             surfacedProducts: new Map(),
+            cartActions: [],
         };
         const out = await chatAgent(messages, ctx);
-        res.json({ text: out.text, products: out.products });
+        res.json({ text: out.text, products: out.products, cart_actions: out.cart_actions });
     }
     catch (err) {
         console.error("Chat error:", err.message);
@@ -675,6 +679,52 @@ app.get("/api/lk", auth_1.requireTgUser, async (req, res) => {
         console.error("[API /lk]", e.message);
         res.status(500).json({ error: "internal" });
     }
+});
+// Создание заказа из миниаппа — обёртка вокруг /api/order-create.php на сайте
+app.post("/api/order", auth_1.requireTgUser, async (req, res) => {
+    const tg = (0, auth_1.getTgUser)(req);
+    const body = req.body;
+    // Если пользователь верифицировал телефон, используем его как priority,
+    // иначе берём из тела запроса (форма)
+    let phone = String(body.phone ?? "").trim();
+    if (body.useVerifiedPhone || !phone) {
+        try {
+            const lk = await (0, lk_1.fetchLk)(tg.id);
+            const lkData = lk.ok ? lk.data : null;
+            const lkPhone = lkData?.configured && lkData.phone ? String(lkData.phone) : "";
+            if (lkPhone)
+                phone = lkPhone;
+        }
+        catch { }
+    }
+    const items = Array.isArray(body.items)
+        ? body.items.filter((i) => i && Number(i.id) > 0 && Number(i.qty) > 0)
+            .map((i) => ({ id: Number(i.id), qty: Number(i.qty) }))
+        : [];
+    if (!phone || !body.name || items.length === 0) {
+        res.status(400).json({ ok: false, error: "missing_fields" });
+        return;
+    }
+    if (items.length > 30) {
+        res.status(400).json({ ok: false, error: "too_many_items" });
+        return;
+    }
+    const result = await (0, order_1.createOrder)({
+        phone,
+        name: String(body.name).trim(),
+        items,
+        address: body.address ? String(body.address).trim() : undefined,
+        delivery_date: body.delivery_date ? String(body.delivery_date).trim() : undefined,
+        delivery_time: body.delivery_time ? String(body.delivery_time).trim() : undefined,
+        comment: body.comment ? String(body.comment).trim() : `Заказ из Telegram-бота tg_id=${tg.id}`,
+        email: body.email ? String(body.email).trim() : undefined,
+    });
+    if (!result.ok) {
+        console.error("[ORDER] failed:", result.error);
+        res.status(502).json({ ok: false, error: result.error ?? "order_failed" });
+        return;
+    }
+    res.json(result);
 });
 app.post("/api/partners/sync", async (req, res) => {
     const { token } = req.body;

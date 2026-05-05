@@ -27,6 +27,7 @@ import {
 import { requireTgUser, getTgUser } from "./auth";
 import { getPartners, getPartnersMeta, syncPartners } from "./partners";
 import { fetchLk } from "./lk";
+import { createOrder, OrderRequest } from "./order";
 
 // ─── Env ────────────────────────────────────────────────────────────────────
 const BOT_TOKEN    = process.env.BOT_TOKEN    ?? "";
@@ -279,7 +280,7 @@ function groqRequest(payload: Record<string, unknown>): Promise<Record<string, u
 async function chatAgent(
   userMessages: ChatMessage[],
   ctx: ToolContext,
-): Promise<{ text: string; products: Record<string, unknown>[] }> {
+): Promise<{ text: string; products: Record<string, unknown>[]; cart_actions: ToolContext["cartActions"] }> {
   const system: ChatMessage = {
     role: "system",
     content: `Ты — Маша, тёплый AI-помощник кондитерской «Мария» в Иркутске.
@@ -345,6 +346,7 @@ async function chatAgent(
       return {
         text: (msg.content ?? "").trim(),
         products: [...ctx.surfacedProducts.values()],
+        cart_actions: ctx.cartActions,
       };
     }
 
@@ -370,6 +372,7 @@ async function chatAgent(
   return {
     text: (finalChoice?.message?.content ?? "Извини, не получилось разобраться. Попробуй переформулировать.").trim(),
     products: [...ctx.surfacedProducts.values()],
+    cart_actions: ctx.cartActions,
   };
 }
 
@@ -389,9 +392,10 @@ app.post("/api/chat", async (req, res) => {
       chatId,
       catalog,
       surfacedProducts: new Map(),
+      cartActions: [],
     };
     const out = await chatAgent(messages, ctx);
-    res.json({ text: out.text, products: out.products });
+    res.json({ text: out.text, products: out.products, cart_actions: out.cart_actions });
   } catch (err) {
     console.error("Chat error:", (err as Error).message);
     res.status(502).json({ error: "ИИ недоступен, попробуйте позже" });
@@ -738,6 +742,56 @@ app.get("/api/lk", requireTgUser, async (req, res) => {
     console.error("[API /lk]", (e as Error).message);
     res.status(500).json({ error: "internal" });
   }
+});
+
+// Создание заказа из миниаппа — обёртка вокруг /api/order-create.php на сайте
+app.post("/api/order", requireTgUser, async (req, res) => {
+  const tg = getTgUser(req)!;
+  const body = req.body as Partial<OrderRequest> & { useVerifiedPhone?: boolean };
+
+  // Если пользователь верифицировал телефон, используем его как priority,
+  // иначе берём из тела запроса (форма)
+  let phone = String(body.phone ?? "").trim();
+  if (body.useVerifiedPhone || !phone) {
+    try {
+      const lk = await fetchLk(tg.id);
+      const lkData = lk.ok ? (lk.data as unknown as Record<string, unknown>) : null;
+      const lkPhone = lkData?.configured && lkData.phone ? String(lkData.phone) : "";
+      if (lkPhone) phone = lkPhone;
+    } catch {}
+  }
+
+  const items = Array.isArray(body.items)
+    ? body.items.filter((i) => i && Number(i.id) > 0 && Number(i.qty) > 0)
+        .map((i) => ({ id: Number(i.id), qty: Number(i.qty) }))
+    : [];
+
+  if (!phone || !body.name || items.length === 0) {
+    res.status(400).json({ ok: false, error: "missing_fields" });
+    return;
+  }
+  if (items.length > 30) {
+    res.status(400).json({ ok: false, error: "too_many_items" });
+    return;
+  }
+
+  const result = await createOrder({
+    phone,
+    name:          String(body.name).trim(),
+    items,
+    address:       body.address       ? String(body.address).trim()       : undefined,
+    delivery_date: body.delivery_date ? String(body.delivery_date).trim() : undefined,
+    delivery_time: body.delivery_time ? String(body.delivery_time).trim() : undefined,
+    comment:       body.comment       ? String(body.comment).trim()       : `Заказ из Telegram-бота tg_id=${tg.id}`,
+    email:         body.email         ? String(body.email).trim()         : undefined,
+  });
+
+  if (!result.ok) {
+    console.error("[ORDER] failed:", result.error);
+    res.status(502).json({ ok: false, error: result.error ?? "order_failed" });
+    return;
+  }
+  res.json(result);
 });
 
 app.post("/api/partners/sync", async (req, res) => {
