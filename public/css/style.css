@@ -336,6 +336,73 @@ b,strong{font-weight:700}
   padding:40px 14px;grid-column:1/-1;
 }
 
+/* Хит-бейдж и вес на карточке товара */
+.pcard-pr__img{position:relative}
+.pcard-pr__hit{
+  position:absolute;top:8px;left:8px;
+  background:linear-gradient(135deg,var(--red),var(--red-d));color:#fff;
+  font-size:10px;font-weight:800;letter-spacing:.4px;
+  padding:3px 8px;border-radius:8px;text-transform:uppercase;
+  box-shadow:0 4px 10px var(--red-glow);
+}
+.pcard-pr__w{
+  display:inline-block;font-size:11px;color:var(--muted);
+  background:var(--gold-l);padding:2px 6px;border-radius:6px;
+  margin-bottom:6px;
+}
+
+/* Модалка детальной карточки товара */
+.cat-modal{
+  position:fixed;inset:0;background:rgba(0,0,0,.5);
+  display:flex;align-items:flex-end;justify-content:center;z-index:1000;
+}
+.cat-modal__sheet{
+  width:100%;max-width:560px;max-height:92vh;overflow-y:auto;
+  background:#fff;border-radius:24px 24px 0 0;
+  position:relative;animation:slideUp .25s ease-out;
+}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.cat-modal__close{
+  position:absolute;top:10px;right:14px;z-index:2;
+  width:32px;height:32px;border-radius:50%;border:none;
+  background:rgba(255,255,255,.94);font-size:24px;line-height:1;
+  cursor:pointer;color:#444;box-shadow:0 4px 12px rgba(0,0,0,.15);
+}
+.cat-modal__hero{
+  width:100%;aspect-ratio:4/3;background-color:var(--gold-l);
+  background-size:cover;background-position:center;
+  border-radius:24px 24px 0 0;
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+}
+.cat-modal__hit{
+  position:absolute;top:14px;left:14px;
+  background:linear-gradient(135deg,var(--red),var(--red-d));color:#fff;
+  font-size:11px;font-weight:800;letter-spacing:.5px;
+  padding:5px 12px;border-radius:10px;text-transform:uppercase;
+  box-shadow:0 6px 14px var(--red-glow);
+}
+.cat-modal__title{
+  font-family:'Playfair Display',serif;font-size:22px;font-weight:700;
+  color:#111;line-height:1.25;padding:18px 18px 4px;
+}
+.cat-modal__price{
+  font-size:20px;font-weight:800;color:var(--red);
+  padding:0 18px 12px;
+}
+.cat-modal__props{
+  padding:0 18px 12px;display:flex;flex-direction:column;gap:6px;
+  font-size:13px;color:#333;
+}
+.cat-modal__props span b{color:var(--muted);font-weight:600;margin-right:4px}
+.cat-modal__desc{
+  padding:6px 18px 16px;font-size:14px;color:#333;line-height:1.55;
+  white-space:pre-wrap;border-top:1px solid rgba(0,0,0,.06);
+  margin-top:6px;padding-top:14px;
+}
+.cat-modal__actions{padding:6px 0 24px}
+
+
 /* ── BUTTONS ─────────────────────────────────────────────────────────────── */
 .btn-full{
   display:block;width:calc(100% - 28px);margin:4px 14px 14px;

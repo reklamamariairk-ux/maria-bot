@@ -1,12 +1,16 @@
 /* ── Catalog (Меню) ──────────────────────────────────────────────────────── */
 
 const CATEGORY_ICONS = {
-  'Торты':            '🎂',
-  'Пироги':           '🥧',
-  'Пирожные':         '🍰',
-  'Наборы':           '🎁',
-  'Торты на заказ':   '✨',
-  'Для праздника':    '🎉',
+  'Торты':              '🎂',
+  'Пироги':             '🥧',
+  'Пирожные':           '🍰',
+  'Пирожные и десерты': '🍰',
+  'Наборы':             '🎁',
+  'Торты на заказ':     '✨',
+  'Для праздника':      '🎉',
+  'Пасха':              '🐣',
+  'Иркутск 1661':       '🏛',
+  'Акции':              '🏷',
 };
 
 let CATALOG_STATE = {
@@ -88,19 +92,86 @@ function catRenderProducts(products) {
     return;
   }
   document.getElementById('menu-empty').style.display = 'none';
-  wrap.innerHTML = products.map((p) => `
-    <div class="pcard-pr" onclick="openSite('${escapeAttr(p.url)}')">
-      <div class="pcard-pr__img" ${p.image ? `style="background-image:url('${escapeAttr(p.image)}')"` : ''}>
-        ${p.image ? '' : '<span class="pcard-pr__noimg">🍰</span>'}
-      </div>
-      <div class="pcard-pr__body">
-        <div class="pcard-pr__name">${escapeHtml(p.name)}</div>
-        <div class="pcard-pr__row">
-          <span class="pcard-pr__price">${escapeHtml(p.price || '')}</span>
-          <span class="pcard-pr__cta">→</span>
+  wrap.innerHTML = products.map((p) => {
+    const hasId = p.id != null && p.id > 0;
+    const onClick = hasId
+      ? `catOpenProduct(${p.id})`
+      : `openSite('${escapeAttr(p.url || '')}')`;
+    const priceTxt = p.price || (p.priceNumber ? `${Number(p.priceNumber).toLocaleString('ru-RU')} ₽` : '');
+    const hitBadge = p.hit ? '<span class="pcard-pr__hit">★ Хит</span>' : '';
+    const weight   = p.weight ? `<span class="pcard-pr__w">${escapeHtml(p.weight)}</span>` : '';
+    return `
+      <div class="pcard-pr" onclick="${onClick}">
+        <div class="pcard-pr__img" ${p.image ? `style="background-image:url('${escapeAttr(p.image)}')"` : ''}>
+          ${p.image ? '' : '<span class="pcard-pr__noimg">🍰</span>'}
+          ${hitBadge}
         </div>
+        <div class="pcard-pr__body">
+          <div class="pcard-pr__name">${escapeHtml(p.name)}</div>
+          ${weight}
+          <div class="pcard-pr__row">
+            <span class="pcard-pr__price">${escapeHtml(priceTxt)}</span>
+            <span class="pcard-pr__cta">→</span>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function catOpenProduct(id) {
+  const modal = document.getElementById('cat-product-modal');
+  const body  = document.getElementById('cat-product-body');
+  if (!modal || !body) {
+    // Fallback if modal markup missing — open site
+    return;
+  }
+  body.innerHTML = '<div class="cat-loading">Загружаем карточку…</div>';
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+
+  try {
+    const res = await fetch('/api/catalog/product/' + encodeURIComponent(id));
+    const data = await res.json();
+    const p = data.product;
+    if (!p) {
+      body.innerHTML = '<div class="cat-empty">Товар не найден</div>';
+      return;
+    }
+
+    const img = (p.images && p.images[0]) || p.image || '';
+    const priceTxt = p.price ? `${Number(p.price).toLocaleString('ru-RU')} ₽` : '—';
+    const desc = (p.description_text || p.preview || '').trim();
+    const props = [];
+    if (p.weight)  props.push(`<span><b>Вес:</b> ${escapeHtml(String(p.weight))}</span>`);
+    if (p.persons) props.push(`<span><b>Персон:</b> ${escapeHtml(String(p.persons))}</span>`);
+    const filling = (p.filling || []).join(', ');
+    if (filling)   props.push(`<span><b>Начинка:</b> ${escapeHtml(filling)}</span>`);
+    const types = [...(p.cake_type || []), ...(p.pie_type || []), ...(p.dessert_type || [])].join(', ');
+    if (types)     props.push(`<span><b>Тип:</b> ${escapeHtml(types)}</span>`);
+
+    body.innerHTML = `
+      <button class="cat-modal__close" onclick="catCloseProduct()">×</button>
+      <div class="cat-modal__hero" ${img ? `style="background-image:url('${escapeAttr(img)}')"` : ''}>
+        ${img ? '' : '<span class="pcard-pr__noimg" style="font-size:64px">🍰</span>'}
+        ${p.hit ? '<span class="cat-modal__hit">★ Хит</span>' : ''}
       </div>
-    </div>`).join('');
+      <div class="cat-modal__title">${escapeHtml(p.name)}</div>
+      <div class="cat-modal__price">${escapeHtml(priceTxt)}</div>
+      ${props.length ? `<div class="cat-modal__props">${props.join('')}</div>` : ''}
+      ${desc ? `<div class="cat-modal__desc">${escapeHtml(desc)}</div>` : ''}
+      <div class="cat-modal__actions">
+        <button class="btn-full" onclick="openSite('${escapeAttr(p.url || '')}')">Купить на сайте →</button>
+      </div>
+    `;
+  } catch (e) {
+    body.innerHTML = '<div class="cat-empty">Ошибка загрузки</div>';
+  }
+}
+
+function catCloseProduct() {
+  const modal = document.getElementById('cat-product-modal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
 }
 
 async function catSearch(query) {
@@ -155,3 +226,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
 window.catShowCategories = catShowCategories;
 window.catShowProducts = catShowProducts;
+window.catOpenProduct = catOpenProduct;
+window.catCloseProduct = catCloseProduct;

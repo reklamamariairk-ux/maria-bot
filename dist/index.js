@@ -581,6 +581,19 @@ app.get("/api/catalog/search", (req, res) => {
     const products = (0, scraper_1.searchCatalog)(catalog, q, 30);
     res.json({ products, total: products.length });
 });
+app.get("/api/catalog/product/:id", async (req, res) => {
+    const id = Number(req.params.id);
+    if (!id) {
+        res.status(400).json({ error: "bad_id" });
+        return;
+    }
+    const product = await (0, scraper_1.fetchProductById)(id);
+    if (!product) {
+        res.status(404).json({ error: "not_found" });
+        return;
+    }
+    res.json({ product });
+});
 // ─── Partners ────────────────────────────────────────────────────────────────
 app.get("/api/partners", (_req, res) => {
     res.json({ partners: (0, partners_1.getPartners)(), meta: (0, partners_1.getPartnersMeta)() });

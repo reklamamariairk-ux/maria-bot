@@ -5,22 +5,35 @@ import path from "path";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 export interface Product {
+  id?: number;
   name: string;
   category: string;
   price: string;
+  priceNumber?: number | null;
+  currency?: string;
   url: string;
   image?: string;
+  weight?: string | null;
+  persons?: string | null;
+  hit?: boolean;
+  available?: boolean;
+  preview?: string;
+  sectionCode?: string;
+  sectionId?: number;
 }
 
 interface CatalogData {
   updated: string;
   products: Product[];
+  source?: string;
 }
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 const BASE = "https://www.maria-irk.ru";
 const DATA_DIR  = path.join(__dirname, "..", "data");
 const DATA_FILE = path.join(DATA_DIR, "catalog.json");
+const CATALOG_API   = process.env.CATALOG_API   ?? "";
+const CATALOG_TOKEN = process.env.CATALOG_TOKEN ?? "";
 
 const PAGES: { path: string; cat: string }[] = [
   { path: "/cakes/",              cat: "Торты" },
@@ -99,9 +112,61 @@ function parsePage(html: string, category: string): Product[] {
   return products;
 }
 
-// ─── Scrape all pages ─────────────────────────────────────────────────────────
-export async function scrapeCatalog(): Promise<Product[]> {
-  console.log("🔄 Начинаю парсинг каталога maria-irk.ru...");
+// ─── Fetch JSON helper ───────────────────────────────────────────────────────
+function fetchJson(url: string): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { rejectUnauthorized: false }, (r) => {
+      let body = "";
+      r.on("data", (c: Buffer) => (body += c));
+      r.on("end", () => {
+        try { resolve(JSON.parse(body)); } catch (e) { reject(e); }
+      });
+    });
+    req.on("error", reject);
+    req.setTimeout(30_000, () => { req.destroy(); reject(new Error("Timeout")); });
+  });
+}
+
+// ─── API source — читаем из /api/catalog.php ────────────────────────────────
+async function fetchFromApi(): Promise<Product[]> {
+  const sep = CATALOG_API.includes("?") ? "&" : "?";
+  const url = `${CATALOG_API}${sep}token=${encodeURIComponent(CATALOG_TOKEN)}&limit=500`;
+  const raw = (await fetchJson(url)) as {
+    sections?: Array<{ id: number; code: string; name: string }>;
+    products?: Array<Record<string, unknown>>;
+  };
+  const sections = Array.isArray(raw.sections) ? raw.sections : [];
+  const sectionById = new Map(sections.map(s => [s.id, s]));
+  const arr = Array.isArray(raw.products) ? raw.products : [];
+
+  return arr.map((p) => {
+    const sid = Number(p.section_id ?? 0);
+    const sec = sectionById.get(sid);
+    const priceNumber = p.price == null ? null : Number(p.price);
+    const priceStr = priceNumber != null ? `${priceNumber.toLocaleString("ru-RU")} ₽` : "";
+    return {
+      id:           Number(p.id),
+      name:         String(p.name ?? ""),
+      category:     sec?.name ?? "Каталог",
+      price:        priceStr,
+      priceNumber,
+      currency:     String(p.currency ?? "RUB"),
+      url:          String(p.url ?? ""),
+      image:        p.image ? String(p.image) : undefined,
+      weight:       p.weight ? String(p.weight) : null,
+      persons:      p.persons ? String(p.persons) : null,
+      hit:          Boolean(p.hit),
+      available:    p.available !== false,
+      preview:      p.preview ? String(p.preview) : "",
+      sectionCode:  sec?.code,
+      sectionId:    sid,
+    } as Product;
+  });
+}
+
+// ─── Scrape all pages (legacy fallback) ─────────────────────────────────────
+async function scrapeFromSite(): Promise<Product[]> {
+  console.log("🔄 Скрейпинг каталога maria-irk.ru (fallback)...");
   const all: Product[] = [];
 
   for (const page of PAGES) {
@@ -110,20 +175,53 @@ export async function scrapeCatalog(): Promise<Product[]> {
       const products = parsePage(html, page.cat);
       console.log(`  ✅ ${page.cat}: ${products.length} позиций`);
       all.push(...products);
-      // пауза между запросами
       await new Promise<void>((r) => setTimeout(r, 600));
     } catch (err) {
       console.error(`  ❌ Ошибка ${page.path}:`, (err as Error).message);
     }
   }
+  return all;
+}
 
-  // Сохраняем на диск
+// ─── Public: получить каталог (API → fallback scraping) ─────────────────────
+export async function scrapeCatalog(): Promise<Product[]> {
+  let all: Product[] = [];
+  let source = "scrape";
+
+  if (CATALOG_API && CATALOG_TOKEN) {
+    try {
+      all = await fetchFromApi();
+      source = "bitrix";
+      console.log(`✅ Каталог из API: ${all.length} позиций`);
+    } catch (err) {
+      console.error("[CATALOG_API] failed, fallback to scrape:", (err as Error).message);
+    }
+  }
+
+  if (all.length === 0) {
+    all = await scrapeFromSite();
+  }
+
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  const data: CatalogData = { updated: new Date().toISOString(), products: all };
+  const data: CatalogData = { updated: new Date().toISOString(), products: all, source };
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf-8");
-  console.log(`✅ Каталог сохранён: ${all.length} позиций`);
+  console.log(`✅ Каталог сохранён: ${all.length} позиций (source=${source})`);
 
   return all;
+}
+
+// ─── Загрузить детальные данные одного товара по ID ─────────────────────────
+export async function fetchProductById(id: number): Promise<Record<string, unknown> | null> {
+  if (!CATALOG_API || !CATALOG_TOKEN) return null;
+  try {
+    const sep = CATALOG_API.includes("?") ? "&" : "?";
+    const url = `${CATALOG_API}${sep}token=${encodeURIComponent(CATALOG_TOKEN)}&id=${id}`;
+    const raw = (await fetchJson(url)) as { product?: Record<string, unknown> };
+    return raw.product ?? null;
+  } catch (e) {
+    console.error("[CATALOG_API] product fetch:", (e as Error).message);
+    return null;
+  }
 }
 
 // ─── Load from disk ───────────────────────────────────────────────────────────

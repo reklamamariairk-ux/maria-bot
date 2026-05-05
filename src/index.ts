@@ -6,7 +6,7 @@ import path from "path";
 import https from "https";
 import cron from "node-cron";
 import { Bot, webhookCallback, InlineKeyboard } from "grammy";
-import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, Product } from "./scraper";
+import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, fetchProductById, Product } from "./scraper";
 import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified } from "./db";
 import {
   initClubSchema,
@@ -628,6 +628,14 @@ app.get("/api/catalog/search", (req, res) => {
   }
   const products = searchCatalog(catalog, q, 30);
   res.json({ products, total: products.length });
+});
+
+app.get("/api/catalog/product/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) { res.status(400).json({ error: "bad_id" }); return; }
+  const product = await fetchProductById(id);
+  if (!product) { res.status(404).json({ error: "not_found" }); return; }
+  res.json({ product });
 });
 
 // ─── Partners ────────────────────────────────────────────────────────────────

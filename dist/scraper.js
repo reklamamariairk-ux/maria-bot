@@ -37,6 +37,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.scrapeCatalog = scrapeCatalog;
+exports.fetchProductById = fetchProductById;
 exports.loadCatalog = loadCatalog;
 exports.catalogAge = catalogAge;
 exports.searchCatalog = searchCatalog;
@@ -48,6 +49,8 @@ const path_1 = __importDefault(require("path"));
 const BASE = "https://www.maria-irk.ru";
 const DATA_DIR = path_1.default.join(__dirname, "..", "data");
 const DATA_FILE = path_1.default.join(DATA_DIR, "catalog.json");
+const CATALOG_API = process.env.CATALOG_API ?? "";
+const CATALOG_TOKEN = process.env.CATALOG_TOKEN ?? "";
 const PAGES = [
     { path: "/cakes/", cat: "Торты" },
     { path: "/pies/", cat: "Пироги" },
@@ -111,9 +114,60 @@ function parsePage(html, category) {
     });
     return products;
 }
-// ─── Scrape all pages ─────────────────────────────────────────────────────────
-async function scrapeCatalog() {
-    console.log("🔄 Начинаю парсинг каталога maria-irk.ru...");
+// ─── Fetch JSON helper ───────────────────────────────────────────────────────
+function fetchJson(url) {
+    return new Promise((resolve, reject) => {
+        const req = https_1.default.get(url, { rejectUnauthorized: false }, (r) => {
+            let body = "";
+            r.on("data", (c) => (body += c));
+            r.on("end", () => {
+                try {
+                    resolve(JSON.parse(body));
+                }
+                catch (e) {
+                    reject(e);
+                }
+            });
+        });
+        req.on("error", reject);
+        req.setTimeout(30000, () => { req.destroy(); reject(new Error("Timeout")); });
+    });
+}
+// ─── API source — читаем из /api/catalog.php ────────────────────────────────
+async function fetchFromApi() {
+    const sep = CATALOG_API.includes("?") ? "&" : "?";
+    const url = `${CATALOG_API}${sep}token=${encodeURIComponent(CATALOG_TOKEN)}&limit=500`;
+    const raw = (await fetchJson(url));
+    const sections = Array.isArray(raw.sections) ? raw.sections : [];
+    const sectionById = new Map(sections.map(s => [s.id, s]));
+    const arr = Array.isArray(raw.products) ? raw.products : [];
+    return arr.map((p) => {
+        const sid = Number(p.section_id ?? 0);
+        const sec = sectionById.get(sid);
+        const priceNumber = p.price == null ? null : Number(p.price);
+        const priceStr = priceNumber != null ? `${priceNumber.toLocaleString("ru-RU")} ₽` : "";
+        return {
+            id: Number(p.id),
+            name: String(p.name ?? ""),
+            category: sec?.name ?? "Каталог",
+            price: priceStr,
+            priceNumber,
+            currency: String(p.currency ?? "RUB"),
+            url: String(p.url ?? ""),
+            image: p.image ? String(p.image) : undefined,
+            weight: p.weight ? String(p.weight) : null,
+            persons: p.persons ? String(p.persons) : null,
+            hit: Boolean(p.hit),
+            available: p.available !== false,
+            preview: p.preview ? String(p.preview) : "",
+            sectionCode: sec?.code,
+            sectionId: sid,
+        };
+    });
+}
+// ─── Scrape all pages (legacy fallback) ─────────────────────────────────────
+async function scrapeFromSite() {
+    console.log("🔄 Скрейпинг каталога maria-irk.ru (fallback)...");
     const all = [];
     for (const page of PAGES) {
         try {
@@ -121,20 +175,52 @@ async function scrapeCatalog() {
             const products = parsePage(html, page.cat);
             console.log(`  ✅ ${page.cat}: ${products.length} позиций`);
             all.push(...products);
-            // пауза между запросами
             await new Promise((r) => setTimeout(r, 600));
         }
         catch (err) {
             console.error(`  ❌ Ошибка ${page.path}:`, err.message);
         }
     }
-    // Сохраняем на диск
+    return all;
+}
+// ─── Public: получить каталог (API → fallback scraping) ─────────────────────
+async function scrapeCatalog() {
+    let all = [];
+    let source = "scrape";
+    if (CATALOG_API && CATALOG_TOKEN) {
+        try {
+            all = await fetchFromApi();
+            source = "bitrix";
+            console.log(`✅ Каталог из API: ${all.length} позиций`);
+        }
+        catch (err) {
+            console.error("[CATALOG_API] failed, fallback to scrape:", err.message);
+        }
+    }
+    if (all.length === 0) {
+        all = await scrapeFromSite();
+    }
     if (!fs_1.default.existsSync(DATA_DIR))
         fs_1.default.mkdirSync(DATA_DIR, { recursive: true });
-    const data = { updated: new Date().toISOString(), products: all };
+    const data = { updated: new Date().toISOString(), products: all, source };
     fs_1.default.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf-8");
-    console.log(`✅ Каталог сохранён: ${all.length} позиций`);
+    console.log(`✅ Каталог сохранён: ${all.length} позиций (source=${source})`);
     return all;
+}
+// ─── Загрузить детальные данные одного товара по ID ─────────────────────────
+async function fetchProductById(id) {
+    if (!CATALOG_API || !CATALOG_TOKEN)
+        return null;
+    try {
+        const sep = CATALOG_API.includes("?") ? "&" : "?";
+        const url = `${CATALOG_API}${sep}token=${encodeURIComponent(CATALOG_TOKEN)}&id=${id}`;
+        const raw = (await fetchJson(url));
+        return raw.product ?? null;
+    }
+    catch (e) {
+        console.error("[CATALOG_API] product fetch:", e.message);
+        return null;
+    }
 }
 // ─── Load from disk ───────────────────────────────────────────────────────────
 function loadCatalog() {
