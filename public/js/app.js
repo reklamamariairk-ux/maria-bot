@@ -36,6 +36,47 @@ function openAiChat() {
 }
 window.openAiChat = openAiChat;
 
+/* ── Торт месяца — динамика из каталога ─────────────────────────────────── */
+let _cakeOfMonth = null;
+
+async function loadCakeOfMonth() {
+  try {
+    const r = await fetch('/api/catalog/products?category=Торты&limit=80', {cache:'no-store'});
+    const d = await r.json();
+    const all = Array.isArray(d?.products) ? d.products : [];
+    // Берём первый HIT-торт (Bitrix property HIT='Y' = «Наши предложения»)
+    const candidates = all.filter(p => p.hit && p.image);
+    if (candidates.length === 0) return;
+    // Берём с самым свежим обновлением (или первого если SORT)
+    const c = candidates[0];
+    _cakeOfMonth = c;
+
+    const card = document.getElementById('promo-cake-of-month');
+    if (!card) return;
+    const nm = document.getElementById('promo-cake-name');
+    const ds = document.getElementById('promo-cake-desc');
+    if (nm) nm.textContent = c.name;
+    if (ds) ds.textContent = c.preview
+      ? (c.preview.length > 90 ? c.preview.substring(0, 88) + '…' : c.preview)
+      : `Хит каталога — ${Number(c.priceNumber || c.price || 0).toLocaleString('ru-RU')} ₽`;
+    if (c.image) {
+      card.style.backgroundImage = `linear-gradient(180deg,rgba(214,31,55,.62) 0%,rgba(160,0,30,.95) 100%),url('${c.image}')`;
+      card.style.backgroundSize = 'cover';
+      card.style.backgroundPosition = 'center';
+    }
+  } catch (e) { console.error('[cake-of-month]', e); }
+}
+
+function catOpenProductFromPromo() {
+  if (_cakeOfMonth?.id && window.catOpenProduct) {
+    window.catOpenProduct(_cakeOfMonth.id);
+  } else {
+    switchTab('menu');
+  }
+}
+window.catOpenProductFromPromo = catOpenProductFromPromo;
+window.loadCakeOfMonth = loadCakeOfMonth;
+
 /* ── Tabs ────────────────────────────────────────────────────────────────── */
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -125,4 +166,7 @@ async function loadPartners() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', loadPartners);
+document.addEventListener('DOMContentLoaded', () => {
+  loadPartners();
+  loadCakeOfMonth();
+});
