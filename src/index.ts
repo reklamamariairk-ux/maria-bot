@@ -405,7 +405,8 @@ app.post("/api/chat", async (req, res) => {
 // ─── Bitrix24 lead ───────────────────────────────────────────────────────────
 const BITRIX_WEBHOOK = process.env.BITRIX_WEBHOOK ?? "";
 
-app.post("/api/order", async (req, res) => {
+// Заявка на индивидуальный торт (форма «На заказ» — менеджер свяжется)
+app.post("/api/lead", async (req, res) => {
   const { name, phone, description, date, portions, comment } = req.body as {
     name?: string; phone?: string; description?: string;
     date?: string; portions?: string; comment?: string;

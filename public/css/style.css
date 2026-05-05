@@ -402,6 +402,24 @@ b,strong{font-weight:700}
 }
 .cat-modal__actions{padding:6px 0 24px}
 
+/* ── FAB AI чат ─────────────────────────────────────────────────────────── */
+.fab-ai{
+  position:fixed;
+  right:14px;
+  bottom:calc(86px + env(safe-area-inset-bottom));
+  z-index:300;
+  width:54px;height:54px;border-radius:50%;
+  background:linear-gradient(135deg,#fff 0%,#fff8eb 100%);
+  border:1.5px solid rgba(214,31,55,.18);
+  font-size:26px;
+  cursor:pointer;
+  box-shadow:0 8px 20px rgba(214,31,55,.22),0 2px 6px rgba(0,0,0,.08);
+  display:flex;align-items:center;justify-content:center;
+  transition:transform .15s, box-shadow .15s;
+}
+.fab-ai:active{transform:scale(.94)}
+.fab-ai:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(214,31,55,.28)}
+
 /* ── Header cart button ─────────────────────────────────────────────────── */
 .header__cart{
   background:linear-gradient(135deg,var(--red),var(--red-d));color:#fff;

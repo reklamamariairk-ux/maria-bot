@@ -16,7 +16,7 @@ async function submitOrder(e) {
   msg.style.display = 'none';
 
   try {
-    const res = await fetch('/api/order', {
+    const res = await fetch('/api/lead', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, phone, description, date, portions, comment }),

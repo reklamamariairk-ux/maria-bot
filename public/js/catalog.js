@@ -39,7 +39,9 @@ async function catLoadCategories() {
 function catRenderCategories() {
   const wrap = document.getElementById('menu-categories');
   if (!wrap) return;
-  wrap.innerHTML = CATALOG_STATE.categories.map((c) => {
+  // Скрываем fallback-категорию «Каталог» (товары без section_id) — их можно найти поиском
+  const visible = CATALOG_STATE.categories.filter((c) => c.name !== 'Каталог' && c.count > 0);
+  wrap.innerHTML = visible.map((c) => {
     const icon = CATEGORY_ICONS[c.name] || '🍮';
     const bg = c.sample
       ? `background-image:linear-gradient(180deg,rgba(255,255,255,.55) 0%,rgba(255,255,255,.92) 70%),url('${c.sample}');background-size:cover;background-position:center`

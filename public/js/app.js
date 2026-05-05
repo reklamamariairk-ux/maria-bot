@@ -7,6 +7,14 @@ function openSite(url) {
   else window.open(url, '_blank');
 }
 
+/* ── AI чат — плавающая кнопка ─────────────────────────────────────────── */
+function openAiChat() {
+  switchTab('fun');
+  showSubTab('chat');
+  setTimeout(() => document.getElementById('chat-input')?.focus(), 200);
+}
+window.openAiChat = openAiChat;
+
 /* ── Tabs ────────────────────────────────────────────────────────────────── */
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -15,6 +23,9 @@ function switchTab(name) {
   const navBtn = document.getElementById('nav-' + name);
   navBtn?.classList.add('active');
   positionNavPill(navBtn);
+  // FAB — скрыть на вкладке «Игры/Чат» (там сам чат)
+  const fab = document.getElementById('fab-ai');
+  if (fab) fab.style.display = name === 'fun' ? 'none' : '';
   if (name === 'fun' && !window._gamesInited) {
     window._gamesInited = true;
     initMemory();

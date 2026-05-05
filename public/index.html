@@ -457,6 +457,11 @@
   </div>
 </div>
 
+<!-- FAB: Маша (AI-чат) — плавающая кнопка, открывает чат на любой вкладке -->
+<button class="fab-ai" id="fab-ai" onclick="openAiChat()" title="Спросить Машу">
+  🤖
+</button>
+
 <!-- MODAL: Карточка товара из каталога -->
 <div class="cat-modal" id="cat-product-modal" style="display:none" onclick="if(event.target===this)catCloseProduct()">
   <div class="cat-modal__sheet" id="cat-product-body"></div>
@@ -509,7 +514,7 @@
     <span class="nb__ic">🎮</span><span class="nb__lb">Игры</span>
   </button>
   <button class="nb" id="nav-order" onclick="switchTab('order')">
-    <span class="nb__ic">🛒</span><span class="nb__lb">Заказ</span>
+    <span class="nb__ic">🎂</span><span class="nb__lb">На заказ</span>
   </button>
 </nav>
 
