@@ -56,9 +56,12 @@ async function loadCakeOfMonth() {
     const nm = document.getElementById('promo-cake-name');
     const ds = document.getElementById('promo-cake-desc');
     if (nm) nm.textContent = c.name;
-    if (ds) ds.textContent = c.preview
-      ? (c.preview.length > 90 ? c.preview.substring(0, 88) + '…' : c.preview)
-      : `Хит каталога — ${Number(c.priceNumber || c.price || 0).toLocaleString('ru-RU')} ₽`;
+    if (ds) {
+      const cleaned = (c.preview || '').replace(/\s+/g, ' ').trim();
+      ds.textContent = cleaned
+        ? (cleaned.length > 90 ? cleaned.substring(0, 88) + '…' : cleaned)
+        : `Хит каталога — ${Number(c.priceNumber || c.price || 0).toLocaleString('ru-RU')} ₽`;
+    }
     if (c.image) {
       card.style.backgroundImage = `linear-gradient(180deg,rgba(214,31,55,.62) 0%,rgba(160,0,30,.95) 100%),url('${c.image}')`;
       card.style.backgroundSize = 'cover';
