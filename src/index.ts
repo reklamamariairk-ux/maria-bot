@@ -595,6 +595,40 @@ app.get("/api/history", requireTgUser, async (req, res) => {
   }
 });
 
+// ─── Catalog API ─────────────────────────────────────────────────────────────
+app.get("/api/catalog/categories", (_req, res) => {
+  const counts = new Map<string, number>();
+  for (const p of catalog) counts.set(p.category, (counts.get(p.category) ?? 0) + 1);
+  const categories = Array.from(counts.entries()).map(([name, count]) => {
+    const sample = catalog.find((p) => p.category === name && p.image);
+    return { name, count, sample: sample?.image ?? null };
+  });
+  res.json({ categories, total: catalog.length, updated: catalogAge() });
+});
+
+app.get("/api/catalog/products", (req, res) => {
+  const category = String(req.query.category ?? "").trim();
+  const limit = Math.min(Number(req.query.limit ?? 30), 100);
+  const offset = Number(req.query.offset ?? 0);
+
+  const filtered = category
+    ? catalog.filter((p) => p.category === category)
+    : catalog;
+
+  const products = filtered.slice(offset, offset + limit);
+  res.json({ products, total: filtered.length, limit, offset });
+});
+
+app.get("/api/catalog/search", (req, res) => {
+  const q = String(req.query.q ?? "").trim();
+  if (!q) {
+    res.json({ products: [], total: 0 });
+    return;
+  }
+  const products = searchCatalog(catalog, q, 30);
+  res.json({ products, total: products.length });
+});
+
 // ─── Partners ────────────────────────────────────────────────────────────────
 app.get("/api/partners", (_req, res) => {
   res.json({ partners: getPartners(), meta: getPartnersMeta() });

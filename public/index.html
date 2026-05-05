@@ -90,37 +90,32 @@
 <!-- ═══ МЕНЮ ═══ -->
 <section class="tab" id="tab-menu">
   <div class="hero hero--sm">
-    <h2 class="hero__h1" style="font-size:24px">Наше меню</h2>
-    <p class="hero__p">Выберите категорию</p>
+    <h2 class="hero__h1" style="font-size:24px">Каталог</h2>
+    <p class="hero__p" id="menu-status">Свежая выпечка с сайта</p>
   </div>
-  <div class="menu-grid">
-    <div class="mcard" onclick="openSite('https://www.maria-irk.ru/catalog/torti/')">
-      <div class="mcard__emoji">🎂</div><div class="mcard__name">Торты</div><div class="mcard__sub">На заказ и в наличии</div>
-    </div>
-    <div class="mcard" onclick="openSite('https://www.maria-irk.ru/catalog/pirogi/')">
-      <div class="mcard__emoji">🥧</div><div class="mcard__name">Пироги</div><div class="mcard__sub">Открытые и закрытые</div>
-    </div>
-    <div class="mcard" onclick="openSite('https://www.maria-irk.ru/catalog/pirozhnye/')">
-      <div class="mcard__emoji">🍰</div><div class="mcard__name">Пирожные</div><div class="mcard__sub">Эклеры, муссы, тарты</div>
-    </div>
-    <div class="mcard" onclick="openSite('https://www.maria-irk.ru/catalog/nabory/')">
-      <div class="mcard__emoji">🎁</div><div class="mcard__name">Наборы</div><div class="mcard__sub">Подарочные боксы</div>
-    </div>
-    <div class="mcard" onclick="openSite('https://www.maria-irk.ru/catalog/dlya-prazdnika/')">
-      <div class="mcard__emoji">🎉</div><div class="mcard__name">Для праздника</div><div class="mcard__sub">Украшения, свечи</div>
-    </div>
-    <div class="mcard" onclick="openSite('https://www.maria-irk.ru/catalog/bento/')">
-      <div class="mcard__emoji">🫙</div><div class="mcard__name">Бенто</div><div class="mcard__sub">От 690 ₽</div>
-    </div>
-    <div class="mcard mcard--accent" onclick="openSite('https://www.maria-irk.ru/catalog/torty-na-zakaz/')">
-      <div class="mcard__emoji">✨</div><div class="mcard__name">Торт на заказ</div><div class="mcard__sub">Любой дизайн</div>
-    </div>
-    <div class="mcard mcard--red" onclick="openSite('https://www.maria-irk.ru/catalog/tort-mesyatsa/')">
-      <div class="mcard__badge">−20%</div>
-      <div class="mcard__emoji">🏅</div><div class="mcard__name">Торт месяца</div><div class="mcard__sub">«Три шоколада»</div>
-    </div>
+
+  <!-- Поиск -->
+  <div class="cat-search">
+    <input class="cat-search__inp" type="search" id="menu-search" placeholder="🔍 Найти торт, пирог, пирожное…" autocomplete="off"/>
+    <button class="cat-search__clear" id="menu-search-clear" style="display:none">✕</button>
   </div>
-  <button class="btn-full" onclick="openSite('https://www.maria-irk.ru/catalog/')">Открыть каталог на сайте →</button>
+
+  <!-- Хлебные крошки + назад -->
+  <div class="cat-bread" id="menu-bread" style="display:none">
+    <button class="cat-bread__back" onclick="catShowCategories()">← Все категории</button>
+    <span class="cat-bread__name" id="menu-bread-name"></span>
+  </div>
+
+  <!-- Список категорий -->
+  <div class="cat-cats" id="menu-categories"></div>
+
+  <!-- Список товаров -->
+  <div class="cat-products" id="menu-products" style="display:none"></div>
+
+  <!-- Пусто -->
+  <div class="cat-empty" id="menu-empty" style="display:none">Ничего не нашлось</div>
+
+  <button class="btn-outline" onclick="openSite('https://www.maria-irk.ru/catalog/')">Полный каталог на сайте →</button>
 </section>
 
 <!-- ═══ КЛУБ ═══ -->
@@ -504,6 +499,7 @@
 <script src="/js/game.js"></script>
 <script src="/js/bakery.js"></script>
 <script src="/js/chat.js"></script>
+<script src="/js/catalog.js"></script>
 <script src="/js/club.js"></script>
 </body>
 </html>

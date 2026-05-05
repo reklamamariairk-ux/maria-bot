@@ -9,6 +9,7 @@ export interface Product {
   category: string;
   price: string;
   url: string;
+  image?: string;
 }
 
 interface CatalogData {
@@ -83,7 +84,16 @@ function parsePage(html: string, category: string): Product[] {
     const price = $(el).find('[data-entity="price-block"] p').first()
       .text().trim().replace(/\s+/g, " ");
 
-    products.push({ name, category, price, url });
+    // Картинка — первый img в карточке с src /upload/...
+    let image: string | undefined;
+    $(el).find("img").each((_i, img) => {
+      const src = $(img).attr("src") ?? $(img).attr("data-src") ?? "";
+      if (src && src.includes("/upload/") && !image) {
+        image = src.startsWith("http") ? src : BASE + src;
+      }
+    });
+
+    products.push({ name, category, price, url, image });
   });
 
   return products;
