@@ -35,7 +35,7 @@ export const TOOL_DEFS = [
             type: "string",
             description: "Опционально: ограничить категорией (Торты, Пироги, Пирожные и десерты, Наборы, Торты на заказ, Для праздника, Пасха).",
           },
-          limit: { type: "integer", description: "Сколько вернуть (по умолчанию 5, максимум 10)" },
+          limit: { type: "number", description: "Сколько вернуть (по умолчанию 5, максимум 10)" },
         },
         required: ["query"],
       },
@@ -51,7 +51,7 @@ export const TOOL_DEFS = [
       parameters: {
         type: "object",
         properties: {
-          id: { type: "integer", description: "ID товара (число)" },
+          id: { type: "number", description: "ID товара (число)" },
         },
         required: ["id"],
       },
@@ -85,7 +85,7 @@ export const TOOL_DEFS = [
       parameters: {
         type: "object",
         properties: {
-          limit: { type: "integer", description: "Сколько вернуть (по умолчанию 5)" },
+          limit: { type: "number", description: "Сколько вернуть (по умолчанию 5)" },
         },
       },
     },
