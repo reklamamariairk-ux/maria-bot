@@ -46,6 +46,7 @@ async function fetchLk(chatId) {
         const raw = (await fetchJson(url));
         if (raw.error)
             return { ok: false, reason: String(raw.error) };
+        const ticketsRaw = raw.tickets;
         return {
             ok: true,
             data: {
@@ -54,7 +55,10 @@ async function fetchLk(chatId) {
                 level: raw.level ?? null,
                 balance: Number(raw.balance ?? 0),
                 year_spent: Number(raw.year_spent ?? 0),
-                tickets: Array.isArray(raw.tickets) ? raw.tickets : [],
+                tickets: Array.isArray(ticketsRaw) ? ticketsRaw : [],
+                tickets_count: typeof raw.tickets_count === "number"
+                    ? raw.tickets_count
+                    : (typeof ticketsRaw === "number" ? ticketsRaw : (Array.isArray(ticketsRaw) ? ticketsRaw.length : 0)),
                 configured: true,
             },
         };

@@ -6,45 +6,37 @@
  *   /local/api/partners.php
  *   доступен по https://www.maria-irk.ru/local/api/partners.php?token=XXX
  *
- * Что нужно:
- *   1) Создан Информационный блок с символьным кодом, указанным в IBLOCK_CODE ниже
- *      (или подставить ID в IBLOCK_ID и оставить IBLOCK_CODE = '').
- *   2) В элементе:
- *        - Название         → name
- *        - Картинка анонса  → не используется здесь (можно подключить позже)
- *        - Свойства:
- *            ICON_EMOJI       (Строка)  — эмодзи-логотип, например 🔬
- *            PERK             (Строка)  — текст бейджа, например «−35%»
- *            DESCRIPTION_FULL (HTML/текст) — описание привилегии
- *            CATEGORY         (Список)  — категория (опционально)
- *      Активные элементы (ACTIVE = Y) попадают в выдачу.
+ * Источник данных: инфоблок «Привилегии для Своих» (IBLOCK_ID = 88, CODE = privilege).
+ *
+ * Реальная структура инфоблока:
+ *   - NAME                  → name
+ *   - DETAIL_TEXT           → desc + источник для perk/emoji эвристик
+ *   - PROPERTY_SHILD   (612)→ category (Список: Здоровье/Красота/Рестораны/Отдых/Дом/Авто)
+ *   - PROPERTY_LINK    (613)→ url
+ *   - PROPERTY_LOGO    (616)→ logo_url (файл)
+ *   - PROPERTY_LOGO_TEXT(617)→ резервное короткое описание, если заполнено
  *
  * Безопасность:
- *   Параметр ?token=... должен совпадать с константой PARTNERS_TOKEN ниже.
- *   Сменить токен можно прямо в файле — главное синхронизировать его с env-переменной
- *   PARTNERS_TOKEN на стороне бота (Render).
+ *   ?token=... должен совпадать с PARTNERS_TOKEN ниже. Сменить токен можно прямо
+ *   в файле — главное синхронизировать с env-переменной PARTNERS_TOKEN на Render.
  */
 
 // ─── Конфиг ────────────────────────────────────────────────────────────────
-const PARTNERS_TOKEN = 'CHANGE_ME_TO_RANDOM_STRING'; // ← поменяй на любую длинную случайную строку
-const IBLOCK_CODE    = 'partners_club';              // символьный код инфоблока
-const IBLOCK_ID      = 0;                            // или поставь числовой ID (оставь 0, если используешь CODE)
-const CACHE_TTL      = 300;                          // сек — серверный кеш ответа
+const PARTNERS_TOKEN = 'da5d08353c26618f5aca4dbe185275e4981aaf2fbbc77d7317de5e89f9d1f94e';
+const IBLOCK_ID      = 88;                           // «Привилегии для Своих»
+const CACHE_TTL      = 300;                          // сек
 
 // ─── Старт ─────────────────────────────────────────────────────────────────
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: public, max-age=300');
 header('Access-Control-Allow-Origin: *');
 
-// Проверка токена
-$token = $_GET['token'] ?? '';
-if ($token !== PARTNERS_TOKEN) {
+if (($_GET['token'] ?? '') !== PARTNERS_TOKEN) {
     http_response_code(403);
     echo json_encode(['error' => 'forbidden']);
     exit;
 }
 
-// Загружаем Bitrix
 require($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/prolog_before.php');
 
 if (!\Bitrix\Main\Loader::includeModule('iblock')) {
@@ -53,34 +45,25 @@ if (!\Bitrix\Main\Loader::includeModule('iblock')) {
     exit;
 }
 
-// Кеш
-$cacheId = 'partners_v1';
+$cacheId = 'partners_v2_iblock_'.IBLOCK_ID;
 $cache = \Bitrix\Main\Data\Cache::createInstance();
 if ($cache->initCache(CACHE_TTL, $cacheId, '/partners')) {
     echo $cache->getVars();
     exit;
 }
 
-// Определяем фильтр по инфоблоку
-$filter = ['ACTIVE' => 'Y'];
-if (IBLOCK_ID > 0) {
-    $filter['IBLOCK_ID'] = IBLOCK_ID;
-} else {
-    $filter['IBLOCK_CODE'] = IBLOCK_CODE;
-}
-
-// Поля и свойства
+// ─── Чтение элементов ─────────────────────────────────────────────────────
 $select = [
-    'ID', 'NAME', 'IBLOCK_ID',
-    'PROPERTY_ICON_EMOJI',
-    'PROPERTY_PERK',
-    'PROPERTY_DESCRIPTION_FULL',
-    'PROPERTY_CATEGORY',
+    'ID', 'NAME', 'DETAIL_TEXT', 'DETAIL_TEXT_TYPE',
+    'PROPERTY_SHILD',
+    'PROPERTY_LINK',
+    'PROPERTY_LOGO',
+    'PROPERTY_LOGO_TEXT',
 ];
 
 $res = CIBlockElement::GetList(
     ['SORT' => 'ASC', 'NAME' => 'ASC'],
-    $filter,
+    ['IBLOCK_ID' => IBLOCK_ID, 'ACTIVE' => 'Y'],
     false,
     false,
     $select
@@ -88,16 +71,37 @@ $res = CIBlockElement::GetList(
 
 $partners = [];
 while ($el = $res->Fetch()) {
-    $desc = $el['PROPERTY_DESCRIPTION_FULL_VALUE'];
-    if (is_array($desc)) {
-        $desc = $desc['TEXT'] ?? '';
+    $name        = trim((string)$el['NAME']);
+    $descRaw     = (string)$el['DETAIL_TEXT'];
+    $descIsHtml  = ($el['DETAIL_TEXT_TYPE'] ?? 'text') === 'html';
+    $desc        = $descIsHtml ? trim(strip_tags($descRaw)) : trim($descRaw);
+
+    $logoText = $el['PROPERTY_LOGO_TEXT_VALUE'];
+    if (is_array($logoText)) $logoText = $logoText['TEXT'] ?? '';
+    $logoText = trim((string)$logoText);
+
+    $url = trim((string)($el['PROPERTY_LINK_VALUE'] ?? ''));
+    $url = preg_replace('/\s+/', '', $url); // в данных встречаются пробелы/табы
+
+    $logoFileId = (int)($el['PROPERTY_LOGO_VALUE'] ?? 0);
+    $logoUrl    = '';
+    if ($logoFileId > 0) {
+        $path = CFile::GetPath($logoFileId);
+        if ($path) $logoUrl = 'https://www.maria-irk.ru'.$path;
     }
+
+    $category = trim((string)($el['PROPERTY_SHILD_VALUE'] ?? ''));
+
+    [$emoji, $perk] = derivePerk($desc ?: $logoText, $category);
+
     $partners[] = [
-        'emoji'    => $el['PROPERTY_ICON_EMOJI_VALUE']  ?: '🤝',
-        'name'     => $el['NAME']                        ?: '',
-        'perk'     => $el['PROPERTY_PERK_VALUE']        ?: '',
-        'desc'     => trim((string)$desc),
-        'category' => $el['PROPERTY_CATEGORY_VALUE']    ?: null,
+        'name'     => $name,
+        'emoji'    => $emoji,
+        'perk'     => $perk,
+        'desc'     => $desc ?: $logoText,
+        'category' => $category ?: null,
+        'url'      => $url ?: null,
+        'logo_url' => $logoUrl ?: null,
     ];
 }
 
@@ -107,8 +111,33 @@ $payload = [
     'partners' => $partners,
 ];
 
-// Стартуем кеш + отдаём
 if ($cache->startDataCache()) {
     $cache->endDataCache(json_encode($payload, JSON_UNESCAPED_UNICODE));
 }
 echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+
+
+// ─── Эвристики ─────────────────────────────────────────────────────────────
+function derivePerk(string $text, string $category): array {
+    $emojiByCat = [
+        'Здоровье'  => '🩺',
+        'Красота'   => '💅',
+        'Рестораны' => '🍽',
+        'Отдых'     => '🌴',
+        'Дом'       => '🏠',
+        'Авто'      => '🚗',
+    ];
+    $defaultEmoji = $emojiByCat[$category] ?? '🤝';
+
+    if (preg_match('/(\d{1,3})\s*%/u', $text, $m)) {
+        return ['🏷', '−'.$m[1].'%'];
+    }
+    if (preg_match('/\bподарок\b/iu', $text)) {
+        return ['🎁', '🎁 Подарок'];
+    }
+    if (preg_match('/(\d[\d\s]{2,})\s*(?:бонусных\s+)?баллов?/iu', $text, $m)) {
+        $n = preg_replace('/\s+/', '', $m[1]);
+        return ['⭐', '+'.$n.' баллов'];
+    }
+    return [$defaultEmoji, ''];
+}

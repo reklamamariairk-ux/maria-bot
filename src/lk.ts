@@ -11,6 +11,7 @@ export interface LkData {
   balance?: number;
   year_spent?: number;
   tickets?: { id: string; name: string; date: string }[];
+  tickets_count?: number;
   configured: boolean;
 }
 
@@ -57,16 +58,20 @@ export async function fetchLk(chatId: number): Promise<{
     const raw = (await fetchJson(url)) as Record<string, unknown>;
     if (raw.error) return { ok: false, reason: String(raw.error) };
 
+    const ticketsRaw = raw.tickets;
     return {
       ok: true,
       data: {
-        found:      Boolean(raw.found),
-        name:       (raw.name as string | null) ?? null,
-        level:      (raw.level as string | null) ?? null,
-        balance:    Number(raw.balance ?? 0),
-        year_spent: Number(raw.year_spent ?? 0),
-        tickets:    Array.isArray(raw.tickets) ? (raw.tickets as { id: string; name: string; date: string }[]) : [],
-        configured: true,
+        found:         Boolean(raw.found),
+        name:          (raw.name as string | null) ?? null,
+        level:         (raw.level as string | null) ?? null,
+        balance:       Number(raw.balance ?? 0),
+        year_spent:    Number(raw.year_spent ?? 0),
+        tickets:       Array.isArray(ticketsRaw) ? (ticketsRaw as { id: string; name: string; date: string }[]) : [],
+        tickets_count: typeof raw.tickets_count === "number"
+          ? raw.tickets_count
+          : (typeof ticketsRaw === "number" ? ticketsRaw : (Array.isArray(ticketsRaw) ? ticketsRaw.length : 0)),
+        configured:    true,
       },
     };
   } catch (e) {

@@ -129,6 +129,7 @@ async function renderLk() {
     }
 
     const tickets = (data.tickets || []).slice(0, 3);
+    const ticketsCount = Number(data.tickets_count || tickets.length || 0);
     card.innerHTML = `
       <div class="lk-card__row">
         <div>
@@ -150,7 +151,10 @@ async function renderLk() {
               <span class="lk-ti__nm">${escapeHtml(t.name || 'Сладкий чек')}</span>
               <span class="lk-ti__dt">${escapeHtml(String(t.date || '').slice(0, 10))}</span>
             </div>`).join('')}
-        </div>` : ''}
+        </div>` : (ticketsCount > 0 ? `
+        <div class="lk-card__tickets">
+          <div class="lk-card__tt">🧾 Билеты «Сладкого чека»: <b>${ticketsCount}</b></div>
+        </div>` : '')}
       <button class="btn-outline" onclick="openSite('https://www.maria-irk.ru/personal/')">Открыть полный кабинет →</button>
     `;
   } catch {

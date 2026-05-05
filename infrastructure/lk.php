@@ -1,49 +1,42 @@
 <?php
 /**
- * Личный кабинет: возвращает баланс, уровень, билеты «Сладкого чека»
- * для зарегистрированного на сайте maria-irk.ru участника клуба
- * по номеру телефона.
+ * Личный кабинет: возвращает баланс баллов, статус, билеты «Сладкого чека»
+ * для участника клуба «Мария для своих» по номеру телефона.
  *
- * Куда положить:
- *   /local/api/lk.php
- *   доступен по https://www.maria-irk.ru/local/api/lk.php?token=XXX&phone=79991234567
+ * Куда положить:  /api/lk.php
+ * Доступ:         https://www.maria-irk.ru/api/lk.php?token=XXX&phone=79991234567
+ *
+ * Источник данных — 1С УПП (89.108.119.147), те же эндпоинты, что использует
+ * страница /personal/bonuses/ и /personal/lottery/ на сайте:
+ *   - Bonus/{phone}        → JSON {"Bonus": "..."} или текст «Нет данных…»
+ *   - SweetCheck/Info/{phone} → XML <Scores>...</Scores>
  *
  * Безопасность:
- *   — Защищено shared-token: только бот знает PARTNERS_TOKEN, без него 403.
- *   — Дополнительно — IP-allowlist (опционально, см. ALLOWED_IPS).
- *   — Бот вызывает только после того, как номер верифицирован
- *     юзером через Telegram-контакт. Двойной верификации не нужно.
+ *   - shared-token (LK_TOKEN), знает только бот.
+ *   - Опционально IP-allowlist (ALLOWED_IPS = []).
+ *   - Бот вызывает только для верифицированных номеров (phone_verified_at).
  *
- * Контракт:
- *   Запрос:  GET ?token=XXX&phone=79991234567
- *   Ответ:   {
- *     "found":   true|false,
- *     "name":    "Имя Фамилия" | null,
- *     "level":   "Друзья|Лучшие друзья|Семья" | null,
- *     "balance": 1234,                           // в баллах (₽)
- *     "year_spent": 12500,                       // покупки за 12 мес. в ₽
- *     "tickets": [ {"id": "...", "name": "...", "date": "..."}, ... ]
+ * Контракт ответа:
+ *   {
+ *     "found":    true|false,           // удалось ли что-то достать из 1С
+ *     "name":     "Имя Фамилия" | null, // если пользователь есть в Bitrix
+ *     "level":    "Семья",              // на сайте сейчас единый уровень
+ *     "balance":  1234,                 // баллов
+ *     "tickets":  5,                    // билетов «Сладкого чека»
+ *     "phone":    "8XXXXXXXXXX"         // нормализованный (для отладки)
  *   }
- *
- * Что нужно настроить на стороне сайта:
- *   1) В коде ниже подменить фрагмент «// ─── Найти пользователя по телефону»
- *      на реальный поиск в вашей системе лояльности (это зависит от того,
- *      где вы храните клубные карты — пользовательские поля Bitrix CMS,
- *      инфоблок, внешний модуль, и т.д.).
- *   2) Аналогично — секции «// ─── Получить баланс / уровень / билеты».
- *   3) PARTNERS_TOKEN ниже — заменить на длинную случайную строку,
- *      положить такую же в env Render как LK_TOKEN.
  */
 
-const PARTNERS_TOKEN = 'CHANGE_ME_TO_RANDOM_STRING';     // обязательно поменять
-const ALLOWED_IPS    = [];                                // [] = разрешены все, иначе ['1.2.3.4', '5.6.7.8']
+const LK_TOKEN     = 'a4e4705f63070a189cc9bfa5bc65a722aa63bd9c981cae37229731eaca396a98';
+const ONEC_HOST    = 'http://89.108.119.147';
+const ONEC_AUTH    = 'web:web';
+const ALLOWED_IPS  = []; // [] = разрешены все, иначе ['1.2.3.4', ...]
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
+header('Access-Control-Allow-Origin: *');
 
-// ─── Аутентификация ────────────────────────────────────────────────────────
-$token = $_GET['token'] ?? '';
-if ($token !== PARTNERS_TOKEN) {
+if (($_GET['token'] ?? '') !== LK_TOKEN) {
     http_response_code(403);
     echo json_encode(['error' => 'forbidden']);
     exit;
@@ -55,104 +48,99 @@ if (!empty(ALLOWED_IPS) && !in_array($_SERVER['REMOTE_ADDR'] ?? '', ALLOWED_IPS,
     exit;
 }
 
-// ─── Нормализация телефона ─────────────────────────────────────────────────
-$phoneRaw = $_GET['phone'] ?? '';
-$phoneDigits = preg_replace('/\D/', '', $phoneRaw);
-if (substr($phoneDigits, 0, 1) === '8') {
-    $phoneDigits = '7' . substr($phoneDigits, 1);
-}
-if (strlen($phoneDigits) < 11) {
+$phone = normalizePhone($_GET['phone'] ?? '');
+if (!$phone) {
     http_response_code(400);
     echo json_encode(['error' => 'bad_phone']);
     exit;
 }
 
-// ─── Загружаем Bitrix ──────────────────────────────────────────────────────
-require($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/prolog_before.php');
+$balance      = fetchBalance($phone);
+$tickets      = fetchTickets($phone);
+$found        = ($balance['ok'] || $tickets['ok']);
+$bitrixUser   = lookupBitrixUser($phone);
 
-if (!\Bitrix\Main\Loader::includeModule('iblock')) {
-    http_response_code(500);
-    echo json_encode(['error' => 'iblock_module_unavailable']);
-    exit;
+echo json_encode([
+    'found'         => $found,
+    'name'          => $bitrixUser['name'] ?? null,
+    'level'         => 'Семья',
+    'balance'       => $balance['value'],
+    'tickets'       => [],                  // детальный список (пока 1С не отдаёт — пустой)
+    'tickets_count' => $tickets['value'],   // суммарное число билетов из 1С
+    'phone'         => $phone,
+], JSON_UNESCAPED_UNICODE);
+
+
+// ─── Помощники ─────────────────────────────────────────────────────────────
+
+function normalizePhone(string $raw): ?string {
+    $p = preg_replace('/[^\d+]/', '', $raw);
+    if (preg_match('/^\+?7/', $p)) {
+        $p = '8' . preg_replace('/^\+?7/', '', $p);
+    } elseif (strpos($p, '+8') === 0) {
+        $p = ltrim($p, '+');
+    }
+    $p = preg_replace('/\D/', '', $p);
+    return (strlen($p) === 11 && $p[0] === '8') ? $p : null;
 }
 
-$response = [
-    'found'      => false,
-    'name'       => null,
-    'level'      => null,
-    'balance'    => 0,
-    'year_spent' => 0,
-    'tickets'    => [],
-];
-
-// ─── Найти пользователя по телефону ────────────────────────────────────────
-// Стандартный путь: пользователи Bitrix Site Manager хранятся в b_user.
-// Поле телефона зависит от настроек: PERSONAL_PHONE / PERSONAL_MOBILE /
-// UF_PHONE / и т.д. — поправить под реальное.
-
-$by = 'id'; $order = 'asc';
-$user = null;
-$dbUser = CUser::GetList(
-    $by, $order,
-    [
-        // Пробуем все возможные поля телефона
-        'LOGIC' => 'OR',
-        ['PERSONAL_PHONE'  => '%' . substr($phoneDigits, -10) . '%'],
-        ['PERSONAL_MOBILE' => '%' . substr($phoneDigits, -10) . '%'],
-    ],
-    ['SELECT' => ['UF_*']]
-);
-if ($u = $dbUser->Fetch()) {
-    $user = $u;
+function callOneC(string $path): array {
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL            => ONEC_HOST . $path,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_HTTPAUTH       => CURLAUTH_BASIC,
+        CURLOPT_USERPWD        => ONEC_AUTH,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => false,
+    ]);
+    $body = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    return ['code' => $code, 'body' => $body === false ? '' : (string)$body];
 }
 
-if (!$user) {
-    echo json_encode($response, JSON_UNESCAPED_UNICODE);
-    exit;
+function fetchBalance(string $phone): array {
+    $r = callOneC("/f_base_2023/hs/Website/Bonus/{$phone}");
+    if ($r['code'] !== 200 || $r['body'] === '') {
+        return ['ok' => false, 'value' => 0];
+    }
+    if (mb_stripos($r['body'], 'Нет данных') !== false) {
+        return ['ok' => true, 'value' => 0];
+    }
+    $j = json_decode($r['body'], true);
+    if (json_last_error() === JSON_ERROR_NONE && isset($j['Bonus'])) {
+        $v = (float)str_replace(',', '.', (string)$j['Bonus']);
+        return ['ok' => true, 'value' => (int)round($v)];
+    }
+    return ['ok' => false, 'value' => 0];
 }
 
-$response['found'] = true;
-$response['name']  = trim(($user['NAME'] ?? '') . ' ' . ($user['LAST_NAME'] ?? '')) ?: null;
-
-// ─── Получить баланс / уровень / билеты ────────────────────────────────────
-// ВАЖНО: ниже — заглушка. Замени на реальный код, который читает
-// баланс из вашей системы лояльности.
-//
-// Если у вас балансы лежат в каком-то модуле (например, Sale, или
-// в собственном инфоблоке "Карты лояльности") — здесь нужно поправить
-// под реальное хранение.
-
-// Пример заглушки — если в b_user есть пользовательское поле UF_BONUS_BALANCE:
-$response['balance']    = (int)($user['UF_BONUS_BALANCE']    ?? 0);
-$response['year_spent'] = (int)($user['UF_YEAR_SPENT']       ?? 0);
-$response['level']      = (string)($user['UF_LOYALTY_LEVEL'] ?? '');
-
-// Уровень по сумме за год, если поле UF_LOYALTY_LEVEL не заполнено
-if (!$response['level']) {
-    $spent = $response['year_spent'];
-    $response['level'] = $spent >= 50000 ? 'Семья' : ($spent >= 10000 ? 'Лучшие друзья' : 'Друзья');
+function fetchTickets(string $phone): array {
+    $r = callOneC("/f_base_2023/hs/SweetCheck/Info/{$phone}");
+    if ($r['code'] !== 200 || $r['body'] === '') {
+        return ['ok' => false, 'value' => 0];
+    }
+    libxml_use_internal_errors(true);
+    $xml = simplexml_load_string($r['body']);
+    if ($xml && isset($xml->Scores)) {
+        $n = (int)preg_replace('/[^\d]/', '', (string)$xml->Scores);
+        return ['ok' => true, 'value' => $n];
+    }
+    return ['ok' => false, 'value' => 0];
 }
 
-// Билеты «Сладкого чека» — пример из инфоблока, если такой есть.
-// Замени IBLOCK_CODE 'sweet_check_tickets' на ваш или удали блок.
-$ticketsIblockCode = 'sweet_check_tickets';
-$dbTickets = CIBlockElement::GetList(
-    ['DATE_CREATE' => 'DESC'],
-    [
-        'IBLOCK_CODE'         => $ticketsIblockCode,
-        'PROPERTY_USER_ID'    => $user['ID'],
-        'ACTIVE'              => 'Y',
-    ],
-    false,
-    ['nTopCount' => 20],
-    ['ID', 'NAME', 'DATE_CREATE', 'PROPERTY_TICKET_NUM']
-);
-while ($t = $dbTickets->Fetch()) {
-    $response['tickets'][] = [
-        'id'   => $t['PROPERTY_TICKET_NUM_VALUE'] ?: $t['ID'],
-        'name' => $t['NAME'] ?: 'Сладкий чек',
-        'date' => $t['DATE_CREATE'],
-    ];
+function lookupBitrixUser(string $phone): array {
+    require_once($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/prolog_before.php');
+    $tail = substr($phone, 1); // 10-digit suffix without leading 8
+    $variants = ['+7'.$tail, '7'.$tail, '8'.$tail, $tail];
+    foreach ($variants as $v) {
+        $db = CUser::GetList('id', 'asc', ['PERSONAL_PHONE' => $v], ['SELECT' => ['ID', 'NAME', 'LAST_NAME']]);
+        if ($u = $db->Fetch()) {
+            $name = trim(($u['NAME'] ?? '') . ' ' . ($u['LAST_NAME'] ?? ''));
+            return ['id' => $u['ID'], 'name' => $name ?: null];
+        }
+    }
+    return ['id' => null, 'name' => null];
 }
-
-echo json_encode($response, JSON_UNESCAPED_UNICODE);
