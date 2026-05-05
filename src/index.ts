@@ -314,19 +314,27 @@ async function chatAgent(
   const messages: ChatMessage[] = [system, ...userMessages];
   const MAX_ITERATIONS = 4;
 
+  let toolsBroken = false;
   for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
     const response = await groqRequest({
       model: "llama-3.3-70b-versatile",
       max_tokens: 1024,
       temperature: 0.6,
       messages,
-      tools: TOOL_DEFS,
-      tool_choice: "auto",
+      ...(toolsBroken ? {} : { tools: TOOL_DEFS, tool_choice: "auto" }),
     });
 
     const choice = (response.choices as Array<{ message: ChatMessage; finish_reason: string }>)?.[0];
     if (!choice) {
-      const errMsg = (response.error as { message?: string } | undefined)?.message ?? "no_choice";
+      const err = response.error as { message?: string; type?: string } | undefined;
+      const errMsg = err?.message ?? "no_choice";
+      // Groq quirk: при некоторых входах модель не может сгенерить tool call.
+      // Делаем повтор без tools.
+      if (!toolsBroken && /function|tool/i.test(errMsg)) {
+        console.error("[chatAgent] tools broken, retry without:", errMsg);
+        toolsBroken = true;
+        continue;
+      }
       throw new Error(errMsg);
     }
     const msg = choice.message;
