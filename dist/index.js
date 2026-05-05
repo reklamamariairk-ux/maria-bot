@@ -777,26 +777,6 @@ app.get("/api/shops", async (_req, res) => {
         res.status(502).json({ count: 0, shops: [], error: "fetch_failed" });
     }
 });
-// Internal: разовая отдача PHP-исходников для заливки в Bitrix
-app.get("/internal/php-source/:name", (req, res) => {
-    if (req.query.token !== process.env.ADMIN_TOKEN) {
-        res.status(403).type("text/plain").send("forbidden");
-        return;
-    }
-    const name = String(req.params.name).replace(/[^A-Za-z0-9_\-\.]/g, "");
-    if (!/\.php$/.test(name)) {
-        res.status(400).send("bad_name");
-        return;
-    }
-    const fs = require("fs");
-    const path = require("path");
-    const filePath = path.join(__dirname, "..", "infrastructure", name);
-    if (!fs.existsSync(filePath)) {
-        res.status(404).send("not_found");
-        return;
-    }
-    res.type("text/plain").send(fs.readFileSync(filePath, "utf-8"));
-});
 app.get("/health", (_req, res) => res.json({ status: "ok", catalog: catalog.length, partners: (0, partners_1.getPartnersMeta)() }));
 // ─── Запуск ──────────────────────────────────────────────────────────────────
 bot.catch((err) => {
