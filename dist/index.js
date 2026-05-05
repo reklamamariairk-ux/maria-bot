@@ -203,42 +203,11 @@ function proxyAsset(url, contentType) {
 }
 app.get("/logo.svg", proxyAsset("https://www.maria-irk.ru/local/templates/maria/img/logo_new.svg", "image/svg+xml"));
 app.get("/logo.png", proxyAsset("https://www.maria-irk.ru/local/templates/maria/img/mobile_logo.png", "image/png"));
-// ─── Groq chat ───────────────────────────────────────────────────────────────
-function groqChat(messages) {
+// ─── Groq chat (agent с tool calling) ───────────────────────────────────────
+const ai_tools_1 = require("./ai-tools");
+function groqRequest(payload) {
     return new Promise((resolve, reject) => {
-        // Ищем подходящие товары по последнему сообщению пользователя
-        const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
-        const hits = (0, scraper_1.searchCatalog)(catalog, lastUser, 6);
-        const catalogBlock = hits.length
-            ? "\n\nТОВАРЫ ИЗ НАШЕГО КАТАЛОГА (реальные данные с сайта):\n" +
-                hits.map((p) => `— ${p.name} (${p.category})${p.price ? ", " + p.price : ""} → ${p.url}`).join("\n")
-            : catalog.length
-                ? `\n\n(Каталог загружен: ${catalog.length} позиций. По запросу ничего не найдено — отвечай по общим знаниям о нас.)`
-                : "\n\n(Каталог ещё загружается — не придумывай конкретные названия, отправляй на сайт.)";
-        const systemPrompt = `Ты — тёплый помощник кондитерской «Мария» в Иркутске. Тебя зовут Маша.
-
-О НАС:
-— Сайт: maria-irk.ru | Телефон: +7 (3952) 50-40-80 | 18 магазинов в Иркутске и Ангарске
-— Торт месяца: «Три шоколада» — три слоя мусса (тёмный, молочный, белый бельгийский шоколад), скидка 20%
-— Программа «Мария для своих»: кэшбэк 5–10% в зависимости от уровня, оплата бонусами до 30%
-— Скидка в день рождения: вам −5%, детям −10% (±5 дней)
-— Лотерея «Сладкий чек»: каждый чек = шанс выиграть iPhone 17, MacBook, PS5, Apple Watch, JBL
-${catalogBlock}
-
-КАК ОТВЕЧАТЬ:
-— Говори живо и тепло, как подруга. Эмодзи — умеренно.
-— Если в каталоге выше есть подходящие товары — называй их по имени и давай ссылку.
-— Если товара нет в каталоге — не придумывай названия, направляй на сайт или телефон.
-— На вопросы про торт на праздник — советуй «Торты на заказ», давай телефон.
-— Ответы короткие: 2–4 предложения. Язык: русский.`;
-        const body = JSON.stringify({
-            model: "llama-3.1-8b-instant",
-            max_tokens: 512,
-            messages: [
-                { role: "system", content: systemPrompt },
-                ...messages,
-            ],
-        });
+        const body = JSON.stringify(payload);
         const opts = {
             hostname: "api.groq.com",
             path: "/openai/v1/chat/completions",
@@ -254,12 +223,7 @@ ${catalogBlock}
             r.on("data", (c) => (d += c));
             r.on("end", () => {
                 try {
-                    const json = JSON.parse(d);
-                    const text = json.choices?.[0]?.message?.content ?? "";
-                    if (!text)
-                        reject(new Error(json.error?.message ?? "Empty response"));
-                    else
-                        resolve(text);
+                    resolve(JSON.parse(d));
                 }
                 catch (e) {
                     reject(e);
@@ -271,18 +235,107 @@ ${catalogBlock}
         req.end();
     });
 }
+async function chatAgent(userMessages, ctx) {
+    const system = {
+        role: "system",
+        content: `Ты — Маша, тёплый AI-помощник кондитерской «Мария» в Иркутске.
+
+О НАС:
+— Сайт maria-irk.ru | Телефон +7 (3952) 50-40-80 | 18 магазинов в Иркутске и Ангарске
+— Торт месяца: «Три шоколада» — три слоя мусса (тёмный, молочный, белый бельгийский шоколад)
+— Клуб «Мария для своих»: кэшбэк 5–10%, оплата бонусами до 30%
+— Скидка ко дню рождения: вам −5%, детям −10% (±5 дней)
+— Лотерея «Сладкий чек»: каждый чек = шанс выиграть iPhone, MacBook, PS5
+
+КАК РАБОТАТЬ:
+— Когда клиент спрашивает про торты/пироги/наборы — ВСЕГДА вызывай search_products чтобы найти РЕАЛЬНЫЕ товары из нашего каталога (247 позиций). Не выдумывай названия.
+— Если клиент уточняет «расскажи подробнее» — вызови get_product с ID последнего обсуждаемого товара.
+— Когда спрашивают про баллы/счёт/бонусы — вызови check_my_loyalty.
+— Когда спрашивают про заказы/историю — вызови get_my_orders.
+— Когда спрашивают про скидки у партнёров — list_partners.
+— Каталог: ${ctx.catalog.length} активных товаров.
+
+СТИЛЬ:
+— Живой, тёплый тон. Без канцелярита.
+— Эмодзи умеренно: 1-2 на сообщение.
+— Ответы короткие: 2-5 предложений.
+— Когда советуешь товар — называй имя и приблизительную цену. Картинку не вставляй текстом — UI покажет карточку под ответом.
+— Язык: русский.
+
+ВАЖНО:
+— Конкретные товары (имя, цена, вес) бери ТОЛЬКО из ответов tool calls. Без выдумок.
+— Если клиент не верифицировал телефон, баланс/заказы недоступны — мягко предложи нажать «Поделиться номером» во вкладке Клуб.`,
+    };
+    const messages = [system, ...userMessages];
+    const MAX_ITERATIONS = 4;
+    for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
+        const response = await groqRequest({
+            model: "llama-3.3-70b-versatile",
+            max_tokens: 1024,
+            temperature: 0.6,
+            messages,
+            tools: ai_tools_1.TOOL_DEFS,
+            tool_choice: "auto",
+        });
+        const choice = response.choices?.[0];
+        if (!choice) {
+            const errMsg = response.error?.message ?? "no_choice";
+            throw new Error(errMsg);
+        }
+        const msg = choice.message;
+        messages.push(msg);
+        // Если LLM ответил без tool_calls — финиш
+        if (!msg.tool_calls || msg.tool_calls.length === 0) {
+            return {
+                text: (msg.content ?? "").trim(),
+                products: [...ctx.surfacedProducts.values()],
+            };
+        }
+        // Иначе — запускаем все tool_calls параллельно
+        const results = await Promise.all(msg.tool_calls.map(async (tc) => {
+            let args = {};
+            try {
+                args = JSON.parse(tc.function.arguments || "{}");
+            }
+            catch { }
+            const out = await (0, ai_tools_1.runTool)(tc.function.name, args, ctx);
+            return { tool_call_id: tc.id, role: "tool", name: tc.function.name, content: out };
+        }));
+        messages.push(...results);
+    }
+    // Если за MAX_ITERATIONS не успели — финальный запрос без tools
+    const final = await groqRequest({
+        model: "llama-3.3-70b-versatile",
+        max_tokens: 512,
+        messages,
+    });
+    const finalChoice = final.choices?.[0];
+    return {
+        text: (finalChoice?.message?.content ?? "Извини, не получилось разобраться. Попробуй переформулировать.").trim(),
+        products: [...ctx.surfacedProducts.values()],
+    };
+}
 app.post("/api/chat", async (req, res) => {
     const { messages } = req.body;
     if (!Array.isArray(messages) || messages.length === 0) {
         res.status(400).json({ error: "messages array is required" });
         return;
     }
+    // chatId — Telegram WebApp init data; если нет — ставим 0 (анон),
+    // тогда tools auth-зависимые вернут unauthorised.
+    const tgUser = (0, auth_1.getTgUser)(req);
+    const chatId = tgUser?.id ?? 0;
     try {
-        const text = await groqChat(messages);
-        res.json({ text });
+        const ctx = {
+            chatId,
+            catalog,
+            surfacedProducts: new Map(),
+        };
+        const out = await chatAgent(messages, ctx);
+        res.json({ text: out.text, products: out.products });
     }
     catch (err) {
-        console.error("Groq error:", err.message);
+        console.error("Chat error:", err.message);
         res.status(502).json({ error: "ИИ недоступен, попробуйте позже" });
     }
 });

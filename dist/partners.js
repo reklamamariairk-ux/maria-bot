@@ -79,6 +79,9 @@ async function syncPartners() {
                 name: String(o.name ?? o.title ?? "").trim(),
                 perk: String(o.perk ?? o.discount ?? "").trim(),
                 desc: String(o.desc ?? o.description ?? "").trim(),
+                category: o.category ? String(o.category) : null,
+                url: o.url ? String(o.url) : null,
+                logo_url: o.logo_url ? String(o.logo_url) : null,
             };
         })
             .filter((p) => p.name.length > 0);

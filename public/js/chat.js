@@ -1,5 +1,6 @@
 /* ─── Chat ───────────────────────────────────────────────────────────────── */
 const chatHistory = [];
+const _chatInitData = window.Telegram?.WebApp?.initData ?? "";
 
 function handleChatKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
@@ -11,7 +12,6 @@ async function sendMessage() {
   const text    = input.value.trim();
   if (!text) return;
 
-  // Скрываем подсказки
   document.querySelector('.chat-suggestions')?.style && (document.querySelector('.chat-suggestions').style.display = 'none');
 
   input.value = '';
@@ -22,9 +22,11 @@ async function sendMessage() {
   const typing = appendTyping();
 
   try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (_chatInitData) headers['Authorization'] = 'tma ' + _chatInitData;
     const res = await fetch('/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ messages: chatHistory }),
     });
 
@@ -39,7 +41,7 @@ async function sendMessage() {
     const data  = await res.json();
     const reply = data.text ?? '';
     chatHistory.push({ role: 'assistant', content: reply });
-    appendMessage('bot', reply);
+    appendMessage('bot', reply, data.products);
   } catch {
     typing.remove();
     appendMessage('bot', '⚠️ Нет соединения. Проверьте интернет.');
@@ -49,15 +51,42 @@ async function sendMessage() {
   }
 }
 
-function appendMessage(role, text) {
+function appendMessage(role, text, products) {
   const wrap = document.getElementById('chat-messages');
   const div  = document.createElement('div');
   div.className = `msg msg--${role} fade-in`;
   const avatar = role === 'bot' ? '<div class="msg__avatar">🍰</div>' : '';
-  div.innerHTML = `${avatar}<div class="msg__bubble">${esc(text).replace(/\n/g,'<br>')}</div>`;
+  let cardsHtml = '';
+  if (Array.isArray(products) && products.length) {
+    const cards = products.slice(0, 6).map((p) => {
+      const id = p.id;
+      const onClick = id && window.catOpenProduct
+        ? `catOpenProduct(${id})`
+        : `openSite('${escAttr(p.url || '')}')`;
+      const priceTxt = p.price != null ? `${Number(p.price).toLocaleString('ru-RU')} ₽` : '';
+      const img = p.image || '';
+      return `
+        <div class="ai-pcard" onclick="${onClick}">
+          <div class="ai-pcard__img" ${img ? `style="background-image:url('${escAttr(img)}')"` : ''}>
+            ${img ? '' : '<span style="font-size:24px;opacity:.5">🍰</span>'}
+            ${p.hit ? '<span class="ai-pcard__hit">★</span>' : ''}
+          </div>
+          <div class="ai-pcard__body">
+            <div class="ai-pcard__name">${esc(p.name || '')}</div>
+            <div class="ai-pcard__price">${esc(priceTxt)}</div>
+          </div>
+        </div>`;
+    }).join('');
+    cardsHtml = `<div class="ai-pgrid">${cards}</div>`;
+  }
+  div.innerHTML = `${avatar}<div class="msg__bubble">${esc(text).replace(/\n/g,'<br>')}${cardsHtml}</div>`;
   wrap.appendChild(div);
   wrap.scrollTop = wrap.scrollHeight;
   return div;
+}
+
+function escAttr(s) {
+  return String(s ?? '').replace(/'/g,'&#39;').replace(/"/g,'&quot;');
 }
 
 function appendTyping() {

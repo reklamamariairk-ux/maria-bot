@@ -402,6 +402,39 @@ b,strong{font-weight:700}
 }
 .cat-modal__actions{padding:6px 0 24px}
 
+/* ── AI chat product cards ──────────────────────────────────────────────── */
+.ai-pgrid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(125px,1fr));
+  gap:8px;margin-top:10px;padding-top:10px;
+  border-top:1px solid rgba(0,0,0,.06);
+}
+.ai-pcard{
+  background:#fff;border-radius:12px;overflow:hidden;
+  cursor:pointer;border:1px solid rgba(0,0,0,.06);
+  transition:transform .15s, box-shadow .15s;
+}
+.ai-pcard:active{transform:scale(.97)}
+.ai-pcard:hover{box-shadow:0 6px 20px rgba(0,0,0,.08)}
+.ai-pcard__img{
+  aspect-ratio:1/1;background-color:var(--gold-l);
+  background-size:cover;background-position:center;
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+}
+.ai-pcard__hit{
+  position:absolute;top:6px;left:6px;
+  background:linear-gradient(135deg,var(--red),var(--red-d));color:#fff;
+  font-size:10px;font-weight:800;padding:2px 6px;border-radius:6px;
+  box-shadow:0 2px 6px var(--red-glow);
+}
+.ai-pcard__body{padding:8px 10px}
+.ai-pcard__name{
+  font-size:11px;font-weight:600;color:#222;line-height:1.3;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  min-height:28px;margin-bottom:4px;
+}
+.ai-pcard__price{font-size:12px;font-weight:800;color:var(--red)}
+
 
 /* ── BUTTONS ─────────────────────────────────────────────────────────────── */
 .btn-full{
