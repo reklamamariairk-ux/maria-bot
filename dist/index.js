@@ -736,6 +736,27 @@ app.post("/api/partners/sync", async (req, res) => {
     res.json(result);
 });
 app.get("/health", (_req, res) => res.json({ status: "ok", catalog: catalog.length, partners: (0, partners_1.getPartnersMeta)() }));
+// Internal: отдача исходников PHP из infrastructure/ для заливки в Bitrix admin
+// (используется только при ручном развёртывании; защищён ADMIN_TOKEN)
+app.get("/internal/php-source/:name", (req, res) => {
+    if (req.query.token !== process.env.ADMIN_TOKEN) {
+        res.status(403).type("text/plain").send("forbidden");
+        return;
+    }
+    const name = String(req.params.name).replace(/[^A-Za-z0-9_\-\.]/g, "");
+    if (!/\.php$/.test(name)) {
+        res.status(400).send("bad_name");
+        return;
+    }
+    const fs = require("fs");
+    const path = require("path");
+    const filePath = path.join(__dirname, "..", "infrastructure", name);
+    if (!fs.existsSync(filePath)) {
+        res.status(404).send("not_found");
+        return;
+    }
+    res.type("text/plain").send(fs.readFileSync(filePath, "utf-8"));
+});
 // ─── Запуск ──────────────────────────────────────────────────────────────────
 bot.catch((err) => {
     const ctx = err.ctx;
