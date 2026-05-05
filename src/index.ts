@@ -95,9 +95,9 @@ const GAMES_TEXT = `
 const SALE_TEXT = `
 🌟 *Акции*
 
-🎂 *Торт месяца «Три шоколада»* — скидка 20%, доставка от 1 000 ₽ бесплатно
+🎂 *Торт месяца* — скидка 20%, доставка от 1 000 ₽ бесплатно
 🎁 Фирменная коробка с лентой — бесплатно к любому заказу
-🧾 *Лотерея «Сладкий чек»* — каждый чек = шанс выиграть iPhone 17, MacBook, PS5
+🧾 *Лотерея «Сладкий чек»* — каждый чек = шанс на iPhone 17 Pro Max, MacBook, PS5 Slim
 
 Подробнее на сайте maria-irk.ru ⏳
 `.trim();
@@ -105,7 +105,7 @@ const SALE_TEXT = `
 const HELP_TEXT = `
 📞 *Контакты кондитерской «Мария»*
 
-📍 18 магазинов в Иркутске и Ангарске
+📍 17 кафе в Иркутске + точки в Ангарске
 🕐 Уточняйте часы работы на сайте
 📱 +7 (3952) 50-40-80
 🌐 maria-irk.ru
@@ -287,11 +287,12 @@ async function chatAgent(
     content: `Ты — Маша, тёплый AI-помощник кондитерской «Мария» в Иркутске.
 
 О НАС:
-— Сайт maria-irk.ru | Телефон +7 (3952) 50-40-80 | 18 магазинов в Иркутске и Ангарске
-— Торт месяца: «Три шоколада» — три слоя мусса (тёмный, молочный, белый бельгийский шоколад)
+— Сайт maria-irk.ru | Телефон +7 (3952) 50-40-80 | 17 кафе в Иркутске + точки в Ангарске
+— 33 года на рынке (с 1993)
+— Торт месяца меняется ежемесячно — узнай через search_products (ищи hit:true)
 — Клуб «Мария для своих»: кэшбэк 5–10%, оплата бонусами до 30%
 — Скидка ко дню рождения: вам −5%, детям −10% (±5 дней)
-— Лотерея «Сладкий чек»: каждый чек = шанс выиграть iPhone, MacBook, PS5
+— Лотерея «Сладкий чек»: каждый чек = шанс на iPhone 17 Pro Max, MacBook, PS5 Slim, Apple Watch, JBL — розыгрыш каждый квартал
 
 КАК РАБОТАТЬ:
 — Когда клиент спрашивает про торты/пироги/наборы — ВСЕГДА вызывай search_products чтобы найти РЕАЛЬНЫЕ товары из нашего каталога (247 позиций). Не выдумывай названия.
@@ -804,6 +805,54 @@ app.post("/api/partners/sync", async (req, res) => {
   }
   const result = await syncPartners();
   res.json(result);
+});
+
+// Прокси к /api/shops.php на сайте — миниапп получает реальные адреса
+const SHOPS_API   = process.env.SHOPS_API   ?? "";
+const SHOPS_TOKEN = process.env.SHOPS_TOKEN ?? process.env.LK_TOKEN ?? "";
+let _shopsCache: { data: unknown; ts: number } | null = null;
+app.get("/api/shops", async (_req, res) => {
+  if (!SHOPS_API || !SHOPS_TOKEN) {
+    res.status(503).json({ count: 0, shops: [], error: "shops_api_not_configured" });
+    return;
+  }
+  // Кеш 1 час
+  if (_shopsCache && (Date.now() - _shopsCache.ts) < 3600_000) {
+    res.json(_shopsCache.data);
+    return;
+  }
+  try {
+    const sep = SHOPS_API.includes("?") ? "&" : "?";
+    const url = `${SHOPS_API}${sep}token=${encodeURIComponent(SHOPS_TOKEN)}`;
+    const data = await new Promise<unknown>((resolve, reject) => {
+      const req = https.get(url, { rejectUnauthorized: false }, (r) => {
+        let body = ""; r.on("data", (c: Buffer) => body += c);
+        r.on("end", () => { try { resolve(JSON.parse(body)); } catch (e) { reject(e); } });
+      });
+      req.on("error", reject);
+      req.setTimeout(10_000, () => { req.destroy(); reject(new Error("Timeout")); });
+    });
+    _shopsCache = { data, ts: Date.now() };
+    res.json(data);
+  } catch (e) {
+    console.error("[SHOPS]", (e as Error).message);
+    res.status(502).json({ count: 0, shops: [], error: "fetch_failed" });
+  }
+});
+
+// Internal: разовая отдача PHP-исходников для заливки в Bitrix
+app.get("/internal/php-source/:name", (req, res) => {
+  if (req.query.token !== process.env.ADMIN_TOKEN) {
+    res.status(403).type("text/plain").send("forbidden");
+    return;
+  }
+  const name = String(req.params.name).replace(/[^A-Za-z0-9_\-\.]/g, "");
+  if (!/\.php$/.test(name)) { res.status(400).send("bad_name"); return; }
+  const fs = require("fs") as typeof import("fs");
+  const path = require("path") as typeof import("path");
+  const filePath = path.join(__dirname, "..", "infrastructure", name);
+  if (!fs.existsSync(filePath)) { res.status(404).send("not_found"); return; }
+  res.type("text/plain").send(fs.readFileSync(filePath, "utf-8"));
 });
 
 app.get("/health", (_req, res) =>

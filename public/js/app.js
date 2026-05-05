@@ -8,12 +8,73 @@ function openSite(url) {
 }
 
 /* ── Магазины (модалка адресов) ─────────────────────────────────────────── */
-function openShopsModal() {
+let _shopsLoaded = false;
+
+async function openShopsModal() {
   const m = document.getElementById('shops-modal');
   if (!m) return;
   m.style.display = 'flex';
   document.body.style.overflow = 'hidden';
+  if (!_shopsLoaded) await loadShops();
 }
+
+async function loadShops() {
+  const wrap = document.getElementById('shops-content');
+  if (!wrap) return;
+  try {
+    const r = await fetch('/api/shops', {cache: 'no-store'});
+    const d = await r.json();
+    const shops = Array.isArray(d?.shops) ? d.shops : [];
+    if (shops.length === 0) {
+      wrap.innerHTML = `
+        <div class="shops__h">📍 Кафе «Мария»</div>
+        <div class="shops__sub">Иркутск + Ангарск</div>
+        <div class="cat-empty" style="padding:30px 20px">Адреса временно недоступны. Скоро добавим.</div>
+        <div class="shops__cta">
+          <button class="btn-outline" onclick="openMaps()">🗺 Открыть на Яндекс.Картах</button>
+          <a class="btn-full" href="tel:+73952504080">☎ +7 (3952) 50-40-80</a>
+        </div>`;
+      return;
+    }
+    // Группировка по городу
+    const byCity = {};
+    for (const s of shops) {
+      const c = (s.city && String(s.city).trim()) || (/ангарск/i.test(s.address || '') ? 'Ангарск' : 'Иркутск');
+      (byCity[c] ||= []).push(s);
+    }
+    const groups = Object.entries(byCity).map(([city, list]) => `
+      <div class="shops__group">
+        <div class="shops__city">${escA(city)}</div>
+        ${list.map(s => `
+          <div class="shop">
+            <div class="shop__addr">${escA(s.address || s.name)}</div>
+            ${s.hours ? `<div class="shop__t">🕐 ${escA(s.hours)}</div>` : ''}
+          </div>`).join('')}
+      </div>`).join('');
+    wrap.innerHTML = `
+      <div class="shops__h">📍 ${shops.length} ${shops.length === 1 ? 'кафе' : 'кафе'} «Мария»</div>
+      <div class="shops__sub">в Иркутске${byCity['Ангарск'] ? ' и Ангарске' : ''}</div>
+      ${groups}
+      <div class="shops__cta">
+        <button class="btn-outline" onclick="openMaps()">🗺 Открыть на Яндекс.Картах</button>
+        <a class="btn-full" href="tel:+73952504080">☎ +7 (3952) 50-40-80</a>
+      </div>`;
+    _shopsLoaded = true;
+  } catch (e) {
+    wrap.innerHTML = `
+      <div class="shops__h">📍 Кафе «Мария»</div>
+      <div class="cat-empty" style="padding:30px 20px">Не удалось загрузить адреса.</div>
+      <div class="shops__cta">
+        <button class="btn-outline" onclick="openMaps()">🗺 Открыть на Яндекс.Картах</button>
+        <a class="btn-full" href="tel:+73952504080">☎ +7 (3952) 50-40-80</a>
+      </div>`;
+  }
+}
+
+function escA(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 function closeShopsModal() {
   const m = document.getElementById('shops-modal');
   if (m) m.style.display = 'none';

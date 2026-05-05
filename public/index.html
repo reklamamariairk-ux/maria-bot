@@ -34,7 +34,7 @@
 <section class="tab active" id="tab-home">
 
   <div class="hero">
-    <div class="hero__tag">Иркутск · с 1995 года</div>
+    <div class="hero__tag">Иркутск · 33 года на рынке</div>
     <h1 class="hero__h1">Свежая выпечка<br>каждый день</h1>
     <p class="hero__p">Торты, пироги, пирожные<br>и подарочные наборы</p>
     <button class="btn-hero" onclick="switchTab('menu')">Смотреть меню →</button>
@@ -51,12 +51,12 @@
     <div class="bento__sm bento__sm--gold" onclick="switchTab('club')">
       <div class="bento__sm-ic">🧾</div>
       <div class="bento__sm-t">Сладкий чек</div>
-      <div class="bento__sm-s">iPhone 17, MacBook, PS5</div>
+      <div class="bento__sm-s">iPhone 17, MacBook, PS5 Slim</div>
     </div>
     <div class="bento__sm bento__sm--light" onclick="openShopsModal()">
       <div class="bento__sm-ic">📍</div>
-      <div class="bento__sm-t">18 магазинов</div>
-      <div class="bento__sm-s">Иркутск и Ангарск</div>
+      <div class="bento__sm-t">17 кафе</div>
+      <div class="bento__sm-s">Иркутск</div>
     </div>
   </div>
 
@@ -244,7 +244,7 @@
     <div class="bf"><span class="bf__ic">🎂</span><div><b>Скидка в день рождения</b><div class="bf__sub">Вам и партнёру — 5%, детям — 10% (±5 дней)</div></div></div>
     <div class="bf"><span class="bf__ic">🏅</span><div><b>Торт месяца −20% ежедневно</b><div class="bf__sub">Постоянная скидка для участников клуба</div></div></div>
     <div class="bf"><span class="bf__ic">🎟</span><div><b>Закрытые распродажи</b><div class="bf__sub">Ранний доступ к новинкам, дегустации, мероприятия</div></div></div>
-    <div class="bf"><span class="bf__ic">🏆</span><div><b>Лотерея «Сладкий чек»</b><div class="bf__sub">Каждый чек — шанс на iPhone 17, MacBook, PS5</div></div></div>
+    <div class="bf"><span class="bf__ic">🏆</span><div><b>Лотерея «Сладкий чек»</b><div class="bf__sub">Каждый чек — шанс на iPhone 17 Pro Max, MacBook, PS5 Slim</div></div></div>
     <div class="bf"><span class="bf__ic">🤝</span><div><b>Скидки у партнёров</b><div class="bf__sub">Рестораны, фитнес, салоны красоты, клиники</div></div></div>
   </div>
 
@@ -257,11 +257,11 @@
   <div id="sc-my" style="display:none"></div>
 
   <div class="prizes">
-    <div class="prize prize--1"><div class="prize__place">🥇</div><div class="prize__icon">📱</div><div class="prize__name">iPhone 17 Pro Max</div></div>
+    <div class="prize prize--1"><div class="prize__place">🥇</div><div class="prize__icon">📱</div><div class="prize__name">iPhone 17 Pro Max</div><div class="prize__sub">256 ГБ, оранжевый</div></div>
     <div class="prize prize--2"><div class="prize__place">🥈</div><div class="prize__icon">💻</div><div class="prize__name">MacBook</div></div>
-    <div class="prize prize--2"><div class="prize__place">🥈</div><div class="prize__icon">🎮</div><div class="prize__name">PlayStation 5</div></div>
-    <div class="prize prize--3"><div class="prize__place">🥉</div><div class="prize__icon">⌚</div><div class="prize__name">Apple Watch</div></div>
-    <div class="prize prize--3"><div class="prize__place">🥉</div><div class="prize__icon">🔊</div><div class="prize__name">JBL Speaker</div></div>
+    <div class="prize prize--2"><div class="prize__place">🥈</div><div class="prize__icon">🎮</div><div class="prize__name">PlayStation 5 Slim</div></div>
+    <div class="prize prize--3"><div class="prize__place">🥉</div><div class="prize__icon">⌚</div><div class="prize__name">Apple Watch Series</div></div>
+    <div class="prize prize--3"><div class="prize__place">🥉</div><div class="prize__icon">🔊</div><div class="prize__name">Колонка JBL</div></div>
   </div>
 
   <div class="sc-rules">
@@ -297,7 +297,7 @@
     </div>
     <div class="of-group">
       <label class="of-label">Какой торт хотите?</label>
-      <input class="of-input" id="of-desc" type="text" placeholder="Например: «Три шоколада», торт на заказ…"/>
+      <input class="of-input" id="of-desc" type="text" placeholder="Например: торт на день рождения, индивидуальный дизайн…"/>
     </div>
     <div class="of-row">
       <div class="of-group" style="flex:1">
@@ -469,44 +469,12 @@
   </div>
 </div>
 
-<!-- MODAL: Магазины (адреса) -->
+<!-- MODAL: Магазины (динамика из /api/shops) -->
 <div class="cat-modal" id="shops-modal" style="display:none" onclick="if(event.target===this)closeShopsModal()">
   <div class="cat-modal__sheet">
     <button class="cat-modal__close" onclick="closeShopsModal()">×</button>
-    <div class="shops">
-      <div class="shops__h">📍 18 магазинов «Мария»</div>
-      <div class="shops__sub">Иркутск и Ангарск</div>
-
-      <div class="shops__group">
-        <div class="shops__city">Иркутск</div>
-        <div class="shop">ул. Байкальская, 206 <span class="shop__t">Бизнес-центр</span></div>
-        <div class="shop">ул. Дзержинского, 36</div>
-        <div class="shop">ул. Карла Маркса, 22</div>
-        <div class="shop">ул. Партизанская, 2А</div>
-        <div class="shop">ул. Седова, 24</div>
-        <div class="shop">ул. Сергеева, 3А</div>
-        <div class="shop">мкр. Ленинский, 22</div>
-        <div class="shop">мкр. Юбилейный, 20</div>
-        <div class="shop">бул. Рябикова, 31А</div>
-        <div class="shop">ТРК «Карамель»</div>
-        <div class="shop">ТРЦ «Сильвер Молл»</div>
-        <div class="shop">ТРЦ «Модный квартал»</div>
-        <div class="shop">ТРЦ «Сезон»</div>
-        <div class="shop">пос. Маркова</div>
-      </div>
-
-      <div class="shops__group">
-        <div class="shops__city">Ангарск</div>
-        <div class="shop">мкр. 18, дом 16</div>
-        <div class="shop">мкр. 22, дом 1</div>
-        <div class="shop">ул. Карла Маркса, 47</div>
-        <div class="shop">ТРЦ «Раздолье»</div>
-      </div>
-
-      <div class="shops__cta">
-        <button class="btn-outline" onclick="openMaps()">🗺 Открыть на карте</button>
-        <a class="btn-full" href="tel:+73952504080">☎ +7 (3952) 50-40-80</a>
-      </div>
+    <div class="shops" id="shops-content">
+      <div class="cat-loading">Загружаем адреса…</div>
     </div>
   </div>
 </div>
