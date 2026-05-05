@@ -1,8 +1,20 @@
 import https from "https";
 import { pool } from "./db";
 
-const LK_API   = process.env.LK_API   ?? ""; // https://www.maria-irk.ru/local/api/lk.php
-const LK_TOKEN = process.env.LK_TOKEN ?? "";
+const LK_API     = process.env.LK_API     ?? ""; // https://www.maria-irk.ru/api/lk.php
+const LK_TOKEN   = process.env.LK_TOKEN   ?? "";
+const ORDERS_API = process.env.ORDERS_API ?? ""; // https://www.maria-irk.ru/api/orders.php
+
+export interface LkOrder {
+  id: number;
+  date: string;
+  sum: number;
+  currency: string;
+  status: string;
+  paid: boolean;
+  canceled: boolean;
+  items: { name: string; qty: number; price: number }[];
+}
 
 export interface LkData {
   found: boolean;
@@ -12,6 +24,7 @@ export interface LkData {
   year_spent?: number;
   tickets?: { id: string; name: string; date: string }[];
   tickets_count?: number;
+  orders?: LkOrder[];
   configured: boolean;
 }
 
@@ -59,10 +72,26 @@ export async function fetchLk(chatId: number): Promise<{
     if (raw.error) return { ok: false, reason: String(raw.error) };
 
     const ticketsRaw = raw.tickets;
+
+    // Параллельно подтягиваем историю заказов (best-effort, не валим LK если упало)
+    let orders: LkOrder[] = [];
+    if (ORDERS_API) {
+      try {
+        const sep2 = ORDERS_API.includes("?") ? "&" : "?";
+        const u2 = `${ORDERS_API}${sep2}token=${encodeURIComponent(LK_TOKEN)}&phone=${encodeURIComponent(phone)}`;
+        const o = (await fetchJson(u2)) as Record<string, unknown>;
+        if (Array.isArray(o.orders)) {
+          orders = o.orders as LkOrder[];
+        }
+      } catch (e) {
+        console.error("[ORDERS]", (e as Error).message);
+      }
+    }
+
     return {
       ok: true,
       data: {
-        found:         Boolean(raw.found),
+        found:         Boolean(raw.found) || orders.length > 0,
         name:          (raw.name as string | null) ?? null,
         level:         (raw.level as string | null) ?? null,
         balance:       Number(raw.balance ?? 0),
@@ -71,6 +100,7 @@ export async function fetchLk(chatId: number): Promise<{
         tickets_count: typeof raw.tickets_count === "number"
           ? raw.tickets_count
           : (typeof ticketsRaw === "number" ? ticketsRaw : (Array.isArray(ticketsRaw) ? ticketsRaw.length : 0)),
+        orders,
         configured:    true,
       },
     };

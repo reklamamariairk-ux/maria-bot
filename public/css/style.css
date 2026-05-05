@@ -1575,6 +1575,20 @@ b,strong{font-weight:700}
 .lk-ti__nm{flex:1;color:#222}
 .lk-ti__dt{color:var(--muted);font-size:11px}
 
+.lk-card__orders{margin-top:10px;padding-top:10px;border-top:1px solid rgba(232,160,48,.2)}
+.lk-ord{padding:8px 0;border-bottom:1px solid rgba(0,0,0,.05)}
+.lk-ord:last-child{border-bottom:none}
+.lk-ord__row{display:flex;gap:8px;align-items:center;justify-content:space-between;font-size:12px;line-height:1.4}
+.lk-ord__row + .lk-ord__row{margin-top:3px}
+.lk-ord__id{font-weight:800;color:var(--red);background:var(--red-l);padding:2px 8px;border-radius:8px;white-space:nowrap;font-size:11px}
+.lk-ord__dt{color:var(--muted);font-size:11px}
+.lk-ord__sum{font-weight:700;color:#222;margin-left:auto}
+.lk-ord__items{color:#444;font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lk-ord__st{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap}
+.lk-ord__st--paid{color:#0a8a4a}
+.lk-ord__st--cancel{color:#aaa;text-decoration:line-through}
+.lk-ord-more{text-align:center;font-size:11px;color:var(--muted);padding-top:6px}
+
 /* ── GAME TOAST ──────────────────────────────────────────────────────────── */
 .game-toast{
   position:fixed;left:50%;top:84px;transform:translateX(-50%);

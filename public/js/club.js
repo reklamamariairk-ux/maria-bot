@@ -130,6 +130,7 @@ async function renderLk() {
 
     const tickets = (data.tickets || []).slice(0, 3);
     const ticketsCount = Number(data.tickets_count || tickets.length || 0);
+    const orders = Array.isArray(data.orders) ? data.orders : [];
     card.innerHTML = `
       <div class="lk-card__row">
         <div>
@@ -155,6 +156,12 @@ async function renderLk() {
         <div class="lk-card__tickets">
           <div class="lk-card__tt">🧾 Билеты «Сладкого чека»: <b>${ticketsCount}</b></div>
         </div>` : '')}
+      ${orders.length ? `
+        <div class="lk-card__orders">
+          <div class="lk-card__tt">🛍 Мои заказы (${orders.length})</div>
+          ${orders.slice(0, 5).map(renderOrderRow).join('')}
+          ${orders.length > 5 ? `<div class="lk-ord-more">…и ещё ${orders.length - 5}</div>` : ''}
+        </div>` : ''}
       <button class="btn-outline" onclick="openSite('https://www.maria-irk.ru/personal/')">Открыть полный кабинет →</button>
     `;
   } catch {
@@ -166,6 +173,25 @@ function escapeHtml(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
   );
+}
+
+function renderOrderRow(o) {
+  const dateShort = String(o.date || '').slice(0, 10);
+  const items = (o.items || []).slice(0, 2).map(i => `${i.qty}× ${i.name}`).join(', ');
+  const more = (o.items || []).length > 2 ? ` +${o.items.length - 2}` : '';
+  const statusCls = o.canceled ? 'lk-ord__st--cancel' : (o.paid ? 'lk-ord__st--paid' : '');
+  return `
+    <div class="lk-ord">
+      <div class="lk-ord__row">
+        <span class="lk-ord__id">#${o.id}</span>
+        <span class="lk-ord__dt">${escapeHtml(dateShort)}</span>
+        <span class="lk-ord__sum">${Number(o.sum).toLocaleString('ru-RU')} ₽</span>
+      </div>
+      <div class="lk-ord__row">
+        <span class="lk-ord__items">${escapeHtml(items)}${more}</span>
+        <span class="lk-ord__st ${statusCls}">${escapeHtml(o.status || '')}</span>
+      </div>
+    </div>`;
 }
 
 function renderHero() {
