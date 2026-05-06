@@ -293,6 +293,18 @@ $searchParts = [
 $searchSafe = $sqlHelper->forSql(implode(' ', array_filter($searchParts)));
 $conn->queryExecute("UPDATE b_sale_order SET SEARCH_CONTENT = '$searchSafe' WHERE ID = $orderId");
 
+// Возвращаем items с name+price+qty — бот использует для богатого COMMENTS
+// в B24-лиде и для crm.lead.productrows.set
+$itemsOut = [];
+foreach ($itemsClean as $i) {
+    $itemsOut[] = [
+        'id'    => (int)$i['id'],
+        'name'  => (string)$i['name'],
+        'price' => (float)$i['price'],
+        'qty'   => (float)$i['qty'],
+    ];
+}
+
 echo json_encode([
     'ok'            => true,
     'orderId'       => $orderId,
@@ -300,5 +312,6 @@ echo json_encode([
     'total'         => $total,
     'currency'      => 'RUB',
     'itemsCount'    => count($itemsClean),
+    'items'         => $itemsOut,
     'message'       => 'Заказ принят. Менеджер свяжется по номеру ' . $phoneFormatted . ' для подтверждения.',
 ], JSON_UNESCAPED_UNICODE);

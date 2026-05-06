@@ -26,6 +26,13 @@ export interface OrderRequest {
   email?: string;
 }
 
+export interface OrderResultItem {
+  id: number;
+  name: string;
+  price: number;
+  qty: number;
+}
+
 export interface OrderResult {
   ok: boolean;
   orderId?: number;
@@ -34,6 +41,7 @@ export interface OrderResult {
   currency?: string;
   message?: string;
   error?: string;
+  items?: OrderResultItem[];
 }
 
 export async function createOrder(req: OrderRequest): Promise<OrderResult> {
@@ -96,7 +104,6 @@ function callJsonPost(url: string, body: unknown): Promise<unknown> {
 }
 
 async function pushToBitrix24(req: OrderRequest, sale: OrderResult): Promise<void> {
-  const itemsList = req.items.map((i) => `• [#${i.id}] ×${i.qty}`).join("\n");
   const tail = (req.phone || "").replace(/\D/g, "").slice(-10);
   const phoneFmt = tail ? `+7 (${tail.slice(0,3)}) ${tail.slice(3,6)}-${tail.slice(6,8)}-${tail.slice(8,10)}` : req.phone;
 
@@ -104,7 +111,20 @@ async function pushToBitrix24(req: OrderRequest, sale: OrderResult): Promise<voi
   const firstName = nameParts[0] || req.name;
   const lastName  = nameParts.slice(1).join(" ");
 
+  // Используем items из ответа PHP (там полный name + price), если PHP старый —
+  // fallback на req.items с одним id.
+  const items: OrderResultItem[] = sale.items && sale.items.length
+    ? sale.items
+    : req.items.map((i) => ({ id: i.id, name: `Товар #${i.id}`, price: 0, qty: i.qty }));
+
   const title = `🍰 Заказ #${sale.orderId ?? '—'} · ${req.name}`;
+
+  // Состав заказа — человеческое описание
+  const itemsList = items.map((i) => {
+    const sum = (i.price * i.qty).toLocaleString("ru-RU");
+    const pricePer = i.price ? `${i.price.toLocaleString("ru-RU")} ₽` : "—";
+    return `• ${i.name} — ${i.qty} × ${pricePer} = ${sum} ₽`;
+  }).join("\n");
 
   // Структурированный комментарий — менеджер видит всё подряд в правой панели лида
   const lines: string[] = [];
@@ -140,7 +160,23 @@ async function pushToBitrix24(req: OrderRequest, sale: OrderResult): Promise<voi
   if (req.email)   fields.EMAIL = [{ VALUE: req.email, VALUE_TYPE: "WORK" }];
   if (req.address) fields.ADDRESS = req.address;
 
-  const url = B24_WEBHOOK.endsWith("/") ? B24_WEBHOOK + "crm.lead.add.json" : B24_WEBHOOK + "/crm.lead.add.json";
-  const result = await callJsonPost(url, { fields });
-  console.log(`[B24] lead for #${sale.orderId} →`, JSON.stringify(result).substring(0, 300));
+  // 1) Создаём лид
+  const addUrl = B24_WEBHOOK.endsWith("/") ? B24_WEBHOOK + "crm.lead.add.json" : B24_WEBHOOK + "/crm.lead.add.json";
+  const created = await callJsonPost(addUrl, { fields }) as { result?: number; error?: string };
+  console.log(`[B24] lead for #${sale.orderId} →`, JSON.stringify(created).substring(0, 300));
+  const leadId = created?.result;
+  if (!leadId) return;
+
+  // 2) Прикрепляем товары к лиду — отображаются в B24 как полноценный список
+  // (а не только текстом в COMMENTS). Поле PRODUCT_ID опускаем — товары
+  // в Bitrix24 CRM каталоге могут быть не синхронизированы с маркет-каталогом сайта;
+  // отдаём PRODUCT_NAME, PRICE, QUANTITY — этого достаточно для отображения.
+  const productrows = items.map((i) => ({
+    PRODUCT_NAME: i.name,
+    PRICE:        i.price,
+    QUANTITY:     i.qty,
+  }));
+  const rowsUrl = B24_WEBHOOK.endsWith("/") ? B24_WEBHOOK + "crm.lead.productrows.set.json" : B24_WEBHOOK + "/crm.lead.productrows.set.json";
+  const rowsRes = await callJsonPost(rowsUrl, { id: leadId, rows: productrows }) as { result?: boolean; error?: string };
+  console.log(`[B24] productrows lead=${leadId} (${productrows.length}) →`, JSON.stringify(rowsRes).substring(0, 200));
 }
