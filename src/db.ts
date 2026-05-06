@@ -20,8 +20,38 @@ export async function initDb() {
       birthday          DATE NOT NULL,
       last_notified_year INT DEFAULT 0
     );
+
+    ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
+    ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS launch_count INT DEFAULT 0;
   `);
   console.log("[DB] Tables ready");
+}
+
+export async function touchSubscriber(chatId: number, username?: string, firstName?: string) {
+  await pool.query(
+    `INSERT INTO subscribers (chat_id, username, first_name, last_seen_at, launch_count)
+     VALUES ($1, $2, $3, NOW(), 1)
+     ON CONFLICT (chat_id) DO UPDATE
+       SET username = COALESCE($2, subscribers.username),
+           first_name = COALESCE($3, subscribers.first_name),
+           last_seen_at = NOW(),
+           launch_count = subscribers.launch_count + 1`,
+    [chatId, username ?? null, firstName ?? null]
+  );
+}
+
+export interface SubscriberInfo {
+  joined_at: string | null;
+  last_seen_at: string | null;
+  launch_count: number;
+}
+
+export async function getSubscriberInfo(chatId: number): Promise<SubscriberInfo | null> {
+  const { rows } = await pool.query(
+    `SELECT joined_at, last_seen_at, launch_count FROM subscribers WHERE chat_id = $1`,
+    [chatId]
+  );
+  return rows[0] ?? null;
 }
 
 export async function addSubscriber(chatId: number, username: string | undefined, firstName: string | undefined) {

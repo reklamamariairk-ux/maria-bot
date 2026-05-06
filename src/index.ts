@@ -7,7 +7,7 @@ import https from "https";
 import cron from "node-cron";
 import { Bot, webhookCallback, InlineKeyboard } from "grammy";
 import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, fetchProductById, Product } from "./scraper";
-import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified } from "./db";
+import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo } from "./db";
 import {
   initClubSchema,
   getBalance,
@@ -531,7 +531,8 @@ app.get("/api/catalog-status", (_req, res) => {
 app.get("/api/me", requireTgUser, async (req, res) => {
   const u = getTgUser(req)!;
   try {
-    await addSubscriber(u.id, u.username, u.first_name).catch(() => {});
+    // touchSubscriber заодно бьёт launch_count и last_seen_at; addSubscriber оставлен для совместимости
+    await touchSubscriber(u.id, u.username, u.first_name).catch(() => {});
     const [verified, balance, daily, myRewards] = await Promise.all([
       isPhoneVerified(u.id),
       getBalance(u.id),
@@ -824,6 +825,27 @@ app.post("/api/order", async (req, res) => {
       const bal = await getBalance(tg.id);
       if (bal.stars > 0 || bal.points > 0) {
         ctx.push(`⭐ Бот-бонусы: ${bal.points} очков · ${bal.stars} звёзд (всего заработано: ${bal.totalEarnedPoints} очков · ${bal.totalEarnedStars} звёзд)`);
+      }
+    } catch {}
+    // Подтверждение телефона через бот
+    try {
+      const verified = await isPhoneVerified(tg.id);
+      if (verified) ctx.push("✓ Телефон подтверждён через Mini App");
+    } catch {}
+    // История взаимодействия с ботом: дата регистрации, запуски, последний заход
+    try {
+      const info = await getSubscriberInfo(tg.id);
+      if (info) {
+        const fmt = (iso: string | null) => {
+          if (!iso) return "—";
+          const d = new Date(iso);
+          return d.toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" });
+        };
+        const reg  = info.joined_at    ? `Регистрация в Mini App: ${fmt(info.joined_at)}`        : null;
+        const last = info.last_seen_at ? `последний заход: ${fmt(info.last_seen_at)}`            : null;
+        const cnt  = info.launch_count > 0 ? `запусков: ${info.launch_count}`                    : null;
+        const line = ["📅", reg, cnt, last].filter(Boolean).join(" · ");
+        if (line.length > 2) ctx.push(line);
       }
     } catch {}
   }
