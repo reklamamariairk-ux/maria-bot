@@ -99,7 +99,55 @@ function renderClub() {
   renderShop();
   renderMyRewardsBlock();
   renderReferral();
+  loadSweetCheckWeek();
+
+  // Восстановить состояние кнопки «Участвую»
+  try {
+    if (localStorage.getItem('maria_sc_joined') === '1') {
+      const btn = document.getElementById('sc-join-btn');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '✅ Вы участвуете';
+      }
+    }
+  } catch {}
 }
+
+async function loadSweetCheckWeek() {
+  try {
+    const r = await fetch('/api/sweet-check/active', {cache: 'no-store'});
+    const d = await r.json();
+    const wrap = document.getElementById('sc-week');
+    if (!wrap) return;
+    if (!d?.active) { wrap.style.display = 'none'; return; }
+    wrap.style.display = '';
+    wrap.innerHTML = `
+      <div class="sc-week">
+        <div class="sc-week__tag">🟢 Активно · ${escapeHtml(d.active.dates || '')}</div>
+        <div class="sc-week__h">${escapeHtml(d.active.name || 'Текущая неделя')}</div>
+        ${d.active.task ? `<div class="sc-week__task">${escapeHtml(d.active.task)}</div>` : ''}
+        ${d.active.reward ? `<div class="sc-week__reward">+${escapeHtml(String(d.active.reward))}</div>` : ''}
+      </div>`;
+  } catch {}
+}
+
+function scJoin() {
+  const btn = document.getElementById('sc-join-btn');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.innerHTML = '✅ Вы участвуете';
+  // Toast
+  const tg = window.Telegram?.WebApp;
+  tg?.HapticFeedback?.notificationOccurred?.('success');
+  if (tg?.showAlert) {
+    tg.showAlert('Отлично! Делайте покупки в наших кафе — за каждое выполненное задание недели получите 5 билетов 🎟');
+  } else {
+    alert('Делайте покупки в кафе «Мария» — за каждое выполненное задание недели получите 5 билетов!');
+  }
+  // Сохраняем флаг в localStorage чтобы в следующий раз не показывать
+  try { localStorage.setItem('maria_sc_joined', '1'); } catch {}
+}
+window.scJoin = scJoin;
 
 function renderSweetCheckMy(data) {
   const wrap = document.getElementById('sc-my');

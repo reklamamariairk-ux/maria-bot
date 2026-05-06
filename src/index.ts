@@ -748,14 +748,14 @@ app.get("/api/lk", requireTgUser, async (req, res) => {
 });
 
 // Создание заказа из миниаппа — обёртка вокруг /api/order-create.php на сайте
-app.post("/api/order", requireTgUser, async (req, res) => {
-  const tg = getTgUser(req)!;
+// Auth не обязателен (юзер может ввести phone руками); если есть verified TG user —
+// можем подтянуть verified phone и привязать chatId в комментарии
+app.post("/api/order", async (req, res) => {
+  const tg = getTgUser(req); // optional, без блокировки
   const body = req.body as Partial<OrderRequest> & { useVerifiedPhone?: boolean };
 
-  // Если пользователь верифицировал телефон, используем его как priority,
-  // иначе берём из тела запроса (форма)
   let phone = String(body.phone ?? "").trim();
-  if (body.useVerifiedPhone || !phone) {
+  if ((body.useVerifiedPhone || !phone) && tg?.id) {
     try {
       const lk = await fetchLk(tg.id);
       const lkData = lk.ok ? (lk.data as unknown as Record<string, unknown>) : null;
@@ -769,15 +769,26 @@ app.post("/api/order", requireTgUser, async (req, res) => {
         .map((i) => ({ id: Number(i.id), qty: Number(i.qty) }))
     : [];
 
-  if (!phone || !body.name || items.length === 0) {
-    res.status(400).json({ ok: false, error: "missing_fields" });
+  console.log(`[ORDER] req: phone=${phone || '-'} name=${body.name || '-'} items=${items.length} tg=${tg?.id || '-'}`);
+
+  if (!phone) {
+    res.status(400).json({ ok: false, error: "phone_required", message: "Укажите номер телефона" });
+    return;
+  }
+  if (!body.name) {
+    res.status(400).json({ ok: false, error: "name_required", message: "Укажите имя" });
+    return;
+  }
+  if (items.length === 0) {
+    res.status(400).json({ ok: false, error: "empty_cart", message: "Корзина пуста" });
     return;
   }
   if (items.length > 30) {
-    res.status(400).json({ ok: false, error: "too_many_items" });
+    res.status(400).json({ ok: false, error: "too_many_items", message: "Слишком много позиций" });
     return;
   }
 
+  const tgTag = tg?.id ? `tg_id=${tg.id}` : 'tg_anonymous';
   const result = await createOrder({
     phone,
     name:          String(body.name).trim(),
@@ -785,15 +796,16 @@ app.post("/api/order", requireTgUser, async (req, res) => {
     address:       body.address       ? String(body.address).trim()       : undefined,
     delivery_date: body.delivery_date ? String(body.delivery_date).trim() : undefined,
     delivery_time: body.delivery_time ? String(body.delivery_time).trim() : undefined,
-    comment:       body.comment       ? String(body.comment).trim()       : `Заказ из Telegram-бота tg_id=${tg.id}`,
+    comment:       body.comment       ? `${body.comment} (${tgTag})` : `Заказ из Telegram-бота ${tgTag}`,
     email:         body.email         ? String(body.email).trim()         : undefined,
   });
 
   if (!result.ok) {
-    console.error("[ORDER] failed:", result.error);
-    res.status(502).json({ ok: false, error: result.error ?? "order_failed" });
+    console.error("[ORDER] PHP returned error:", result.error);
+    res.status(502).json({ ok: false, error: result.error ?? "order_failed", message: "Не удалось создать заказ. Попробуй позже или позвони +7 (3952) 50-40-80." });
     return;
   }
+  console.log(`[ORDER] created #${result.orderId} for ${phone}`);
   res.json(result);
 });
 
@@ -838,6 +850,37 @@ app.get("/api/shops", async (_req, res) => {
     console.error("[SHOPS]", (e as Error).message);
     res.status(502).json({ count: 0, shops: [], error: "fetch_failed" });
   }
+});
+
+// Sweet Check — активная неделя/квест
+// Расписание зеркально с сайта. Админ Maria сможет править даты в этом месте.
+const SWEET_CHECK_WEEKS = [
+  { from: "2026-04-13", to: "2026-04-19", name: "Неделя 4 · Старт",        task: "Купи набор «Семейный»", reward: "5 билетов" },
+  { from: "2026-04-20", to: "2026-04-26", name: "Неделя 5 · Сезон ягод",   task: "Купи 2 пирога с ягодной начинкой", reward: "5 билетов" },
+  { from: "2026-04-27", to: "2026-05-03", name: "Неделя 6 · Капкейки",     task: "Купи 4 капкейка любых вкусов", reward: "5 билетов" },
+  { from: "2026-05-04", to: "2026-05-10", name: "Неделя 7 · Подарок другу",task: "Купи бенто-торт + капкейк или десерт в стакане", reward: "5 билетов" },
+  { from: "2026-05-11", to: "2026-05-17", name: "Неделя 8",                task: "Уточняется в кафе", reward: "5 билетов" },
+  { from: "2026-05-18", to: "2026-05-24", name: "Неделя 9",                task: "Уточняется в кафе", reward: "5 билетов" },
+  { from: "2026-05-25", to: "2026-05-31", name: "Неделя 10",               task: "Уточняется в кафе", reward: "5 билетов" },
+  { from: "2026-06-01", to: "2026-06-07", name: "Неделя 11",               task: "Уточняется в кафе", reward: "5 билетов" },
+  { from: "2026-06-08", to: "2026-06-14", name: "Неделя 12",               task: "Уточняется в кафе", reward: "5 билетов" },
+  { from: "2026-06-15", to: "2026-06-21", name: "Неделя 13",               task: "Уточняется в кафе", reward: "5 билетов" },
+  { from: "2026-06-22", to: "2026-06-28", name: "Неделя 14",               task: "Уточняется в кафе", reward: "5 билетов" },
+  { from: "2026-06-29", to: "2026-07-05", name: "Неделя 15 · Финал Q2",    task: "Уточняется в кафе", reward: "5 билетов" },
+];
+app.get("/api/sweet-check/active", (_req, res) => {
+  const now = new Date().toISOString().slice(0, 10);
+  const active = SWEET_CHECK_WEEKS.find((w) => w.from <= now && now <= w.to) ?? null;
+  const next   = SWEET_CHECK_WEEKS.find((w) => w.from > now) ?? null;
+  const fmt = (d: string) => {
+    const [y, m, dd] = d.split("-");
+    return `${dd}.${m}.${y}`;
+  };
+  res.json({
+    active: active ? { ...active, dates: `${fmt(active.from)} — ${fmt(active.to)}` } : null,
+    next:   next   ? { ...next,   dates: `${fmt(next.from)} — ${fmt(next.to)}` }     : null,
+    period: { from: SWEET_CHECK_WEEKS[0]?.from, to: SWEET_CHECK_WEEKS.at(-1)?.to },
+  });
 });
 
 app.get("/health", (_req, res) =>

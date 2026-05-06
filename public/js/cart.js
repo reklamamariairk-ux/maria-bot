@@ -244,8 +244,9 @@ async function cartSubmit() {
     });
     const data = await res.json();
     if (!res.ok || !data.ok) {
-      const err = data.error || 'unknown';
-      if (status) status.innerHTML = `<span style="color:var(--red)">Ошибка: ${escHtml(String(err))}</span>`;
+      const userMsg = data.message || data.error || 'Не удалось отправить заказ';
+      if (status) status.innerHTML = `<span style="color:var(--red)">${escHtml(String(userMsg))}</span>`;
+      console.error('[cart] order failed', res.status, data);
       return;
     }
     cartClear();

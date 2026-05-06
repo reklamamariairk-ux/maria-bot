@@ -267,12 +267,19 @@
   <div class="sc-rules">
     <h4>Как получить билет</h4>
     <ul>
-      <li>За каждые 1 000 ₽ покупок — 1 билет</li>
-      <li>Билеты сохраняются между квартальными розыгрышами</li>
+      <li>Каждую неделю — новое задание в кафе</li>
+      <li>Купи нужный набор → +5 билетов на розыгрыш</li>
+      <li>Билеты копятся до конца квартала</li>
       <li>Чем больше билетов — выше шанс на приз</li>
-      <li>Розыгрыш транслируется в нашем Telegram-канале</li>
     </ul>
   </div>
+
+  <!-- Активная неделя-квест (динамика из /api/sweet-check) -->
+  <div id="sc-week" style="display:none"></div>
+
+  <button class="btn-full" id="sc-join-btn" onclick="scJoin()" style="margin-top:14px">
+    🎟 Участвовать в Сладком чеке
+  </button>
 
   <div class="sh" style="margin-top:20px"><span class="sh__line"></span><span class="sh__text">Партнёры клуба</span><span class="sh__line"></span></div>
   <p class="section-desc">По карте «Мария для своих» — привилегии у наших партнёров</p>
