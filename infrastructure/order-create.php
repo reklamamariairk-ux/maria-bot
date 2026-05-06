@@ -268,7 +268,11 @@ foreach ($props as $propId => [$name, $val]) {
     if ($val === '' || $val === null) continue;
     $nameSafe = $sqlHelper->forSql((string)$name);
     $valSafe  = $sqlHelper->forSql((string)$val);
-    $sql = "INSERT INTO b_sale_order_props_value (ORDER_ID, ORDER_PROPS_ID, NAME, VALUE) VALUES ($orderId, $propId, '$nameSafe', '$valSafe') ON DUPLICATE KEY UPDATE NAME = VALUES(NAME), VALUE = VALUES(VALUE)";
+    // Bitrix Sale: уникальный ключ (ENTITY_ID, ENTITY_TYPE, ORDER_PROPS_ID).
+    // Без ENTITY_ID/ENTITY_TYPE строки уходят в ENTITY_ID=0 и не видны в карточке заказа.
+    $sql = "INSERT INTO b_sale_order_props_value (ORDER_ID, ENTITY_ID, ENTITY_TYPE, ORDER_PROPS_ID, NAME, VALUE) "
+         . "VALUES ($orderId, $orderId, 'ORDER', $propId, '$nameSafe', '$valSafe') "
+         . "ON DUPLICATE KEY UPDATE NAME = VALUES(NAME), VALUE = VALUES(VALUE)";
     try {
         $conn->queryExecute($sql);
     } catch (\Throwable $e) {
