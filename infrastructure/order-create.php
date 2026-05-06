@@ -167,26 +167,38 @@ $sql = "INSERT INTO b_sale_order (
     PAY_SYSTEM_ID, DELIVERY_ID, RECOUNT_FLAG, USER_DESCRIPTION,
     XML_ID, EXTERNAL_ORDER, MARKED, RESERVED,
     DATE_INSERT, DATE_UPDATE, IS_RECURRING, ALLOW_DELIVERY,
-    DEDUCTED, UPDATED_1C, RUNNING, IS_SYNC_B24, VERSION
+    DEDUCTED, UPDATED_1C, RUNNING, IS_SYNC_B24, VERSION,
+    CREATED_BY, RESPONSIBLE_ID
 ) VALUES (
     's1', $userId, " . PERSON_TYPE . ", 'N', 'N', '" . STATUS_NEW . "',
     $priceSafe, 'RUB', 0, 0, 0,
     " . PAY_SYSTEM . ", " . DELIVERY_ID . ", 'Y', '$comment2',
     '$xmlIdSafe', 'N', 'N', 'N',
     NOW(), NOW(), 'N', 'N',
-    'N', 'N', 'N', 'N', '2'
+    'N', 'N', 'N', 'N', '2',
+    $userId, NULL
 )";
-$conn->queryExecute($sql);
+try {
+    $conn->queryExecute($sql);
+} catch (\Throwable $e) {
+    http_response_code(500);
+    echo json_encode([
+        'ok' => false, 'error' => 'order_insert_failed',
+        'message' => 'SQL ' . $e->getMessage(),
+        'sql_first' => substr($sql, 0, 600),
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 $orderId = (int)$conn->getInsertedId();
 
 if ($orderId <= 0) {
     http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => 'order_insert_failed']);
+    echo json_encode(['ok' => false, 'error' => 'order_insert_failed', 'message' => 'no_id_returned']);
     exit;
 }
 
 // ACCOUNT_NUMBER = ID
-$conn->queryExecute("UPDATE b_sale_order SET ACCOUNT_NUMBER = '$orderId' WHERE ID = $orderId");
+try { $conn->queryExecute("UPDATE b_sale_order SET ACCOUNT_NUMBER = '$orderId' WHERE ID = $orderId"); } catch (\Throwable $e) {}
 
 // ─── INSERT b_sale_basket для каждой позиции ──────────────────────────────
 $fuserId = 0;

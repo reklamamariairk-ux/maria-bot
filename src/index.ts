@@ -236,6 +236,20 @@ function proxyAsset(url: string, contentType: string) {
 app.get("/logo.svg", proxyAsset("https://www.maria-irk.ru/local/templates/maria/img/logo_new.svg", "image/svg+xml"));
 app.get("/logo.png", proxyAsset("https://www.maria-irk.ru/local/templates/maria/img/mobile_logo.png", "image/png"));
 
+// Временный endpoint — отдаёт исходник order-create.php для заливки в Bitrix admin.
+// Используется только в момент деплоя; после успешной заливки удаляется.
+app.get("/internal/php-source", (req, res) => {
+  const file = String(req.query.file ?? "");
+  if (file !== "order-create.php") {
+    res.status(404).json({ error: "not_allowed" });
+    return;
+  }
+  const fs = require("fs");
+  const content = fs.readFileSync(path.join(__dirname, "..", "infrastructure", "order-create.php"), "utf8");
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.send(content);
+});
+
 // ─── Groq chat (agent с tool calling) ───────────────────────────────────────
 import { TOOL_DEFS, runTool, ToolContext } from "./ai-tools";
 
