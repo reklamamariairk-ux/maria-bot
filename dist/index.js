@@ -724,38 +724,39 @@ app.post("/api/order", async (req, res) => {
         return;
     }
     // Собираем максимум контекста о клиенте — чтобы менеджер видел в Sale-заказе.
+    // Используем BMP-only символы (Bitrix MySQL utf8 не держит 4-байтные эмодзи).
     const ctx = [];
     if (body.comment)
-        ctx.push(`💬 ${body.comment}`);
+        ctx.push(`Комментарий: ${body.comment}`);
     if (tg?.id) {
         const tgInfo = [
             tg.username ? `@${tg.username}` : null,
             `id=${tg.id}`,
             [tg.first_name, tg.last_name].filter(Boolean).join(" ") || null,
         ].filter(Boolean).join(" · ");
-        ctx.push(`📱 Telegram: ${tgInfo}`);
+        ctx.push(`Telegram: ${tgInfo}`);
     }
     else {
-        ctx.push("📱 Telegram: гость (не залогинен в Mini App)");
+        ctx.push("Telegram: гость (не залогинен в Mini App)");
     }
     if (lkData) {
         if (lkData.configured) {
             const name = lkData.name ? `${lkData.name}` : "";
             const level = lkData.level ? `· ${lkData.level}` : "";
-            ctx.push(`👤 Программа лояльности: ${name} ${level}`.trim());
+            ctx.push(`Программа лояльности: ${name} ${level}`.trim());
             if (lkData.balance != null)
-                ctx.push(`💰 Баланс баллов: ${lkData.balance}`);
+                ctx.push(`Баланс баллов: ${lkData.balance}`);
             if (lkData.year_spent != null)
-                ctx.push(`💸 Потрачено за год: ${Number(lkData.year_spent).toLocaleString("ru-RU")} ₽`);
+                ctx.push(`Потрачено за год: ${Number(lkData.year_spent).toLocaleString("ru-RU")} ₽`);
             const tCount = Number(lkData.tickets_count ?? 0);
             if (tCount > 0)
-                ctx.push(`🎟 Сладкий чек: ${tCount} билет${tCount === 1 ? "" : tCount < 5 ? "а" : "ов"}`);
+                ctx.push(`Сладкий чек: ${tCount} билет${tCount === 1 ? "" : tCount < 5 ? "а" : "ов"}`);
             const orderCount = Array.isArray(lkData.orders) ? lkData.orders.length : 0;
             if (orderCount > 0)
-                ctx.push(`📦 История покупок на сайте: ${orderCount} заказ${orderCount === 1 ? "" : orderCount < 5 ? "а" : "ов"}`);
+                ctx.push(`История покупок на сайте: ${orderCount} заказ${orderCount === 1 ? "" : orderCount < 5 ? "а" : "ов"}`);
         }
         else {
-            ctx.push("👤 На сайте maria-irk.ru с этим телефоном клиент не зарегистрирован");
+            ctx.push("На сайте maria-irk.ru с этим телефоном клиент не зарегистрирован");
         }
     }
     // Локальный баланс бота (звёзды/очки за игры/рефералов)
@@ -763,7 +764,7 @@ app.post("/api/order", async (req, res) => {
         try {
             const bal = await (0, club_1.getBalance)(tg.id);
             if (bal.stars > 0 || bal.points > 0) {
-                ctx.push(`⭐ Бот-бонусы: ${bal.points} очков · ${bal.stars} звёзд (всего заработано: ${bal.totalEarnedPoints} очков · ${bal.totalEarnedStars} звёзд)`);
+                ctx.push(`Бот-бонусы: ${bal.points} очков · ${bal.stars} звёзд (всего заработано: ${bal.totalEarnedPoints} очков · ${bal.totalEarnedStars} звёзд)`);
             }
         }
         catch { }
@@ -787,8 +788,8 @@ app.post("/api/order", async (req, res) => {
                 const reg = info.joined_at ? `Регистрация в Mini App: ${fmt(info.joined_at)}` : null;
                 const last = info.last_seen_at ? `последний заход: ${fmt(info.last_seen_at)}` : null;
                 const cnt = info.launch_count > 0 ? `запусков: ${info.launch_count}` : null;
-                const line = ["📅", reg, cnt, last].filter(Boolean).join(" · ");
-                if (line.length > 2)
+                const line = [reg, cnt, last].filter(Boolean).join(" · ");
+                if (line)
                     ctx.push(line);
             }
         }

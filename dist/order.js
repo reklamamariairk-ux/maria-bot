@@ -78,7 +78,8 @@ async function pushToBitrix24(req, sale) {
     const items = sale.items && sale.items.length
         ? sale.items
         : req.items.map((i) => ({ id: i.id, name: `Товар #${i.id}`, price: 0, qty: i.qty }));
-    const title = `🍰 Заказ #${sale.orderId ?? '—'} · ${req.name}`;
+    // Используем BMP-only символы (Bitrix MySQL utf8 не держит 4-байтные эмодзи)
+    const title = `★ Заказ #${sale.orderId ?? '—'} · ${req.name}`;
     // Состав заказа — человеческое описание
     const itemsList = items.map((i) => {
         const sum = (i.price * i.qty).toLocaleString("ru-RU");
@@ -87,26 +88,26 @@ async function pushToBitrix24(req, sale) {
     }).join("\n");
     // Структурированный комментарий — менеджер видит всё подряд в правой панели лида
     const lines = [];
-    lines.push(`💰 Сумма: ${sale.total ?? '?'} ₽`);
-    lines.push(`📞 Телефон: ${phoneFmt}`);
+    lines.push(`Сумма заказа: ${sale.total ?? '?'} ₽`);
+    lines.push(`☎ Телефон: ${phoneFmt}`);
     if (req.email)
-        lines.push(`✉️ Email: ${req.email}`);
+        lines.push(`✉ Email: ${req.email}`);
     if (req.address)
-        lines.push(`📍 Адрес: ${req.address}`);
+        lines.push(`▼ Адрес: ${req.address}`);
     if (req.delivery_date)
-        lines.push(`📅 Дата доставки: ${req.delivery_date}`);
+        lines.push(`▶ Дата доставки: ${req.delivery_date}`);
     if (req.delivery_time)
         lines.push(`⏰ Время доставки: ${req.delivery_time}`);
     lines.push("");
-    lines.push("🛒 Состав заказа:");
+    lines.push("▼ Состав заказа:");
     lines.push(itemsList);
     if (req.comment) {
         lines.push("");
-        lines.push("ℹ️ Контекст клиента:");
+        lines.push("ⓘ Контекст клиента:");
         lines.push(req.comment);
     }
     lines.push("");
-    lines.push(`🔗 Заказ в Sale: https://www.maria-irk.ru/bitrix/admin/sale_order_view.php?ID=${sale.orderId ?? ''}`);
+    lines.push(`→ Заказ в Sale: https://www.maria-irk.ru/bitrix/admin/sale_order_view.php?ID=${sale.orderId ?? ''}`);
     const comments = lines.join("\n");
     const fields = {
         TITLE: title,
