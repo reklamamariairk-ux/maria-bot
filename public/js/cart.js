@@ -223,9 +223,16 @@ async function cartSubmit() {
     return;
   }
 
-  const items = cartLoad().map((it) => ({ id: Number(it.id), qty: Number(it.qty) }));
+  // Берём только корректные позиции — id > 0, qty > 0
+  const rawItems = cartLoad();
+  const items = rawItems
+    .map((it) => ({ id: Number(it.id), qty: Number(it.qty) }))
+    .filter((it) => it.id > 0 && it.qty > 0);
   if (items.length === 0) {
-    if (status) status.innerHTML = '<span style="color:var(--red)">Корзина пуста</span>';
+    const reason = rawItems.length > 0
+      ? `В корзине ${rawItems.length} позиций, но ни одной с валидным id. Очистите корзину и добавьте товары заново.`
+      : 'Корзина пуста';
+    if (status) status.innerHTML = `<span style="color:var(--red)">${escHtml(reason)}</span>`;
     return;
   }
 
@@ -245,7 +252,8 @@ async function cartSubmit() {
     const data = await res.json();
     if (!res.ok || !data.ok) {
       const userMsg = data.message || data.error || 'Не удалось отправить заказ';
-      if (status) status.innerHTML = `<span style="color:var(--red)">${escHtml(String(userMsg))}</span>`;
+      const tech = data.error && data.error !== userMsg ? ` <small style="opacity:.6">[${escHtml(String(data.error))}]</small>` : '';
+      if (status) status.innerHTML = `<span style="color:var(--red)">${escHtml(String(userMsg))}</span>${tech}`;
       console.error('[cart] order failed', res.status, data);
       return;
     }

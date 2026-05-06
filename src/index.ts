@@ -751,6 +751,50 @@ app.get("/api/lk", requireTgUser, async (req, res) => {
 // Создание заказа из миниаппа — обёртка вокруг /api/order-create.php на сайте
 // Auth не обязателен (юзер может ввести phone руками); если есть verified TG user —
 // можем подтянуть verified phone и привязать chatId в комментарии
+// ─── Ring buffer для отладки последних 20 попыток заказа ────────────────────
+interface OrderAttempt {
+  ts: string;
+  tg: number | null;
+  body: { phone?: string; name?: string; itemsCount?: number; itemIds?: number[]; hasAddress?: boolean; hasComment?: boolean; useVerifiedPhone?: boolean };
+  outcome: "validation_error" | "php_error" | "success" | "exception";
+  status: number;
+  error?: string;
+  message?: string;
+  orderId?: number;
+  phpRaw?: string;
+}
+const ORDER_LOG: OrderAttempt[] = [];
+function logOrderAttempt(a: OrderAttempt) {
+  ORDER_LOG.push(a);
+  if (ORDER_LOG.length > 20) ORDER_LOG.shift();
+}
+
+app.get("/api/_debug-orders", (req, res) => {
+  if ((req.query.token ?? "") !== process.env.ORDER_TOKEN) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  res.json({ count: ORDER_LOG.length, attempts: ORDER_LOG });
+});
+
+// Перевод ошибок order-create.php в человекочитаемый русский
+function translateOrderError(err: string | undefined): string {
+  const map: Record<string, string> = {
+    bad_json:              "Неверный формат данных. Попробуйте ещё раз.",
+    forbidden:             "Сервер отказал в обработке (токен).",
+    method_not_allowed:    "Метод не поддерживается.",
+    module_unavailable:    "Модуль магазина временно недоступен.",
+    missing_fields:        "Не заполнены обязательные поля.",
+    bad_phone:             "Неверный номер телефона. Укажите 10-значный российский номер.",
+    no_valid_items:        "Товары не найдены или сняты с продажи. Обновите корзину.",
+    order_insert_failed:   "Не удалось сохранить заказ в базе. Попробуйте через минуту.",
+    basket_insert_failed:  "Не удалось сохранить позиции корзины. Попробуйте через минуту.",
+    order_api_not_configured: "Сервис заказов не настроен. Свяжитесь с поддержкой.",
+    timeout:               "Сайт не ответил вовремя. Попробуйте через минуту.",
+  };
+  return map[err ?? ""] ?? `Не удалось создать заказ. Позвоните +7 (3952) 50-40-80 для оформления.`;
+}
+
 app.post("/api/order", async (req, res) => {
   const tg = tryGetTgUser(req); // optional, без блокировки
   const body = req.body as Partial<OrderRequest> & { useVerifiedPhone?: boolean };
@@ -772,22 +816,49 @@ app.post("/api/order", async (req, res) => {
         .map((i) => ({ id: Number(i.id), qty: Number(i.qty) }))
     : [];
 
-  console.log(`[ORDER] req: phone=${phone || '-'} name=${body.name || '-'} items=${items.length} tg=${tg?.id || '-'}`);
+  // Снимок body для логирования (без чувствительных данных)
+  const bodySnap = {
+    phone:          phone || undefined,
+    name:           body.name ? String(body.name) : undefined,
+    itemsCount:     items.length,
+    itemIds:        items.slice(0, 10).map((i) => i.id),
+    hasAddress:     !!body.address,
+    hasComment:     !!body.comment,
+    useVerifiedPhone: !!body.useVerifiedPhone,
+  };
+  const ts = new Date().toISOString();
+  const baseAttempt: OrderAttempt = { ts, tg: tg?.id ?? null, body: bodySnap, outcome: "validation_error", status: 0 };
 
-  if (!phone) {
-    res.status(400).json({ ok: false, error: "phone_required", message: "Укажите номер телефона" });
+  console.log(`[ORDER] req: phone=${phone || '-'} name=${body.name || '-'} items=${items.length} ids=${JSON.stringify(bodySnap.itemIds)} tg=${tg?.id || '-'}`);
+
+  // Валидация телефона: после очистки от не-цифр должно быть 10+ цифр
+  const phoneDigits = phone.replace(/\D/g, "");
+  if (!phone || phoneDigits.length < 10) {
+    const r = { ok: false, error: "phone_required", message: "Укажите телефон (минимум 10 цифр, например 9149094916 или +79149094916)" };
+    logOrderAttempt({ ...baseAttempt, status: 400, error: r.error, message: r.message });
+    res.status(400).json(r);
     return;
   }
   if (!body.name) {
-    res.status(400).json({ ok: false, error: "name_required", message: "Укажите имя" });
+    const r = { ok: false, error: "name_required", message: "Укажите имя" };
+    logOrderAttempt({ ...baseAttempt, status: 400, error: r.error, message: r.message });
+    res.status(400).json(r);
     return;
   }
   if (items.length === 0) {
-    res.status(400).json({ ok: false, error: "empty_cart", message: "Корзина пуста" });
+    const original = Array.isArray(body.items) ? body.items.length : 0;
+    const msg = original > 0
+      ? "Не удалось разобрать товары в корзине. Очистите корзину и добавьте заново."
+      : "Корзина пуста";
+    const r = { ok: false, error: "empty_cart", message: msg };
+    logOrderAttempt({ ...baseAttempt, status: 400, error: r.error, message: r.message });
+    res.status(400).json(r);
     return;
   }
   if (items.length > 30) {
-    res.status(400).json({ ok: false, error: "too_many_items", message: "Слишком много позиций" });
+    const r = { ok: false, error: "too_many_items", message: "Слишком много позиций (максимум 30)" };
+    logOrderAttempt({ ...baseAttempt, status: 400, error: r.error, message: r.message });
+    res.status(400).json(r);
     return;
   }
 
@@ -864,11 +935,14 @@ app.post("/api/order", async (req, res) => {
   });
 
   if (!result.ok) {
-    console.error("[ORDER] PHP returned error:", result.error);
-    res.status(502).json({ ok: false, error: result.error ?? "order_failed", message: "Не удалось создать заказ. Попробуй позже или позвони +7 (3952) 50-40-80." });
+    console.error(`[ORDER] PHP error: ${result.error} for phone=${phone} items=${JSON.stringify(bodySnap.itemIds)}`);
+    const userMsg = translateOrderError(result.error);
+    logOrderAttempt({ ...baseAttempt, outcome: "php_error", status: 502, error: result.error, message: userMsg });
+    res.status(502).json({ ok: false, error: result.error ?? "order_failed", message: userMsg });
     return;
   }
   console.log(`[ORDER] created #${result.orderId} for ${phone}`);
+  logOrderAttempt({ ...baseAttempt, outcome: "success", status: 200, orderId: result.orderId });
   res.json(result);
 });
 
