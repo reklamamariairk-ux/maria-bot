@@ -167,38 +167,26 @@ $sql = "INSERT INTO b_sale_order (
     PAY_SYSTEM_ID, DELIVERY_ID, RECOUNT_FLAG, USER_DESCRIPTION,
     XML_ID, EXTERNAL_ORDER, MARKED, RESERVED,
     DATE_INSERT, DATE_UPDATE, IS_RECURRING, ALLOW_DELIVERY,
-    DEDUCTED, UPDATED_1C, RUNNING, IS_SYNC_B24, VERSION,
-    CREATED_BY, RESPONSIBLE_ID
+    DEDUCTED, UPDATED_1C, RUNNING, IS_SYNC_B24, VERSION
 ) VALUES (
     's1', $userId, " . PERSON_TYPE . ", 'N', 'N', '" . STATUS_NEW . "',
     $priceSafe, 'RUB', 0, 0, 0,
     " . PAY_SYSTEM . ", " . DELIVERY_ID . ", 'Y', '$comment2',
     '$xmlIdSafe', 'N', 'N', 'N',
     NOW(), NOW(), 'N', 'N',
-    'N', 'N', 'N', 'N', '2',
-    $userId, NULL
+    'N', 'N', 'N', 'N', '2'
 )";
-try {
-    $conn->queryExecute($sql);
-} catch (\Throwable $e) {
-    http_response_code(500);
-    echo json_encode([
-        'ok' => false, 'error' => 'order_insert_failed',
-        'message' => 'SQL ' . $e->getMessage(),
-        'sql_first' => substr($sql, 0, 600),
-    ], JSON_UNESCAPED_UNICODE);
-    exit;
-}
+$conn->queryExecute($sql);
 $orderId = (int)$conn->getInsertedId();
 
 if ($orderId <= 0) {
     http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => 'order_insert_failed', 'message' => 'no_id_returned']);
+    echo json_encode(['ok' => false, 'error' => 'order_insert_failed']);
     exit;
 }
 
 // ACCOUNT_NUMBER = ID
-try { $conn->queryExecute("UPDATE b_sale_order SET ACCOUNT_NUMBER = '$orderId' WHERE ID = $orderId"); } catch (\Throwable $e) {}
+$conn->queryExecute("UPDATE b_sale_order SET ACCOUNT_NUMBER = '$orderId' WHERE ID = $orderId");
 
 // ─── INSERT b_sale_basket для каждой позиции ──────────────────────────────
 $fuserId = 0;
@@ -214,34 +202,54 @@ if ($fuserId <= 0) {
     $fuserId = $f ? (int)$f['ID'] : 1;
 }
 
+// Узнаём реальный набор колонок b_sale_basket один раз
+static $basketCols = null;
+if ($basketCols === null) {
+    $basketCols = [];
+    $rs = $conn->query("SHOW COLUMNS FROM b_sale_basket");
+    while ($r = $rs->fetch()) { $basketCols[strtoupper($r['Field'])] = true; }
+}
+
 foreach ($itemsClean as $item) {
     $name  = $sqlHelper->forSql($item['name']);
     $price = number_format($item['price'], 8, '.', '');
     $qty   = number_format($item['qty'],   4, '.', '');
     $pid   = (int)$item['id'];
-    $sql = "INSERT INTO b_sale_basket (
-        FUSER_ID, ORDER_ID, PRODUCT_ID, NAME, QUANTITY, LID, MODULE,
-        PRICE, CURRENCY, DISCOUNT_PRICE, VAT_RATE, NOTES,
-        DATE_INSERT, DATE_UPDATE, PRODUCT_PROVIDER_CLASS,
-        CATALOG_XML_ID, PRODUCT_XML_ID, BASE_PRICE,
-        CAN_BUY, DELAY, RESERVED, RESERVE_QUANTITY, MARKING_CODE,
-        SUMMARY_PRICE
-    ) VALUES (
-        $fuserId, $orderId, $pid, '$name', $qty, 's1', 'catalog',
-        $price, 'RUB', 0, 0, '',
-        NOW(), NOW(), 'CCatalogProductProvider',
-        '', '$pid', $price,
-        'Y', 'N', 'N', NULL, '',
-        $price
-    )";
+    $desired = [
+        'FUSER_ID'                => $fuserId,
+        'ORDER_ID'                => $orderId,
+        'PRODUCT_ID'              => $pid,
+        'NAME'                    => "'$name'",
+        'QUANTITY'                => $qty,
+        'LID'                     => "'s1'",
+        'MODULE'                  => "'catalog'",
+        'PRICE'                   => $price,
+        'CURRENCY'                => "'RUB'",
+        'DISCOUNT_PRICE'          => 0,
+        'VAT_RATE'                => 0,
+        'NOTES'                   => "''",
+        'DATE_INSERT'             => 'NOW()',
+        'DATE_UPDATE'             => 'NOW()',
+        'PRODUCT_PROVIDER_CLASS'  => "'CCatalogProductProvider'",
+        'CATALOG_XML_ID'          => "''",
+        'PRODUCT_XML_ID'          => "'$pid'",
+        'BASE_PRICE'              => $price,
+        'CAN_BUY'                 => "'Y'",
+        'DELAY'                   => "'N'",
+        'RESERVED'                => "'N'",
+        'RESERVE_QUANTITY'        => 'NULL',
+        'SUMMARY_PRICE'           => $price,
+    ];
+    $cols = []; $vals = [];
+    foreach ($desired as $c => $v) {
+        if (isset($basketCols[$c])) { $cols[] = $c; $vals[] = $v; }
+    }
+    $sql = "INSERT INTO b_sale_basket (" . implode(',', $cols) . ") VALUES (" . implode(',', $vals) . ")";
     try {
         $conn->queryExecute($sql);
     } catch (\Throwable $e) {
         http_response_code(500);
-        echo json_encode([
-            'ok' => false, 'error' => 'basket_insert_failed',
-            'message' => 'SQL ' . $e->getMessage(),
-        ], JSON_UNESCAPED_UNICODE);
+        echo json_encode(['ok'=>false,'error'=>'basket_insert_failed','message'=>$e->getMessage()], JSON_UNESCAPED_UNICODE);
         exit;
     }
 }
@@ -260,8 +268,12 @@ foreach ($props as $propId => [$name, $val]) {
     if ($val === '' || $val === null) continue;
     $nameSafe = $sqlHelper->forSql((string)$name);
     $valSafe  = $sqlHelper->forSql((string)$val);
-    $sql = "INSERT INTO b_sale_order_props_value (ORDER_ID, ORDER_PROPS_ID, NAME, VALUE) VALUES ($orderId, $propId, '$nameSafe', '$valSafe')";
-    $conn->queryExecute($sql);
+    $sql = "INSERT INTO b_sale_order_props_value (ORDER_ID, ORDER_PROPS_ID, NAME, VALUE) VALUES ($orderId, $propId, '$nameSafe', '$valSafe') ON DUPLICATE KEY UPDATE NAME = VALUES(NAME), VALUE = VALUES(VALUE)";
+    try {
+        $conn->queryExecute($sql);
+    } catch (\Throwable $e) {
+        // не критично — пропускаем
+    }
 }
 
 // ─── SEARCH_CONTENT для поиска по нашему /api/orders.php ─────────────────
