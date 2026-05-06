@@ -108,9 +108,9 @@ async function pushToBitrix24(req: OrderRequest, sale: OrderResult): Promise<voi
     req.delivery_date ? `Дата:  ${req.delivery_date}`          : null,
     req.delivery_time ? `Время: ${req.delivery_time}`          : null,
     req.email         ? `Email: ${req.email}`                  : null,
-    req.comment       ? `Комментарий: ${req.comment}`          : null,
     `\nСостав:\n${itemsList}`,
-    `\n→ В Sale админке: bitrix-admin.maria-irk.ru/sale_order_view.php?ID=${sale.orderId ?? ''}`,
+    req.comment       ? `\n${req.comment}`                     : null,
+    `\n→ В Sale админке: www.maria-irk.ru/bitrix/admin/sale_order_view.php?ID=${sale.orderId ?? ''}`,
   ].filter(Boolean).join("\n");
 
   const fields = {

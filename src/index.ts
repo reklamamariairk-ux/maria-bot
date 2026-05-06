@@ -24,7 +24,7 @@ import {
   recordReferral,
   CONVERSION_TIERS,
 } from "./club";
-import { requireTgUser, getTgUser } from "./auth";
+import { requireTgUser, getTgUser, tryGetTgUser } from "./auth";
 import { getPartners, getPartnersMeta, syncPartners } from "./partners";
 import { fetchLk } from "./lk";
 import { createOrder, OrderRequest } from "./order";
@@ -751,16 +751,18 @@ app.get("/api/lk", requireTgUser, async (req, res) => {
 // Auth не обязателен (юзер может ввести phone руками); если есть verified TG user —
 // можем подтянуть verified phone и привязать chatId в комментарии
 app.post("/api/order", async (req, res) => {
-  const tg = getTgUser(req); // optional, без блокировки
+  const tg = tryGetTgUser(req); // optional, без блокировки
   const body = req.body as Partial<OrderRequest> & { useVerifiedPhone?: boolean };
 
   let phone = String(body.phone ?? "").trim();
-  if ((body.useVerifiedPhone || !phone) && tg?.id) {
+  let lkData: Record<string, unknown> | null = null;
+  if (tg?.id) {
     try {
       const lk = await fetchLk(tg.id);
-      const lkData = lk.ok ? (lk.data as unknown as Record<string, unknown>) : null;
-      const lkPhone = lkData?.configured && lkData.phone ? String(lkData.phone) : "";
-      if (lkPhone) phone = lkPhone;
+      lkData = lk.ok ? (lk.data as unknown as Record<string, unknown>) : null;
+      if ((body.useVerifiedPhone || !phone) && lkData?.configured && lkData.phone) {
+        phone = String(lkData.phone);
+      }
     } catch {}
   }
 
@@ -788,7 +790,45 @@ app.post("/api/order", async (req, res) => {
     return;
   }
 
-  const tgTag = tg?.id ? `tg_id=${tg.id}` : 'tg_anonymous';
+  // Собираем максимум контекста о клиенте — чтобы менеджер видел в Sale-заказе.
+  const ctx: string[] = [];
+  if (body.comment) ctx.push(`💬 ${body.comment}`);
+  if (tg?.id) {
+    const tgInfo = [
+      tg.username ? `@${tg.username}` : null,
+      `id=${tg.id}`,
+      [tg.first_name, tg.last_name].filter(Boolean).join(" ") || null,
+    ].filter(Boolean).join(" · ");
+    ctx.push(`📱 Telegram: ${tgInfo}`);
+  } else {
+    ctx.push("📱 Telegram: гость (не залогинен в Mini App)");
+  }
+  if (lkData) {
+    if (lkData.configured) {
+      const name  = lkData.name  ? `${lkData.name}` : "";
+      const level = lkData.level ? `· ${lkData.level}` : "";
+      ctx.push(`👤 Программа лояльности: ${name} ${level}`.trim());
+      if (lkData.balance != null)    ctx.push(`💰 Баланс баллов: ${lkData.balance}`);
+      if (lkData.year_spent != null) ctx.push(`💸 Потрачено за год: ${Number(lkData.year_spent).toLocaleString("ru-RU")} ₽`);
+      const tCount = Number(lkData.tickets_count ?? 0);
+      if (tCount > 0) ctx.push(`🎟 Сладкий чек: ${tCount} билет${tCount === 1 ? "" : tCount < 5 ? "а" : "ов"}`);
+      const orderCount = Array.isArray(lkData.orders) ? lkData.orders.length : 0;
+      if (orderCount > 0) ctx.push(`📦 История покупок на сайте: ${orderCount} заказ${orderCount === 1 ? "" : orderCount < 5 ? "а" : "ов"}`);
+    } else {
+      ctx.push("👤 На сайте maria-irk.ru с этим телефоном клиент не зарегистрирован");
+    }
+  }
+  // Локальный баланс бота (звёзды/очки за игры/рефералов)
+  if (tg?.id) {
+    try {
+      const bal = await getBalance(tg.id);
+      if (bal.stars > 0 || bal.points > 0) {
+        ctx.push(`⭐ Бот-бонусы: ${bal.points} очков · ${bal.stars} звёзд (всего заработано: ${bal.totalEarnedPoints} очков · ${bal.totalEarnedStars} звёзд)`);
+      }
+    } catch {}
+  }
+  const richComment = ctx.join("\n");
+
   const result = await createOrder({
     phone,
     name:          String(body.name).trim(),
@@ -796,7 +836,7 @@ app.post("/api/order", async (req, res) => {
     address:       body.address       ? String(body.address).trim()       : undefined,
     delivery_date: body.delivery_date ? String(body.delivery_date).trim() : undefined,
     delivery_time: body.delivery_time ? String(body.delivery_time).trim() : undefined,
-    comment:       body.comment       ? `${body.comment} (${tgTag})` : `Заказ из Telegram-бота ${tgTag}`,
+    comment:       richComment,
     email:         body.email         ? String(body.email).trim()         : undefined,
   });
 

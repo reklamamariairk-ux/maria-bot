@@ -59,3 +59,16 @@ export function requireTgUser(req: Request, res: Response, next: NextFunction) {
 export function getTgUser(req: Request): TgUser | undefined {
   return (req as Request & { tgUser?: TgUser }).tgUser;
 }
+
+// Optional verify: достаёт TgUser из заголовка Authorization, если присутствует и валидный.
+// Не 401-ит — просто возвращает undefined.
+export function tryGetTgUser(req: Request): TgUser | undefined {
+  const cached = (req as Request & { tgUser?: TgUser }).tgUser;
+  if (cached) return cached;
+  const auth = req.header("Authorization") ?? "";
+  const initData = auth.startsWith("tma ") ? auth.slice(4) : "";
+  if (!initData) return undefined;
+  const user = verifyInitData(initData);
+  if (user) (req as Request & { tgUser?: TgUser }).tgUser = user;
+  return user ?? undefined;
+}
