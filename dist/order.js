@@ -71,32 +71,49 @@ async function pushToBitrix24(req, sale) {
     const itemsList = req.items.map((i) => `• [#${i.id}] ×${i.qty}`).join("\n");
     const tail = (req.phone || "").replace(/\D/g, "").slice(-10);
     const phoneFmt = tail ? `+7 (${tail.slice(0, 3)}) ${tail.slice(3, 6)}-${tail.slice(6, 8)}-${tail.slice(8, 10)}` : req.phone;
-    const title = `🍰 Заказ из Telegram-бота #${sale.orderId ?? '—'} · ${req.name}`;
-    const comments = [
-        `Сумма: ${sale.total ?? '?'} ₽`,
-        `Телефон: ${phoneFmt}`,
-        req.address ? `Адрес: ${req.address}` : null,
-        req.delivery_date ? `Дата:  ${req.delivery_date}` : null,
-        req.delivery_time ? `Время: ${req.delivery_time}` : null,
-        req.email ? `Email: ${req.email}` : null,
-        req.comment ? `Комментарий: ${req.comment}` : null,
-        `\nСостав:\n${itemsList}`,
-        `\n→ В Sale админке: bitrix-admin.maria-irk.ru/sale_order_view.php?ID=${sale.orderId ?? ''}`,
-    ].filter(Boolean).join("\n");
+    const nameParts = (req.name || "").trim().split(/\s+/);
+    const firstName = nameParts[0] || req.name;
+    const lastName = nameParts.slice(1).join(" ");
+    const title = `🍰 Заказ #${sale.orderId ?? '—'} · ${req.name}`;
+    // Структурированный комментарий — менеджер видит всё подряд в правой панели лида
+    const lines = [];
+    lines.push(`💰 Сумма: ${sale.total ?? '?'} ₽`);
+    lines.push(`📞 Телефон: ${phoneFmt}`);
+    if (req.email)
+        lines.push(`✉️ Email: ${req.email}`);
+    if (req.address)
+        lines.push(`📍 Адрес: ${req.address}`);
+    if (req.delivery_date)
+        lines.push(`📅 Дата доставки: ${req.delivery_date}`);
+    if (req.delivery_time)
+        lines.push(`⏰ Время доставки: ${req.delivery_time}`);
+    lines.push("");
+    lines.push("🛒 Состав заказа:");
+    lines.push(itemsList);
+    if (req.comment) {
+        lines.push("");
+        lines.push("ℹ️ Контекст клиента:");
+        lines.push(req.comment);
+    }
+    lines.push("");
+    lines.push(`🔗 Заказ в Sale: https://www.maria-irk.ru/bitrix/admin/sale_order_view.php?ID=${sale.orderId ?? ''}`);
+    const comments = lines.join("\n");
     const fields = {
         TITLE: title,
-        NAME: (req.name || "").split(/\s+/)[0] || req.name,
-        LAST_NAME: (req.name || "").split(/\s+/).slice(1).join(" ") || "",
+        NAME: firstName,
+        LAST_NAME: lastName,
         PHONE: [{ VALUE: req.phone, VALUE_TYPE: "WORK" }],
-        EMAIL: req.email ? [{ VALUE: req.email, VALUE_TYPE: "WORK" }] : undefined,
         COMMENTS: comments,
         SOURCE_ID: "WEB",
         SOURCE_DESCRIPTION: "Telegram Mini App",
         OPPORTUNITY: sale.total ?? 0,
         CURRENCY_ID: "RUB",
     };
-    // Используем crm.lead.add — самый простой и универсальный
+    if (req.email)
+        fields.EMAIL = [{ VALUE: req.email, VALUE_TYPE: "WORK" }];
+    if (req.address)
+        fields.ADDRESS = req.address;
     const url = B24_WEBHOOK.endsWith("/") ? B24_WEBHOOK + "crm.lead.add.json" : B24_WEBHOOK + "/crm.lead.add.json";
     const result = await callJsonPost(url, { fields });
-    console.log(`[B24] lead created for order #${sale.orderId}:`, JSON.stringify(result).substring(0, 200));
+    console.log(`[B24] lead for #${sale.orderId} →`, JSON.stringify(result).substring(0, 300));
 }

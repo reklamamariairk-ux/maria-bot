@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.pool = void 0;
 exports.initDb = initDb;
+exports.touchSubscriber = touchSubscriber;
+exports.getSubscriberInfo = getSubscriberInfo;
 exports.addSubscriber = addSubscriber;
 exports.getAllSubscribers = getAllSubscribers;
 exports.setUserBirthday = setUserBirthday;
@@ -27,8 +29,24 @@ async function initDb() {
       birthday          DATE NOT NULL,
       last_notified_year INT DEFAULT 0
     );
+
+    ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
+    ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS launch_count INT DEFAULT 0;
   `);
     console.log("[DB] Tables ready");
+}
+async function touchSubscriber(chatId, username, firstName) {
+    await exports.pool.query(`INSERT INTO subscribers (chat_id, username, first_name, last_seen_at, launch_count)
+     VALUES ($1, $2, $3, NOW(), 1)
+     ON CONFLICT (chat_id) DO UPDATE
+       SET username = COALESCE($2, subscribers.username),
+           first_name = COALESCE($3, subscribers.first_name),
+           last_seen_at = NOW(),
+           launch_count = subscribers.launch_count + 1`, [chatId, username ?? null, firstName ?? null]);
+}
+async function getSubscriberInfo(chatId) {
+    const { rows } = await exports.pool.query(`SELECT joined_at, last_seen_at, launch_count FROM subscribers WHERE chat_id = $1`, [chatId]);
+    return rows[0] ?? null;
 }
 async function addSubscriber(chatId, username, firstName) {
     await exports.pool.query(`INSERT INTO subscribers (chat_id, username, first_name)

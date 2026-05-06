@@ -468,7 +468,8 @@ app.get("/api/catalog-status", (_req, res) => {
 app.get("/api/me", auth_1.requireTgUser, async (req, res) => {
     const u = (0, auth_1.getTgUser)(req);
     try {
-        await (0, db_1.addSubscriber)(u.id, u.username, u.first_name).catch(() => { });
+        // touchSubscriber заодно бьёт launch_count и last_seen_at; addSubscriber оставлен для совместимости
+        await (0, db_1.touchSubscriber)(u.id, u.username, u.first_name).catch(() => { });
         const [verified, balance, daily, myRewards] = await Promise.all([
             (0, club_1.isPhoneVerified)(u.id),
             (0, club_1.getBalance)(u.id),
@@ -687,16 +688,17 @@ app.get("/api/lk", auth_1.requireTgUser, async (req, res) => {
 // Auth не обязателен (юзер может ввести phone руками); если есть verified TG user —
 // можем подтянуть verified phone и привязать chatId в комментарии
 app.post("/api/order", async (req, res) => {
-    const tg = (0, auth_1.getTgUser)(req); // optional, без блокировки
+    const tg = (0, auth_1.tryGetTgUser)(req); // optional, без блокировки
     const body = req.body;
     let phone = String(body.phone ?? "").trim();
-    if ((body.useVerifiedPhone || !phone) && tg?.id) {
+    let lkData = null;
+    if (tg?.id) {
         try {
             const lk = await (0, lk_1.fetchLk)(tg.id);
-            const lkData = lk.ok ? lk.data : null;
-            const lkPhone = lkData?.configured && lkData.phone ? String(lkData.phone) : "";
-            if (lkPhone)
-                phone = lkPhone;
+            lkData = lk.ok ? lk.data : null;
+            if ((body.useVerifiedPhone || !phone) && lkData?.configured && lkData.phone) {
+                phone = String(lkData.phone);
+            }
         }
         catch { }
     }
@@ -721,7 +723,78 @@ app.post("/api/order", async (req, res) => {
         res.status(400).json({ ok: false, error: "too_many_items", message: "Слишком много позиций" });
         return;
     }
-    const tgTag = tg?.id ? `tg_id=${tg.id}` : 'tg_anonymous';
+    // Собираем максимум контекста о клиенте — чтобы менеджер видел в Sale-заказе.
+    const ctx = [];
+    if (body.comment)
+        ctx.push(`💬 ${body.comment}`);
+    if (tg?.id) {
+        const tgInfo = [
+            tg.username ? `@${tg.username}` : null,
+            `id=${tg.id}`,
+            [tg.first_name, tg.last_name].filter(Boolean).join(" ") || null,
+        ].filter(Boolean).join(" · ");
+        ctx.push(`📱 Telegram: ${tgInfo}`);
+    }
+    else {
+        ctx.push("📱 Telegram: гость (не залогинен в Mini App)");
+    }
+    if (lkData) {
+        if (lkData.configured) {
+            const name = lkData.name ? `${lkData.name}` : "";
+            const level = lkData.level ? `· ${lkData.level}` : "";
+            ctx.push(`👤 Программа лояльности: ${name} ${level}`.trim());
+            if (lkData.balance != null)
+                ctx.push(`💰 Баланс баллов: ${lkData.balance}`);
+            if (lkData.year_spent != null)
+                ctx.push(`💸 Потрачено за год: ${Number(lkData.year_spent).toLocaleString("ru-RU")} ₽`);
+            const tCount = Number(lkData.tickets_count ?? 0);
+            if (tCount > 0)
+                ctx.push(`🎟 Сладкий чек: ${tCount} билет${tCount === 1 ? "" : tCount < 5 ? "а" : "ов"}`);
+            const orderCount = Array.isArray(lkData.orders) ? lkData.orders.length : 0;
+            if (orderCount > 0)
+                ctx.push(`📦 История покупок на сайте: ${orderCount} заказ${orderCount === 1 ? "" : orderCount < 5 ? "а" : "ов"}`);
+        }
+        else {
+            ctx.push("👤 На сайте maria-irk.ru с этим телефоном клиент не зарегистрирован");
+        }
+    }
+    // Локальный баланс бота (звёзды/очки за игры/рефералов)
+    if (tg?.id) {
+        try {
+            const bal = await (0, club_1.getBalance)(tg.id);
+            if (bal.stars > 0 || bal.points > 0) {
+                ctx.push(`⭐ Бот-бонусы: ${bal.points} очков · ${bal.stars} звёзд (всего заработано: ${bal.totalEarnedPoints} очков · ${bal.totalEarnedStars} звёзд)`);
+            }
+        }
+        catch { }
+        // Подтверждение телефона через бот
+        try {
+            const verified = await (0, club_1.isPhoneVerified)(tg.id);
+            if (verified)
+                ctx.push("✓ Телефон подтверждён через Mini App");
+        }
+        catch { }
+        // История взаимодействия с ботом: дата регистрации, запуски, последний заход
+        try {
+            const info = await (0, db_1.getSubscriberInfo)(tg.id);
+            if (info) {
+                const fmt = (iso) => {
+                    if (!iso)
+                        return "—";
+                    const d = new Date(iso);
+                    return d.toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" });
+                };
+                const reg = info.joined_at ? `Регистрация в Mini App: ${fmt(info.joined_at)}` : null;
+                const last = info.last_seen_at ? `последний заход: ${fmt(info.last_seen_at)}` : null;
+                const cnt = info.launch_count > 0 ? `запусков: ${info.launch_count}` : null;
+                const line = ["📅", reg, cnt, last].filter(Boolean).join(" · ");
+                if (line.length > 2)
+                    ctx.push(line);
+            }
+        }
+        catch { }
+    }
+    const richComment = ctx.join("\n");
     const result = await (0, order_1.createOrder)({
         phone,
         name: String(body.name).trim(),
@@ -729,7 +802,7 @@ app.post("/api/order", async (req, res) => {
         address: body.address ? String(body.address).trim() : undefined,
         delivery_date: body.delivery_date ? String(body.delivery_date).trim() : undefined,
         delivery_time: body.delivery_time ? String(body.delivery_time).trim() : undefined,
-        comment: body.comment ? `${body.comment} (${tgTag})` : `Заказ из Telegram-бота ${tgTag}`,
+        comment: richComment,
         email: body.email ? String(body.email).trim() : undefined,
     });
     if (!result.ok) {
@@ -819,6 +892,12 @@ app.get("/api/sweet-check/active", (_req, res) => {
     });
 });
 app.get("/health", (_req, res) => res.json({ status: "ok", catalog: catalog.length, partners: (0, partners_1.getPartnersMeta)() }));
+// Версия билда — для верификации, что новый код задеплоился
+app.get("/version", (_req, res) => res.json({
+    version: process.env.npm_package_version ?? "unknown",
+    builtAt: new Date().toISOString(),
+    features: ["rich-order-comment", "subscriber-stats", "phone-verified-mark"],
+}));
 // ─── Запуск ──────────────────────────────────────────────────────────────────
 bot.catch((err) => {
     const ctx = err.ctx;

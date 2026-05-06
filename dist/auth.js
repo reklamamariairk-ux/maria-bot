@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.verifyInitData = verifyInitData;
 exports.requireTgUser = requireTgUser;
 exports.getTgUser = getTgUser;
+exports.tryGetTgUser = tryGetTgUser;
 const crypto_1 = __importDefault(require("crypto"));
 const BOT_TOKEN = process.env.BOT_TOKEN ?? "";
 // Verify Telegram WebApp initData (https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app)
@@ -54,4 +55,19 @@ function requireTgUser(req, res, next) {
 }
 function getTgUser(req) {
     return req.tgUser;
+}
+// Optional verify: достаёт TgUser из заголовка Authorization, если присутствует и валидный.
+// Не 401-ит — просто возвращает undefined.
+function tryGetTgUser(req) {
+    const cached = req.tgUser;
+    if (cached)
+        return cached;
+    const auth = req.header("Authorization") ?? "";
+    const initData = auth.startsWith("tma ") ? auth.slice(4) : "";
+    if (!initData)
+        return undefined;
+    const user = verifyInitData(initData);
+    if (user)
+        req.tgUser = user;
+    return user ?? undefined;
 }
