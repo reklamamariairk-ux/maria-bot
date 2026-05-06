@@ -99,14 +99,19 @@ function catRenderProducts(products) {
     const onClick = hasId
       ? `catOpenProduct(${p.id})`
       : `openSite('${escapeAttr(p.url || '')}')`;
+    const priceNum = p.price ? parseInt(String(p.price).replace(/\D/g, ''), 10) : (p.priceNumber || 0);
     const priceTxt = p.price || (p.priceNumber ? `${Number(p.priceNumber).toLocaleString('ru-RU')} ₽` : '');
     const hitBadge = p.hit ? '<span class="pcard-pr__hit">★ Хит</span>' : '';
     const weight   = p.weight ? `<span class="pcard-pr__w">${escapeHtml(p.weight)}</span>` : '';
+    const addBtn = hasId && priceNum > 0
+      ? `<button class="pcard-pr__add" aria-label="В корзину" onclick="event.stopPropagation();catQuickAdd(${p.id},this)">+</button>`
+      : '';
     return `
       <div class="pcard-pr" onclick="${onClick}">
         <div class="pcard-pr__img" ${p.image ? `style="background-image:url('${escapeAttr(p.image)}')"` : ''}>
           ${p.image ? '' : '<span class="pcard-pr__noimg">🍰</span>'}
           ${hitBadge}
+          ${addBtn}
         </div>
         <div class="pcard-pr__body">
           <div class="pcard-pr__name">${escapeHtml(p.name)}</div>
@@ -226,7 +231,30 @@ document.addEventListener('DOMContentLoaded', () => {
   catLoadCategories();
 });
 
+async function catQuickAdd(id, btn) {
+  if (!id) return;
+  // Уже знаем имя/картинку из карточки — но на всякий случай дотянем точную цену
+  try {
+    const res = await fetch('/api/catalog/product/' + encodeURIComponent(id));
+    const data = await res.json();
+    const p = data.product;
+    if (!p || !p.price) {
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.('error');
+      return;
+    }
+    const img = (p.images && p.images[0]) || p.image || '';
+    cartAdd({ id: p.id, name: p.name, price: p.price, image: img });
+    if (btn) {
+      btn.classList.add('added');
+      setTimeout(() => btn.classList.remove('added'), 800);
+    }
+  } catch (e) {
+    console.error('[catQuickAdd]', e);
+  }
+}
+
 window.catShowCategories = catShowCategories;
 window.catShowProducts = catShowProducts;
 window.catOpenProduct = catOpenProduct;
 window.catCloseProduct = catCloseProduct;
+window.catQuickAdd = catQuickAdd;

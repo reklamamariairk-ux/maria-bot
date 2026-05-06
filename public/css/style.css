@@ -319,7 +319,28 @@ b,strong{font-weight:700}
   aspect-ratio:1/1;background-color:var(--gold-l);
   background-size:cover;background-position:center;
   display:flex;align-items:center;justify-content:center;
+  position:relative;
 }
+.pcard-pr__add{
+  position:absolute;right:8px;bottom:8px;
+  width:36px;height:36px;border-radius:50%;border:0;
+  background:var(--red);color:#fff;
+  font-size:22px;font-weight:700;line-height:1;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;box-shadow:0 4px 12px rgba(206,0,30,.4);
+  transition:transform .15s ease, background .2s ease;
+  z-index:2;padding:0;
+}
+.pcard-pr__add:active{transform:scale(.88)}
+.pcard-pr__add:hover{transform:scale(1.08)}
+.pcard-pr__add.added{background:#1ea75c;animation:pcardAddedPop .8s ease}
+@keyframes pcardAddedPop{
+  0%   {transform:scale(1)}
+  30%  {transform:scale(1.25)}
+  100% {transform:scale(1)}
+}
+.pcard-pr__add.added::before{content:'✓';font-size:18px}
+.pcard-pr__add.added{font-size:0}
 .pcard-pr__noimg{font-size:36px;opacity:.5}
 .pcard-pr__body{padding:10px 12px 12px}
 .pcard-pr__name{
