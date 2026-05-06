@@ -949,6 +949,15 @@ app.get("/health", (_req, res) =>
   res.json({ status: "ok", catalog: catalog.length, partners: getPartnersMeta() })
 );
 
+// Версия билда — для верификации, что новый код задеплоился
+app.get("/version", (_req, res) =>
+  res.json({
+    version: process.env.npm_package_version ?? "unknown",
+    builtAt: new Date().toISOString(),
+    features: ["rich-order-comment", "subscriber-stats", "phone-verified-mark"],
+  })
+);
+
 
 // ─── Запуск ──────────────────────────────────────────────────────────────────
 bot.catch((err) => {
