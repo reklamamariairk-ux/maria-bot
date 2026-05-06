@@ -1,6 +1,8 @@
 "use strict";
 /**
  * Создание заказа: бот-обёртка вокруг /api/order-create.php на сайте.
+ * Дополнительно — создание deal в Bitrix24 (CRM) через входящий webhook,
+ * чтобы менеджер увидел заявку в B24 сразу, не дожидаясь Sale-sync.
  */
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
@@ -10,6 +12,7 @@ exports.createOrder = createOrder;
 const https_1 = __importDefault(require("https"));
 const ORDER_API = process.env.ORDER_API ?? ""; // https://www.maria-irk.ru/api/order-create.php
 const ORDER_TOKEN = process.env.ORDER_TOKEN ?? ""; // shared
+const B24_WEBHOOK = process.env.BITRIX_WEBHOOK ?? ""; // https://b24.maria-irk.ru/rest/USER_ID/HASH/
 async function createOrder(req) {
     if (!ORDER_API || !ORDER_TOKEN) {
         return { ok: false, error: "order_api_not_configured" };
@@ -17,11 +20,24 @@ async function createOrder(req) {
     if (!req.phone || !req.name || !Array.isArray(req.items) || req.items.length === 0) {
         return { ok: false, error: "missing_fields" };
     }
+    // 1) Создание заказа в Bitrix Sale (b_sale_order)
+    const saleResult = await callJsonPost(`${ORDER_API}${ORDER_API.includes("?") ? "&" : "?"}token=${encodeURIComponent(ORDER_TOKEN)}`, req);
+    if (!saleResult.ok) {
+        return saleResult;
+    }
+    // 2) Параллельно — создание deal в Bitrix24 CRM (для менеджера)
+    // Не блокирует ответ юзеру — fire-and-log.
+    if (B24_WEBHOOK) {
+        pushToBitrix24(req, saleResult).catch((e) => {
+            console.error("[B24] failed:", e.message);
+        });
+    }
+    return saleResult;
+}
+function callJsonPost(url, body) {
     return new Promise((resolve) => {
-        const sep = ORDER_API.includes("?") ? "&" : "?";
-        const url = `${ORDER_API}${sep}token=${encodeURIComponent(ORDER_TOKEN)}`;
-        const body = JSON.stringify(req);
         const u = new URL(url);
+        const payload = JSON.stringify(body);
         const opts = {
             hostname: u.hostname,
             port: u.port || 443,
@@ -29,7 +45,7 @@ async function createOrder(req) {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Content-Length": Buffer.byteLength(body),
+                "Content-Length": Buffer.byteLength(payload),
             },
             rejectUnauthorized: false,
         };
@@ -38,8 +54,7 @@ async function createOrder(req) {
             r.on("data", (c) => (d += c));
             r.on("end", () => {
                 try {
-                    const json = JSON.parse(d);
-                    resolve(json);
+                    resolve(JSON.parse(d));
                 }
                 catch (e) {
                     resolve({ ok: false, error: `bad_response:${e.message}` });
@@ -48,7 +63,40 @@ async function createOrder(req) {
         });
         httpReq.on("error", (e) => resolve({ ok: false, error: e.message }));
         httpReq.setTimeout(20000, () => { httpReq.destroy(); resolve({ ok: false, error: "timeout" }); });
-        httpReq.write(body);
+        httpReq.write(payload);
         httpReq.end();
     });
+}
+async function pushToBitrix24(req, sale) {
+    const itemsList = req.items.map((i) => `• [#${i.id}] ×${i.qty}`).join("\n");
+    const tail = (req.phone || "").replace(/\D/g, "").slice(-10);
+    const phoneFmt = tail ? `+7 (${tail.slice(0, 3)}) ${tail.slice(3, 6)}-${tail.slice(6, 8)}-${tail.slice(8, 10)}` : req.phone;
+    const title = `🍰 Заказ из Telegram-бота #${sale.orderId ?? '—'} · ${req.name}`;
+    const comments = [
+        `Сумма: ${sale.total ?? '?'} ₽`,
+        `Телефон: ${phoneFmt}`,
+        req.address ? `Адрес: ${req.address}` : null,
+        req.delivery_date ? `Дата:  ${req.delivery_date}` : null,
+        req.delivery_time ? `Время: ${req.delivery_time}` : null,
+        req.email ? `Email: ${req.email}` : null,
+        req.comment ? `Комментарий: ${req.comment}` : null,
+        `\nСостав:\n${itemsList}`,
+        `\n→ В Sale админке: bitrix-admin.maria-irk.ru/sale_order_view.php?ID=${sale.orderId ?? ''}`,
+    ].filter(Boolean).join("\n");
+    const fields = {
+        TITLE: title,
+        NAME: (req.name || "").split(/\s+/)[0] || req.name,
+        LAST_NAME: (req.name || "").split(/\s+/).slice(1).join(" ") || "",
+        PHONE: [{ VALUE: req.phone, VALUE_TYPE: "WORK" }],
+        EMAIL: req.email ? [{ VALUE: req.email, VALUE_TYPE: "WORK" }] : undefined,
+        COMMENTS: comments,
+        SOURCE_ID: "WEB",
+        SOURCE_DESCRIPTION: "Telegram Mini App",
+        OPPORTUNITY: sale.total ?? 0,
+        CURRENCY_ID: "RUB",
+    };
+    // Используем crm.lead.add — самый простой и универсальный
+    const url = B24_WEBHOOK.endsWith("/") ? B24_WEBHOOK + "crm.lead.add.json" : B24_WEBHOOK + "/crm.lead.add.json";
+    const result = await callJsonPost(url, { fields });
+    console.log(`[B24] lead created for order #${sale.orderId}:`, JSON.stringify(result).substring(0, 200));
 }
