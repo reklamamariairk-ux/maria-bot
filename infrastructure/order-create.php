@@ -224,17 +224,26 @@ foreach ($itemsClean as $item) {
         PRICE, CURRENCY, DISCOUNT_PRICE, VAT_RATE, NOTES,
         DATE_INSERT, DATE_UPDATE, PRODUCT_PROVIDER_CLASS,
         CATALOG_XML_ID, PRODUCT_XML_ID, BASE_PRICE,
-        CAN_BUY, DELAY, IS_RECURRING, RESERVED, RESERVE_QUANTITY, MARKING_CODE,
+        CAN_BUY, DELAY, RESERVED, RESERVE_QUANTITY, MARKING_CODE,
         SUMMARY_PRICE
     ) VALUES (
         $fuserId, $orderId, $pid, '$name', $qty, 's1', 'catalog',
         $price, 'RUB', 0, 0, '',
         NOW(), NOW(), 'CCatalogProductProvider',
         '', '$pid', $price,
-        'Y', 'N', 'N', 'N', NULL, '',
+        'Y', 'N', 'N', NULL, '',
         $price
     )";
-    $conn->queryExecute($sql);
+    try {
+        $conn->queryExecute($sql);
+    } catch (\Throwable $e) {
+        http_response_code(500);
+        echo json_encode([
+            'ok' => false, 'error' => 'basket_insert_failed',
+            'message' => 'SQL ' . $e->getMessage(),
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
 }
 
 // ─── INSERT b_sale_order_props_value (свойства заказа) ────────────────────
