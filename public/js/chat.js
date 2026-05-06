@@ -1,6 +1,13 @@
 /* ─── Chat ───────────────────────────────────────────────────────────────── */
 const chatHistory = [];
+const CHAT_HISTORY_MAX = 12; // ограничиваем — 6 пар user+assistant, чтобы не упираться в токен-лимит Groq
 const _chatInitData = window.Telegram?.WebApp?.initData ?? "";
+
+function trimChatHistory() {
+  if (chatHistory.length > CHAT_HISTORY_MAX) {
+    chatHistory.splice(0, chatHistory.length - CHAT_HISTORY_MAX);
+  }
+}
 
 function handleChatKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
@@ -17,6 +24,7 @@ async function sendMessage() {
   input.value = '';
   appendMessage('user', text);
   chatHistory.push({ role: 'user', content: text });
+  trimChatHistory();
 
   sendBtn.disabled = true;
   const typing = appendTyping();
@@ -41,6 +49,7 @@ async function sendMessage() {
     const data  = await res.json();
     const reply = data.text ?? '';
     chatHistory.push({ role: 'assistant', content: reply });
+    trimChatHistory();
     appendMessage('bot', reply, data.products);
 
     // Если AI добавил товары в корзину — применяем

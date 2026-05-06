@@ -224,18 +224,56 @@ function groqRequest(payload) {
             let d = "";
             r.on("data", (c) => (d += c));
             r.on("end", () => {
+                const status = r.statusCode ?? 0;
                 try {
-                    resolve(JSON.parse(d));
+                    const parsed = JSON.parse(d);
+                    if (status === 429 || (parsed.error?.code === "rate_limit_exceeded")) {
+                        const e = new Error(`Groq rate limit (${status})`);
+                        e.status = status;
+                        e.rateLimited = true;
+                        reject(e);
+                        return;
+                    }
+                    if (status >= 500) {
+                        const e = new Error(`Groq ${status}: ${parsed.error?.message ?? "server error"}`);
+                        e.status = status;
+                        reject(e);
+                        return;
+                    }
+                    resolve(parsed);
                 }
                 catch (e) {
-                    reject(e);
+                    const err = new Error(`Groq parse error (status ${status}): ${e.message}`);
+                    err.status = status;
+                    reject(err);
                 }
             });
         });
         req.on("error", reject);
+        req.setTimeout(30000, () => {
+            req.destroy();
+            const e = new Error("Groq timeout (30s)");
+            e.status = 0;
+            reject(e);
+        });
         req.write(body);
         req.end();
     });
+}
+// Обрезаем историю если она слишком длинная — сохраняем system + последние N пар user/assistant
+// Tool messages и tool_calls идут парами, поэтому обрезаем по паре assistant→[tool…] чтобы не сломать логику
+function trimHistory(messages, maxNonSystem = 16) {
+    if (messages.length <= maxNonSystem + 1)
+        return messages;
+    // Сохраняем первое system-сообщение и последние maxNonSystem
+    const sys = messages[0]?.role === "system" ? [messages[0]] : [];
+    const tail = messages.slice(-maxNonSystem);
+    // Если первый элемент tail — tool, то он сирота (не имеет соответствующего assistant с tool_calls)
+    // → пропускаем, пока не дойдём до user или assistant без tool_calls
+    let firstSafe = 0;
+    while (firstSafe < tail.length && tail[firstSafe].role === "tool")
+        firstSafe++;
+    return [...sys, ...tail.slice(firstSafe)];
 }
 async function chatAgent(userMessages, ctx) {
     const system = {
@@ -269,15 +307,20 @@ async function chatAgent(userMessages, ctx) {
 — Конкретные товары (имя, цена, вес) бери ТОЛЬКО из ответов tool calls. Без выдумок.
 — Если клиент не верифицировал телефон, баланс/заказы недоступны — мягко предложи нажать «Поделиться номером» во вкладке Клуб.`,
     };
-    const messages = [system, ...userMessages];
+    // Обрезаем историю клиента — оставляем последние ~12 сообщений + system,
+    // чтобы не упереться в токен-лимит Groq и не плодить долгие запросы.
+    const trimmedUser = userMessages.length > 12 ? userMessages.slice(-12) : userMessages;
+    const messages = [system, ...trimmedUser];
     const MAX_ITERATIONS = 4;
     let toolsBroken = false;
     for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
+        // Для каждой итерации обрезаем messages если они выросли с tool-результатами
+        const sendMessages = trimHistory(messages, 18);
         const response = await groqRequest({
             model: "llama-3.3-70b-versatile",
             max_tokens: 1024,
             temperature: 0.6,
-            messages,
+            messages: sendMessages,
             ...(toolsBroken ? {} : { tools: ai_tools_1.TOOL_DEFS, tool_choice: "auto" }),
         });
         const choice = response.choices?.[0];
@@ -349,8 +392,17 @@ app.post("/api/chat", async (req, res) => {
         res.json({ text: out.text, products: out.products, cart_actions: out.cart_actions });
     }
     catch (err) {
-        console.error("Chat error:", err.message);
-        res.status(502).json({ error: "ИИ недоступен, попробуйте позже" });
+        const e = err;
+        console.error(`[CHAT] err: status=${e.status} msg=${e.message}`);
+        if (e.rateLimited) {
+            res.status(429).json({ error: "ИИ временно занят (превышен лимит запросов). Подожди 10-20 секунд и попробуй ещё раз." });
+        }
+        else if (e.status === 0 || /timeout/i.test(e.message)) {
+            res.status(504).json({ error: "ИИ не ответил вовремя. Попробуй ещё раз через минуту." });
+        }
+        else {
+            res.status(502).json({ error: "ИИ временно недоступен. Попробуй через минуту или позвони +7 (3952) 50-40-80." });
+        }
     }
 });
 // ─── Bitrix24 lead ───────────────────────────────────────────────────────────
