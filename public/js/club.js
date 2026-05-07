@@ -94,6 +94,7 @@ function renderClub() {
   document.getElementById("club-main").style.display = "block";
 
   renderHero();
+  loadBirthdayPromo();
   renderDaily();
   renderLk();
   renderShop();
@@ -150,30 +151,86 @@ function scJoin() {
 window.scJoin = scJoin;
 
 function renderSweetCheckMy(data) {
-  const wrap = document.getElementById('sc-my');
-  if (!wrap) return;
+  // Старый блок внутри accordion — не используем больше, оставлен для обратной совместимости
+  const oldWrap = document.getElementById('sc-my');
+  if (oldWrap) oldWrap.style.display = 'none';
+
+  // Новый top-card на верху клуба
+  const top = document.getElementById('sc-my-top');
+  if (!top) return;
   if (!data || !data.configured || !data.found) {
-    wrap.style.display = 'none';
+    top.style.display = 'none';
     return;
   }
   const tickets = Number(data.tickets_count || 0);
-  const nextThreshold = 1000;
-  // фейковый прогресс — ничего знаем про сумму до билета, ставим pseudo
-  const cardCls = tickets >= 5 ? 'sc-my sc-my--gold' : (tickets >= 1 ? 'sc-my' : 'sc-my sc-my--empty');
-  wrap.style.display = '';
-  wrap.innerHTML = `
-    <div class="${cardCls}">
-      <div class="sc-my__h">🎟 Ваши билеты</div>
-      <div class="sc-my__big">${tickets}</div>
-      <div class="sc-my__sub">${tickets > 0
-        ? `${tickets === 1 ? 'один билет уже' : tickets + ' билетов уже'} в розыгрыше`
-        : 'Сделайте первую покупку — получите первый билет'}</div>
-      ${tickets > 0 ? `
-        <div class="sc-my__chance">
-          ${tickets >= 10 ? '🔥 Высокий шанс' : tickets >= 3 ? '⭐ Хорошие шансы' : '💫 Шансы есть'}
-        </div>` : ''}
+  if (tickets === 0) {
+    top.style.display = 'none';
+    return;
+  }
+  top.style.display = '';
+  const chance = tickets >= 10 ? 'Высокий шанс' : tickets >= 3 ? 'Хорошие шансы' : 'Шансы есть';
+  top.innerHTML = `
+    <div class="sc-top-card">
+      <div class="sc-top-card__row">
+        <div class="sc-top-card__num">${tickets}</div>
+        <div>
+          <div class="sc-top-card__lb">${tickets === 1 ? 'Билет' : 'Билетов'} в розыгрыше</div>
+          <div class="sc-top-card__h">${chance} на iPhone 17</div>
+          <div class="sc-top-card__sub">Розыгрыш каждый квартал · купи нужный набор → +5 билетов</div>
+        </div>
+      </div>
     </div>`;
 }
+
+// День рождения — карточка-промо в клубе
+async function loadBirthdayPromo() {
+  const promo = document.getElementById('bday-promo');
+  if (!promo) return;
+  try {
+    const data = await api('/api/me');
+    if (!data || data.__unauthorized) { promo.style.display = 'none'; return; }
+    if (data.birthday) { promo.style.display = 'none'; return; }
+    promo.style.display = '';
+  } catch {
+    promo.style.display = 'none';
+  }
+}
+async function saveBirthday() {
+  const inp = document.getElementById('bday-input');
+  const status = document.getElementById('bday-status');
+  if (!inp || !inp.value) {
+    if (status) status.textContent = 'Выбери дату из календаря';
+    return;
+  }
+  if (status) status.textContent = '⏳ Сохраняем…';
+  try {
+    const res = await fetch('/api/birthday', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(window.Telegram?.WebApp?.initData ? { 'Authorization': 'tma ' + window.Telegram.WebApp.initData } : {})
+      },
+      body: JSON.stringify({ birthday: inp.value })
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      if (status) status.textContent = '✓ Сохранили — придёт подарок ко дню рождения';
+      window.haptic?.('success');
+      setTimeout(() => {
+        const promo = document.getElementById('bday-promo');
+        if (promo) promo.style.display = 'none';
+      }, 2000);
+    } else {
+      if (status) status.textContent = data.error || 'Не получилось сохранить';
+      window.haptic?.('error');
+    }
+  } catch {
+    if (status) status.textContent = 'Сеть недоступна';
+    window.haptic?.('error');
+  }
+}
+window.saveBirthday = saveBirthday;
+window.loadBirthdayPromo = loadBirthdayPromo;
 
 async function renderLk() {
   const section = document.getElementById('lk-section');
@@ -255,6 +312,11 @@ function renderOrderRow(o) {
   const items = (o.items || []).slice(0, 2).map(i => `${i.qty}× ${i.name}`).join(', ');
   const more = (o.items || []).length > 2 ? ` +${o.items.length - 2}` : '';
   const statusCls = o.canceled ? 'lk-ord__st--cancel' : (o.paid ? 'lk-ord__st--paid' : '');
+  // Можем повторить заказ если есть товары с id
+  const itemsWithId = (o.items || []).filter(i => i.id || i.product_id);
+  const canRepeat = itemsWithId.length > 0 && !o.canceled;
+  // JSON для повтора (id+qty)
+  const reorderData = JSON.stringify(itemsWithId.map(i => ({ id: i.id || i.product_id, qty: i.qty || 1, name: i.name, price: i.price }))).replace(/"/g, '&quot;');
   return `
     <div class="lk-ord">
       <div class="lk-ord__row">
@@ -266,8 +328,27 @@ function renderOrderRow(o) {
         <span class="lk-ord__items">${escapeHtml(items)}${more}</span>
         <span class="lk-ord__st ${statusCls}">${escapeHtml(o.status || '')}</span>
       </div>
+      ${canRepeat ? `<button class="lk-ord__repeat" data-haptic="medium" onclick='reorderItems(${reorderData})'>↻ Повторить заказ</button>` : ''}
     </div>`;
 }
+
+// Повтор заказа — кладёт все товары в корзину и открывает её
+function reorderItems(items) {
+  if (!Array.isArray(items) || !items.length) return;
+  let added = 0;
+  for (const it of items) {
+    if (!it.id || !window.cartAdd) continue;
+    window.cartAdd({ id: Number(it.id), name: it.name || `Товар #${it.id}`, price: Number(it.price) || 0, image: null });
+    added++;
+  }
+  if (added > 0) {
+    window.haptic?.('success');
+    setTimeout(() => window.cartOpen?.(), 300);
+  } else {
+    window.haptic?.('error');
+  }
+}
+window.reorderItems = reorderItems;
 
 function renderHero() {
   const name = CLUB_STATE.user?.first_name || "Друг";

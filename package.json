@@ -20,7 +20,8 @@
     "grammy": "^1.27.0",
     "helmet": "^7.1.0",
     "node-cron": "^4.2.1",
-    "pg": "^8.20.0"
+    "pg": "^8.20.0",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@types/cheerio": "^0.22.35",

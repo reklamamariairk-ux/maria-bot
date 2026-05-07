@@ -31,6 +31,9 @@ async function sendMessage() {
   if (!text) return;
 
   document.querySelector('.chat-suggestions')?.style && (document.querySelector('.chat-suggestions').style.display = 'none');
+  // Скрываем chip-suggestions после первого сообщения
+  const chipsWrap = document.getElementById('chat-chips');
+  if (chipsWrap) chipsWrap.style.display = 'none';
 
   input.value = '';
   appendMessage('user', text);

@@ -196,6 +196,23 @@
         </button>
       </div>
 
+      <!-- Sweet Check «Мои билеты» — отображается если есть билеты (заполнится из LK) -->
+      <div id="sc-my-top" style="display:none"></div>
+
+      <!-- Карточка-приглашение указать ДР (если не указан) -->
+      <div id="bday-promo" class="bday-promo" style="display:none">
+        <div class="bday-promo__ic"><span data-icon="cake" data-size="22"></span></div>
+        <div class="bday-promo__body">
+          <div class="bday-promo__h">Когда твой день рождения?</div>
+          <div class="bday-promo__sub">Получай −5% (вам) и −10% (детям) ±5 дней от ДР</div>
+          <div class="bday-promo__row">
+            <input id="bday-input" type="date" class="bday-promo__input" />
+            <button class="btn-full bday-promo__btn" data-haptic="medium" onclick="saveBirthday()">Сохранить</button>
+          </div>
+          <div id="bday-status" class="bday-promo__status"></div>
+        </div>
+      </div>
+
       <!-- Стрик и daily -->
       <div class="sh"><span class="sh__line"></span><span class="sh__text">Сегодня</span><span class="sh__line"></span></div>
       <div class="daily">
@@ -590,13 +607,13 @@
   </button>
 </nav>
 
-<script src="/js/app.js"></script>
-<script src="/js/order.js"></script>
-<script src="/js/game.js"></script>
-<script src="/js/bakery.js"></script>
-<script src="/js/chat.js"></script>
-<script src="/js/catalog.js"></script>
-<script src="/js/club.js"></script>
-<script src="/js/cart.js"></script>
+<script src="/js/app.js" defer></script>
+<script src="/js/order.js" defer></script>
+<script src="/js/game.js" defer></script>
+<script src="/js/bakery.js" defer></script>
+<script src="/js/chat.js" defer></script>
+<script src="/js/catalog.js" defer></script>
+<script src="/js/club.js" defer></script>
+<script src="/js/cart.js" defer></script>
 </body>
 </html>

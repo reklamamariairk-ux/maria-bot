@@ -90,12 +90,73 @@ window.closeShopsModal = closeShopsModal;
 window.openMaps = openMaps;
 
 /* ── AI чат — модал, открывается с любой вкладки ───────────────────────── */
+const AI_CHIP_POOL = {
+  home: [
+    'Что в наличии прямо сейчас?',
+    'Какой торт месяца?',
+    'Расскажи про Сладкий чек',
+    'Как работает клуб?',
+    'Самый популярный торт',
+  ],
+  menu: [
+    'Что подойдёт на день рождения?',
+    'Торт без сахара?',
+    'Какие пироги есть с курицей?',
+    'Что взять на 8 человек?',
+    'Самый недорогой торт',
+  ],
+  club: [
+    'Как получить больше баллов?',
+    'Сколько у меня билетов?',
+    'Какие награды доступны?',
+    'Как пригласить друга?',
+    'Что даёт уровень "Семья"?',
+  ],
+  fun: [
+    'Как играть в пекарне?',
+    'Сколько баллов даёт игра?',
+    'Покажи лучший торт месяца',
+  ],
+  order: [
+    'Сколько стоит торт на 10 человек?',
+    'Можно ли с фотопечатью?',
+    'За сколько дней заказывать?',
+  ],
+};
+
+function getAiChips() {
+  const activeTab = document.querySelector('.tab.active')?.id || 'tab-home';
+  const key = activeTab.replace('tab-', '');
+  const pool = AI_CHIP_POOL[key] || AI_CHIP_POOL.home;
+  // Берём случайные 3 из пула
+  const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, 3);
+  return shuffled;
+}
+
+function refreshChatChips() {
+  const wrap = document.getElementById('chat-chips');
+  if (!wrap) return;
+  // Не перезаписываем если уже идёт диалог
+  const messages = document.getElementById('chat-messages');
+  const userMsgs = messages ? messages.querySelectorAll('.msg--user').length : 0;
+  if (userMsgs > 0) {
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = '';
+  const chips = getAiChips();
+  wrap.innerHTML = chips.map((c) =>
+    `<button class="chip" data-haptic="light" onclick="usechip(this)">${c.replace(/[<>"']/g, '')}</button>`
+  ).join('');
+}
+
 function openAiChat() {
   const m = document.getElementById('ai-chat-modal');
   if (!m) return;
   m.style.display = 'flex';
   document.body.style.overflow = 'hidden';
   window.tgBack?.show(() => closeAiChat());
+  refreshChatChips();
   setTimeout(() => document.getElementById('chat-input')?.focus(), 200);
   // Прокрутка к низу истории
   setTimeout(() => {

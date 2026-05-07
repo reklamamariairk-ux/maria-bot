@@ -89,8 +89,19 @@ function catShowCategories() {
 function catRenderProducts(products) {
   const wrap = document.getElementById('menu-products');
   if (!products.length) {
-    wrap.innerHTML = '';
-    document.getElementById('menu-empty').style.display = '';
+    const inp = document.getElementById('menu-search');
+    const q = inp?.value?.trim() || '';
+    wrap.innerHTML = `
+      <div class="empty-state" style="grid-column:1/-1">
+        <div class="empty-state__ic"><span data-icon="search" data-size="28"></span></div>
+        <div class="empty-state__h">${q ? 'Ничего не нашлось' : 'В этой категории пока пусто'}</div>
+        <div class="empty-state__sub">${q ? `По запросу «${escapeHtml(q)}» товаров нет. Попробуй другой поиск.` : 'Загляни сюда позже — мы обновляем меню каждый день.'}</div>
+        <div class="empty-state__cta">
+          <button class="btn-outline" onclick="catShowCategories()">Все категории</button>
+        </div>
+      </div>`;
+    document.getElementById('menu-empty').style.display = 'none';
+    if (window.IconInflate) window.IconInflate(wrap);
     return;
   }
   document.getElementById('menu-empty').style.display = 'none';

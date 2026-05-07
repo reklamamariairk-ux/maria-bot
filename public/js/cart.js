@@ -181,37 +181,68 @@ function cartRender(view) {
   window.tgMain?.show(`Оформить · ${total} ₽`, () => cartRender('checkout'));
 }
 
+// Сохранённые данные клиента для повторного оформления
+const CHECKOUT_KEY = 'maria_checkout_v1';
+function checkoutLoad() {
+  try { return JSON.parse(localStorage.getItem(CHECKOUT_KEY) || '{}'); }
+  catch { return {}; }
+}
+function checkoutSave(d) {
+  try { localStorage.setItem(CHECKOUT_KEY, JSON.stringify(d)); } catch {}
+}
+function fmtDate(d) {
+  return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
+}
+function dateLabel(offset) {
+  const d = new Date(Date.now() + offset * 86400000);
+  return fmtDate(d);
+}
+
 function cartRenderCheckout() {
   const wrap = document.getElementById('cart-body');
   if (!wrap) return;
   const tg = window.Telegram?.WebApp;
   const u = tg?.initDataUnsafe?.user;
-  const defName = u ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : '';
-  const tomorrow = new Date(Date.now() + 86400000);
-  const dd = String(tomorrow.getDate()).padStart(2, '0');
-  const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
-  const yy = tomorrow.getFullYear();
-  const tomorrowStr = `${dd}.${mm}.${yy}`;
+  const tgName = u ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : '';
+  const saved = checkoutLoad();
+  const defName    = saved.name    || tgName || '';
+  const defPhone   = saved.phone   || '';
+  const defAddress = saved.address || '';
+  const defDate    = saved.date    || dateLabel(1); // завтра по умолчанию
+  const defTime    = saved.time    || '';
+
+  // Дата-чипы: сегодня/завтра/послезавтра/+5 дней
+  const dateChips = [
+    { v: dateLabel(0), label: 'Сегодня' },
+    { v: dateLabel(1), label: 'Завтра' },
+    { v: dateLabel(2), label: 'Послезавтра' },
+    { v: dateLabel(5), label: '+5 дней' },
+  ];
+  const timeChips = ['10:00–12:00','12:00–14:00','14:00–16:00','16:00–18:00','18:00–20:00'];
 
   wrap.innerHTML = `
     <button class="cat-modal__close" onclick="cartClose()">×</button>
-    <div class="cart-h">📝 Оформление заказа</div>
+    <div class="cart-h">Оформление заказа</div>
     <div class="cart-form">
-      <label>Имя <span style="color:var(--red)">*</span>
-        <input id="co-name" type="text" placeholder="Как к вам обращаться" value="${escAttr(defName)}" />
+      <label>Имя <span class="lbl-req">*</span>
+        <input id="co-name" type="text" placeholder="Как к вам обращаться" value="${escAttr(defName)}" autocomplete="name" />
       </label>
-      <label>Телефон <span style="color:var(--red)">*</span>
-        <input id="co-phone" type="tel" placeholder="+7 999 123-45-67" />
+      <label>Телефон <span class="lbl-req">*</span>
+        <input id="co-phone" type="tel" placeholder="+7 (999) 123-45-67" value="${escAttr(defPhone)}" inputmode="tel" autocomplete="tel" oninput="phoneMask(this)" />
       </label>
-      <label>Адрес доставки <span style="color:#aaa">(если самовывоз — оставь пустым)</span>
-        <input id="co-address" type="text" placeholder="г Иркутск, ул ..." />
+      <label>Адрес доставки <span class="lbl-hint">(пусто = самовывоз)</span>
+        <input id="co-address" type="text" placeholder="г Иркутск, ул ..." value="${escAttr(defAddress)}" autocomplete="street-address" />
       </label>
-      <label>Дата
-        <input id="co-date" type="text" value="${tomorrowStr}" placeholder="dd.mm.yyyy" />
-      </label>
-      <label>Время
-        <input id="co-time" type="text" placeholder="10:00–12:00" />
-      </label>
+      <label>Дата доставки</label>
+      <div class="chip-group" id="co-date-chips">
+        ${dateChips.map((c) => `<button type="button" class="chip-pick${c.v === defDate ? ' chip-pick--on' : ''}" data-haptic="selection" onclick="pickDate('${c.v}',this)">${c.label}<small>${c.v.slice(0,5)}</small></button>`).join('')}
+      </div>
+      <input id="co-date" type="hidden" value="${escAttr(defDate)}" />
+      <label>Время доставки</label>
+      <div class="chip-group" id="co-time-chips">
+        ${timeChips.map((t) => `<button type="button" class="chip-pick${t === defTime ? ' chip-pick--on' : ''}" data-haptic="selection" onclick="pickTime('${t}',this)">${t}</button>`).join('')}
+      </div>
+      <input id="co-time" type="hidden" value="${escAttr(defTime)}" />
       <label>Комментарий
         <textarea id="co-comment" rows="2" placeholder="Уточнения для менеджера"></textarea>
       </label>
@@ -277,6 +308,8 @@ async function cartSubmit() {
       console.error('[cart] order failed', res.status, data);
       return;
     }
+    // Запоминаем для будущих заказов
+    checkoutSave({ name, phone, address, date, time });
     cartClear();
     window.tgMain?.hide();
     document.getElementById('cart-body').innerHTML = `
@@ -305,6 +338,35 @@ function escAttr(s) {
   return String(s ?? '').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
 }
 
+/* ── Helpers: phoneMask, pickDate, pickTime ─────────────────────────────── */
+function phoneMask(inp) {
+  if (!inp) return;
+  let v = inp.value.replace(/\D/g, '');
+  if (v.startsWith('8')) v = '7' + v.slice(1);
+  if (!v.startsWith('7')) v = '7' + v;
+  v = v.slice(0, 11);
+  let f = '+7';
+  if (v.length > 1) f += ' (' + v.slice(1, 4);
+  if (v.length >= 4) f += ') ';
+  if (v.length >= 4) f += v.slice(4, 7);
+  if (v.length >= 7) f += '-' + v.slice(7, 9);
+  if (v.length >= 9) f += '-' + v.slice(9, 11);
+  inp.value = f.trim();
+}
+function pickDate(val, btn) {
+  document.getElementById('co-date').value = val;
+  document.querySelectorAll('#co-date-chips .chip-pick').forEach((b) => b.classList.remove('chip-pick--on'));
+  if (btn) btn.classList.add('chip-pick--on');
+}
+function pickTime(val, btn) {
+  document.getElementById('co-time').value = val;
+  document.querySelectorAll('#co-time-chips .chip-pick').forEach((b) => b.classList.remove('chip-pick--on'));
+  if (btn) btn.classList.add('chip-pick--on');
+}
+
+window.phoneMask = phoneMask;
+window.pickDate = pickDate;
+window.pickTime = pickTime;
 window.cartOpen = cartOpen;
 window.cartClose = cartClose;
 window.cartAdd = cartAdd;

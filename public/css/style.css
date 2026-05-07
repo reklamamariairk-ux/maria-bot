@@ -2319,3 +2319,135 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
   flex:1;overflow-y:auto;padding:14px 4px;
   -webkit-overflow-scrolling:touch;
 }
+
+/* ── Form chips (date / time picker) ──────────────────────────────────────── */
+.chip-group{
+  display:flex;flex-wrap:wrap;gap:8px;
+  padding:6px 0 12px;
+}
+.chip-pick{
+  flex:0 0 auto;
+  background:#fff;
+  border:1.5px solid var(--border-strong);
+  border-radius:12px;
+  padding:9px 14px;
+  font-family:var(--ff-body);font-size:13px;font-weight:600;
+  color:var(--text);letter-spacing:-.1px;
+  cursor:pointer;
+  transition:all var(--t-fast);
+  display:inline-flex;flex-direction:column;align-items:center;gap:1px;
+  line-height:1.15;
+}
+.chip-pick small{font-size:10px;color:var(--muted);font-weight:500}
+.chip-pick:active{transform:scale(.94)}
+.chip-pick:hover{border-color:var(--red);color:var(--red)}
+.chip-pick--on{
+  background:var(--mesh-red);color:#fff;border-color:transparent;
+  box-shadow:var(--shadow-glow);
+}
+.chip-pick--on small{color:rgba(255,255,255,.85)}
+
+/* Form labels — премиум-типографика */
+.cart-form label{
+  display:block;font-size:13px;font-weight:600;color:var(--text-2);
+  margin-top:14px;margin-bottom:6px;letter-spacing:-.1px;
+}
+.cart-form label:first-child{margin-top:0}
+.lbl-req{color:var(--red);font-weight:700}
+.lbl-hint{color:var(--muted);font-size:11px;font-weight:500;margin-left:4px}
+
+/* Empty states — общие */
+.empty-state{
+  text-align:center;padding:48px 24px;color:var(--muted);
+}
+.empty-state__ic{
+  width:64px;height:64px;margin:0 auto 14px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--red-xl);border-radius:50%;
+  color:var(--red);
+}
+.empty-state__h{font-size:16px;font-weight:700;color:var(--text);margin-bottom:6px;letter-spacing:-.2px}
+.empty-state__sub{font-size:13px;line-height:1.5;font-weight:500;max-width:280px;margin:0 auto}
+.empty-state__cta{margin-top:16px}
+
+/* ── Birthday promo card ───────────────────────────────────────────────── */
+.bday-promo{
+  display:flex;gap:14px;
+  margin:14px;
+  padding:18px;
+  background:linear-gradient(135deg,#fff8f0 0%,#fffaf3 100%);
+  border:1px solid var(--border);
+  border-radius:18px;
+  box-shadow:var(--shadow-card);
+  position:relative;overflow:hidden;
+}
+.bday-promo::before{
+  content:'';position:absolute;top:-30%;right:-20%;
+  width:220px;height:220px;border-radius:50%;
+  background:radial-gradient(circle,rgba(232,160,48,.18),transparent 70%);
+  pointer-events:none;
+}
+.bday-promo__ic{
+  width:42px;height:42px;flex-shrink:0;
+  background:var(--mesh-gold);color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:12px;
+  box-shadow:var(--shadow-gold);
+  z-index:1;
+}
+.bday-promo__body{flex:1;position:relative;z-index:1}
+.bday-promo__h{font-size:15px;font-weight:800;color:var(--text);margin-bottom:4px;letter-spacing:-.2px}
+.bday-promo__sub{font-size:12px;color:var(--text-2);line-height:1.4;margin-bottom:12px;font-weight:500}
+.bday-promo__row{display:flex;gap:8px;align-items:stretch}
+.bday-promo__input{
+  flex:1;padding:10px 12px;
+  border:1.5px solid var(--border-strong);border-radius:10px;
+  font-family:var(--ff-body);font-size:13px;font-weight:600;
+  background:#fff;color:var(--text);outline:none;
+  transition:border-color var(--t-fast);
+}
+.bday-promo__input:focus{border-color:var(--gold)}
+.bday-promo__btn{
+  width:auto;flex:0 0 auto;margin:0;
+  padding:10px 18px;font-size:13px;border-radius:10px;
+}
+.bday-promo__status{font-size:12px;margin-top:8px;color:var(--gold-d);font-weight:600;min-height:14px}
+
+/* Sweet Check Мои билеты на верху клуба — премиум */
+.sc-top-card{
+  margin:14px;padding:18px;
+  background:var(--mesh-premium);color:#fff;
+  border-radius:18px;position:relative;overflow:hidden;
+  box-shadow:0 14px 36px -10px rgba(40,8,20,.4);
+}
+.sc-top-card::before{
+  content:'';position:absolute;inset:0;border-radius:18px;
+  padding:1px;background:linear-gradient(135deg,rgba(212,160,64,.55),transparent 50%,rgba(214,31,55,.4));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;
+  pointer-events:none;
+}
+.sc-top-card__row{display:flex;align-items:center;gap:12px}
+.sc-top-card__num{
+  font-size:42px;font-weight:800;letter-spacing:-1px;
+  background:var(--grad-text-gold);
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;color:transparent;
+  font-family:var(--ff-display);line-height:1;
+}
+.sc-top-card__lb{font-size:11px;font-weight:700;color:rgba(255,255,255,.85);letter-spacing:.6px;text-transform:uppercase}
+.sc-top-card__h{font-size:15px;font-weight:700;margin-top:2px}
+.sc-top-card__sub{font-size:12px;color:rgba(255,255,255,.7);margin-top:4px;line-height:1.45}
+
+/* ── Повтор заказа в LK ─────────────────────────────────────────────────── */
+.lk-ord__repeat{
+  margin-top:8px;width:100%;
+  background:#fff;border:1.5px solid var(--red);
+  color:var(--red);
+  border-radius:10px;padding:8px 12px;
+  font-family:var(--ff-body);font-size:12px;font-weight:700;
+  cursor:pointer;letter-spacing:-.1px;
+  transition:all var(--t-fast);
+}
+.lk-ord__repeat:hover{background:var(--red);color:#fff;box-shadow:var(--shadow-glow)}
+.lk-ord__repeat:active{transform:scale(.96)}

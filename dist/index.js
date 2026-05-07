@@ -239,9 +239,19 @@ function proxyAsset(url, contentType) {
 app.get("/logo.svg", proxyAsset("https://www.maria-irk.ru/local/templates/maria/img/logo_new.svg", "image/svg+xml"));
 app.get("/logo.png", proxyAsset("https://www.maria-irk.ru/local/templates/maria/img/mobile_logo.png", "image/png"));
 // ─── Image proxy ────────────────────────────────────────────────────────────
-// Прокси картинок товаров с агрессивным кэшем (память + диск) + предзагрузка
-// топ-картинок при старте бота.
+// Прокси картинок товаров с resize в WebP + дисковым кэшем + прогревом.
+// Sharp превращает 1.4 MB PNG в ~80-150 KB WebP — ускоряет загрузку в 10×.
 const fsSync = __importStar(require("fs"));
+let sharp = null;
+try {
+    // Динамический импорт — если sharp не установился (Render free tier), fallback на raw stream
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    sharp = require("sharp");
+    console.log("[IMG] sharp loaded — resize + webp enabled");
+}
+catch (e) {
+    console.warn("[IMG] sharp not available, falling back to raw streaming:", e.message);
+}
 const IMG_CACHE_DIR = path_1.default.join("/tmp", "img_cache");
 const IMG_CACHE_LIMIT = 96 * 1024 * 1024; // 96 MB в памяти
 const IMG_MAX_ITEM = 3 * 1024 * 1024; // 3 MB — крупнее не кешируем
@@ -325,12 +335,29 @@ function fetchUpstream(u) {
                 if (!oversize)
                     chunks.push(c);
             });
-            r.on("end", () => {
+            r.on("end", async () => {
                 if (oversize || !chunks.length) {
                     resolve(null);
                     return;
                 }
-                const value = { buf: Buffer.concat(chunks), type };
+                let buf = Buffer.concat(chunks);
+                let outType = type;
+                // Sharp: ресайз до 600×750 (или меньше если оригинал меньше) и конвертация в WebP
+                if (sharp) {
+                    try {
+                        const resized = await sharp(buf)
+                            .resize(600, 750, { fit: "inside", withoutEnlargement: true })
+                            .webp({ quality: 78, effort: 4 })
+                            .toBuffer();
+                        buf = resized;
+                        outType = "image/webp";
+                    }
+                    catch (e) {
+                        // fallback — отдаём оригинал
+                        console.warn("[IMG] resize failed:", e.message);
+                    }
+                }
+                const value = { buf, type: outType };
                 imgMemPut(u, value);
                 imgDiskPut(u, value);
                 resolve(value);
@@ -716,16 +743,46 @@ app.get("/api/catalog-status", (_req, res) => {
     });
 });
 // ─── Club / Loyalty API ──────────────────────────────────────────────────────
+// День рождения юзера — для UI показа карточки-приглашения
+const db_2 = require("./db");
+async function getUserBirthday(chatId) {
+    try {
+        const { rows } = await db_2.pool.query(`SELECT birthday FROM user_birthdays WHERE chat_id = $1`, [chatId]);
+        return rows[0]?.birthday ? String(rows[0].birthday).slice(0, 10) : null;
+    }
+    catch {
+        return null;
+    }
+}
+app.post("/api/birthday", auth_1.requireTgUser, async (req, res) => {
+    const u = (0, auth_1.getTgUser)(req);
+    const body = req.body;
+    const bday = String(body.birthday ?? "").trim();
+    // Принимаем yyyy-mm-dd (input type=date)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(bday)) {
+        res.status(400).json({ ok: false, error: "Неверный формат даты" });
+        return;
+    }
+    try {
+        await (0, db_1.setUserBirthday)(u.id, bday);
+        res.json({ ok: true });
+    }
+    catch (e) {
+        console.error("[BIRTHDAY]", e.message);
+        res.status(500).json({ ok: false, error: "Не получилось сохранить" });
+    }
+});
 app.get("/api/me", auth_1.requireTgUser, async (req, res) => {
     const u = (0, auth_1.getTgUser)(req);
     try {
         // touchSubscriber заодно бьёт launch_count и last_seen_at; addSubscriber оставлен для совместимости
         await (0, db_1.touchSubscriber)(u.id, u.username, u.first_name).catch(() => { });
-        const [verified, balance, daily, myRewards] = await Promise.all([
+        const [verified, balance, daily, myRewards, birthday] = await Promise.all([
             (0, club_1.isPhoneVerified)(u.id),
             (0, club_1.getBalance)(u.id),
             (0, club_1.getDailyStatus)(u.id),
             (0, club_1.getMyRewards)(u.id),
+            getUserBirthday(u.id),
         ]);
         res.json({
             user: { id: u.id, first_name: u.first_name, username: u.username },
@@ -733,6 +790,7 @@ app.get("/api/me", auth_1.requireTgUser, async (req, res) => {
             balance,
             daily,
             activeRewards: myRewards.length,
+            birthday,
         });
     }
     catch (e) {
