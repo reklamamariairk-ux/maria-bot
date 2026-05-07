@@ -90,12 +90,15 @@ function appendMessage(role, text, products) {
         : `openSite('${escAttr(p.url || '')}')`;
       const priceTxt = p.price != null ? `${Number(p.price).toLocaleString('ru-RU')} ₽` : '';
       const img = p.image || '';
+      const imgEl = img
+        ? `<img class="ai-pcard__pic" src="/img?u=${encodeURIComponent(img)}" alt="${escAttr(p.name||'')}" loading="lazy" decoding="async">`
+        : '<span style="font-size:24px;opacity:.5">🍰</span>';
       return `
         <div class="ai-pcard" onclick="${onClick}">
-          <div class="ai-pcard__img" ${img ? `style="background-image:url('${escAttr(img)}')"` : ''}>
-            ${img ? '' : '<span style="font-size:24px;opacity:.5">🍰</span>'}
+          <div class="ai-pcard__img">
+            ${imgEl}
             ${p.hit ? '<span class="ai-pcard__hit">★</span>' : ''}
-          </div>
+          </div>`
           <div class="ai-pcard__body">
             <div class="ai-pcard__name">${esc(p.name || '')}</div>
             <div class="ai-pcard__price">${esc(priceTxt)}</div>

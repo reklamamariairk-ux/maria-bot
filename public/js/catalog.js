@@ -94,7 +94,7 @@ function catRenderProducts(products) {
     return;
   }
   document.getElementById('menu-empty').style.display = 'none';
-  wrap.innerHTML = products.map((p) => {
+  wrap.innerHTML = products.map((p, idx) => {
     const hasId = p.id != null && p.id > 0;
     const onClick = hasId
       ? `catOpenProduct(${p.id})`
@@ -106,10 +106,16 @@ function catRenderProducts(products) {
     const addBtn = hasId && priceNum > 0
       ? `<button class="pcard-pr__add" aria-label="В корзину" onclick="event.stopPropagation();catQuickAdd(${p.id},this)">+</button>`
       : '';
+    // Первые 6 — eager (видимы сразу), остальные — lazy
+    const loading = idx < 6 ? 'eager' : 'lazy';
+    const fetchpriority = idx < 4 ? 'high' : 'auto';
+    const imgEl = p.image
+      ? `<img class="pcard-pr__pic" src="/img?u=${encodeURIComponent(p.image)}" alt="${escapeAttr(p.name)}" loading="${loading}" decoding="async" fetchpriority="${fetchpriority}" onerror="this.style.display='none'">`
+      : '<span class="pcard-pr__noimg">🍰</span>';
     return `
       <div class="pcard-pr" onclick="${onClick}">
-        <div class="pcard-pr__img" ${p.image ? `style="background-image:url('${escapeAttr(p.image)}')"` : ''}>
-          ${p.image ? '' : '<span class="pcard-pr__noimg">🍰</span>'}
+        <div class="pcard-pr__img">
+          ${imgEl}
           ${hitBadge}
           ${addBtn}
         </div>
@@ -158,8 +164,8 @@ async function catOpenProduct(id) {
 
     body.innerHTML = `
       <button class="cat-modal__close" onclick="catCloseProduct()">×</button>
-      <div class="cat-modal__hero" ${img ? `style="background-image:url('${escapeAttr(img)}')"` : ''}>
-        ${img ? '' : '<span class="pcard-pr__noimg" style="font-size:64px">🍰</span>'}
+      <div class="cat-modal__hero">
+        ${img ? `<img class="cat-modal__pic" src="/img?u=${encodeURIComponent(img)}" alt="${escapeAttr(p.name)}" loading="eager" decoding="async" fetchpriority="high">` : '<span class="pcard-pr__noimg" style="font-size:64px">🍰</span>'}
         ${p.hit ? '<span class="cat-modal__hit">★ Хит</span>' : ''}
       </div>
       <div class="cat-modal__title">${escapeHtml(p.name)}</div>

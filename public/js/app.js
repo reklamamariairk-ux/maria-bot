@@ -124,7 +124,8 @@ async function loadCakeOfMonth() {
         : `Хит каталога — ${Number(c.priceNumber || c.price || 0).toLocaleString('ru-RU')} ₽`;
     }
     if (c.image) {
-      card.style.backgroundImage = `linear-gradient(180deg,rgba(214,31,55,.62) 0%,rgba(160,0,30,.95) 100%),url('${c.image}')`;
+      const proxied = `/img?u=${encodeURIComponent(c.image)}`;
+      card.style.backgroundImage = `linear-gradient(180deg,rgba(214,31,55,.62) 0%,rgba(160,0,30,.95) 100%),url('${proxied}')`;
       card.style.backgroundSize = 'cover';
       card.style.backgroundPosition = 'center';
     }

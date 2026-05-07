@@ -136,7 +136,7 @@ function cartRender(view) {
   const lines = items.map((it) => {
     const sum = (Number(it.price) || 0) * (Number(it.qty) || 0);
     const img = it.image
-      ? `<div class="cart-i__img" style="background-image:url('${escAttr(it.image)}')"></div>`
+      ? `<div class="cart-i__img"><img src="/img?u=${encodeURIComponent(it.image)}" alt="" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;display:block"></div>`
       : `<div class="cart-i__img"><span style="opacity:.4;font-size:24px">🍰</span></div>`;
     return `
       <div class="cart-i" data-id="${it.id}">

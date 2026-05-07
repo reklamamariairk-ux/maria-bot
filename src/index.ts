@@ -236,6 +236,91 @@ function proxyAsset(url: string, contentType: string) {
 app.get("/logo.svg", proxyAsset("https://www.maria-irk.ru/local/templates/maria/img/logo_new.svg", "image/svg+xml"));
 app.get("/logo.png", proxyAsset("https://www.maria-irk.ru/local/templates/maria/img/mobile_logo.png", "image/png"));
 
+// ─── Image proxy ────────────────────────────────────────────────────────────
+// Прокси картинок товаров с агрессивными cache-заголовками + in-memory hot cache.
+// Сами URL содержат хеш в пути → можно отдавать как immutable.
+const IMG_CACHE_LIMIT = 64 * 1024 * 1024; // 64 MB — храним только горячие
+const IMG_MAX_ITEM    = 2 * 1024 * 1024;  // 2 MB — крупнее не кешируем
+interface CachedImg { buf: Buffer; type: string; ts: number; }
+const imgCache = new Map<string, CachedImg>();
+let imgCacheBytes = 0;
+
+function imgCacheGet(key: string): CachedImg | null {
+  const v = imgCache.get(key);
+  if (!v) return null;
+  // refresh LRU position
+  imgCache.delete(key);
+  imgCache.set(key, v);
+  return v;
+}
+function imgCachePut(key: string, value: CachedImg) {
+  if (value.buf.length > IMG_MAX_ITEM) return;
+  imgCache.set(key, value);
+  imgCacheBytes += value.buf.length;
+  while (imgCacheBytes > IMG_CACHE_LIMIT) {
+    const first = imgCache.keys().next().value;
+    if (!first) break;
+    const old = imgCache.get(first);
+    if (old) imgCacheBytes -= old.buf.length;
+    imgCache.delete(first);
+  }
+}
+
+app.get("/img", (req, res) => {
+  const u = String(req.query.u ?? "");
+  // Whitelist: только maria-irk.ru
+  if (!/^https:\/\/(www\.)?maria-irk\.ru\/upload\//.test(u)) {
+    res.status(400).end();
+    return;
+  }
+  const hit = imgCacheGet(u);
+  if (hit) {
+    res.setHeader("Content-Type", hit.type);
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    res.setHeader("X-Cache", "HIT");
+    res.end(hit.buf);
+    return;
+  }
+  const url = new URL(u);
+  const opts: https.RequestOptions = {
+    hostname: url.hostname,
+    path: url.pathname + url.search,
+    headers: { "User-Agent": "MariaBot/1.0 ImgProxy" },
+    rejectUnauthorized: false,
+  };
+  const upstream = https.request(opts, (r) => {
+    if ((r.statusCode ?? 0) >= 400) {
+      res.status(r.statusCode ?? 502).end();
+      r.resume();
+      return;
+    }
+    const type = String(r.headers["content-type"] ?? "image/jpeg");
+    res.setHeader("Content-Type", type);
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    res.setHeader("X-Cache", "MISS");
+    const chunks: Buffer[] = [];
+    let total = 0;
+    let stoppedCaching = false;
+    r.on("data", (chunk: Buffer) => {
+      if (!stoppedCaching) {
+        total += chunk.length;
+        if (total > IMG_MAX_ITEM) stoppedCaching = true;
+        else chunks.push(chunk);
+      }
+      res.write(chunk);
+    });
+    r.on("end", () => {
+      res.end();
+      if (!stoppedCaching && chunks.length) {
+        imgCachePut(u, { buf: Buffer.concat(chunks), type, ts: Date.now() });
+      }
+    });
+  });
+  upstream.on("error", () => { res.status(502).end(); });
+  upstream.setTimeout(15_000, () => { upstream.destroy(); if (!res.headersSent) res.status(504).end(); });
+  upstream.end();
+});
+
 // ─── Groq chat (agent с tool calling) ───────────────────────────────────────
 import { TOOL_DEFS, runTool, ToolContext } from "./ai-tools";
 
