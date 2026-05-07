@@ -707,19 +707,19 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 .fab-ai{
   position:fixed;
   right:14px;
-  bottom:calc(86px + env(safe-area-inset-bottom));
+  bottom:calc(96px + env(safe-area-inset-bottom));
   z-index:300;
-  width:54px;height:54px;border-radius:50%;
-  background:linear-gradient(135deg,#fff 0%,#fff8eb 100%);
-  border:1.5px solid rgba(214,31,55,.18);
-  font-size:26px;
+  width:56px;height:56px;border-radius:50%;
+  background:var(--mesh-red);color:#fff;
+  border:none;
   cursor:pointer;
-  box-shadow:0 8px 20px rgba(214,31,55,.22),0 2px 6px rgba(0,0,0,.08);
+  box-shadow:var(--shadow-glow);
   display:flex;align-items:center;justify-content:center;
   transition:transform .15s, box-shadow .15s;
+  padding:0;
 }
-.fab-ai:active{transform:scale(.94)}
-.fab-ai:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(214,31,55,.28)}
+.fab-ai:active{transform:scale(.92)}
+.fab-ai:hover{transform:translateY(-2px);box-shadow:0 16px 36px -8px rgba(180,30,40,.55)}
 .fab-ai::before{
   content:'';position:absolute;inset:-3px;border-radius:50%;
   background:radial-gradient(circle,rgba(214,31,55,.45) 0%,transparent 70%);
@@ -2138,3 +2138,184 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
   animation:gtoast .25s ease;
 }
 @keyframes gtoast{from{opacity:0;transform:translate(-50%,-12px)}to{opacity:1;transform:translate(-50%,0)}}
+
+/* ── Hit-card row ─ карусель «Хит недели» на главной ──────────────────────── */
+.hits-row{
+  display:flex;gap:10px;padding:0 14px 6px;
+  overflow-x:auto;scroll-snap-type:x mandatory;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;
+}
+.hits-row::-webkit-scrollbar{display:none}
+.hit-card{
+  flex:0 0 142px;scroll-snap-align:start;
+  background:#fff;border:1px solid var(--border);
+  border-radius:18px;padding:6px;
+  cursor:pointer;
+  box-shadow:var(--shadow-card);
+  transition:transform var(--t),box-shadow var(--t);
+}
+.hit-card:active{transform:scale(.96)}
+.hit-card:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
+.hit-card__img{
+  position:relative;aspect-ratio:1/1;overflow:hidden;
+  border-radius:14px;background:var(--gold-l);
+}
+.hit-card__img img{
+  width:100%;height:100%;object-fit:cover;display:block;
+  opacity:0;transition:opacity .35s ease, filter .35s ease;filter:blur(8px);
+}
+.hit-card__img img.loaded{opacity:1;filter:none}
+.hit-card__badge{
+  position:absolute;top:6px;left:6px;
+  background:var(--mesh-red);color:#fff;
+  font-size:10px;font-weight:800;padding:3px 8px;border-radius:10px;
+  box-shadow:var(--shadow-glow);letter-spacing:.3px;
+}
+.hit-card__name{
+  font-size:12px;font-weight:600;color:var(--text);line-height:1.3;
+  margin:8px 4px 4px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  min-height:31px;letter-spacing:-.1px;
+}
+.hit-card__price{
+  font-size:14px;font-weight:800;letter-spacing:-.3px;
+  background:var(--grad-text-red);
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;color:transparent;
+  padding:0 4px 6px;
+  font-variation-settings:'wght' 800;
+}
+
+/* ── Sweet Check banner (на главной) ──────────────────────────────────────── */
+.sc-banner{
+  position:relative;margin:4px 14px 0;
+  border-radius:24px;overflow:hidden;
+  cursor:pointer;
+  background:var(--mesh-premium);
+  color:#fff;
+  padding:24px 22px 22px;
+  box-shadow:0 16px 44px -10px rgba(40,8,20,.45);
+  transition:transform var(--t),box-shadow var(--t);
+  isolation:isolate;
+}
+.sc-banner:active{transform:scale(.98)}
+.sc-banner::before{
+  /* золотая обводка */
+  content:'';position:absolute;inset:0;border-radius:24px;
+  padding:1px;background:linear-gradient(135deg,rgba(212,160,64,.6),rgba(212,160,64,0) 40%,rgba(214,31,55,.4));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;
+  pointer-events:none;
+}
+.sc-banner__bg{
+  position:absolute;top:-30%;right:-15%;
+  width:280px;height:280px;border-radius:50%;
+  background:radial-gradient(circle,rgba(212,160,64,.22),transparent 70%);
+  pointer-events:none;
+}
+.sc-banner__content{position:relative;z-index:1}
+.sc-banner__eye{
+  display:inline-flex;align-items:center;gap:6px;
+  background:rgba(212,160,64,.18);
+  border:1px solid rgba(212,160,64,.4);
+  color:#f6c66a;
+  padding:5px 12px;border-radius:999px;
+  font-size:11px;font-weight:700;letter-spacing:.6px;
+  text-transform:uppercase;margin-bottom:14px;
+}
+.sc-banner__h{
+  font-family:var(--ff-display);
+  font-size:clamp(22px, 6vw, 28px);font-weight:800;
+  line-height:1.08;letter-spacing:-.6px;margin-bottom:10px;
+  text-wrap:balance;
+}
+.sc-banner__sub{
+  font-size:13px;opacity:.85;line-height:1.5;margin-bottom:16px;
+  font-weight:500;
+}
+.sc-banner__cta{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:13px;font-weight:700;letter-spacing:.2px;
+  padding:9px 18px;border-radius:999px;
+  background:rgba(255,255,255,.16);
+  border:1px solid rgba(255,255,255,.28);
+  backdrop-filter:blur(8px);
+}
+
+/* ── Accordion (details / summary) ────────────────────────────────────────── */
+.acc{
+  margin:8px 14px;
+  background:#fff;border:1px solid var(--border);
+  border-radius:18px;
+  overflow:hidden;
+  box-shadow:var(--shadow-xs);
+  transition:box-shadow var(--t);
+}
+.acc[open]{box-shadow:var(--shadow-sm)}
+.acc__sum{
+  display:flex;align-items:center;gap:12px;
+  padding:16px 18px;cursor:pointer;
+  font-family:var(--ff-body);font-weight:700;font-size:15px;
+  color:var(--text);letter-spacing:-.1px;
+  list-style:none;
+  user-select:none;
+  -webkit-tap-highlight-color:transparent;
+}
+.acc__sum::-webkit-details-marker{display:none}
+.acc__ic{
+  width:36px;height:36px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--red-xl);color:var(--red);
+  border-radius:10px;
+}
+.acc__t{flex:1}
+.acc__chev{
+  flex-shrink:0;color:var(--ink-3);
+  transition:transform var(--t);
+  display:flex;align-items:center;
+}
+.acc[open] .acc__chev{transform:rotate(90deg);color:var(--red)}
+.acc__body{
+  padding:0 18px 18px;
+  animation:accReveal .28s ease;
+}
+@keyframes accReveal{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── AI Chat Modal ─────────────────────────────────────────────────────── */
+.ai-chat__sheet{
+  max-width:480px;width:100%;
+  height:min(86vh, 720px);
+  display:flex;flex-direction:column;
+  border-radius:22px 22px 0 0;
+  padding:0;
+  overflow:hidden;
+  background:#fff;
+}
+@media (min-width: 520px){
+  .ai-chat__sheet{border-radius:22px;height:min(82vh,720px);margin:auto}
+}
+.ai-chat__head{
+  padding:18px 20px 14px;
+  border-bottom:1px solid var(--border);
+  background:#fff;
+  flex-shrink:0;
+}
+.ai-chat__title{
+  font-family:var(--ff-body);
+  font-size:17px;font-weight:800;color:var(--text);
+  display:inline-flex;align-items:center;gap:8px;
+  letter-spacing:-.2px;
+}
+.ai-chat__title [data-icon]{color:var(--red)}
+.ai-chat__sub{
+  font-size:12px;color:var(--muted);font-weight:500;
+  margin-top:2px;
+}
+.ai-chat__sheet .chat-wrap{
+  flex:1;display:flex;flex-direction:column;
+  padding:8px 14px 14px;overflow:hidden;
+}
+.ai-chat__sheet .chat-messages{
+  flex:1;overflow-y:auto;padding:14px 4px;
+  -webkit-overflow-scrolling:touch;
+}

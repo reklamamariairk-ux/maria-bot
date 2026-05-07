@@ -45,7 +45,25 @@
     <button class="btn-hero" data-haptic="light" onclick="switchTab('menu')">Смотреть меню →</button>
   </div>
 
-  <!-- Bento -->
+  <!-- Хит недели — карусель (заполнится из app.js) -->
+  <div class="sh"><span class="sh__line"></span><span class="sh__text">Хит недели</span><span class="sh__line"></span></div>
+  <div class="hits-row" id="home-hits">
+    <div class="cat-loading">Подбираем самое вкусное…</div>
+  </div>
+
+  <!-- Sweet Check — крупный premium-баннер -->
+  <div class="sh"><span class="sh__line"></span><span class="sh__text">Сладкий чек</span><span class="sh__line"></span></div>
+  <div class="sc-banner" data-haptic="light" onclick="switchTab('club')">
+    <div class="sc-banner__bg"></div>
+    <div class="sc-banner__content">
+      <div class="sc-banner__eye"><span data-icon="ticket" data-size="14"></span> Лотерея на технику</div>
+      <div class="sc-banner__h">Каждый чек —<br>шанс выиграть iPhone 17</div>
+      <div class="sc-banner__sub">MacBook · PS5 Slim · Apple Watch · JBL · разыгрываем каждый квартал</div>
+      <div class="sc-banner__cta">Узнать как участвовать <span data-icon="arrowRight" data-size="14"></span></div>
+    </div>
+  </div>
+
+  <!-- Bento — Клуб + Кафе -->
   <div class="bento">
     <div class="bento__big" data-haptic="light" onclick="switchTab('club')">
       <div class="bento__eye"><span data-icon="diamond" data-size="14"></span> Клуб «Мария для своих»</div>
@@ -53,22 +71,22 @@
       <div class="bento__sub">Кэшбэк до 10% · скидки у партнёров · бонусы за игры</div>
       <div class="bento__cta">Открыть клуб <span data-icon="arrowRight" data-size="14"></span></div>
     </div>
-    <div class="bento__sm bento__sm--gold" data-haptic="light" onclick="switchTab('club')">
-      <div class="bento__sm-ic"><span data-icon="ticket" data-size="26"></span></div>
-      <div class="bento__sm-t">Сладкий чек</div>
-      <div class="bento__sm-s">iPhone 17, MacBook, PS5</div>
-    </div>
     <div class="bento__sm bento__sm--light" data-haptic="light" onclick="openShopsModal()">
       <div class="bento__sm-ic" style="color:var(--red)"><span data-icon="pin" data-size="26"></span></div>
       <div class="bento__sm-t">17 кафе</div>
       <div class="bento__sm-s">Иркутск</div>
     </div>
+    <a class="bento__sm bento__sm--light" href="tel:+73952504080" data-haptic="light" style="text-decoration:none">
+      <div class="bento__sm-ic" style="color:var(--gold-d)"><span data-icon="phone" data-size="26"></span></div>
+      <div class="bento__sm-t">Позвонить</div>
+      <div class="bento__sm-s">50-40-80</div>
+    </a>
   </div>
 
-  <!-- Акции -->
-  <div class="sh"><span class="sh__line"></span><span class="sh__text">Акции месяца</span><span class="sh__line"></span></div>
+  <!-- Торт месяца — компактный promo -->
+  <div class="sh"><span class="sh__line"></span><span class="sh__text">Торт месяца</span><span class="sh__line"></span></div>
   <div class="promos">
-    <div class="promo promo--red" id="promo-cake-of-month" onclick="catOpenProductFromPromo()">
+    <div class="promo promo--red" id="promo-cake-of-month" data-haptic="light" onclick="catOpenProductFromPromo()">
       <div class="promo__badge">−20%</div>
       <div class="promo__name" id="promo-cake-name">Торт месяца</div>
       <div class="promo__desc" id="promo-cake-desc">Загружается…</div>
@@ -79,18 +97,6 @@
       <div class="promo__name">Упаковка в подарок</div>
       <div class="promo__desc">Фирменная коробка с лентой — бесплатно к любому заказу</div>
     </div>
-  </div>
-
-  <!-- Контакты -->
-  <div class="sh"><span class="sh__line"></span><span class="sh__text">Контакты</span><span class="sh__line"></span></div>
-  <div class="contacts-wrap">
-    <a class="contact-row" href="tel:+73952504080">
-      <span class="cr-icon">📱</span><span>+7 (3952) 50-40-80</span>
-    </a>
-    <div class="contact-row">
-      <span class="cr-icon">🌐</span><span>maria-irk.ru</span>
-    </div>
-    <button class="btn-outline" onclick="openShopsModal()">Все адреса магазинов →</button>
   </div>
 
 </section>
@@ -236,68 +242,83 @@
     </div>
   </div>
 
-  <div class="sh"><span class="sh__line"></span><span class="sh__text">Уровни</span><span class="sh__line"></span></div>
-  <div class="levels">
-    <div class="lv lv--1">
-      <div class="lv__left"><div class="lv__icon">🤝</div><div><div class="lv__name">Друзья</div><div class="lv__cond">от 0 ₽ в год</div></div></div>
-      <div class="lv__pct">5%</div>
+  <!-- ── Дополнительная информация — accordion-секции ──────────────── -->
+
+  <details class="acc">
+    <summary class="acc__sum">
+      <span class="acc__ic"><span data-icon="trophy" data-size="20"></span></span>
+      <span class="acc__t">Уровни и привилегии</span>
+      <span class="acc__chev"><span data-icon="arrowRight" data-size="16"></span></span>
+    </summary>
+    <div class="acc__body">
+      <div class="levels">
+        <div class="lv lv--1">
+          <div class="lv__left"><div class="lv__icon">🤝</div><div><div class="lv__name">Друзья</div><div class="lv__cond">от 0 ₽ в год</div></div></div>
+          <div class="lv__pct">5%</div>
+        </div>
+        <div class="lv lv--2">
+          <div class="lv__left"><div class="lv__icon">💛</div><div><div class="lv__name">Лучшие друзья</div><div class="lv__cond">от 10 000 ₽ в год</div></div></div>
+          <div class="lv__pct">7%</div>
+        </div>
+        <div class="lv lv--3">
+          <div class="lv__left"><div class="lv__icon">❤️</div><div><div class="lv__name">Семья</div><div class="lv__cond">от 50 000 ₽ в год</div></div></div>
+          <div class="lv__pct">10%</div>
+        </div>
+      </div>
+      <div class="benefits" style="margin-top:14px">
+        <div class="bf"><span class="bf__ic">💰</span><div><b>Оплата бонусами до 30%</b><div class="bf__sub">Накопленные баллы — до 30% любого заказа</div></div></div>
+        <div class="bf"><span class="bf__ic">🎂</span><div><b>Скидка в день рождения</b><div class="bf__sub">Вам и партнёру — 5%, детям — 10% (±5 дней)</div></div></div>
+        <div class="bf"><span class="bf__ic">🏅</span><div><b>Торт месяца −20% ежедневно</b><div class="bf__sub">Постоянная скидка для участников клуба</div></div></div>
+        <div class="bf"><span class="bf__ic">🎟</span><div><b>Закрытые распродажи</b><div class="bf__sub">Ранний доступ к новинкам, дегустации, мероприятия</div></div></div>
+        <div class="bf"><span class="bf__ic">🤝</span><div><b>Скидки у партнёров</b><div class="bf__sub">Рестораны, фитнес, салоны красоты, клиники</div></div></div>
+      </div>
+      <div class="infobox" style="margin-top:12px">ℹ️ Скидки и бонусы не суммируются — применяется максимальная выгода</div>
     </div>
-    <div class="lv lv--2">
-      <div class="lv__left"><div class="lv__icon">💛</div><div><div class="lv__name">Лучшие друзья</div><div class="lv__cond">от 10 000 ₽ в год</div></div></div>
-      <div class="lv__pct">7%</div>
+  </details>
+
+  <details class="acc">
+    <summary class="acc__sum">
+      <span class="acc__ic"><span data-icon="ticket" data-size="20"></span></span>
+      <span class="acc__t">Сладкий чек — призы и правила</span>
+      <span class="acc__chev"><span data-icon="arrowRight" data-size="16"></span></span>
+    </summary>
+    <div class="acc__body">
+      <p class="section-desc" style="padding-left:0;padding-right:0">Каждый чек — шанс выиграть технику мечты. Розыгрыш каждый квартал.</p>
+      <div id="sc-my" style="display:none"></div>
+      <div class="prizes">
+        <div class="prize prize--1"><div class="prize__place">🥇</div><div class="prize__icon">📱</div><div class="prize__name">iPhone 17 Pro Max</div><div class="prize__sub">256 ГБ, оранжевый</div></div>
+        <div class="prize prize--2"><div class="prize__place">🥈</div><div class="prize__icon">💻</div><div class="prize__name">MacBook</div></div>
+        <div class="prize prize--2"><div class="prize__place">🥈</div><div class="prize__icon">🎮</div><div class="prize__name">PlayStation 5 Slim</div></div>
+        <div class="prize prize--3"><div class="prize__place">🥉</div><div class="prize__icon">⌚</div><div class="prize__name">Apple Watch Series</div></div>
+        <div class="prize prize--3"><div class="prize__place">🥉</div><div class="prize__icon">🔊</div><div class="prize__name">Колонка JBL</div></div>
+      </div>
+      <div class="sc-rules">
+        <h4>Как получить билет</h4>
+        <ul>
+          <li>Каждую неделю — новое задание в кафе</li>
+          <li>Купи нужный набор → +5 билетов на розыгрыш</li>
+          <li>Билеты копятся до конца квартала</li>
+          <li>Чем больше билетов — выше шанс на приз</li>
+        </ul>
+      </div>
+      <div id="sc-week" style="display:none"></div>
+      <button class="btn-full" id="sc-join-btn" onclick="scJoin()" style="margin-top:14px">
+        🎟 Участвовать в Сладком чеке
+      </button>
     </div>
-    <div class="lv lv--3">
-      <div class="lv__left"><div class="lv__icon">❤️</div><div><div class="lv__name">Семья</div><div class="lv__cond">от 50 000 ₽ в год</div></div></div>
-      <div class="lv__pct">10%</div>
+  </details>
+
+  <details class="acc">
+    <summary class="acc__sum">
+      <span class="acc__ic"><span data-icon="sparkles" data-size="20"></span></span>
+      <span class="acc__t">Партнёры клуба</span>
+      <span class="acc__chev"><span data-icon="arrowRight" data-size="16"></span></span>
+    </summary>
+    <div class="acc__body">
+      <p class="section-desc" style="padding-left:0;padding-right:0">По карте «Мария для своих» — привилегии у наших партнёров</p>
+      <div id="partners-list"></div>
     </div>
-  </div>
-
-  <div class="sh"><span class="sh__line"></span><span class="sh__text">Привилегии</span><span class="sh__line"></span></div>
-  <div class="benefits">
-    <div class="bf"><span class="bf__ic">💰</span><div><b>Оплата бонусами до 30%</b><div class="bf__sub">Накопленные баллы — до 30% любого заказа</div></div></div>
-    <div class="bf"><span class="bf__ic">🎂</span><div><b>Скидка в день рождения</b><div class="bf__sub">Вам и партнёру — 5%, детям — 10% (±5 дней)</div></div></div>
-    <div class="bf"><span class="bf__ic">🏅</span><div><b>Торт месяца −20% ежедневно</b><div class="bf__sub">Постоянная скидка для участников клуба</div></div></div>
-    <div class="bf"><span class="bf__ic">🎟</span><div><b>Закрытые распродажи</b><div class="bf__sub">Ранний доступ к новинкам, дегустации, мероприятия</div></div></div>
-    <div class="bf"><span class="bf__ic">🏆</span><div><b>Лотерея «Сладкий чек»</b><div class="bf__sub">Каждый чек — шанс на iPhone 17 Pro Max, MacBook, PS5 Slim</div></div></div>
-    <div class="bf"><span class="bf__ic">🤝</span><div><b>Скидки у партнёров</b><div class="bf__sub">Рестораны, фитнес, салоны красоты, клиники</div></div></div>
-  </div>
-
-  <div class="infobox">ℹ️ Скидки и бонусы не суммируются — применяется максимальная выгода</div>
-
-  <div class="sh" style="margin-top:20px"><span class="sh__line"></span><span class="sh__text">🧾 Сладкий чек — лотерея</span><span class="sh__line"></span></div>
-  <p class="section-desc">Каждый чек — шанс выиграть технику мечты. Розыгрыш каждый квартал.</p>
-
-  <!-- Личные билеты юзера (заполнится из LK) -->
-  <div id="sc-my" style="display:none"></div>
-
-  <div class="prizes">
-    <div class="prize prize--1"><div class="prize__place">🥇</div><div class="prize__icon">📱</div><div class="prize__name">iPhone 17 Pro Max</div><div class="prize__sub">256 ГБ, оранжевый</div></div>
-    <div class="prize prize--2"><div class="prize__place">🥈</div><div class="prize__icon">💻</div><div class="prize__name">MacBook</div></div>
-    <div class="prize prize--2"><div class="prize__place">🥈</div><div class="prize__icon">🎮</div><div class="prize__name">PlayStation 5 Slim</div></div>
-    <div class="prize prize--3"><div class="prize__place">🥉</div><div class="prize__icon">⌚</div><div class="prize__name">Apple Watch Series</div></div>
-    <div class="prize prize--3"><div class="prize__place">🥉</div><div class="prize__icon">🔊</div><div class="prize__name">Колонка JBL</div></div>
-  </div>
-
-  <div class="sc-rules">
-    <h4>Как получить билет</h4>
-    <ul>
-      <li>Каждую неделю — новое задание в кафе</li>
-      <li>Купи нужный набор → +5 билетов на розыгрыш</li>
-      <li>Билеты копятся до конца квартала</li>
-      <li>Чем больше билетов — выше шанс на приз</li>
-    </ul>
-  </div>
-
-  <!-- Активная неделя-квест (динамика из /api/sweet-check) -->
-  <div id="sc-week" style="display:none"></div>
-
-  <button class="btn-full" id="sc-join-btn" onclick="scJoin()" style="margin-top:14px">
-    🎟 Участвовать в Сладком чеке
-  </button>
-
-  <div class="sh" style="margin-top:20px"><span class="sh__line"></span><span class="sh__text">Партнёры клуба</span><span class="sh__line"></span></div>
-  <p class="section-desc">По карте «Мария для своих» — привилегии у наших партнёров</p>
-  <div id="partners-list"></div>
+  </details>
 </section>
 
 <!-- ═══ ЗАКАЗ ТОРТА ═══ -->
@@ -341,12 +362,8 @@
   <div class="infobox" style="margin-top:16px">📞 Или позвоните: <a href="tel:+73952504080">+7 (3952) 50-40-80</a></div>
 </section>
 
-<!-- ═══ ИГРЫ + ЧАТ ═══ -->
+<!-- ═══ ИГРЫ ═══ -->
 <section class="tab" id="tab-fun">
-  <div class="sub-tabs">
-    <button class="sub-tab active" id="subtab-games" onclick="showSubTab('games')">🎮 Игры</button>
-    <button class="sub-tab" id="subtab-chat" onclick="showSubTab('chat')">🤖 ИИ-чат</button>
-  </div>
 
   <!-- GAMES -->
   <div id="subtab-content-games">
@@ -453,8 +470,18 @@
     </div>
   </div>
 
-  <!-- CHAT -->
-  <div id="subtab-content-chat" style="display:none">
+</section>
+
+<!-- MODAL: AI-чат (открывается с любой вкладки через FAB) -->
+<div class="cat-modal" id="ai-chat-modal" style="display:none" onclick="if(event.target===this)closeAiChat()">
+  <div class="cat-modal__sheet ai-chat__sheet">
+    <button class="cat-modal__close" onclick="closeAiChat()">×</button>
+    <div class="ai-chat__head">
+      <div class="ai-chat__title">
+        <span data-icon="bot" data-size="22"></span> Маша — AI-помощник
+      </div>
+      <div class="ai-chat__sub">Спроси про торты, заказ или клуб</div>
+    </div>
     <div class="chat-wrap">
       <div class="chat-messages" id="chat-messages">
         <div class="msg msg--bot fade-in">
@@ -465,15 +492,17 @@
       <div class="chat-chips" id="chat-chips">
         <button class="chip" onclick="usechip(this)">Торт на день рождения?</button>
         <button class="chip" onclick="usechip(this)">Как оформить заказ?</button>
-        <button class="chip" onclick="usechip(this)">Расскажи про клуб Марии</button>
+        <button class="chip" onclick="usechip(this)">Расскажи про клуб</button>
       </div>
       <div class="chat-row">
         <input class="chat-in" id="chat-input" type="text" placeholder="Напишите вопрос…" autocomplete="off" onkeydown="handleChatKey(event)"/>
-        <button class="chat-btn" id="chat-send" onclick="sendMessage()">➤</button>
+        <button class="chat-btn" id="chat-send" data-haptic="light" onclick="sendMessage()" aria-label="Отправить">
+          <span data-icon="arrowRight" data-size="18"></span>
+        </button>
       </div>
     </div>
   </div>
-</section>
+</div>
 
 </main>
 
@@ -501,8 +530,8 @@
 </div>
 
 <!-- FAB: Маша (AI-чат) — плавающая кнопка, открывает чат на любой вкладке -->
-<button class="fab-ai" id="fab-ai" onclick="openAiChat()" title="Спросить Машу">
-  🤖
+<button class="fab-ai" id="fab-ai" data-haptic="light" onclick="openAiChat()" title="Спросить Машу" aria-label="AI-чат">
+  <span data-icon="bot" data-size="22"></span>
 </button>
 
 <!-- MODAL: Карточка товара из каталога -->

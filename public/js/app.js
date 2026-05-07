@@ -89,13 +89,28 @@ window.openShopsModal = openShopsModal;
 window.closeShopsModal = closeShopsModal;
 window.openMaps = openMaps;
 
-/* ── AI чат — плавающая кнопка ─────────────────────────────────────────── */
+/* ── AI чат — модал, открывается с любой вкладки ───────────────────────── */
 function openAiChat() {
-  switchTab('fun');
-  showSubTab('chat');
+  const m = document.getElementById('ai-chat-modal');
+  if (!m) return;
+  m.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  window.tgBack?.show(() => closeAiChat());
   setTimeout(() => document.getElementById('chat-input')?.focus(), 200);
+  // Прокрутка к низу истории
+  setTimeout(() => {
+    const wrap = document.getElementById('chat-messages');
+    if (wrap) wrap.scrollTop = wrap.scrollHeight;
+  }, 50);
+}
+function closeAiChat() {
+  const m = document.getElementById('ai-chat-modal');
+  if (m) m.style.display = 'none';
+  document.body.style.overflow = '';
+  window.tgBack?.hide();
 }
 window.openAiChat = openAiChat;
+window.closeAiChat = closeAiChat;
 
 /* ── Торт месяца — динамика из каталога ─────────────────────────────────── */
 let _cakeOfMonth = null;
@@ -142,6 +157,43 @@ function catOpenProductFromPromo() {
 window.catOpenProductFromPromo = catOpenProductFromPromo;
 window.loadCakeOfMonth = loadCakeOfMonth;
 
+/* ── Хит недели — карусель на главной ───────────────────────────────────── */
+async function loadHomeHits() {
+  const wrap = document.getElementById('home-hits');
+  if (!wrap) return;
+  try {
+    const r = await fetch('/api/catalog/products?limit=100', {cache:'no-store'});
+    const d = await r.json();
+    const all = Array.isArray(d?.products) ? d.products : [];
+    const hits = all.filter(p => p.hit && p.image && p.id && (p.priceNumber || p.price)).slice(0, 8);
+    if (hits.length === 0) {
+      wrap.innerHTML = '';
+      wrap.style.display = 'none';
+      return;
+    }
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    wrap.innerHTML = hits.map((p, i) => {
+      const priceTxt = p.price || (p.priceNumber ? `${Number(p.priceNumber).toLocaleString('ru-RU')} ₽` : '');
+      const loading = i < 3 ? 'eager' : 'lazy';
+      const fp      = i < 2 ? 'high' : 'auto';
+      return `
+        <div class="hit-card" data-haptic="light" onclick="catOpenProduct(${p.id})">
+          <div class="hit-card__img">
+            <img src="/img?u=${encodeURIComponent(p.image)}" alt="${esc(p.name)}" loading="${loading}" decoding="async" fetchpriority="${fp}" onload="this.classList.add('loaded')">
+            <span class="hit-card__badge">★ Хит</span>
+          </div>
+          <div class="hit-card__name">${esc(p.name)}</div>
+          <div class="hit-card__price">${esc(priceTxt)}</div>
+        </div>`;
+    }).join('');
+    if (window.IconInflate) window.IconInflate(wrap);
+  } catch (e) {
+    console.error('[home-hits]', e);
+    wrap.innerHTML = '';
+  }
+}
+window.loadHomeHits = loadHomeHits;
+
 /* ── Tabs ────────────────────────────────────────────────────────────────── */
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -150,9 +202,9 @@ function switchTab(name) {
   const navBtn = document.getElementById('nav-' + name);
   navBtn?.classList.add('active');
   positionNavPill(navBtn);
-  // FAB — скрыть на вкладке «Игры/Чат» (там сам чат)
+  // FAB AI-чата теперь виден на ВСЕХ вкладках (модал поверх)
   const fab = document.getElementById('fab-ai');
-  if (fab) fab.style.display = name === 'fun' ? 'none' : '';
+  if (fab) fab.style.display = '';
   if (name === 'fun' && !window._gamesInited) {
     window._gamesInited = true;
     initMemory();
@@ -238,4 +290,5 @@ async function loadPartners() {
 document.addEventListener('DOMContentLoaded', () => {
   loadPartners();
   loadCakeOfMonth();
+  loadHomeHits();
 });
