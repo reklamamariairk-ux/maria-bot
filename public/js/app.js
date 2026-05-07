@@ -157,6 +157,10 @@ function switchTab(name) {
     window._gamesInited = true;
     initMemory();
     flappyInit();
+    // Пекарня — по умолчанию открыта первой
+    if (typeof hkBoot === 'function') {
+      try { hkBoot(); } catch (e) { console.error('[hkBoot]', e); }
+    }
   }
   if (window.Telegram?.WebApp?.HapticFeedback?.selectionChanged) {
     window.Telegram.WebApp.HapticFeedback.selectionChanged();

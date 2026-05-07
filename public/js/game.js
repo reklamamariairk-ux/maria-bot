@@ -69,7 +69,7 @@ function checkMatch() {
 /* ═══════════════════════════════════════════════════════
    GAME SELECTOR
 ═══════════════════════════════════════════════════════ */
-const GAME_IDS = ['memory','flappy','bakery'];
+const GAME_IDS = ['bakery','memory','flappy'];
 
 function showGame(name) {
   GAME_IDS.forEach(id => {

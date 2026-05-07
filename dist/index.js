@@ -505,15 +505,16 @@ async function chatAgent(userMessages, ctx) {
 — Конкретные товары (имя, цена, вес) бери ТОЛЬКО из ответов tool calls. Без выдумок.
 — Если клиент не верифицировал телефон, баланс/заказы недоступны — мягко предложи нажать «Поделиться номером» во вкладке Клуб.`,
     };
-    // Обрезаем историю клиента — оставляем последние ~12 сообщений + system,
-    // чтобы не упереться в токен-лимит Groq и не плодить долгие запросы.
-    const trimmedUser = userMessages.length > 12 ? userMessages.slice(-12) : userMessages;
+    // Обрезаем историю клиента — оставляем последние ~30 сообщений + system.
+    // Llama-3.3-70b у Groq имеет 32K context, средний тур ~150 токенов → 30 сообщений
+    // помещается с большим запасом, диалог стабильно идёт.
+    const trimmedUser = userMessages.length > 30 ? userMessages.slice(-30) : userMessages;
     const messages = [system, ...trimmedUser];
     const MAX_ITERATIONS = 4;
     let toolsBroken = false;
     for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
         // Для каждой итерации обрезаем messages если они выросли с tool-результатами
-        const sendMessages = trimHistory(messages, 18);
+        const sendMessages = trimHistory(messages, 36);
         const response = await groqRequest({
             model: "llama-3.3-70b-versatile",
             max_tokens: 1024,

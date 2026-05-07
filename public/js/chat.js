@@ -1,12 +1,23 @@
 /* ─── Chat ───────────────────────────────────────────────────────────────── */
-const chatHistory = [];
-const CHAT_HISTORY_MAX = 12; // ограничиваем — 6 пар user+assistant, чтобы не упираться в токен-лимит Groq
+// Восстанавливаем историю чата из sessionStorage — сохраняется на время сессии
+const CHAT_KEY = 'maria_chat_history_v1';
+let chatHistory = [];
+try {
+  const saved = sessionStorage.getItem(CHAT_KEY);
+  if (saved) {
+    const parsed = JSON.parse(saved);
+    if (Array.isArray(parsed)) chatHistory = parsed;
+  }
+} catch {}
+
+const CHAT_HISTORY_MAX = 40; // 20 пар user+assistant — достаточно для длинного диалога
 const _chatInitData = window.Telegram?.WebApp?.initData ?? "";
 
 function trimChatHistory() {
   if (chatHistory.length > CHAT_HISTORY_MAX) {
     chatHistory.splice(0, chatHistory.length - CHAT_HISTORY_MAX);
   }
+  try { sessionStorage.setItem(CHAT_KEY, JSON.stringify(chatHistory)); } catch {}
 }
 
 function handleChatKey(e) {
