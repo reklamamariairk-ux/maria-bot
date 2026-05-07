@@ -256,10 +256,21 @@ async function loadHomeHits() {
 window.loadHomeHits = loadHomeHits;
 
 /* ── Tabs ────────────────────────────────────────────────────────────────── */
+const TAB_ORDER = ['home','menu','club','fun','order'];
+let _lastTab = 'home';
 function switchTab(name) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  // Определяем направление перехода (вправо/влево) для slide-анимации
+  const fromIdx = TAB_ORDER.indexOf(_lastTab);
+  const toIdx   = TAB_ORDER.indexOf(name);
+  const back    = fromIdx > toIdx;
+  _lastTab = name;
+  document.querySelectorAll('.tab').forEach(t => { t.classList.remove('active'); t.classList.remove('tab-back'); });
   document.querySelectorAll('.nb').forEach(b => b.classList.remove('active'));
-  document.getElementById('tab-' + name)?.classList.add('active');
+  const tab = document.getElementById('tab-' + name);
+  if (tab) {
+    if (back) tab.classList.add('tab-back');
+    tab.classList.add('active');
+  }
   const navBtn = document.getElementById('nav-' + name);
   navBtn?.classList.add('active');
   positionNavPill(navBtn);

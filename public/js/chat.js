@@ -20,6 +20,27 @@ function trimChatHistory() {
   try { sessionStorage.setItem(CHAT_KEY, JSON.stringify(chatHistory)); } catch {}
 }
 
+function clearChat() {
+  const tg = window.Telegram?.WebApp;
+  const doClear = () => {
+    chatHistory = [];
+    try { sessionStorage.removeItem(CHAT_KEY); } catch {}
+    const wrap = document.getElementById('chat-messages');
+    if (wrap) {
+      wrap.innerHTML = `
+        <div class="msg msg--bot fade-in">
+          <div class="msg__av">🍰</div>
+          <div class="msg__bbl">Привет! Чем могу помочь?</div>
+        </div>`;
+    }
+    if (window.refreshChatChips) window.refreshChatChips();
+    window.haptic?.('selection');
+  };
+  if (tg?.showConfirm) tg.showConfirm('Очистить историю чата?', (ok) => { if (ok) doClear(); });
+  else if (confirm('Очистить историю чата?')) doClear();
+}
+window.clearChat = clearChat;
+
 function handleChatKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 }

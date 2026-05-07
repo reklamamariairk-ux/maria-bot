@@ -3,6 +3,12 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+  <meta name="theme-color" content="#ffffff"/>
+  <meta name="apple-mobile-web-app-title" content="Мария"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="/logo.png"/>
   <title>Мария — кондитерская</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
@@ -21,9 +27,9 @@
        onerror="this.src='/logo.png'"
        onerror="this.style.display='none';document.getElementById('lf').style.display='block'"/>
   <span class="header__name" id="lf" style="display:none">Мария</span>
-  <div class="hdr-counters" id="hdr-counters" style="display:none" onclick="switchTab('club')">
-    <span class="hdr-c hdr-c--star">⭐ <b id="hdr-stars">0</b></span>
-    <span class="hdr-c hdr-c--point">💎 <b id="hdr-points">0</b></span>
+  <div class="hdr-counters" id="hdr-counters" style="display:none" onclick="switchTab('club')" title="Звёзды и баллы программы лояльности">
+    <span class="hdr-c hdr-c--star" title="Звёзды — за игры и активность. Конвертируются в баллы.">⭐ <b id="hdr-stars">0</b></span>
+    <span class="hdr-c hdr-c--point" title="Баллы — оплата до 30% любого заказа.">💎 <b id="hdr-points">0</b></span>
   </div>
   <button class="header__cart" id="hdr-cart" data-haptic="light" onclick="cartOpen()" style="display:none">
     <span data-icon="cart" data-size="16"></span> <b id="hdr-cart-count">0</b>
@@ -148,9 +154,20 @@
     <p class="club-hero__p">Программа лояльности</p>
   </div>
 
-  <!-- Не открыто через Telegram -->
+  <!-- Не открыто через Telegram — premium empty state -->
   <div id="club-no-tg" style="display:none">
-    <div class="infobox">⚠️ Чтобы участвовать в программе, откройте бота @mariatortik_bot в Telegram</div>
+    <div class="empty-state" style="padding-top:32px">
+      <div class="empty-state__ic" style="width:80px;height:80px;background:var(--mesh-red);color:#fff">
+        <span data-icon="diamond" data-size="36"></span>
+      </div>
+      <div class="empty-state__h">Открой клуб через Telegram</div>
+      <div class="empty-state__sub">Программа лояльности доступна только в Mini App: кэшбэк до 10%, баллы за игры, билеты «Сладкого чека».</div>
+      <div class="empty-state__cta">
+        <a class="btn-full" href="https://t.me/mariatortik_bot" target="_blank" style="display:inline-block;width:auto;padding:13px 28px;text-decoration:none">
+          Открыть в Telegram →
+        </a>
+      </div>
+    </div>
   </div>
 
   <div id="club-content" style="display:none">
@@ -347,17 +364,35 @@
 
   <form class="order-form" id="order-form" onsubmit="submitOrder(event)">
     <div class="of-group">
-      <label class="of-label">Ваше имя *</label>
+      <label class="of-label">Ваше имя <span class="lbl-req">*</span></label>
       <input class="of-input" id="of-name" type="text" placeholder="Иван" required autocomplete="name"/>
     </div>
     <div class="of-group">
-      <label class="of-label">Телефон *</label>
-      <input class="of-input" id="of-phone" type="tel" placeholder="+7 (___) ___-__-__" required autocomplete="tel"/>
+      <label class="of-label">Телефон <span class="lbl-req">*</span></label>
+      <input class="of-input" id="of-phone" type="tel" placeholder="+7 (___) ___-__-__" required autocomplete="tel" inputmode="tel" oninput="phoneMask(this)"/>
     </div>
     <div class="of-group">
       <label class="of-label">Какой торт хотите?</label>
-      <input class="of-input" id="of-desc" type="text" placeholder="Например: торт на день рождения, индивидуальный дизайн…"/>
+      <input class="of-input" id="of-desc" type="text" placeholder="Торт на день рождения, индивидуальный дизайн…"/>
     </div>
+
+    <!-- Фото референса -->
+    <div class="of-group">
+      <label class="of-label">Фото референса <span class="lbl-hint">(опционально)</span></label>
+      <label class="of-photo-input">
+        <input type="file" id="of-photo" accept="image/*" onchange="orderPhotoChange(this)" style="display:none"/>
+        <span class="of-photo-input__btn" data-haptic="light">
+          <span data-icon="sparkles" data-size="18"></span>
+          <span>Прикрепить картинку дизайна</span>
+        </span>
+      </label>
+      <input type="hidden" id="of-photo-data" />
+      <div id="of-photo-preview" class="of-photo-preview" style="display:none">
+        <img alt="референс"/>
+        <button type="button" class="of-photo-preview__rm" onclick="document.getElementById('of-photo').value='';document.getElementById('of-photo-data').value='';this.parentElement.style.display='none'" aria-label="Убрать">×</button>
+      </div>
+    </div>
+
     <div class="of-row">
       <div class="of-group" style="flex:1">
         <label class="of-label">Дата нужна</label>
@@ -498,6 +533,9 @@
         <span data-icon="bot" data-size="22"></span> Маша — AI-помощник
       </div>
       <div class="ai-chat__sub">Спроси про торты, заказ или клуб</div>
+      <button class="ai-chat__clear" data-haptic="light" onclick="clearChat()" aria-label="Очистить историю">
+        <span data-icon="close" data-size="14"></span> Очистить
+      </button>
     </div>
     <div class="chat-wrap">
       <div class="chat-messages" id="chat-messages">

@@ -236,6 +236,14 @@ function proxyAsset(url: string, contentType: string) {
 app.get("/logo.svg", proxyAsset("https://www.maria-irk.ru/local/templates/maria/img/logo_new.svg", "image/svg+xml"));
 app.get("/logo.png", proxyAsset("https://www.maria-irk.ru/local/templates/maria/img/mobile_logo.png", "image/png"));
 
+// Раздача фото-референсов «На заказ» — менеджеры открывают по ссылке из лида
+app.get("/lead-photo/:name", (req, res) => {
+  const name = String(req.params.name || "").replace(/[^a-z0-9._-]/gi, "");
+  if (!name) { res.status(400).end(); return; }
+  const file = path.join("/tmp", "lead_photos", name);
+  res.sendFile(file, (err) => { if (err) res.status(404).end(); });
+});
+
 // ─── Image proxy ────────────────────────────────────────────────────────────
 // Прокси картинок товаров с resize в WebP + дисковым кэшем + прогревом.
 // Sharp превращает 1.4 MB PNG в ~80-150 KB WebP — ускоряет загрузку в 10×.
@@ -629,15 +637,36 @@ app.post("/api/chat", async (req, res) => {
 const BITRIX_WEBHOOK = process.env.BITRIX_WEBHOOK ?? "";
 
 // Заявка на индивидуальный торт (форма «На заказ» — менеджер свяжется)
-app.post("/api/lead", async (req, res) => {
-  const { name, phone, description, date, portions, comment } = req.body as {
+app.post("/api/lead", express.json({ limit: "8mb" }), async (req, res) => {
+  const { name, phone, description, date, portions, comment, photo } = req.body as {
     name?: string; phone?: string; description?: string;
-    date?: string; portions?: string; comment?: string;
+    date?: string; portions?: string; comment?: string; photo?: string;
   };
 
   if (!name || !phone) {
     res.status(400).json({ error: "Имя и телефон обязательны" });
     return;
+  }
+
+  // Если есть фото-референс (data:image/jpeg;base64,...) — сохраняем в /tmp с уникальным именем,
+  // в COMMENTS лида пишем ссылку для менеджера.
+  let photoUrl = "";
+  if (photo && photo.startsWith("data:image/")) {
+    try {
+      const m = photo.match(/^data:image\/(\w+);base64,(.+)$/);
+      if (m) {
+        const ext = m[1] === "jpeg" ? "jpg" : m[1];
+        const buf = Buffer.from(m[2], "base64");
+        if (buf.length < 4 * 1024 * 1024) {
+          const id = require("crypto").randomBytes(8).toString("hex");
+          const dir = path.join("/tmp", "lead_photos");
+          fsSync.mkdirSync(dir, { recursive: true });
+          const fname = `${Date.now()}_${id}.${ext}`;
+          fsSync.writeFileSync(path.join(dir, fname), buf);
+          photoUrl = `${process.env.MINI_APP_URL || ""}/lead-photo/${fname}`.replace(/^\//, "https://maria-bot-6182.onrender.com/");
+        }
+      }
+    } catch (e) { console.warn("[LEAD] photo save failed:", (e as Error).message); }
   }
 
   const title = `Заказ торта — ${name} (Telegram Mini App)`;
@@ -646,6 +675,7 @@ app.post("/api/lead", async (req, res) => {
     date        && `Дата: ${date}`,
     portions    && `Порций: ${portions}`,
     comment     && `Комментарий: ${comment}`,
+    photoUrl    && `Фото референса: ${photoUrl}`,
   ].filter(Boolean).join("\n");
 
   if (!BITRIX_WEBHOOK) {

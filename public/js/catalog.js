@@ -17,7 +17,41 @@ let CATALOG_STATE = {
   categories: [],
   loading: false,
   searchTimer: null,
+  sort: 'default',     // default | price-asc | price-desc | popular
+  priceMax: 0,         // 0 = без ограничения
+  currentCategory: '', // для фильтрации повторно
+  lastProducts: [],    // последний загруженный список
 };
+
+// Wishlist (избранное) — localStorage
+const WISH_KEY = 'maria_wishlist_v1';
+function wishLoad() {
+  try { return JSON.parse(localStorage.getItem(WISH_KEY) || '[]'); }
+  catch { return []; }
+}
+function wishSave(arr) {
+  try { localStorage.setItem(WISH_KEY, JSON.stringify(arr)); } catch {}
+}
+function wishHas(id) {
+  return wishLoad().includes(Number(id));
+}
+function wishToggle(id, btn) {
+  const list = wishLoad();
+  const n = Number(id);
+  const idx = list.indexOf(n);
+  if (idx >= 0) {
+    list.splice(idx, 1);
+    if (btn) btn.classList.remove('on');
+    window.haptic?.('selection');
+  } else {
+    list.push(n);
+    if (btn) btn.classList.add('on');
+    window.haptic?.('success');
+  }
+  wishSave(list);
+}
+window.wishToggle = wishToggle;
+window.wishHas = wishHas;
 
 async function catLoadCategories() {
   if (CATALOG_STATE.loading) return;
@@ -61,20 +95,134 @@ async function catShowProducts(category) {
   document.getElementById('menu-bread').style.display = '';
   document.getElementById('menu-bread-name').textContent = category;
   document.getElementById('menu-empty').style.display = 'none';
+  // Скрываем chip-фильтры в категории
+  const chips = document.getElementById('menu-chips');
+  if (chips) chips.style.display = 'none';
+  CATALOG_STATE.currentCategory = category;
 
   const grid = document.getElementById('menu-products');
-  grid.innerHTML = '<div class="cat-loading">Загружаем…</div>';
+  // Skeleton loader — 6 placeholder-карточек
+  grid.innerHTML = Array(6).fill(0).map(() => `
+    <div class="pcard-pr-skel">
+      <div class="pcard-pr-skel__img"></div>
+      <div class="pcard-pr-skel__line pcard-pr-skel__line--w"></div>
+      <div class="pcard-pr-skel__line pcard-pr-skel__line--n"></div>
+    </div>`).join('');
 
   try {
     const res = await fetch('/api/catalog/products?category=' + encodeURIComponent(category) + '&limit=100');
     const data = await res.json();
-    catRenderProducts(data.products || []);
+    CATALOG_STATE.lastProducts = data.products || [];
+    catRenderToolbarAndProducts();
   } catch {
     grid.innerHTML = '<div class="cat-empty">Не удалось загрузить. Попробуй позже.</div>';
   }
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+// Применяем sort + price-фильтр к lastProducts и рендерим
+function catRenderToolbarAndProducts() {
+  let products = [...(CATALOG_STATE.lastProducts || [])];
+  // Filter по цене
+  if (CATALOG_STATE.priceMax > 0) {
+    products = products.filter((p) => {
+      const price = Number(p.priceNumber) || 0;
+      return price > 0 && price <= CATALOG_STATE.priceMax;
+    });
+  }
+  // Sort
+  const s = CATALOG_STATE.sort;
+  if (s === 'price-asc')  products.sort((a,b) => (a.priceNumber||0) - (b.priceNumber||0));
+  if (s === 'price-desc') products.sort((a,b) => (b.priceNumber||0) - (a.priceNumber||0));
+  if (s === 'popular')    products.sort((a,b) => Number(b.hit||0) - Number(a.hit||0));
+  // Toolbar над сеткой
+  const toolbar = catRenderToolbar(products.length);
+  const grid = document.getElementById('menu-products');
+  grid.innerHTML = toolbar + '<div class="cat-products-grid">' + catRenderProductsHtml(products) + '</div>';
+  if (window.IconInflate) window.IconInflate(grid);
+}
+
+function catRenderToolbar(count) {
+  const sortLabel = {
+    'default':    'По умолчанию',
+    'price-asc':  'Сначала дешевле',
+    'price-desc': 'Сначала дороже',
+    'popular':    'По популярности',
+  }[CATALOG_STATE.sort] || 'По умолчанию';
+  const priceLabel = CATALOG_STATE.priceMax > 0 ? `до ${CATALOG_STATE.priceMax.toLocaleString('ru-RU')} ₽` : 'Любая цена';
+  return `
+    <div class="cat-toolbar">
+      <button class="cat-toolbar__btn" data-haptic="light" onclick="catSortMenu(this)">
+        <span data-icon="sparkles" data-size="14"></span> ${sortLabel}
+      </button>
+      <button class="cat-toolbar__btn" data-haptic="light" onclick="catPriceMenu(this)">
+        <span data-icon="coin" data-size="14"></span> ${priceLabel}
+      </button>
+      <span class="cat-toolbar__count">${count} ${count === 1 ? 'товар' : count < 5 ? 'товара' : 'товаров'}</span>
+    </div>`;
+}
+
+function catSortMenu() {
+  const opts = [
+    ['default',    'По умолчанию'],
+    ['price-asc',  'Сначала дешевле'],
+    ['price-desc', 'Сначала дороже'],
+    ['popular',    'По популярности'],
+  ];
+  const html = opts.map(([k, lb]) =>
+    `<button class="popmenu__item${CATALOG_STATE.sort === k ? ' on' : ''}" onclick="catSetSort('${k}')">${lb}</button>`
+  ).join('');
+  catShowPopmenu('Сортировка', html);
+}
+function catSetSort(s) {
+  CATALOG_STATE.sort = s;
+  catClosePopmenu();
+  catRenderToolbarAndProducts();
+}
+function catPriceMenu() {
+  const opts = [
+    [0,    'Любая цена'],
+    [1000, 'до 1 000 ₽'],
+    [2000, 'до 2 000 ₽'],
+    [3000, 'до 3 000 ₽'],
+    [5000, 'до 5 000 ₽'],
+  ];
+  const html = opts.map(([v, lb]) =>
+    `<button class="popmenu__item${CATALOG_STATE.priceMax === v ? ' on' : ''}" onclick="catSetPriceMax(${v})">${lb}</button>`
+  ).join('');
+  catShowPopmenu('Цена', html);
+}
+function catSetPriceMax(v) {
+  CATALOG_STATE.priceMax = v;
+  catClosePopmenu();
+  catRenderToolbarAndProducts();
+}
+function catShowPopmenu(title, innerHtml) {
+  let m = document.getElementById('cat-popmenu');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'cat-popmenu';
+    m.className = 'popmenu-overlay';
+    m.onclick = (e) => { if (e.target === m) catClosePopmenu(); };
+    document.body.appendChild(m);
+  }
+  m.innerHTML = `
+    <div class="popmenu">
+      <div class="popmenu__h">${title}</div>
+      ${innerHtml}
+    </div>`;
+  m.style.display = 'flex';
+}
+function catClosePopmenu() {
+  const m = document.getElementById('cat-popmenu');
+  if (m) m.style.display = 'none';
+}
+window.catSortMenu = catSortMenu;
+window.catPriceMenu = catPriceMenu;
+window.catSetSort = catSetSort;
+window.catSetPriceMax = catSetPriceMax;
+window.catClosePopmenu = catClosePopmenu;
 
 function catShowCategories() {
   document.getElementById('menu-categories').style.display = '';
@@ -87,6 +235,7 @@ function catShowCategories() {
 }
 
 function catRenderProducts(products) {
+  // Используется search-flow (без toolbar)
   const wrap = document.getElementById('menu-products');
   if (!products.length) {
     const inp = document.getElementById('menu-search');
@@ -105,7 +254,15 @@ function catRenderProducts(products) {
     return;
   }
   document.getElementById('menu-empty').style.display = 'none';
-  wrap.innerHTML = products.map((p, idx) => {
+  wrap.innerHTML = '<div class="cat-products-grid">' + catRenderProductsHtml(products) + '</div>';
+  if (window.IconInflate) window.IconInflate(wrap);
+  return;
+}
+
+function catRenderProductsHtml(products) {
+  if (!products.length) return '';
+  const wishList = wishLoad();
+  return products.map((p, idx) => {
     const hasId = p.id != null && p.id > 0;
     const onClick = hasId
       ? `catOpenProduct(${p.id})`
@@ -116,6 +273,9 @@ function catRenderProducts(products) {
     const weight   = p.weight ? `<span class="pcard-pr__w">${escapeHtml(p.weight)}</span>` : '';
     const addBtn = hasId && priceNum > 0
       ? `<button class="pcard-pr__add" aria-label="В корзину" onclick="event.stopPropagation();catQuickAdd(${p.id},this)">+</button>`
+      : '';
+    const wishBtn = hasId
+      ? `<button class="pcard-pr__wish${wishList.includes(Number(p.id)) ? ' on' : ''}" aria-label="В избранное" onclick="event.stopPropagation();wishToggle(${p.id},this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>`
       : '';
     // Первые 6 — eager (видимы сразу), остальные — lazy
     const loading = idx < 6 ? 'eager' : 'lazy';
@@ -128,6 +288,7 @@ function catRenderProducts(products) {
         <div class="pcard-pr__img">
           ${imgEl}
           ${hitBadge}
+          ${wishBtn}
           ${addBtn}
         </div>
         <div class="pcard-pr__body">
@@ -184,6 +345,10 @@ async function catOpenProduct(id) {
       ${props.length ? `<div class="cat-modal__props">${props.join('')}</div>` : ''}
       ${desc ? `<div class="cat-modal__desc">${escapeHtml(desc)}</div>` : ''}
       <div class="cat-modal__actions">
+        <button class="btn-outline cat-modal__share" data-haptic="light" onclick="shareProduct(${p.id})" aria-label="Поделиться">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>
+          Поделиться
+        </button>
         <button class="btn-full" onclick='cartAdd(${JSON.stringify({id:p.id,name:p.name,price:p.price,image:img}).replace(/"/g,"&quot;")});catCloseProduct()'>🛒 В корзину</button>
       </div>
     `;
@@ -293,6 +458,29 @@ function catChipSearch(query) {
   catSearch(query);
 }
 
+function shareProduct(id) {
+  const p = (CATALOG_STATE.lastProducts || []).find(x => Number(x.id) === Number(id));
+  const url = p?.url || `https://www.maria-irk.ru/`;
+  const text = p ? `${p.name} в кондитерской «Мария»` : 'Кондитерская «Мария»';
+  const tg = window.Telegram?.WebApp;
+  // Telegram WebApp не имеет shareTo напрямую — используем openTelegramLink с https://t.me/share/url
+  const shareLink = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
+  if (tg?.openTelegramLink) {
+    tg.openTelegramLink(shareLink);
+  } else if (navigator.share) {
+    navigator.share({ url, text }).catch(() => {});
+  } else {
+    // Fallback — скопировать ссылку в clipboard
+    navigator.clipboard?.writeText(url).then(() => {
+      const t = document.createElement('div');
+      t.textContent = '🔗 Ссылка скопирована';
+      t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(20,15,15,.92);color:#fff;padding:10px 18px;border-radius:24px;z-index:9999;font-size:13px';
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), 2000);
+    });
+  }
+}
+window.shareProduct = shareProduct;
 window.catShowCategories = catShowCategories;
 window.catShowProducts = catShowProducts;
 window.catOpenProduct = catOpenProduct;

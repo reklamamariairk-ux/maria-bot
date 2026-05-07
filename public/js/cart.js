@@ -99,6 +99,16 @@ function cartClear() {
   cartRender();
 }
 
+function cartClearConfirm() {
+  const tg = window.Telegram?.WebApp;
+  if (tg?.showConfirm) {
+    tg.showConfirm('Очистить корзину?', (ok) => { if (ok) cartClear(); });
+    return;
+  }
+  if (confirm('Очистить корзину?')) cartClear();
+}
+window.cartClearConfirm = cartClearConfirm;
+
 function cartTotal() {
   return cartLoad().reduce((s, it) => s + (Number(it.price) || 0) * (Number(it.qty) || 0), 0);
 }
@@ -172,7 +182,7 @@ function cartRender(view) {
     <div class="cart-list">${lines}</div>
     <div class="cart-foot">
       <div class="cart-total">Итого: <b>${cartTotal().toLocaleString('ru-RU')} ₽</b></div>
-      <button class="btn-outline" onclick="cartClear()">Очистить</button>
+      <button class="btn-outline" onclick="cartClearConfirm()">Очистить</button>
       <button class="btn-full cart-foot__cta" onclick="cartRender('checkout')">Оформить →</button>
     </div>
   `;

@@ -171,9 +171,18 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 .main{min-height:calc(100vh - var(--hh) - 88px);padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 
 /* ── TABS ────────────────────────────────────────────────────────────────── */
-.tab{display:none;animation:fadeUp .28s cubic-bezier(.22,1,.36,1)}
-.tab.active{display:block}
+.tab{display:none}
+.tab.active{display:block;animation:tabSlide .32s cubic-bezier(.22,1,.36,1)}
+.tab.active.tab-back{animation:tabSlideBack .32s cubic-bezier(.22,1,.36,1)}
 @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes tabSlide{
+  from{opacity:0;transform:translateX(16px) scale(.99)}
+  to  {opacity:1;transform:translateX(0)    scale(1)}
+}
+@keyframes tabSlideBack{
+  from{opacity:0;transform:translateX(-16px) scale(.99)}
+  to  {opacity:1;transform:translateX(0)     scale(1)}
+}
 
 /* ── HERO ────────────────────────────────────────────────────────────────── */
 .hero{
@@ -454,9 +463,9 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 .cat-chip:hover{border-color:var(--red);color:var(--red);box-shadow:var(--shadow-sm)}
 .cat-chip:active{transform:scale(.94);background:var(--red-xl);border-color:var(--red)}
 
-.cat-products{
+.cat-products{padding:4px 14px 10px}
+.cat-products-grid{
   display:grid;grid-template-columns:1fr 1fr;gap:10px;
-  padding:4px 14px 10px;
 }
 .pcard-pr{
   background:#fff;
@@ -2451,3 +2460,173 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 }
 .lk-ord__repeat:hover{background:var(--red);color:#fff;box-shadow:var(--shadow-glow)}
 .lk-ord__repeat:active{transform:scale(.96)}
+
+/* ── Wishlist heart на карточке товара ─────────────────────────────────── */
+.pcard-pr__wish{
+  position:absolute;top:8px;right:8px;
+  width:32px;height:32px;border-radius:50%;border:0;
+  background:rgba(255,255,255,.92);
+  backdrop-filter:blur(8px);
+  color:var(--ink-3);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;
+  transition:all .18s cubic-bezier(.34,1.56,.64,1);
+  box-shadow:var(--shadow-xs);
+  z-index:2;padding:0;
+}
+.pcard-pr__wish:active{transform:scale(.85)}
+.pcard-pr__wish.on{background:#fff;color:var(--red)}
+.pcard-pr__wish.on svg{fill:var(--red);stroke:var(--red);animation:wishPop .35s cubic-bezier(.34,1.56,.64,1)}
+@keyframes wishPop{
+  0%{transform:scale(1)}
+  40%{transform:scale(1.35)}
+  100%{transform:scale(1)}
+}
+
+/* ── Sort/Price toolbar над сеткой ──────────────────────────────────────── */
+.cat-toolbar{
+  display:flex;align-items:center;gap:8px;
+  padding:0 0 10px;
+  flex-wrap:wrap;
+}
+.cat-toolbar__btn{
+  display:inline-flex;align-items:center;gap:6px;
+  background:#fff;border:1.5px solid var(--border-strong);
+  border-radius:999px;padding:8px 14px;
+  font-family:var(--ff-body);font-size:12px;font-weight:600;color:var(--text);
+  cursor:pointer;transition:all var(--t-fast);
+  letter-spacing:-.1px;
+}
+.cat-toolbar__btn:hover{border-color:var(--red);color:var(--red)}
+.cat-toolbar__btn:active{transform:scale(.94)}
+.cat-toolbar__count{margin-left:auto;font-size:12px;color:var(--muted);font-weight:500}
+
+/* ── Popmenu (sort / price выбор) ──────────────────────────────────────── */
+.popmenu-overlay{
+  position:fixed;inset:0;z-index:500;
+  background:rgba(13,6,8,.45);
+  backdrop-filter:blur(6px);
+  display:flex;align-items:flex-end;justify-content:center;
+  animation:fadeUp .22s ease;
+}
+.popmenu{
+  width:100%;max-width:440px;
+  background:#fff;border-radius:24px 24px 0 0;
+  padding:18px 18px calc(20px + env(safe-area-inset-bottom));
+  box-shadow:0 -12px 36px rgba(13,6,8,.15);
+  animation:popmenuUp .28s cubic-bezier(.22,1,.36,1);
+}
+@keyframes popmenuUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+.popmenu__h{
+  font-family:var(--ff-body);font-size:13px;font-weight:700;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.6px;
+  text-align:center;padding-bottom:14px;border-bottom:1px solid var(--border);margin-bottom:10px;
+}
+.popmenu__item{
+  display:block;width:100%;text-align:left;
+  background:transparent;border:0;
+  padding:13px 14px;
+  font-family:var(--ff-body);font-size:15px;font-weight:600;color:var(--text);
+  border-radius:12px;cursor:pointer;
+  transition:all var(--t-fast);letter-spacing:-.1px;
+}
+.popmenu__item:hover{background:var(--red-xl);color:var(--red)}
+.popmenu__item:active{transform:scale(.98)}
+.popmenu__item.on{
+  background:var(--red-xl);color:var(--red);
+  position:relative;padding-right:36px;
+}
+.popmenu__item.on::after{
+  content:'✓';position:absolute;right:14px;top:50%;transform:translateY(-50%);
+  font-weight:800;
+}
+
+/* ── Skeleton-карточки каталога (placeholder при загрузке) ──────────────── */
+.pcard-pr-skel{
+  background:#fff;border:1px solid var(--border);
+  border-radius:var(--r);padding:6px;
+  box-shadow:var(--shadow-card);
+}
+.pcard-pr-skel__img{
+  aspect-ratio:4/5;border-radius:var(--r-img);
+  background:linear-gradient(110deg, #f4f4f5 8%, #fafafb 18%, #f4f4f5 33%);
+  background-size:200% 100%;
+  animation:skelShimmer 1.4s infinite linear;
+}
+.pcard-pr-skel__line{
+  height:12px;border-radius:6px;margin:10px 6px;
+  background:linear-gradient(110deg, #f4f4f5 8%, #fafafb 18%, #f4f4f5 33%);
+  background-size:200% 100%;
+  animation:skelShimmer 1.4s infinite linear;
+}
+.pcard-pr-skel__line--w{width:80%}
+.pcard-pr-skel__line--n{width:40%;height:14px}
+@keyframes skelShimmer{
+  0%{background-position:200% 0}
+  100%{background-position:-200% 0}
+}
+
+/* ── Order-form: photo upload styles ───────────────────────────────────── */
+.of-photo-input{display:block;width:100%}
+.of-photo-input__btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  background:#fff;border:1.5px dashed var(--border-strong);
+  border-radius:14px;padding:14px;
+  font-family:var(--ff-body);font-size:13px;font-weight:600;color:var(--text);
+  cursor:pointer;transition:all var(--t-fast);
+  letter-spacing:-.1px;
+}
+.of-photo-input__btn:hover{border-color:var(--red);color:var(--red);border-style:solid;background:var(--red-xl)}
+.of-photo-input__btn:active{transform:scale(.98)}
+.of-photo-preview{
+  position:relative;margin-top:10px;
+  border-radius:14px;overflow:hidden;
+  border:1px solid var(--border);
+  background:var(--bg-soft);
+}
+.of-photo-preview img{width:100%;height:auto;display:block;max-height:240px;object-fit:contain;background:#000}
+.of-photo-preview__rm{
+  position:absolute;top:8px;right:8px;
+  width:30px;height:30px;border-radius:50%;border:0;
+  background:rgba(13,6,8,.7);color:#fff;
+  font-size:18px;font-weight:700;line-height:1;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  backdrop-filter:blur(6px);
+}
+.of-photo-preview__rm:active{transform:scale(.9)}
+
+/* ── AI chat: clear-button ─────────────────────────────────────────────── */
+.ai-chat__head{position:relative}
+.ai-chat__clear{
+  position:absolute;top:14px;right:54px;
+  background:transparent;border:1px solid var(--border-strong);
+  border-radius:999px;padding:6px 10px;
+  font-family:var(--ff-body);font-size:11px;font-weight:600;color:var(--muted);
+  display:inline-flex;align-items:center;gap:4px;
+  cursor:pointer;transition:all var(--t-fast);
+  letter-spacing:-.1px;
+}
+.ai-chat__clear:hover{border-color:var(--red);color:var(--red)}
+.ai-chat__clear:active{transform:scale(.94)}
+
+/* ── Share product кнопка в карточке ────────────────────────────────────── */
+.cat-modal__share{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  width:auto;margin:0 14px 8px;
+  padding:11px 16px;
+  border-radius:14px;
+}
+
+/* ── Tooltip / hint при тапе на счётчики в шапке ───────────────────────── */
+.hdr-c{position:relative}
+.hdr-c__tip{
+  position:absolute;top:calc(100% + 8px);right:0;
+  background:rgba(13,6,8,.92);color:#fff;
+  padding:8px 12px;border-radius:8px;
+  font-size:11px;font-weight:500;line-height:1.4;
+  white-space:nowrap;
+  opacity:0;pointer-events:none;
+  transition:opacity .2s;
+  box-shadow:var(--shadow-md);
+}
+.hdr-c--show .hdr-c__tip{opacity:1}
