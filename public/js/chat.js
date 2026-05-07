@@ -98,7 +98,7 @@ function appendMessage(role, text, products) {
           <div class="ai-pcard__img">
             ${imgEl}
             ${p.hit ? '<span class="ai-pcard__hit">★</span>' : ''}
-          </div>`
+          </div>
           <div class="ai-pcard__body">
             <div class="ai-pcard__name">${esc(p.name || '')}</div>
             <div class="ai-pcard__price">${esc(priceTxt)}</div>
