@@ -135,12 +135,12 @@ async function catOpenProduct(id) {
   const modal = document.getElementById('cat-product-modal');
   const body  = document.getElementById('cat-product-body');
   if (!modal || !body) {
-    // Fallback if modal markup missing — open site
     return;
   }
   body.innerHTML = '<div class="cat-loading">Загружаем карточку…</div>';
   modal.style.display = 'flex';
   document.body.style.overflow = 'hidden';
+  window.tgBack?.show(() => catCloseProduct());
 
   try {
     const res = await fetch('/api/catalog/product/' + encodeURIComponent(id));
@@ -176,6 +176,12 @@ async function catOpenProduct(id) {
         <button class="btn-full" onclick='cartAdd(${JSON.stringify({id:p.id,name:p.name,price:p.price,image:img}).replace(/"/g,"&quot;")});catCloseProduct()'>🛒 В корзину</button>
       </div>
     `;
+    // Нативная Telegram MainButton — для добавления в корзину одним тапом
+    const priceLabel = p.price ? `Добавить в корзину · ${Number(p.price).toLocaleString('ru-RU')} ₽` : 'Добавить в корзину';
+    window.tgMain?.show(priceLabel, () => {
+      window.cartAdd?.({ id: p.id, name: p.name, price: p.price, image: img });
+      catCloseProduct();
+    });
   } catch (e) {
     body.innerHTML = '<div class="cat-empty">Ошибка загрузки</div>';
   }
@@ -185,6 +191,7 @@ function catCloseProduct() {
   const modal = document.getElementById('cat-product-modal');
   if (modal) modal.style.display = 'none';
   document.body.style.overflow = '';
+  window.tgBack?.hide();
 }
 
 async function catSearch(query) {
@@ -260,8 +267,25 @@ async function catQuickAdd(id, btn) {
   }
 }
 
+function catChip(category) {
+  const inp = document.getElementById('menu-search');
+  if (inp) inp.value = '';
+  const clear = document.getElementById('menu-search-clear');
+  if (clear) clear.style.display = 'none';
+  catShowProducts(category);
+}
+function catChipSearch(query) {
+  const inp = document.getElementById('menu-search');
+  if (inp) inp.value = query;
+  const clear = document.getElementById('menu-search-clear');
+  if (clear) clear.style.display = '';
+  catSearch(query);
+}
+
 window.catShowCategories = catShowCategories;
 window.catShowProducts = catShowProducts;
 window.catOpenProduct = catOpenProduct;
 window.catCloseProduct = catCloseProduct;
 window.catQuickAdd = catQuickAdd;
+window.catChip = catChip;
+window.catChipSearch = catChipSearch;

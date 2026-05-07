@@ -53,6 +53,70 @@
     if (t) window.haptic(t.dataset.haptic);
   }, { capture: true });
 
+  // ─── MainButton — нативная закреплённая кнопка снизу ──────────────────────
+  // Использование: tgMain.show('Оформить · 1 200 ₽', () => cartSubmit());
+  window.tgMain = {
+    show(text, onClick, opts = {}) {
+      const mb = window.Telegram?.WebApp?.MainButton;
+      if (!mb) return false;
+      try {
+        mb.setText(text);
+        if (opts.color) mb.color = opts.color;
+        if (opts.textColor) mb.textColor = opts.textColor;
+        // удаляем предыдущие хендлеры (Telegram не предоставляет removeEventListener)
+        if (this._onClick) {
+          try { mb.offClick(this._onClick); } catch {}
+        }
+        this._onClick = () => { window.haptic?.('medium'); onClick && onClick(); };
+        mb.onClick(this._onClick);
+        if (opts.disabled) mb.disable(); else mb.enable();
+        if (opts.progress) mb.showProgress(false); else mb.hideProgress();
+        mb.show();
+        return true;
+      } catch { return false; }
+    },
+    hide() {
+      const mb = window.Telegram?.WebApp?.MainButton;
+      if (!mb) return;
+      try {
+        if (this._onClick) { try { mb.offClick(this._onClick); } catch {} this._onClick = null; }
+        mb.hide();
+      } catch {}
+    },
+    progress(on) {
+      const mb = window.Telegram?.WebApp?.MainButton;
+      if (!mb) return;
+      try { on ? mb.showProgress(false) : mb.hideProgress(); } catch {}
+    },
+    setText(text) {
+      const mb = window.Telegram?.WebApp?.MainButton;
+      try { mb && mb.setText(text); } catch {}
+    },
+  };
+
+  // ─── BackButton — нативная кнопка «назад» в шапке Telegram ─────────────────
+  window.tgBack = {
+    show(onBack) {
+      const bb = window.Telegram?.WebApp?.BackButton;
+      if (!bb) return false;
+      try {
+        if (this._onClick) { try { bb.offClick(this._onClick); } catch {} }
+        this._onClick = () => { window.haptic?.('light'); onBack && onBack(); };
+        bb.onClick(this._onClick);
+        bb.show();
+        return true;
+      } catch { return false; }
+    },
+    hide() {
+      const bb = window.Telegram?.WebApp?.BackButton;
+      if (!bb) return;
+      try {
+        if (this._onClick) { try { bb.offClick(this._onClick); } catch {} this._onClick = null; }
+        bb.hide();
+      } catch {}
+    },
+  };
+
   // ─── Tween number (rolling odometer) ───────────────────────────────────────
   window.tweenNumber = function(el, from, to, dur) {
     if (!el) return;

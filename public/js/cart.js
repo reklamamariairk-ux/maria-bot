@@ -110,6 +110,8 @@ function cartOpen() {
   if (!m) return;
   m.style.display = 'flex';
   document.body.style.overflow = 'hidden';
+  // Telegram BackButton — нативная "← назад" вверху TG
+  window.tgBack?.show(() => cartClose());
   cartRender();
 }
 
@@ -117,6 +119,8 @@ function cartClose() {
   const m = document.getElementById('cart-modal');
   if (m) m.style.display = 'none';
   document.body.style.overflow = '';
+  window.tgBack?.hide();
+  window.tgMain?.hide();
 }
 
 function cartRender(view) {
@@ -169,9 +173,12 @@ function cartRender(view) {
     <div class="cart-foot">
       <div class="cart-total">Итого: <b>${cartTotal().toLocaleString('ru-RU')} ₽</b></div>
       <button class="btn-outline" onclick="cartClear()">Очистить</button>
-      <button class="btn-full" onclick="cartRender('checkout')">Оформить →</button>
+      <button class="btn-full cart-foot__cta" onclick="cartRender('checkout')">Оформить →</button>
     </div>
   `;
+  // Нативная Telegram MainButton — снизу, прилипает к клавиатуре
+  const total = cartTotal().toLocaleString('ru-RU');
+  window.tgMain?.show(`Оформить · ${total} ₽`, () => cartRender('checkout'));
 }
 
 function cartRenderCheckout() {
@@ -211,10 +218,12 @@ function cartRenderCheckout() {
       <div class="cart-form__hint">Менеджер позвонит для подтверждения. Оплата при получении.</div>
       <div class="cart-total" style="margin-top:8px">К оплате: <b>${cartTotal().toLocaleString('ru-RU')} ₽</b></div>
       <button class="btn-outline" onclick="cartRender()">← Назад в корзину</button>
-      <button class="btn-full" onclick="cartSubmit()">Оформить заказ</button>
+      <button class="btn-full cart-foot__cta" onclick="cartSubmit()">Оформить заказ</button>
       <div class="cart-form__status" id="co-status"></div>
     </div>
   `;
+  const total = cartTotal().toLocaleString('ru-RU');
+  window.tgMain?.show(`Подтвердить заказ · ${total} ₽`, () => cartSubmit());
 }
 
 async function cartSubmit() {
@@ -245,6 +254,7 @@ async function cartSubmit() {
   }
 
   if (status) status.innerHTML = '⏳ Отправляем заказ…';
+  window.tgMain?.progress(true);
 
   try {
     const headers = { 'Content-Type': 'application/json' };
@@ -262,10 +272,13 @@ async function cartSubmit() {
       const userMsg = data.message || data.error || 'Не удалось отправить заказ';
       const tech = data.error && data.error !== userMsg ? ` <small style="opacity:.6">[${escHtml(String(data.error))}]</small>` : '';
       if (status) status.innerHTML = `<span style="color:var(--red)">${escHtml(String(userMsg))}</span>${tech}`;
+      window.haptic?.('error');
+      window.tgMain?.progress(false);
       console.error('[cart] order failed', res.status, data);
       return;
     }
     cartClear();
+    window.tgMain?.hide();
     document.getElementById('cart-body').innerHTML = `
       <button class="cat-modal__close" onclick="cartClose()">×</button>
       <div class="cart-success">
@@ -278,6 +291,8 @@ async function cartSubmit() {
     window.haptic?.('success');
   } catch (e) {
     if (status) status.innerHTML = `<span style="color:var(--red)">Сеть недоступна. Попробуй ещё раз.</span>`;
+    window.haptic?.('error');
+    window.tgMain?.progress(false);
   }
 }
 

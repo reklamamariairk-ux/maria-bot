@@ -104,6 +104,15 @@
     <input class="cat-search__inp" type="search" id="menu-search" placeholder="🔍 Найти торт, пирог, пирожное…" autocomplete="off"/>
     <button class="cat-search__clear" id="menu-search-clear" style="display:none">✕</button>
   </div>
+  <!-- Chip-фильтры — быстрый доступ к подборкам -->
+  <div class="cat-chips" id="menu-chips">
+    <button class="cat-chip" data-haptic="selection" onclick="catChip('Торты')">🎂 Торты</button>
+    <button class="cat-chip" data-haptic="selection" onclick="catChip('Пироги')">🥧 Пироги</button>
+    <button class="cat-chip" data-haptic="selection" onclick="catChip('Пирожные и десерты')">🍰 Десерты</button>
+    <button class="cat-chip" data-haptic="selection" onclick="catChipSearch('хит')">★ Хиты</button>
+    <button class="cat-chip" data-haptic="selection" onclick="catChip('Наборы')">🎁 Наборы</button>
+    <button class="cat-chip" data-haptic="selection" onclick="catChip('Торты на заказ')">🎨 На заказ</button>
+  </div>
 
   <!-- Хлебные крошки + назад -->
   <div class="cat-bread" id="menu-bread" style="display:none">
@@ -545,7 +554,7 @@
     <span class="nb__ic">🎮</span><span class="nb__lb">Игры</span>
   </button>
   <button class="nb" id="nav-order" data-haptic="selection" onclick="switchTab('order')">
-    <span class="nb__ic">🎂</span><span class="nb__lb">На заказ</span>
+    <span class="nb__ic">🎨</span><span class="nb__lb">На заказ</span>
   </button>
 </nav>
 
