@@ -470,6 +470,47 @@ function catChipSearch(query) {
   catSearch(query);
 }
 
+// Показать избранное — фильтр lastProducts по wishlist
+async function catShowWishlist() {
+  const ids = wishLoad();
+  document.getElementById('menu-categories').style.display = 'none';
+  document.getElementById('menu-products').style.display = '';
+  document.getElementById('menu-bread').style.display = '';
+  document.getElementById('menu-bread-name').textContent = 'Избранное';
+  document.getElementById('menu-empty').style.display = 'none';
+  const chips = document.getElementById('menu-chips');
+  if (chips) chips.style.display = 'none';
+  CATALOG_STATE.currentCategory = '__wishlist__';
+
+  const grid = document.getElementById('menu-products');
+  if (ids.length === 0) {
+    grid.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state__ic" style="background:var(--red-xl);color:var(--red)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" width="32" height="32"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+        </div>
+        <div class="empty-state__h">Пока ничего в избранном</div>
+        <div class="empty-state__sub">Тапни на ♡ на любом товаре — он появится здесь, чтобы вернуться позже.</div>
+        <div class="empty-state__cta">
+          <button class="btn-outline" onclick="catShowCategories()">К каталогу</button>
+        </div>
+      </div>`;
+    return;
+  }
+  grid.innerHTML = '<div class="cat-loading">Загружаем избранное…</div>';
+  // Тянем все товары и фильтруем по id (быстрее чем отдельные запросы)
+  try {
+    const r = await fetch('/api/catalog/products?limit=300');
+    const d = await r.json();
+    const allProducts = (d.products || []).filter((p) => ids.includes(Number(p.id)));
+    CATALOG_STATE.lastProducts = allProducts;
+    catRenderToolbarAndProducts();
+  } catch {
+    grid.innerHTML = '<div class="cat-empty">Не удалось загрузить.</div>';
+  }
+}
+window.catShowWishlist = catShowWishlist;
+
 async function shareProduct(id) {
   // Ищем продукт сначала в lastProducts, затем тянем с сервера если не нашли
   let p = (CATALOG_STATE.lastProducts || []).find(x => Number(x.id) === Number(id));

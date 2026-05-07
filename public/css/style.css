@@ -2630,3 +2630,11 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
   box-shadow:var(--shadow-md);
 }
 .hdr-c--show .hdr-c__tip{opacity:1}
+
+/* ── Chip Избранное ───────────────────────────────────────────────────── */
+.cat-chip--wish{
+  background:linear-gradient(135deg,#fff8f0,#fef0f2);
+  border-color:rgba(214,31,55,.2);
+  color:var(--red);
+}
+.cat-chip--wish:hover{background:var(--mesh-red);color:#fff;border-color:transparent}
