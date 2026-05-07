@@ -14,7 +14,7 @@ async function openShopsModal() {
   const m = document.getElementById('shops-modal');
   if (!m) return;
   m.style.display = 'flex';
-  document.body.style.overflow = 'hidden';
+  window.scrollLock?.();
   if (!_shopsLoaded) await loadShops();
 }
 
@@ -78,7 +78,7 @@ function escA(s) {
 function closeShopsModal() {
   const m = document.getElementById('shops-modal');
   if (m) m.style.display = 'none';
-  document.body.style.overflow = '';
+  window.scrollUnlock?.();
 }
 function openMaps() {
   const url = 'https://yandex.ru/maps/?text=Мария кондитерская Иркутск';
@@ -154,7 +154,7 @@ function openAiChat() {
   const m = document.getElementById('ai-chat-modal');
   if (!m) return;
   m.style.display = 'flex';
-  document.body.style.overflow = 'hidden';
+  window.scrollLock?.();
   window.tgBack?.show(() => closeAiChat());
   refreshChatChips();
   setTimeout(() => document.getElementById('chat-input')?.focus(), 200);
@@ -167,7 +167,7 @@ function openAiChat() {
 function closeAiChat() {
   const m = document.getElementById('ai-chat-modal');
   if (m) m.style.display = 'none';
-  document.body.style.overflow = '';
+  window.scrollUnlock?.();
   window.tgBack?.hide();
 }
 window.openAiChat = openAiChat;

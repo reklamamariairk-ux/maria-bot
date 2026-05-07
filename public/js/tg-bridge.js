@@ -122,6 +122,34 @@
     },
   };
 
+  // ─── Scroll Lock ───────────────────────────────────────────────────────────
+  // Безшовное открытие модалок — фиксируем body, не теряя позицию скролла.
+  // Раньше использовали body.style.overflow = 'hidden', что вызывало:
+  //   1) на десктопе — сдвиг контента вправо (исчезает скроллбар)
+  //   2) на iOS Safari — прыжок sticky-хедера и проскролл фона
+  let _scrollLockY = 0;
+  let _scrollLockCount = 0;  // счётчик вложенных модалок
+  window.scrollLock = function() {
+    _scrollLockCount++;
+    if (_scrollLockCount > 1) return;
+    _scrollLockY = window.scrollY || document.documentElement.scrollTop || 0;
+    document.body.style.position = 'fixed';
+    document.body.style.top = -_scrollLockY + 'px';
+    document.body.style.left = '0';
+    document.body.style.right = '0';
+    document.body.style.width = '100%';
+  };
+  window.scrollUnlock = function() {
+    _scrollLockCount = Math.max(0, _scrollLockCount - 1);
+    if (_scrollLockCount > 0) return;
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.left = '';
+    document.body.style.right = '';
+    document.body.style.width = '';
+    window.scrollTo(0, _scrollLockY);
+  };
+
   // ─── Tween number (rolling odometer) ───────────────────────────────────────
   window.tweenNumber = function(el, from, to, dur) {
     if (!el) return;

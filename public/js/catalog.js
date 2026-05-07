@@ -311,7 +311,7 @@ async function catOpenProduct(id) {
   }
   body.innerHTML = '<div class="cat-loading">Загружаем карточку…</div>';
   modal.style.display = 'flex';
-  document.body.style.overflow = 'hidden';
+  window.scrollLock?.();
   window.tgBack?.show(() => catCloseProduct());
 
   try {
@@ -366,7 +366,7 @@ async function catOpenProduct(id) {
 function catCloseProduct() {
   const modal = document.getElementById('cat-product-modal');
   if (modal) modal.style.display = 'none';
-  document.body.style.overflow = '';
+  window.scrollUnlock?.();
   window.tgBack?.hide();
 }
 
