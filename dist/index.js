@@ -418,6 +418,7 @@ function fetchUpstream(u) {
                             .resize(600, 750, { fit: "inside", withoutEnlargement: true })
                             .webp({ quality: 78, effort: 4 })
                             .toBuffer();
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         buf = resized;
                         outType = "image/webp";
                     }

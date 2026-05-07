@@ -392,7 +392,8 @@ function fetchUpstream(u: string): Promise<CachedImg | null> {
               .resize(600, 750, { fit: "inside", withoutEnlargement: true })
               .webp({ quality: 78, effort: 4 })
               .toBuffer();
-            buf = resized;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            buf = resized as any;
             outType = "image/webp";
           } catch (e) {
             // fallback — отдаём оригинал
