@@ -2671,3 +2671,13 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
   color:var(--red);
 }
 .cat-chip--wish:hover{background:var(--mesh-red);color:#fff;border-color:transparent}
+
+/* ── Auto-linkified телефоны (через linkifyPhones) ─────────────────────── */
+.auto-tel{
+  color:var(--red);text-decoration:none;
+  border-bottom:1px dashed currentColor;
+  font-weight:600;white-space:nowrap;
+  transition:all var(--t-fast);
+}
+.auto-tel:hover{color:var(--red-d);border-bottom-style:solid}
+.auto-tel:active{opacity:.7}

@@ -59,6 +59,8 @@ async function loadShops() {
         <button class="btn-outline" onclick="openMaps()">🗺 Открыть на Яндекс.Картах</button>
         <a class="btn-full" href="tel:+73952504080">☎ +7 (3952) 50-40-80</a>
       </div>`;
+    // Если у магазинов есть телефоны в адресах — кликабельны
+    window.linkifyPhones?.(wrap);
     _shopsLoaded = true;
   } catch (e) {
     wrap.innerHTML = `

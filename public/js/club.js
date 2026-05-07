@@ -296,6 +296,8 @@ async function renderLk() {
         </div>` : ''}
       <button class="btn-outline" onclick="toggleHistory()">📜 История начислений</button>
     `;
+    // Авто-link для номеров телефонов в LK
+    window.linkifyPhones?.(card);
   } catch {
     section.style.display = 'none';
   }

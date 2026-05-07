@@ -150,6 +150,47 @@
     window.scrollTo(0, _scrollLockY);
   };
 
+  // ─── Auto-linkify phones — оборачивает любые +7-номера в текстовых нодах
+  // в кликабельные tel:-ссылки. Применять к динамическому контенту.
+  // window.linkifyPhones(document.getElementById('shops-content'))
+  // ────────────────────────────────────────────────────────────────────────────
+  const PHONE_RE = /(\+?7|8)[\s\-().]*(\d{3,4})[\s\-().]*(\d{2,3})[\s\-().]*(\d{2})[\s\-().]*(\d{2})/g;
+  window.linkifyPhones = function(root) {
+    if (!root || !root.querySelectorAll) return;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode(n) {
+        // Игнорируем text внутри <a>, <input>, <textarea>, <script>
+        const p = n.parentElement;
+        if (!p) return NodeFilter.FILTER_REJECT;
+        const tag = p.tagName;
+        if (tag === 'A' || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SCRIPT' || tag === 'STYLE') return NodeFilter.FILTER_REJECT;
+        if (!PHONE_RE.test(n.nodeValue || '')) { PHONE_RE.lastIndex = 0; return NodeFilter.FILTER_REJECT; }
+        PHONE_RE.lastIndex = 0;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    const nodes = [];
+    let n; while ((n = walker.nextNode())) nodes.push(n);
+    for (const node of nodes) {
+      const text = node.nodeValue;
+      const frag = document.createDocumentFragment();
+      let last = 0;
+      text.replace(PHONE_RE, (match, p1, p2, p3, p4, p5, offset) => {
+        if (offset > last) frag.appendChild(document.createTextNode(text.slice(last, offset)));
+        const a = document.createElement('a');
+        const digits = '7' + p2 + p3 + p4 + p5;
+        a.href = 'tel:+' + digits;
+        a.className = 'auto-tel';
+        a.dataset.haptic = 'light';
+        a.textContent = match;
+        frag.appendChild(a);
+        last = offset + match.length;
+      });
+      if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+      node.parentNode.replaceChild(frag, node);
+    }
+  };
+
   // ─── Tween number (rolling odometer) ───────────────────────────────────────
   window.tweenNumber = function(el, from, to, dur) {
     if (!el) return;

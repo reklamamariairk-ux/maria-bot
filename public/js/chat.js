@@ -143,6 +143,8 @@ function appendMessage(role, text, products) {
     cardsHtml = `<div class="ai-pgrid">${cards}</div>`;
   }
   div.innerHTML = `${avatar}<div class="msg__bubble">${esc(text).replace(/\n/g,'<br>')}${cardsHtml}</div>`;
+  // Превращаем телефоны в кликабельные ссылки в ответе AI
+  window.linkifyPhones?.(div);
   wrap.appendChild(div);
   wrap.scrollTop = wrap.scrollHeight;
   return div;
