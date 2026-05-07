@@ -35,16 +35,18 @@
        onerror="this.src='/logo.png'"
        onerror="this.style.display='none';document.getElementById('lf').style.display='block'"/>
   <span class="header__name" id="lf" style="display:none">Мария</span>
-  <div class="hdr-counters" id="hdr-counters" style="display:none" onclick="switchTab('club')" title="Звёзды и баллы программы лояльности">
-    <span class="hdr-c hdr-c--star" title="Звёзды — за игры и активность. Конвертируются в баллы.">⭐ <b id="hdr-stars">0</b></span>
-    <span class="hdr-c hdr-c--point" title="Баллы — оплата до 30% любого заказа.">💎 <b id="hdr-points">0</b></span>
+  <div class="hdr-right">
+    <div class="hdr-counters" id="hdr-counters" style="display:none" onclick="switchTab('club')" title="Звёзды и баллы программы лояльности">
+      <span class="hdr-c hdr-c--star" title="Звёзды — за игры и активность. Конвертируются в баллы.">⭐ <b id="hdr-stars">0</b></span>
+      <span class="hdr-c hdr-c--point" title="Баллы — оплата до 30% любого заказа.">💎 <b id="hdr-points">0</b></span>
+    </div>
+    <button class="header__cart" id="hdr-cart" data-haptic="light" onclick="cartOpen()" style="display:none">
+      <span data-icon="cart" data-size="16"></span> <b id="hdr-cart-count">0</b>
+    </button>
+    <a class="header__phone" href="tel:+73952504080" aria-label="Позвонить">
+      <span data-icon="phone" data-size="14"></span> <span class="header__phone-num">50-40-80</span>
+    </a>
   </div>
-  <button class="header__cart" id="hdr-cart" data-haptic="light" onclick="cartOpen()" style="display:none">
-    <span data-icon="cart" data-size="16"></span> <b id="hdr-cart-count">0</b>
-  </button>
-  <a class="header__phone" href="tel:+73952504080" aria-label="Позвонить">
-    <span data-icon="phone" data-size="14"></span> <span class="header__phone-num">50-40-80</span>
-  </a>
 </header>
 
 <main class="main">

@@ -141,31 +141,53 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
   background:rgba(255,255,255,.86);
   backdrop-filter:blur(20px) saturate(1.4);
   -webkit-backdrop-filter:blur(20px) saturate(1.4);
-  display:flex;align-items:center;justify-content:space-between;
-  padding:0 18px;
+  display:flex;align-items:center;
+  gap:8px;
+  padding:0 14px;
   border-bottom:1px solid rgba(13,6,8,.05);
+  flex-wrap:nowrap;
+  overflow:hidden;
 }
 .header::after{
   content:'';position:absolute;left:0;right:0;bottom:-1px;height:1px;
   background:var(--premium-line);opacity:.4;pointer-events:none;
 }
+.header > * { flex-shrink: 0; }
 .header__logo{
-  height:32px;max-width:130px;
+  height:30px;max-width:100px;
   object-fit:contain;
+  flex-shrink:1;min-width:0;
 }
 .header__name{
   font-family:'Playfair Display',serif;
-  font-size:22px;color:var(--red);font-weight:800;letter-spacing:.3px;
+  font-size:20px;color:var(--red);font-weight:800;letter-spacing:.3px;
+  white-space:nowrap;
 }
 .header__phone{
-  font-size:13px;font-weight:600;
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:13px;font-weight:700;
   color:var(--red);
   background:var(--red-l);
-  border-radius:24px;padding:6px 14px;
+  border-radius:999px;padding:7px 14px;
   border:1px solid rgba(214,31,55,.15);
   transition:all var(--t-fast);letter-spacing:.2px;
+  white-space:nowrap;
+  line-height:1;
 }
 .header__phone:hover{background:var(--red);color:#fff;box-shadow:0 4px 16px var(--red-glow)}
+.header__phone-num{display:inline-block;white-space:nowrap}
+
+/* Узкий экран (≤380px): телефон без цифр — только иконка-кнопка */
+@media (max-width: 380px) {
+  .header{padding:0 10px;gap:6px}
+  .header__logo{height:28px;max-width:80px}
+  .header__phone{padding:8px;border-radius:50%}
+  .header__phone-num{display:none}
+}
+/* Очень узкий (≤320px): убрать счётчики */
+@media (max-width: 320px) {
+  .hdr-counters{display:none !important}
+}
 
 /* ── MAIN ────────────────────────────────────────────────────────────────── */
 .main{min-height:calc(100vh - var(--hh) - 88px);padding-bottom:calc(96px + env(safe-area-inset-bottom))}
@@ -743,12 +765,12 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 /* ── Header cart button ─────────────────────────────────────────────────── */
 .header__cart{
   background:var(--mesh-red);color:#fff;
-  border:none;border-radius:14px;padding:6px 12px;
+  border:none;border-radius:12px;padding:6px 10px;
   font-family:var(--ff-body);font-size:13px;font-weight:700;
-  cursor:pointer;display:flex;gap:4px;align-items:center;
+  cursor:pointer;display:inline-flex;gap:4px;align-items:center;
   box-shadow:var(--shadow-glow);
-  margin-right:8px;
   transition:transform var(--t);
+  white-space:nowrap;line-height:1;
 }
 .header__cart:active{transform:scale(.94)}
 .header__cart.cart-bump{animation:cartBump .35s cubic-bezier(.34,1.56,.64,1)}
@@ -1876,15 +1898,26 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 
 /* ── HEADER COUNTERS ─────────────────────────────────────────────────────── */
 .hdr-counters{
-  display:flex;gap:6px;align-items:center;cursor:pointer;
-  margin-left:auto;margin-right:8px;
+  display:flex;gap:5px;align-items:center;cursor:pointer;
+  white-space:nowrap;
+}
+/* Правая группа в шапке — counters + cart + phone */
+.hdr-right{
+  display:flex;align-items:center;gap:6px;
+  margin-left:auto;
+  flex-shrink:0;white-space:nowrap;
 }
 .hdr-c{
-  font-size:13px;font-weight:700;
+  font-size:12px;font-weight:700;
   background:var(--surface);border:1px solid var(--border);
-  border-radius:14px;padding:4px 10px;color:var(--text);
+  border-radius:12px;padding:3px 8px;color:var(--text);
   display:inline-flex;align-items:center;gap:3px;
   transition:transform var(--t);
+  white-space:nowrap;
+}
+@media (max-width: 380px) {
+  .hdr-c{font-size:11px;padding:3px 6px;border-radius:10px}
+  .hdr-counters{gap:4px}
 }
 .hdr-c b{font-weight:800}
 .hdr-c--star{color:#b8841a;background:var(--gold-l)}
