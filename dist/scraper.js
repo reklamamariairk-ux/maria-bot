@@ -146,12 +146,18 @@ async function fetchFromApi() {
         const sec = sectionById.get(sid);
         const priceNumber = p.price == null ? null : Number(p.price);
         const priceStr = priceNumber != null ? `${priceNumber.toLocaleString("ru-RU")} ₽` : "";
+        const oldPriceNumber = p.oldPrice == null ? null : Number(p.oldPrice);
+        const oldPriceStr = oldPriceNumber != null ? `${oldPriceNumber.toLocaleString("ru-RU")} ₽` : "";
+        const discountPercent = p.discountPercent != null ? Number(p.discountPercent) : 0;
         return {
             id: Number(p.id),
             name: String(p.name ?? ""),
             category: sec?.name ?? "Каталог",
             price: priceStr,
             priceNumber,
+            oldPrice: oldPriceStr || undefined,
+            oldPriceNumber,
+            discountPercent: discountPercent || undefined,
             currency: String(p.currency ?? "RUB"),
             url: String(p.url ?? ""),
             image: p.image ? String(p.image) : undefined,

@@ -276,7 +276,11 @@ function catRenderProductsHtml(products) {
       : `openSite('${escapeAttr(p.url || '')}')`;
     const priceNum = p.price ? parseInt(String(p.price).replace(/\D/g, ''), 10) : (p.priceNumber || 0);
     const priceTxt = p.price || (p.priceNumber ? `${Number(p.priceNumber).toLocaleString('ru-RU')} ₽` : '');
-    const hitBadge = p.hit ? '<span class="pcard-pr__hit">★ Хит</span>' : '';
+    const oldPriceTxt = p.oldPrice || (p.oldPriceNumber ? `${Number(p.oldPriceNumber).toLocaleString('ru-RU')} ₽` : '');
+    const hasDiscount = p.discountPercent && p.discountPercent > 0;
+    const hitBadge = hasDiscount
+      ? `<span class="pcard-pr__hit pcard-pr__hit--sale">−${p.discountPercent}%</span>`
+      : (p.hit ? '<span class="pcard-pr__hit">★ Хит</span>' : '');
     const weight   = p.weight ? `<span class="pcard-pr__w">${escapeHtml(p.weight)}</span>` : '';
     const addBtn = hasId && priceNum > 0
       ? `<button class="pcard-pr__add" aria-label="В корзину" onclick="event.stopPropagation();catQuickAdd(${p.id},this)">+</button>`
@@ -302,7 +306,10 @@ function catRenderProductsHtml(products) {
           <div class="pcard-pr__name">${escapeHtml(p.name)}</div>
           ${weight}
           <div class="pcard-pr__row">
-            <span class="pcard-pr__price">${escapeHtml(priceTxt)}</span>
+            <div class="pcard-pr__prices">
+              <span class="pcard-pr__price">${escapeHtml(priceTxt)}</span>
+              ${hasDiscount && oldPriceTxt ? `<span class="pcard-pr__old">${escapeHtml(oldPriceTxt)}</span>` : ''}
+            </div>
             <span class="pcard-pr__cta">→</span>
           </div>
         </div>
@@ -332,6 +339,8 @@ async function catOpenProduct(id) {
 
     const img = (p.images && p.images[0]) || p.image || '';
     const priceTxt = p.price ? `${Number(p.price).toLocaleString('ru-RU')} ₽` : '—';
+    const oldPriceTxt = p.oldPrice ? `${Number(p.oldPrice).toLocaleString('ru-RU')} ₽` : '';
+    const hasDiscount = p.discountPercent && p.discountPercent > 0;
     const desc = (p.description_text || p.preview || '').trim();
     const props = [];
     if (p.weight)  props.push(`<span><b>Вес:</b> ${escapeHtml(String(p.weight))}</span>`);
@@ -348,7 +357,10 @@ async function catOpenProduct(id) {
         ${p.hit ? '<span class="cat-modal__hit">★ Хит</span>' : ''}
       </div>
       <div class="cat-modal__title">${escapeHtml(p.name)}</div>
-      <div class="cat-modal__price">${escapeHtml(priceTxt)}</div>
+      <div class="cat-modal__price">
+        ${escapeHtml(priceTxt)}
+        ${hasDiscount && oldPriceTxt ? `<span class="cat-modal__old">${escapeHtml(oldPriceTxt)}</span> <span class="cat-modal__pct">−${p.discountPercent}%</span>` : ''}
+      </div>
       ${props.length ? `<div class="cat-modal__props">${props.join('')}</div>` : ''}
       ${desc ? `<div class="cat-modal__desc">${escapeHtml(desc)}</div>` : ''}
       <div class="cat-modal__actions">

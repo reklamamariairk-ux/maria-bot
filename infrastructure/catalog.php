@@ -152,7 +152,7 @@ function loadList(string $sectionCode, int $limit, int $offset): array {
         ];
     }
 
-    // Цены и availability — одним батчем
+    // Цены и availability — одним батчем + применение скидок (Bitrix discount rules)
     if (!empty($ids)) {
         $idsList = implode(',', array_map('intval', $ids));
         $conn = \Bitrix\Main\Application::getConnection();
@@ -163,14 +163,35 @@ function loadList(string $sectionCode, int $limit, int $offset): array {
         $availById = [];
         while ($a = $rs3->fetch()) $availById[(int)$a['ID']] = $a;
 
+        // Применяем правила скидок (торт месяца -20% и т.п.) через CCatalogProduct::GetOptimalPrice
+        // Используем группу 2 ("Все авторизованные") как стандартную для всех клиентов сайта
+        $userGroups = [2];
         foreach ($out as &$item) {
             $eid = $item['id'];
             $pr = $priceById[$eid] ?? null;
-            $item['price']      = $pr ? (float)$pr['PRICE'] : null;
-            $item['currency']   = $pr['CURRENCY'] ?? 'RUB';
+            $base = $pr ? (float)$pr['PRICE'] : null;
+            $finalPrice = $base;
+            $discountPercent = 0;
+            if ($base !== null && class_exists('\CCatalogProduct')) {
+                try {
+                    $opt = \CCatalogProduct::GetOptimalPrice($eid, 1, $userGroups, 'N');
+                    if ($opt && isset($opt['DISCOUNT_PRICE'])) {
+                        $finalPrice = (float)$opt['DISCOUNT_PRICE'];
+                        $rawBase = isset($opt['PRICE']['BASE_PRICE']) ? (float)$opt['PRICE']['BASE_PRICE'] : $base;
+                        if ($rawBase > $finalPrice && $rawBase > 0) {
+                            $discountPercent = (int)round(($rawBase - $finalPrice) / $rawBase * 100);
+                            $base = $rawBase;
+                        }
+                    }
+                } catch (\Throwable $e) { /* fallback to base */ }
+            }
+            $item['price']         = $finalPrice;
+            $item['oldPrice']      = ($discountPercent > 0 && $base !== null) ? $base : null;
+            $item['discountPercent'] = $discountPercent;
+            $item['currency']      = $pr['CURRENCY'] ?? 'RUB';
             $av = $availById[$eid] ?? null;
-            $item['available']  = $av ? ($av['AVAILABLE'] === 'Y') : true; // Без catalog-записи считаем доступным
-            $item['quantity']   = $av ? (float)$av['QUANTITY'] : null;
+            $item['available']     = $av ? ($av['AVAILABLE'] === 'Y') : true;
+            $item['quantity']      = $av ? (float)$av['QUANTITY'] : null;
         }
         unset($item);
     }
@@ -204,12 +225,28 @@ function loadProduct(int $id): ?array {
         $description = (string)$f['DETAIL_TEXT'];
     }
 
-    // Price + availability
+    // Price + availability + applied discounts
     $conn = \Bitrix\Main\Application::getConnection();
     $rs2 = $conn->query("SELECT PRICE, CURRENCY FROM b_catalog_price WHERE PRODUCT_ID = $id AND CATALOG_GROUP_ID = " . PRICE_GROUP);
     $pr = $rs2->fetch();
     $rs3 = $conn->query("SELECT AVAILABLE, QUANTITY FROM b_catalog_product WHERE ID = $id");
     $av = $rs3->fetch();
+    // Применяем скидки
+    $base = $pr ? (float)$pr['PRICE'] : null;
+    $finalPrice = $base; $discountPercent = 0;
+    if ($base !== null && class_exists('\CCatalogProduct')) {
+        try {
+            $opt = \CCatalogProduct::GetOptimalPrice($id, 1, [2], 'N');
+            if ($opt && isset($opt['DISCOUNT_PRICE'])) {
+                $finalPrice = (float)$opt['DISCOUNT_PRICE'];
+                $rawBase = isset($opt['PRICE']['BASE_PRICE']) ? (float)$opt['PRICE']['BASE_PRICE'] : $base;
+                if ($rawBase > $finalPrice && $rawBase > 0) {
+                    $discountPercent = (int)round(($rawBase - $finalPrice) / $rawBase * 100);
+                    $base = $rawBase;
+                }
+            }
+        } catch (\Throwable $e) {}
+    }
 
     return [
         'id'          => (int)$f['ID'],
@@ -220,7 +257,9 @@ function loadProduct(int $id): ?array {
         'description' => $description,
         'description_text' => trim(strip_tags($description)),
         'preview'     => trim(strip_tags((string)$f['PREVIEW_TEXT'])) ?: trim(strip_tags(propText($props['PREVIEW_TEXT_CUSTOM']['VALUE'] ?? ''))),
-        'price'       => $pr ? (float)$pr['PRICE'] : null,
+        'price'       => $finalPrice,
+        'oldPrice'    => $discountPercent > 0 ? $base : null,
+        'discountPercent' => $discountPercent,
         'currency'    => $pr['CURRENCY'] ?? 'RUB',
         'available'   => $av ? ($av['AVAILABLE'] === 'Y') : true,
         'quantity'    => $av ? (float)$av['QUANTITY'] : null,
@@ -267,7 +306,24 @@ function searchCatalog(string $q, int $limit): array {
         while ($p = $rs2->fetch()) $priceById[(int)$p['PRODUCT_ID']] = $p;
         foreach ($out as &$item) {
             $pr = $priceById[$item['id']] ?? null;
-            $item['price']    = $pr ? (float)$pr['PRICE'] : null;
+            $base = $pr ? (float)$pr['PRICE'] : null;
+            $finalPrice = $base; $discountPercent = 0;
+            if ($base !== null && class_exists('\CCatalogProduct')) {
+                try {
+                    $opt = \CCatalogProduct::GetOptimalPrice($item['id'], 1, [2], 'N');
+                    if ($opt && isset($opt['DISCOUNT_PRICE'])) {
+                        $finalPrice = (float)$opt['DISCOUNT_PRICE'];
+                        $rawBase = isset($opt['PRICE']['BASE_PRICE']) ? (float)$opt['PRICE']['BASE_PRICE'] : $base;
+                        if ($rawBase > $finalPrice && $rawBase > 0) {
+                            $discountPercent = (int)round(($rawBase - $finalPrice) / $rawBase * 100);
+                            $base = $rawBase;
+                        }
+                    }
+                } catch (\Throwable $e) {}
+            }
+            $item['price']    = $finalPrice;
+            $item['oldPrice'] = $discountPercent > 0 ? $base : null;
+            $item['discountPercent'] = $discountPercent;
             $item['currency'] = $pr['CURRENCY'] ?? 'RUB';
         }
     }

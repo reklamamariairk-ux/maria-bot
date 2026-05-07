@@ -2681,3 +2681,25 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 }
 .auto-tel:hover{color:var(--red-d);border-bottom-style:solid}
 .auto-tel:active{opacity:.7}
+
+/* ── Цены: со скидкой / без ───────────────────────────────────────────── */
+.pcard-pr__prices{display:flex;flex-direction:column;gap:0;line-height:1.1}
+.pcard-pr__old{
+  font-size:11px;font-weight:600;color:var(--muted);
+  text-decoration:line-through;
+  margin-top:1px;letter-spacing:-.1px;
+  -webkit-text-fill-color:initial;background:none;
+}
+.pcard-pr__hit--sale{background:var(--mesh-red)}
+.cat-modal__old{
+  font-size:14px;font-weight:600;color:var(--muted);
+  text-decoration:line-through;
+  margin-left:8px;-webkit-text-fill-color:initial;background:none;color:var(--muted);
+}
+.cat-modal__pct{
+  display:inline-block;
+  font-size:12px;font-weight:800;color:#fff;
+  background:var(--mesh-red);
+  padding:3px 8px;border-radius:8px;
+  margin-left:6px;letter-spacing:.3px;vertical-align:middle;
+}
