@@ -65,6 +65,32 @@ if (needsScrape) {
 // Каталог обновляем каждый час — синхронизация с правками на сайте
 setInterval(refreshCatalog, 60 * 60 * 1000);
 
+// Очистка старых файлов в /tmp (img_cache > 7 дней, lead_photos > 90 дней)
+function cleanupTmpDir(dir: string, maxAgeMs: number) {
+  try {
+    const entries = require("fs").readdirSync(dir);
+    const now = Date.now();
+    let removed = 0;
+    for (const f of entries) {
+      try {
+        const fp = require("path").join(dir, f);
+        const st = require("fs").statSync(fp);
+        if (now - st.mtimeMs > maxAgeMs) {
+          require("fs").unlinkSync(fp);
+          removed++;
+        }
+      } catch {}
+    }
+    if (removed > 0) console.log(`[CLEANUP] removed ${removed} stale files from ${dir}`);
+  } catch {}
+}
+function runCleanup() {
+  cleanupTmpDir("/tmp/img_cache", 7 * 24 * 60 * 60 * 1000);    // 7 дней
+  cleanupTmpDir("/tmp/lead_photos", 90 * 24 * 60 * 60 * 1000); // 90 дней
+}
+setInterval(runCleanup, 6 * 60 * 60 * 1000); // каждые 6 часов
+setTimeout(runCleanup, 5 * 60 * 1000);       // первая через 5 минут после старта
+
 // ─── Telegram Bot ───────────────────────────────────────────────────────────
 const bot = new Bot(BOT_TOKEN);
 
@@ -220,6 +246,35 @@ const app = express();
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
+
+// ─── Rate limit ─────────────────────────────────────────────────────────────
+// Простой sliding window per-IP: разные лимиты для разных эндпоинтов.
+const rateBuckets = new Map<string, number[]>();
+function rateLimit(maxPerMinute: number) {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
+    const key = `${ip}:${req.path}`;
+    const now = Date.now();
+    const win = 60_000;
+    const arr = (rateBuckets.get(key) || []).filter((t) => now - t < win);
+    if (arr.length >= maxPerMinute) {
+      res.status(429).json({ ok: false, error: "rate_limited", message: "Слишком много запросов. Подожди минуту." });
+      return;
+    }
+    arr.push(now);
+    rateBuckets.set(key, arr);
+    next();
+  };
+}
+// Чистим старые ведра раз в 5 минут чтобы Map не разрастался
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, arr] of rateBuckets) {
+    const fresh = arr.filter((t) => now - t < 60_000);
+    if (fresh.length === 0) rateBuckets.delete(k);
+    else rateBuckets.set(k, fresh);
+  }
+}, 5 * 60_000);
 
 app.use(express.static(path.join(__dirname, "..", "public")));
 
@@ -600,7 +655,7 @@ async function chatAgent(
   };
 }
 
-app.post("/api/chat", async (req, res) => {
+app.post("/api/chat", rateLimit(20), async (req, res) => {
   const { messages } = req.body as { messages: ChatMessage[] };
   if (!Array.isArray(messages) || messages.length === 0) {
     res.status(400).json({ error: "messages array is required" });
@@ -637,7 +692,7 @@ app.post("/api/chat", async (req, res) => {
 const BITRIX_WEBHOOK = process.env.BITRIX_WEBHOOK ?? "";
 
 // Заявка на индивидуальный торт (форма «На заказ» — менеджер свяжется)
-app.post("/api/lead", express.json({ limit: "8mb" }), async (req, res) => {
+app.post("/api/lead", rateLimit(10), express.json({ limit: "8mb" }), async (req, res) => {
   const { name, phone, description, date, portions, comment, photo } = req.body as {
     name?: string; phone?: string; description?: string;
     date?: string; portions?: string; comment?: string; photo?: string;
@@ -1054,7 +1109,12 @@ app.get("/api/_debug-orders", (req, res) => {
     res.status(403).json({ error: "forbidden" });
     return;
   }
-  res.json({ count: ORDER_LOG.length, attempts: ORDER_LOG });
+  // Маскируем телефон полностью кроме последних 4 цифр — debug не должен светить PII целиком
+  const masked = ORDER_LOG.map((a) => {
+    const phone = a.body.phone ? a.body.phone.replace(/\d(?=\d{4})/g, "*") : a.body.phone;
+    return { ...a, body: { ...a.body, phone } };
+  });
+  res.json({ count: ORDER_LOG.length, attempts: masked });
 });
 
 // Перевод ошибок order-create.php в человекочитаемый русский
@@ -1075,7 +1135,7 @@ function translateOrderError(err: string | undefined): string {
   return map[err ?? ""] ?? `Не удалось создать заказ. Позвоните +7 (3952) 50-40-80 для оформления.`;
 }
 
-app.post("/api/order", async (req, res) => {
+app.post("/api/order", rateLimit(15), async (req, res) => {
   const tg = tryGetTgUser(req); // optional, без блокировки
   const body = req.body as Partial<OrderRequest> & { useVerifiedPhone?: boolean };
 

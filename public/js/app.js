@@ -286,9 +286,12 @@ function switchTab(name) {
       try { hkBoot(); } catch (e) { console.error('[hkBoot]', e); }
     }
   }
-  if (window.Telegram?.WebApp?.HapticFeedback?.selectionChanged) {
-    window.Telegram.WebApp.HapticFeedback.selectionChanged();
+  // Останавливаем flappy при переходе на любую вкладку кроме fun (экономим CPU)
+  if (name !== 'fun' && typeof flappyStop === 'function') {
+    try { flappyStop(); } catch {}
   }
+  // Haptic уже срабатывает через data-haptic="selection" на nav-кнопках —
+  // дублировать selectionChanged здесь не нужно
   window.scrollTo(0, 0);
 }
 
@@ -310,8 +313,9 @@ window.addEventListener('resize', () => {
   positionNavPill(active);
 });
 
-/* ── Sub-tabs ────────────────────────────────────────────────────────────── */
+/* ── Sub-tabs (dead code, оставлен пустым для совместимости) ──────────── */
 function showSubTab(name) {
+  // Sub-tabs удалены — функция оставлена пустой на случай если её где-то вызовут
   ['games','chat'].forEach(n => {
     const el  = document.getElementById('subtab-content-' + n);
     const btn = document.getElementById('subtab-' + n);

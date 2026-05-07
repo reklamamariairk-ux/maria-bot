@@ -229,9 +229,16 @@ function catShowCategories() {
   document.getElementById('menu-products').style.display = 'none';
   document.getElementById('menu-bread').style.display = 'none';
   document.getElementById('menu-empty').style.display = 'none';
+  const chips = document.getElementById('menu-chips');
+  if (chips) chips.style.display = '';
   const inp = document.getElementById('menu-search');
   if (inp) inp.value = '';
-  document.getElementById('menu-search-clear').style.display = 'none';
+  const clear = document.getElementById('menu-search-clear');
+  if (clear) clear.style.display = 'none';
+  // Сбрасываем sort/filter
+  CATALOG_STATE.sort = 'default';
+  CATALOG_STATE.priceMax = 0;
+  CATALOG_STATE.currentCategory = '';
 }
 
 function catRenderProducts(products) {
@@ -349,13 +356,18 @@ async function catOpenProduct(id) {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>
           Поделиться
         </button>
-        <button class="btn-full" onclick='cartAdd(${JSON.stringify({id:p.id,name:p.name,price:p.price,image:img}).replace(/"/g,"&quot;")});catCloseProduct()'>🛒 В корзину</button>
+        <button class="btn-full" id="cat-modal-add">🛒 В корзину</button>
       </div>
     `;
+    // Привязываем обработчик через addEventListener, чтобы не зависеть от inline-onclick (где нужно
+    // экранировать ' " < > и т.п. в имени товара)
+    const addBtn = document.getElementById('cat-modal-add');
+    const productSnap = { id: p.id, name: p.name, price: p.price, image: img };
+    if (addBtn) addBtn.onclick = () => { window.cartAdd?.(productSnap); catCloseProduct(); };
     // Нативная Telegram MainButton — для добавления в корзину одним тапом
     const priceLabel = p.price ? `Добавить в корзину · ${Number(p.price).toLocaleString('ru-RU')} ₽` : 'Добавить в корзину';
     window.tgMain?.show(priceLabel, () => {
-      window.cartAdd?.({ id: p.id, name: p.name, price: p.price, image: img });
+      window.cartAdd?.(productSnap);
       catCloseProduct();
     });
   } catch (e) {
@@ -458,12 +470,19 @@ function catChipSearch(query) {
   catSearch(query);
 }
 
-function shareProduct(id) {
-  const p = (CATALOG_STATE.lastProducts || []).find(x => Number(x.id) === Number(id));
+async function shareProduct(id) {
+  // Ищем продукт сначала в lastProducts, затем тянем с сервера если не нашли
+  let p = (CATALOG_STATE.lastProducts || []).find(x => Number(x.id) === Number(id));
+  if (!p) {
+    try {
+      const r = await fetch('/api/catalog/product/' + encodeURIComponent(id));
+      const d = await r.json();
+      p = d.product;
+    } catch {}
+  }
   const url = p?.url || `https://www.maria-irk.ru/`;
   const text = p ? `${p.name} в кондитерской «Мария»` : 'Кондитерская «Мария»';
   const tg = window.Telegram?.WebApp;
-  // Telegram WebApp не имеет shareTo напрямую — используем openTelegramLink с https://t.me/share/url
   const shareLink = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
   if (tg?.openTelegramLink) {
     tg.openTelegramLink(shareLink);
