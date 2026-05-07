@@ -1,43 +1,101 @@
 /* ── TOKENS ──────────────────────────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root {
+  /* Бренд (всегда одинаковый — для CTA, бейджей, цены) */
   --red:        #d61f37;
   --red-d:      #a8182c;
   --red-l:      #fce8eb;
   --red-glow:   rgba(214,31,55,.28);
   --gold:       #e8a030;
   --gold-l:     #fef6e4;
-  --dark:       #130008;
-  --bg:         #fdf8f9;
-  --surface:    #ffffff;
-  --muted:      #8b949e;
+
+  /* Тема — переопределяется tg-bridge.js из Telegram themeParams */
+  --tg-bg-color:           #fdf8f9;
+  --tg-text-color:         #130008;
+  --tg-hint-color:         #8b949e;
+  --tg-link-color:         #d61f37;
+  --tg-button-color:       #d61f37;
+  --tg-button-text-color:  #ffffff;
+  --tg-secondary-bg-color: #ffffff;
+  --tg-section-bg-color:   #ffffff;
+
+  /* Алиасы: используем эти семантические имена в компонентах */
+  --bg:         var(--tg-bg-color);
+  --surface:    var(--tg-secondary-bg-color);
+  --dark:       var(--tg-text-color);
+  --muted:      var(--tg-hint-color);
   --border:     rgba(214,31,55,.1);
-  --r:          20px;
+
+  /* Геометрия — inset-скругления (continuous corners) */
+  --r:          24px;     /* card radius */
+  --r-img:      20px;     /* image inside card (delta 4 для continuous) */
   --r-sm:       14px;
+  --r-pill:     999px;
+  --r-tab:      28px;
   --hh:         58px;
   --nh:         64px;
-  --shadow:     0 8px 32px rgba(214,31,55,.18);
-  --shadow-sm:  0 2px 16px rgba(0,0,0,.06);
-  --shadow-card:0 4px 24px rgba(214,31,55,.1);
+
+  /* Тени — дороже, тёплее, того же hue что бренд */
+  --shadow:        0 12px 36px -8px rgba(214,31,55,.30);
+  --shadow-sm:     0 2px 16px rgba(0,0,0,.06);
+  --shadow-card:   0 4px 24px rgba(214,31,55,.10);
+  --shadow-glow:   0 8px 32px -8px rgba(180,30,40,.45);
+
+  /* Анимация — spring */
   --t:          .25s cubic-bezier(.34,1.56,.64,1);
   --t-fast:     .18s cubic-bezier(.25,.46,.45,.94);
+  --t-slow:     .42s cubic-bezier(.22,1,.36,1);
+
+  /* Глассморф */
   --glass:      rgba(255,255,255,.72);
   --glass-b:    rgba(255,255,255,.45);
   --blur:       blur(20px) saturate(180%);
+
+  /* Mesh-градиенты для CTA */
+  --mesh-red:
+    radial-gradient(at 20% 20%, #f03a55 0%, transparent 50%),
+    radial-gradient(at 80% 0%,  #d61f37 0%, transparent 60%),
+    radial-gradient(at 70% 100%, #a8182c 0%, transparent 50%),
+    linear-gradient(135deg, #d61f37, #a8182c);
+  --mesh-gold:
+    radial-gradient(at 30% 20%, #f0c050 0%, transparent 55%),
+    radial-gradient(at 80% 80%, #b06010 0%, transparent 50%),
+    linear-gradient(135deg, #e8a030, #b06010);
+
+  /* Шрифт-стек — Inter Variable приоритетный */
+  --ff-body: 'Inter','Manrope',-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;
+  --ff-display: 'Playfair Display','Inter',serif;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+  font-optical-sizing: auto;
+}
+
+/* Dark mode — пересчитываем алиасы (бренд остаётся, только фон/поверхности темнеют) */
+html.tg-dark {
+  --border:    rgba(255,255,255,.08);
+  --shadow:        0 12px 36px -8px rgba(0,0,0,.55);
+  --shadow-sm:     0 2px 12px rgba(0,0,0,.35);
+  --shadow-card:   0 4px 24px rgba(0,0,0,.35);
+  --glass:      rgba(20,15,15,.55);
+  --glass-b:    rgba(20,15,15,.35);
 }
 
 /* ── RESET ───────────────────────────────────────────────────────────────── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{
-  font-family:'Inter',system-ui,-apple-system,sans-serif;
-  font-feature-settings:'cv02','cv03','cv04','cv11';
-  background:var(--bg);color:#111;
+  font-family:var(--ff-body);
+  font-feature-settings:'cv02','cv03','cv04','cv11','ss01','ss03';
+  background:var(--bg);color:var(--dark);
   overflow-x:hidden;-webkit-font-smoothing:antialiased;
+  transition:background-color .3s ease, color .3s ease;
 }
 a{color:var(--red);text-decoration:none}
 b,strong{font-weight:700}
+
+/* Картинки — плавный fade-in после загрузки (cheap blur-up без LQIP) */
+img[loading]{opacity:0;transition:opacity .35s ease, filter .35s ease;filter:blur(8px) saturate(.8)}
+img[loading].loaded,img[loading]:not([src=""]){opacity:1;filter:blur(0) saturate(1)}
+img.loaded{opacity:1;filter:blur(0) saturate(1)}
 
 /* ── HEADER ──────────────────────────────────────────────────────────────── */
 .header{
@@ -105,11 +163,12 @@ b,strong{font-weight:700}
   text-transform:uppercase;
 }
 .hero__h1{
-  font-family:'Playfair Display',serif;
-  font-size:32px;font-weight:800;line-height:1.15;margin-bottom:12px;
-  letter-spacing:-.3px;
+  font-family:var(--ff-display);
+  font-size:clamp(34px, 9vw, 44px);font-weight:800;line-height:1.05;margin-bottom:14px;
+  letter-spacing:-.6px;
+  text-wrap:balance;
 }
-.hero__p{font-size:14px;opacity:.82;line-height:1.65;margin-bottom:24px}
+.hero__p{font-size:15px;opacity:.85;line-height:1.55;margin-bottom:26px;letter-spacing:-.1px}
 .btn-hero{
   display:inline-flex;align-items:center;gap:6px;
   background:rgba(255,255,255,.15);color:#fff;
@@ -131,10 +190,14 @@ b,strong{font-weight:700}
 }
 .bento__big{
   grid-column:1 / span 2;
-  background:linear-gradient(135deg,#1a0010 0%,var(--red-d) 50%,var(--red) 100%);
-  color:#fff;border-radius:24px;padding:22px 22px 20px;
+  background:
+    radial-gradient(at 20% 20%, #f03a55 0%, transparent 55%),
+    radial-gradient(at 80% 0%, #d61f37 0%, transparent 60%),
+    radial-gradient(at 70% 100%, #6a0018 0%, transparent 55%),
+    linear-gradient(135deg, #1a0010 0%, var(--red-d) 50%, var(--red) 100%);
+  color:#fff;border-radius:28px;padding:24px;
   cursor:pointer;position:relative;overflow:hidden;
-  box-shadow:0 12px 40px rgba(168,24,44,.32);
+  box-shadow:0 16px 44px -10px rgba(168,24,44,.42);
   transition:transform var(--t),box-shadow var(--t);
 }
 .bento__big::before{
@@ -158,9 +221,9 @@ b,strong{font-weight:700}
   padding:5px 12px;border-radius:24px;backdrop-filter:blur(8px);
 }
 .bento__h{
-  font-family:'Playfair Display',serif;
-  font-size:22px;font-weight:800;line-height:1.18;letter-spacing:-.3px;
-  margin-bottom:8px;
+  font-family:var(--ff-display);
+  font-size:clamp(22px, 6vw, 28px);font-weight:800;line-height:1.08;letter-spacing:-.6px;
+  margin-bottom:10px;text-wrap:balance;
 }
 .bento__sub{font-size:12px;opacity:.78;line-height:1.55;margin-bottom:14px}
 .bento__cta{
@@ -309,29 +372,35 @@ b,strong{font-weight:700}
 }
 .pcard-pr{
   background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--r);overflow:hidden;cursor:pointer;
+  border-radius:var(--r);
+  padding:6px;
+  cursor:pointer;
   box-shadow:var(--shadow-card);
   transition:transform var(--t),box-shadow var(--t);
 }
 .pcard-pr:active{transform:scale(.96)}
-.pcard-pr:hover{transform:translateY(-2px);box-shadow:0 10px 28px var(--red-glow)}
+.pcard-pr:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
 .pcard-pr__img{
-  aspect-ratio:1/1;background-color:var(--gold-l);
+  aspect-ratio:4/5;background-color:var(--gold-l);
   display:flex;align-items:center;justify-content:center;
   position:relative;overflow:hidden;
+  border-radius:var(--r-img);
 }
 .pcard-pr__pic{
   width:100%;height:100%;object-fit:cover;display:block;
-  transition:opacity .2s ease;
 }
+.pcard-pr__pic[loading]{opacity:0;filter:blur(10px)}
+.pcard-pr__pic.loaded{opacity:1;filter:blur(0)}
 .pcard-pr__add{
   position:absolute;right:8px;bottom:8px;
-  width:36px;height:36px;border-radius:50%;border:0;
-  background:var(--red);color:#fff;
+  width:38px;height:38px;border-radius:50%;border:0;
+  background:var(--mesh-red);
+  color:#fff;
   font-size:22px;font-weight:700;line-height:1;
   display:flex;align-items:center;justify-content:center;
-  cursor:pointer;box-shadow:0 4px 12px rgba(206,0,30,.4);
-  transition:transform .15s ease, background .2s ease;
+  cursor:pointer;
+  box-shadow:var(--shadow-glow);
+  transition:transform .18s cubic-bezier(.34,1.56,.64,1);
   z-index:2;padding:0;
 }
 .pcard-pr__add:active{transform:scale(.88)}
@@ -565,14 +634,21 @@ b,strong{font-weight:700}
 
 /* ── Header cart button ─────────────────────────────────────────────────── */
 .header__cart{
-  background:linear-gradient(135deg,var(--red),var(--red-d));color:#fff;
+  background:var(--mesh-red);color:#fff;
   border:none;border-radius:14px;padding:6px 12px;
-  font-family:'Inter',sans-serif;font-size:13px;font-weight:700;
+  font-family:var(--ff-body);font-size:13px;font-weight:700;
   cursor:pointer;display:flex;gap:4px;align-items:center;
-  box-shadow:0 4px 12px var(--red-glow);
+  box-shadow:var(--shadow-glow);
   margin-right:8px;
+  transition:transform var(--t);
 }
 .header__cart:active{transform:scale(.94)}
+.header__cart.cart-bump{animation:cartBump .35s cubic-bezier(.34,1.56,.64,1)}
+@keyframes cartBump{
+  0%{transform:scale(1)}
+  40%{transform:scale(1.18)}
+  100%{transform:scale(1)}
+}
 
 /* Корзина-toast */
 .cart-toast{
@@ -683,15 +759,16 @@ b,strong{font-weight:700}
 /* ── BUTTONS ─────────────────────────────────────────────────────────────── */
 .btn-full{
   display:block;width:calc(100% - 28px);margin:4px 14px 14px;
-  background:linear-gradient(135deg,var(--red),var(--red-d));color:#fff;
-  font-family:'Inter',sans-serif;font-weight:700;font-size:14px;
-  padding:14px;border-radius:var(--r-sm);border:none;cursor:pointer;
-  box-shadow:0 6px 28px var(--red-glow);
-  transition:transform var(--t),box-shadow var(--t);
-  letter-spacing:.4px;
+  background:var(--mesh-red);color:#fff;
+  font-family:var(--ff-body);font-weight:700;font-size:15px;
+  padding:15px;border-radius:18px;border:none;cursor:pointer;
+  box-shadow:var(--shadow-glow);
+  transition:transform var(--t),box-shadow var(--t),font-variation-settings .2s;
+  font-variation-settings:'wght' 700;
+  letter-spacing:-.1px;
 }
-.btn-full:hover{transform:translateY(-1px);box-shadow:0 10px 40px var(--red-glow)}
-.btn-full:active{transform:scale(.97)}
+.btn-full:hover{transform:translateY(-1px);box-shadow:0 12px 44px -8px rgba(180,30,40,.55);font-variation-settings:'wght' 760}
+.btn-full:active{transform:scale(.97);font-variation-settings:'wght' 800}
 
 /* ── CLUB ────────────────────────────────────────────────────────────────── */
 .club-hero{
@@ -1148,12 +1225,12 @@ b,strong{font-weight:700}
 .chat-in:focus{border-color:var(--red);box-shadow:0 0 0 4px rgba(214,31,55,.1)}
 .chat-btn{
   width:46px;height:46px;border-radius:50%;
-  background:linear-gradient(135deg,var(--red),var(--red-d));
+  background:var(--mesh-red);
   color:#fff;border:none;
   font-size:16px;cursor:pointer;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;
   transition:transform var(--t),box-shadow var(--t);
-  box-shadow:0 4px 18px var(--red-glow);
+  box-shadow:var(--shadow-glow);
 }
 .chat-btn:hover{transform:scale(1.08);box-shadow:0 6px 24px var(--red-glow)}
 .chat-btn:active{transform:scale(.9)}

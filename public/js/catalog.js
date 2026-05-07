@@ -110,7 +110,7 @@ function catRenderProducts(products) {
     const loading = idx < 6 ? 'eager' : 'lazy';
     const fetchpriority = idx < 4 ? 'high' : 'auto';
     const imgEl = p.image
-      ? `<img class="pcard-pr__pic" src="/img?u=${encodeURIComponent(p.image)}" alt="${escapeAttr(p.name)}" loading="${loading}" decoding="async" fetchpriority="${fetchpriority}" onerror="this.style.display='none'">`
+      ? `<img class="pcard-pr__pic" src="/img?u=${encodeURIComponent(p.image)}" alt="${escapeAttr(p.name)}" loading="${loading}" decoding="async" fetchpriority="${fetchpriority}" onload="this.classList.add('loaded')" onerror="this.style.display='none'">`
       : '<span class="pcard-pr__noimg">🍰</span>';
     return `
       <div class="pcard-pr" onclick="${onClick}">
@@ -239,13 +239,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function catQuickAdd(id, btn) {
   if (!id) return;
-  // Уже знаем имя/картинку из карточки — но на всякий случай дотянем точную цену
+  window.haptic?.('medium');
   try {
     const res = await fetch('/api/catalog/product/' + encodeURIComponent(id));
     const data = await res.json();
     const p = data.product;
     if (!p || !p.price) {
-      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.('error');
+      window.haptic?.('error');
       return;
     }
     const img = (p.images && p.images[0]) || p.image || '';
@@ -256,6 +256,7 @@ async function catQuickAdd(id, btn) {
     }
   } catch (e) {
     console.error('[catQuickAdd]', e);
+    window.haptic?.('error');
   }
 }
 

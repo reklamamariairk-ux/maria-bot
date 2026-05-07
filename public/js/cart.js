@@ -28,8 +28,17 @@ function cartUpdateBadge() {
   const n = document.getElementById('hdr-cart-count');
   if (!btn || !n) return;
   const c = cartCount();
-  n.textContent = c;
+  const prev = Number(n.textContent) || 0;
+  if (window.tweenNumber && prev !== c) {
+    window.tweenNumber(n, prev, c, 350);
+  } else {
+    n.textContent = c;
+  }
   btn.style.display = c > 0 ? '' : 'none';
+  if (prev !== c) {
+    btn.classList.add('cart-bump');
+    setTimeout(() => btn.classList.remove('cart-bump'), 350);
+  }
 }
 
 function cartAdd(product) {
@@ -52,8 +61,7 @@ function cartAdd(product) {
 }
 
 function cartFlash(productName) {
-  const tg = window.Telegram?.WebApp;
-  tg?.HapticFeedback?.notificationOccurred?.('success');
+  window.haptic?.('success');
   // Простой toast
   let toast = document.getElementById('cart-toast');
   if (!toast) {
@@ -267,7 +275,7 @@ async function cartSubmit() {
         <div class="cart-total">Сумма: <b>${Number(data.total || 0).toLocaleString('ru-RU')} ₽</b></div>
         <button class="btn-full" onclick="cartClose()">Готово</button>
       </div>`;
-    window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.('success');
+    window.haptic?.('success');
   } catch (e) {
     if (status) status.innerHTML = `<span style="color:var(--red)">Сеть недоступна. Попробуй ещё раз.</span>`;
   }

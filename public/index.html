@@ -6,8 +6,10 @@
   <title>Мария — кондитерская</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <!-- Variable fonts: Inter (вариативный), Playfair Display, плюс Manrope/Onest как fallback -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..800&family=Playfair+Display:wght@700;800&family=Manrope:wght@500..800&display=swap" rel="stylesheet"/>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="/js/tg-bridge.js"></script>
   <link rel="stylesheet" href="/css/style.css"/>
 </head>
 <body>
@@ -22,7 +24,7 @@
     <span class="hdr-c hdr-c--star">⭐ <b id="hdr-stars">0</b></span>
     <span class="hdr-c hdr-c--point">💎 <b id="hdr-points">0</b></span>
   </div>
-  <button class="header__cart" id="hdr-cart" onclick="cartOpen()" style="display:none">
+  <button class="header__cart" id="hdr-cart" data-haptic="light" onclick="cartOpen()" style="display:none">
     🛒 <b id="hdr-cart-count">0</b>
   </button>
   <a class="header__phone" href="tel:+73952504080">☎ 50-40-80</a>
@@ -37,7 +39,7 @@
     <div class="hero__tag">Иркутск · 33 года на рынке</div>
     <h1 class="hero__h1">Свежая выпечка<br>каждый день</h1>
     <p class="hero__p">Торты, пироги, пирожные<br>и подарочные наборы</p>
-    <button class="btn-hero" onclick="switchTab('menu')">Смотреть меню →</button>
+    <button class="btn-hero" data-haptic="light" onclick="switchTab('menu')">Смотреть меню →</button>
   </div>
 
   <!-- Bento -->
@@ -530,19 +532,19 @@
 <!-- BOTTOM NAV -->
 <nav class="bnav">
   <span class="bnav__pill" id="bnav-pill"></span>
-  <button class="nb active" id="nav-home" onclick="switchTab('home')">
+  <button class="nb active" id="nav-home" data-haptic="selection" onclick="switchTab('home')">
     <span class="nb__ic">🏠</span><span class="nb__lb">Главная</span>
   </button>
-  <button class="nb" id="nav-menu" onclick="switchTab('menu')">
+  <button class="nb" id="nav-menu" data-haptic="selection" onclick="switchTab('menu')">
     <span class="nb__ic">🎂</span><span class="nb__lb">Меню</span>
   </button>
-  <button class="nb" id="nav-club" onclick="switchTab('club')">
+  <button class="nb" id="nav-club" data-haptic="selection" onclick="switchTab('club')">
     <span class="nb__ic">💎</span><span class="nb__lb">Клуб</span>
   </button>
-  <button class="nb" id="nav-fun" onclick="switchTab('fun')">
+  <button class="nb" id="nav-fun" data-haptic="selection" onclick="switchTab('fun')">
     <span class="nb__ic">🎮</span><span class="nb__lb">Игры</span>
   </button>
-  <button class="nb" id="nav-order" onclick="switchTab('order')">
+  <button class="nb" id="nav-order" data-haptic="selection" onclick="switchTab('order')">
     <span class="nb__ic">🎂</span><span class="nb__lb">На заказ</span>
   </button>
 </nav>
