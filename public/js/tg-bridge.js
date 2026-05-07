@@ -12,22 +12,27 @@
     try { tg.ready(); tg.expand(); } catch {}
 
     function applyTheme() {
+      // Принципиально: брендовый стиль приложения — белый фон + красно-золотые акценты.
+      // Не подхватываем background из themeParams — было бы непредсказуемо при смене темы.
+      // Подхватываем только text_color на случай если у юзера в TG настроен особый цвет.
       const tp = tg.themeParams || {};
       const root = document.documentElement;
-      const set = (k, fallback) => { if (tp[k]) root.style.setProperty('--tg-'+k.replace(/_/g,'-'), tp[k]); else if (fallback) root.style.setProperty('--tg-'+k.replace(/_/g,'-'), fallback); };
-      set('bg_color',          '#fdf8f9');
-      set('text_color',        '#130008');
-      set('hint_color',        '#8b949e');
-      set('link_color',        '#d61f37');
-      set('button_color',      '#d61f37');
-      set('button_text_color', '#ffffff');
-      set('secondary_bg_color','#ffffff');
-      set('section_bg_color',  '#ffffff');
-      set('header_bg_color',   tp.bg_color || '#fdf8f9');
+      root.style.setProperty('--tg-bg-color',           '#ffffff');
+      root.style.setProperty('--tg-secondary-bg-color', '#ffffff');
+      root.style.setProperty('--tg-section-bg-color',   '#ffffff');
+      root.style.setProperty('--tg-text-color',         tp.text_color || '#130008');
+      root.style.setProperty('--tg-hint-color',         tp.hint_color || '#8b949e');
+      root.style.setProperty('--tg-link-color',         '#d61f37');
+      root.style.setProperty('--tg-button-color',       '#d61f37');
+      root.style.setProperty('--tg-button-text-color',  '#ffffff');
 
-      const isDark = (tg.colorScheme === 'dark');
-      root.classList.toggle('tg-dark', isDark);
-      root.classList.toggle('tg-light', !isDark);
+      // Сообщаем Telegram, какого цвета шапка — пусть подложит белый
+      try { tg.setHeaderColor?.('#ffffff'); } catch {}
+      try { tg.setBackgroundColor?.('#ffffff'); } catch {}
+
+      // Намеренно всегда light — приложение всегда «премиум-белое»
+      root.classList.add('tg-light');
+      root.classList.remove('tg-dark');
     }
     applyTheme();
     tg.onEvent?.('themeChanged', applyTheme);

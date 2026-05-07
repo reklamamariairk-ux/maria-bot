@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -206,22 +239,50 @@ function proxyAsset(url, contentType) {
 app.get("/logo.svg", proxyAsset("https://www.maria-irk.ru/local/templates/maria/img/logo_new.svg", "image/svg+xml"));
 app.get("/logo.png", proxyAsset("https://www.maria-irk.ru/local/templates/maria/img/mobile_logo.png", "image/png"));
 // ─── Image proxy ────────────────────────────────────────────────────────────
-// Прокси картинок товаров с агрессивными cache-заголовками + in-memory hot cache.
-// Сами URL содержат хеш в пути → можно отдавать как immutable.
-const IMG_CACHE_LIMIT = 64 * 1024 * 1024; // 64 MB — храним только горячие
-const IMG_MAX_ITEM = 2 * 1024 * 1024; // 2 MB — крупнее не кешируем
+// Прокси картинок товаров с агрессивным кэшем (память + диск) + предзагрузка
+// топ-картинок при старте бота.
+const fsSync = __importStar(require("fs"));
+const IMG_CACHE_DIR = path_1.default.join("/tmp", "img_cache");
+const IMG_CACHE_LIMIT = 96 * 1024 * 1024; // 96 MB в памяти
+const IMG_MAX_ITEM = 3 * 1024 * 1024; // 3 MB — крупнее не кешируем
+try {
+    fsSync.mkdirSync(IMG_CACHE_DIR, { recursive: true });
+}
+catch { }
 const imgCache = new Map();
 let imgCacheBytes = 0;
-function imgCacheGet(key) {
+const inflight = new Map();
+function imgKey(u) {
+    return require("crypto").createHash("md5").update(u).digest("hex");
+}
+function imgDiskGet(u) {
+    const k = imgKey(u);
+    try {
+        const buf = fsSync.readFileSync(path_1.default.join(IMG_CACHE_DIR, k));
+        const meta = fsSync.readFileSync(path_1.default.join(IMG_CACHE_DIR, k + ".meta"), "utf8");
+        return { buf, type: meta.trim() || "image/jpeg" };
+    }
+    catch {
+        return null;
+    }
+}
+function imgDiskPut(u, v) {
+    const k = imgKey(u);
+    try {
+        fsSync.writeFileSync(path_1.default.join(IMG_CACHE_DIR, k), v.buf);
+        fsSync.writeFileSync(path_1.default.join(IMG_CACHE_DIR, k + ".meta"), v.type);
+    }
+    catch { }
+}
+function imgMemGet(key) {
     const v = imgCache.get(key);
     if (!v)
         return null;
-    // refresh LRU position
     imgCache.delete(key);
     imgCache.set(key, v);
     return v;
 }
-function imgCachePut(key, value) {
+function imgMemPut(key, value) {
     if (value.buf.length > IMG_MAX_ITEM)
         return;
     imgCache.set(key, value);
@@ -236,63 +297,112 @@ function imgCachePut(key, value) {
         imgCache.delete(first);
     }
 }
-app.get("/img", (req, res) => {
+function fetchUpstream(u) {
+    if (inflight.has(u))
+        return inflight.get(u);
+    const p = new Promise((resolve) => {
+        const url = new URL(u);
+        const opts = {
+            hostname: url.hostname,
+            path: url.pathname + url.search,
+            headers: { "User-Agent": "MariaBot/1.0 ImgProxy" },
+            rejectUnauthorized: false,
+        };
+        const req = https_1.default.request(opts, (r) => {
+            if ((r.statusCode ?? 0) >= 400) {
+                r.resume();
+                resolve(null);
+                return;
+            }
+            const type = String(r.headers["content-type"] ?? "image/jpeg");
+            const chunks = [];
+            let total = 0;
+            let oversize = false;
+            r.on("data", (c) => {
+                total += c.length;
+                if (total > IMG_MAX_ITEM)
+                    oversize = true;
+                if (!oversize)
+                    chunks.push(c);
+            });
+            r.on("end", () => {
+                if (oversize || !chunks.length) {
+                    resolve(null);
+                    return;
+                }
+                const value = { buf: Buffer.concat(chunks), type };
+                imgMemPut(u, value);
+                imgDiskPut(u, value);
+                resolve(value);
+            });
+        });
+        req.on("error", () => resolve(null));
+        req.setTimeout(20000, () => { req.destroy(); resolve(null); });
+        req.end();
+    });
+    inflight.set(u, p);
+    p.finally(() => inflight.delete(u));
+    return p;
+}
+async function imgGet(u) {
+    // 1) память
+    const mem = imgMemGet(u);
+    if (mem)
+        return mem;
+    // 2) диск
+    const disk = imgDiskGet(u);
+    if (disk) {
+        imgMemPut(u, disk);
+        return disk;
+    }
+    // 3) upstream
+    return fetchUpstream(u);
+}
+app.get("/img", async (req, res) => {
     const u = String(req.query.u ?? "");
-    // Whitelist: только maria-irk.ru
     if (!/^https:\/\/(www\.)?maria-irk\.ru\/upload\//.test(u)) {
         res.status(400).end();
         return;
     }
-    const hit = imgCacheGet(u);
-    if (hit) {
-        res.setHeader("Content-Type", hit.type);
+    // Сначала проверим горячий кэш — быстрый return без await
+    const memHit = imgMemGet(u);
+    if (memHit) {
+        res.setHeader("Content-Type", memHit.type);
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
         res.setHeader("X-Cache", "HIT");
-        res.end(hit.buf);
+        res.end(memHit.buf);
         return;
     }
-    const url = new URL(u);
-    const opts = {
-        hostname: url.hostname,
-        path: url.pathname + url.search,
-        headers: { "User-Agent": "MariaBot/1.0 ImgProxy" },
-        rejectUnauthorized: false,
-    };
-    const upstream = https_1.default.request(opts, (r) => {
-        if ((r.statusCode ?? 0) >= 400) {
-            res.status(r.statusCode ?? 502).end();
-            r.resume();
-            return;
-        }
-        const type = String(r.headers["content-type"] ?? "image/jpeg");
-        res.setHeader("Content-Type", type);
-        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-        res.setHeader("X-Cache", "MISS");
-        const chunks = [];
-        let total = 0;
-        let stoppedCaching = false;
-        r.on("data", (chunk) => {
-            if (!stoppedCaching) {
-                total += chunk.length;
-                if (total > IMG_MAX_ITEM)
-                    stoppedCaching = true;
-                else
-                    chunks.push(chunk);
-            }
-            res.write(chunk);
-        });
-        r.on("end", () => {
-            res.end();
-            if (!stoppedCaching && chunks.length) {
-                imgCachePut(u, { buf: Buffer.concat(chunks), type, ts: Date.now() });
-            }
-        });
-    });
-    upstream.on("error", () => { res.status(502).end(); });
-    upstream.setTimeout(15000, () => { upstream.destroy(); if (!res.headersSent)
-        res.status(504).end(); });
-    upstream.end();
+    const v = await imgGet(u);
+    if (!v) {
+        res.status(502).end();
+        return;
+    }
+    res.setHeader("Content-Type", v.type);
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    res.setHeader("X-Cache", "FILL");
+    res.end(v.buf);
 });
+// Прогрев кэша: при старте качаем картинки топ-100 товаров
+async function prewarmImageCache() {
+    const urls = catalog
+        .filter((p) => p.image && /maria-irk\.ru\/upload\//.test(p.image))
+        .slice(0, 100)
+        .map((p) => p.image);
+    console.log(`[IMG] prewarming ${urls.length} images…`);
+    let done = 0;
+    // Параллельно по 6 — чтобы не ддосить maria-irk.ru
+    const batch = 6;
+    for (let i = 0; i < urls.length; i += batch) {
+        await Promise.all(urls.slice(i, i + batch).map((u) => imgGet(u).then(() => { done++; })));
+    }
+    console.log(`[IMG] prewarmed ${done}/${urls.length} (mem ${(imgCacheBytes / 1024 / 1024).toFixed(1)} MB)`);
+}
+// Запуск прогрева когда каталог готов (через 5 сек после старта)
+setTimeout(() => { prewarmImageCache().catch((e) => console.error("[IMG] prewarm failed:", e)); }, 5000);
+// И повторно после каждого обновления каталога
+const _origRefresh = refreshCatalog;
+global.__refreshCatalogPatched = false;
 // ─── Groq chat (agent с tool calling) ───────────────────────────────────────
 const ai_tools_1 = require("./ai-tools");
 function groqRequest(payload) {
