@@ -18,6 +18,10 @@
  * Цена — CATALOG_GROUP_ID = 1 (Розничная цена).
  */
 
+// Глушим warnings/notices чтобы JSON не портился (PHP 8 deprecation в Bitrix tools.php)
+error_reporting(0);
+ini_set('display_errors', '0');
+ob_start();
 @require_once($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/prolog_before.php');
 
 const CATALOG_TOKEN = 'a4e4705f63070a189cc9bfa5bc65a722aa63bd9c981cae37229731eaca396a98';
@@ -64,7 +68,7 @@ $section = trim((string)($_GET['section'] ?? ''));
 $limit   = max(1, min(500, (int)($_GET['limit'] ?? 200)));
 $offset  = max(0, (int)($_GET['offset'] ?? 0));
 
-$cacheId = 'catalog_v2_disc_' . md5("$section|$limit|$offset");
+$cacheId = 'catalog_v5_occ_' . md5("$section|$limit|$offset");
 $cache = \Bitrix\Main\Data\Cache::createInstance();
 header('Cache-Control: public, max-age=300');
 if ($cache->initCache(CACHE_TTL, $cacheId, '/maria_catalog')) {
@@ -132,14 +136,17 @@ function loadList(string $sectionCode, int $limit, int $offset): array {
 
     $out = [];
     $ids = [];
+    $idxById = [];
     while ($r = $rs->GetNext()) {
-        $ids[] = (int)$r['ID'];
+        $id = (int)$r['ID'];
+        $ids[] = $id;
+        $idxById[$id] = count($out);
         $img = pickImage((int)$r['PREVIEW_PICTURE'], (int)$r['DETAIL_PICTURE']);
         $previewProp = strip_tags(propText($r['PROPERTY_PREVIEW_TEXT_CUSTOM_VALUE']));
         $preview = trim((string)$r['PREVIEW_TEXT']) ?: $previewProp;
 
         $out[] = [
-            'id'         => (int)$r['ID'],
+            'id'         => $id,
             'name'       => htmlspecialchars_decode((string)$r['NAME']),
             'code'       => $r['CODE'],
             'section_id' => (int)$r['IBLOCK_SECTION_ID'],
@@ -148,8 +155,56 @@ function loadList(string $sectionCode, int $limit, int $offset): array {
             'weight'     => firstStr($r['PROPERTY_PROP_159_VALUE']),
             'persons'    => $r['PROPERTY_PERSONS_VALUE'] ?: null,
             'hit'        => !empty($r['PROPERTY_HIT_VALUE']),
+            'occasion'   => [],
+            'filling'    => [],
+            'cake_type'  => [],
+            'pie_type'   => [],
+            'dessert_type' => [],
+            'whom'       => [],
             'url'        => absUrl($r['DETAIL_PAGE_URL']),
         ];
+    }
+
+    // Подгружаем мульти-свойства одним SQL'ом (efficient batch)
+    if (!empty($ids)) {
+        $idsList = implode(',', array_map('intval', $ids));
+        $conn = \Bitrix\Main\Application::getConnection();
+        $sqlHelper = $conn->getSqlHelper();
+        $codes = ['OCCASION', 'FILLING', 'CAKE_TYPE', 'PIE_TYPE', 'DESSERT_TYPE', 'WHOM'];
+        $codesSql = "'" . implode("','", array_map([$sqlHelper, 'forSql'], $codes)) . "'";
+
+        // Получаем prop_id → code mapping
+        $propMap = [];
+        $rs = $conn->query("SELECT ID, CODE FROM b_iblock_property WHERE IBLOCK_ID = " . IBLOCK_ID . " AND CODE IN ($codesSql)");
+        while ($p = $rs->fetch()) $propMap[(int)$p['ID']] = $p['CODE'];
+        if (!empty($propMap)) {
+            $propIds = implode(',', array_keys($propMap));
+            // Multiple свойства — в b_iblock_element_property
+            $rs = $conn->query(
+                "SELECT eep.IBLOCK_ELEMENT_ID, eep.IBLOCK_PROPERTY_ID, eep.VALUE, ep.VALUE AS ENUM_VALUE " .
+                "FROM b_iblock_element_property eep " .
+                "LEFT JOIN b_iblock_property_enum ep ON ep.ID = eep.VALUE AND eep.VALUE REGEXP '^[0-9]+$' " .
+                "WHERE eep.IBLOCK_ELEMENT_ID IN ($idsList) AND eep.IBLOCK_PROPERTY_ID IN ($propIds) AND eep.VALUE IS NOT NULL"
+            );
+            while ($r = $rs->fetch()) {
+                $eid = (int)$r['IBLOCK_ELEMENT_ID'];
+                if (!isset($idxById[$eid])) continue;
+                $code = $propMap[(int)$r['IBLOCK_PROPERTY_ID']];
+                $field = strtolower($code);
+                $val = $r['ENUM_VALUE'] !== null && $r['ENUM_VALUE'] !== '' ? $r['ENUM_VALUE'] : $r['VALUE'];
+                if (!is_string($val) || $val === '') continue;
+                $out[$idxById[$eid]][$field][] = $val;
+            }
+            // Дедуп
+            foreach ($out as &$item) {
+                foreach (['occasion','filling','cake_type','pie_type','dessert_type','whom'] as $k) {
+                    if (!empty($item[$k])) {
+                        $item[$k] = array_values(array_unique($item[$k]));
+                    }
+                }
+            }
+            unset($item);
+        }
     }
 
     // Цены и availability — одним батчем + применение скидок (Bitrix discount rules)
@@ -365,4 +420,26 @@ function listValues($prop): array {
     if (!$v) return [];
     if (is_array($v)) return array_values(array_map('strval', $v));
     return [(string)$v];
+}
+
+// Резолвит значение свойства в текст (для multiple=Y списков):
+// если value — это ID enum-варианта, ищем XML_ID/VALUE в b_iblock_property_enum
+$enumCache = [];
+function resolveListValue($v, string $propCode): ?string {
+    if ($v === null || $v === '' || $v === false) return null;
+    $vStr = (string)$v;
+    // Если уже текст (не цифра) — возвращаем как есть
+    if (!ctype_digit($vStr)) return $vStr;
+    global $enumCache;
+    if (!isset($enumCache[$propCode])) {
+        $enumCache[$propCode] = [];
+        $conn = \Bitrix\Main\Application::getConnection();
+        $rs = $conn->query(
+            "SELECT pe.ID, pe.VALUE FROM b_iblock_property_enum pe " .
+            "JOIN b_iblock_property p ON p.ID = pe.PROPERTY_ID " .
+            "WHERE p.CODE = '" . $conn->getSqlHelper()->forSql($propCode) . "' AND p.IBLOCK_ID = " . IBLOCK_ID
+        );
+        while ($r = $rs->fetch()) $enumCache[$propCode][(int)$r['ID']] = (string)$r['VALUE'];
+    }
+    return $enumCache[$propCode][(int)$vStr] ?? $vStr;
 }

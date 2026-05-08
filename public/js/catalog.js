@@ -482,6 +482,74 @@ function catChipSearch(query) {
   catSearch(query);
 }
 
+// «Настроение» — popmenu со списком типов (cake_type из каталога)
+const MOOD_OPTIONS = [
+  { code: 'Праздник - каждый день', label: '🎉 На праздник' },
+  { code: 'Детский',                label: '👶 Детский' },
+  { code: 'Домашний',               label: '🏠 Домашний' },
+  { code: 'С сырным кремом',        label: '🧀 С сырным кремом' },
+  { code: 'Сметанный',              label: '🥄 Сметанный' },
+  { code: 'Шоколадный',             label: '🍫 Шоколадный' },
+  { code: 'Фруктовый',              label: '🍇 Фруктовый' },
+  { code: 'Бенто',                  label: '🍰 Бенто (мини)' },
+  { code: 'Бисквитный',             label: '🎂 Бисквитный' },
+  { code: 'Торты под заказ',        label: '🎨 Под заказ' },
+];
+
+function catMoodMenu() {
+  const html = MOOD_OPTIONS.map(({ code, label }) =>
+    `<button class="popmenu__item" onclick="catShowMood('${escapeAttr(code)}',&quot;${escapeAttr(label)}&quot;)">${label}</button>`
+  ).join('');
+  catShowPopmenu('Подбор по настроению', html);
+}
+window.catMoodMenu = catMoodMenu;
+
+async function catShowMood(code, label) {
+  catClosePopmenu();
+  document.getElementById('menu-categories').style.display = 'none';
+  document.getElementById('menu-products').style.display = '';
+  document.getElementById('menu-bread').style.display = '';
+  document.getElementById('menu-bread-name').textContent = label || `Настроение: ${code}`;
+  document.getElementById('menu-empty').style.display = 'none';
+  const chips = document.getElementById('menu-chips');
+  if (chips) chips.style.display = 'none';
+  CATALOG_STATE.currentCategory = `__mood:${code}`;
+
+  const grid = document.getElementById('menu-products');
+  grid.innerHTML = Array(6).fill(0).map(() => `
+    <div class="pcard-pr-skel">
+      <div class="pcard-pr-skel__img"></div>
+      <div class="pcard-pr-skel__line pcard-pr-skel__line--w"></div>
+      <div class="pcard-pr-skel__line pcard-pr-skel__line--n"></div>
+    </div>`).join('');
+  try {
+    const r = await fetch('/api/catalog/products?limit=300');
+    const d = await r.json();
+    const all = d.products || [];
+    const lc = code.toLowerCase();
+    const matches = all.filter((p) =>
+      Array.isArray(p.cake_type) && p.cake_type.some((t) => String(t).toLowerCase() === lc)
+    );
+    CATALOG_STATE.lastProducts = matches;
+    if (matches.length === 0) {
+      grid.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state__ic"><span data-icon="sparkles" data-size="28"></span></div>
+          <div class="empty-state__h">Здесь пока ничего нет</div>
+          <div class="empty-state__sub">В категории «${escapeHtml(label || code)}» нет товаров. Попробуй другой тип.</div>
+          <div class="empty-state__cta"><button class="btn-outline" onclick="catShowCategories()">К каталогу</button></div>
+        </div>`;
+      if (window.IconInflate) window.IconInflate(grid);
+    } else {
+      catRenderToolbarAndProducts();
+    }
+  } catch {
+    grid.innerHTML = '<div class="cat-empty">Не удалось загрузить.</div>';
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+window.catShowMood = catShowMood;
+
 // Показать избранное — фильтр lastProducts по wishlist
 async function catShowWishlist() {
   const ids = wishLoad();

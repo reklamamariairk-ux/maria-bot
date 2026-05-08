@@ -2703,3 +2703,11 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
   padding:3px 8px;border-radius:8px;
   margin-left:6px;letter-spacing:.3px;vertical-align:middle;
 }
+
+/* ── Chip Настроение ──────────────────────────────────────────────────── */
+.cat-chip--mood{
+  background:linear-gradient(135deg,#fff8e8,#fefaf0);
+  border-color:rgba(200,146,50,.3);
+  color:var(--gold-d);
+}
+.cat-chip--mood:hover{background:var(--mesh-gold);color:#fff;border-color:transparent}
