@@ -29,8 +29,8 @@ function clearChat() {
     if (wrap) {
       wrap.innerHTML = `
         <div class="msg msg--bot fade-in">
-          <div class="msg__av">🍰</div>
-          <div class="msg__bbl">Привет! Чем могу помочь?</div>
+          <div class="msg__avatar">🍰</div>
+          <div class="msg__bubble">Привет! Чем могу помочь? <span class="msg__time">${nowHM()}</span></div>
         </div>`;
     }
     if (window.refreshChatChips) window.refreshChatChips();
@@ -130,7 +130,9 @@ async function streamChat(headers, typing) {
     if (createdBubble) return;
     typing.remove();
     const div = document.createElement('div');
-    div.className = 'msg msg--bot fade-in';
+    const prev = wrap.lastElementChild;
+    const grouped = prev && prev.classList.contains('msg--bot');
+    div.className = `msg msg--bot fade-in${grouped ? ' msg--grouped' : ''}`;
     div.innerHTML = '<div class="msg__avatar">🍰</div><div class="msg__bubble"></div>';
     bubble = div.querySelector('.msg__bubble');
     wrap.appendChild(div);
@@ -192,7 +194,8 @@ async function streamChat(headers, typing) {
             }
             finalProducts = parsed.products || [];
             finalCart = parsed.cart_actions || [];
-            // Добавляем карточки товаров под текст
+            // Timestamp в углу, потом карточки
+            bubble.insertAdjacentHTML('beforeend', `<span class="msg__time">${nowHM()}</span>`);
             if (finalProducts.length) {
               const grid = renderProductGrid(finalProducts);
               if (grid) bubble.insertAdjacentHTML('beforeend', grid);
@@ -251,40 +254,23 @@ function renderProductGrid(products) {
 function appendMessage(role, text, products) {
   const wrap = document.getElementById('chat-messages');
   const div  = document.createElement('div');
-  div.className = `msg msg--${role} fade-in`;
+  // Группировка: если предыдущее сообщение того же автора — не показываем аватар, ужимаем gap
+  const prev = wrap.lastElementChild;
+  const grouped = prev && prev.classList.contains('msg') && prev.classList.contains(`msg--${role}`);
+  div.className = `msg msg--${role} fade-in${grouped ? ' msg--grouped' : ''}`;
   const avatar = role === 'bot' ? '<div class="msg__avatar">🍰</div>' : '';
-  let cardsHtml = '';
-  if (Array.isArray(products) && products.length) {
-    const cards = products.slice(0, 6).map((p) => {
-      const id = p.id;
-      const onClick = id && window.catOpenProduct
-        ? `catOpenProduct(${id})`
-        : `openSite('${escAttr(p.url || '')}')`;
-      const priceTxt = p.price != null ? `${Number(p.price).toLocaleString('ru-RU')} ₽` : '';
-      const img = p.image || '';
-      const imgEl = img
-        ? `<img class="ai-pcard__pic" src="/img?u=${encodeURIComponent(img)}" alt="${escAttr(p.name||'')}" loading="lazy" decoding="async">`
-        : '<span style="font-size:24px;opacity:.5">🍰</span>';
-      return `
-        <div class="ai-pcard" onclick="${onClick}">
-          <div class="ai-pcard__img">
-            ${imgEl}
-            ${p.hit ? '<span class="ai-pcard__hit">★</span>' : ''}
-          </div>
-          <div class="ai-pcard__body">
-            <div class="ai-pcard__name">${esc(p.name || '')}</div>
-            <div class="ai-pcard__price">${esc(priceTxt)}</div>
-          </div>
-        </div>`;
-    }).join('');
-    cardsHtml = `<div class="ai-pgrid">${cards}</div>`;
-  }
-  div.innerHTML = `${avatar}<div class="msg__bubble">${esc(text).replace(/\n/g,'<br>')}${cardsHtml}</div>`;
-  // Превращаем телефоны в кликабельные ссылки в ответе AI
+  const cardsHtml = renderProductGrid(products);
+  const timeHtml = `<span class="msg__time">${nowHM()}</span>`;
+  div.innerHTML = `${avatar}<div class="msg__bubble">${esc(text).replace(/\n/g,'<br>')}${timeHtml}${cardsHtml}</div>`;
   window.linkifyPhones?.(div);
   wrap.appendChild(div);
   wrap.scrollTop = wrap.scrollHeight;
   return div;
+}
+
+function nowHM() {
+  const d = new Date();
+  return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
 }
 
 function escAttr(s) {
@@ -294,8 +280,10 @@ function escAttr(s) {
 function appendTyping() {
   const wrap = document.getElementById('chat-messages');
   const div  = document.createElement('div');
-  div.className = 'msg msg--bot fade-in';
-  div.innerHTML = '<div class="msg__avatar">🍰</div><div class="msg__bubble" style="color:#aaa;font-style:italic">Печатает…</div>';
+  const prev = wrap.lastElementChild;
+  const grouped = prev && prev.classList.contains('msg--bot');
+  div.className = `msg msg--bot fade-in${grouped ? ' msg--grouped' : ''}`;
+  div.innerHTML = '<div class="msg__avatar">🍰</div><div class="msg__bubble msg__bubble--typing"><span class="typing-dots"><i></i><i></i><i></i></span></div>';
   wrap.appendChild(div);
   wrap.scrollTop = wrap.scrollHeight;
   return div;
