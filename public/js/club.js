@@ -156,18 +156,35 @@ function renderSweetCheckMy(data) {
 
   const top = document.getElementById('sc-my-top');
   if (!top) return;
-  // Если LK не настроен — не показываем (нет смысла без покупок в кафе)
-  if (!data || !data.configured) {
-    top.style.display = 'none';
-    return;
-  }
-  const tickets = Number(data.tickets_count || 0);
   top.style.display = '';
 
-  if (tickets === 0) {
-    // Teaser для тех, у кого нет билетов — promotion
+  const verified = !!CLUB_STATE?.phoneVerified;
+  const tickets = Number(data?.tickets_count || 0);
+
+  // Click handler — open Sweet Check accordion
+  const openAcc = `document.querySelector('#tab-club details.acc:nth-of-type(2)')?.setAttribute('open','')`;
+
+  // Состояние 1: не verified
+  if (!verified) {
     top.innerHTML = `
       <div class="sc-top-card sc-top-card--teaser" onclick="document.querySelector('#tab-club details.acc:nth-of-type(2)')?.setAttribute('open','')">
+        <div class="sc-top-card__row">
+          <div class="sc-top-card__num sc-top-card__num--gift">📱</div>
+          <div>
+            <div class="sc-top-card__lb">Сладкий чек · iPhone 17</div>
+            <div class="sc-top-card__h">Подтверди номер чтобы участвовать</div>
+            <div class="sc-top-card__sub">Каждый чек становится билетом в квартальный розыгрыш</div>
+          </div>
+          <div class="sc-top-card__chev">›</div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  // Состояние 2: verified, 0 билетов
+  if (tickets === 0) {
+    top.innerHTML = `
+      <div class="sc-top-card sc-top-card--teaser" onclick="${openAcc}">
         <div class="sc-top-card__row">
           <div class="sc-top-card__num sc-top-card__num--gift">🎁</div>
           <div>
@@ -181,9 +198,10 @@ function renderSweetCheckMy(data) {
     return;
   }
 
+  // Состояние 3: verified + есть билеты
   const chance = tickets >= 10 ? 'Высокий шанс' : tickets >= 3 ? 'Хорошие шансы' : 'Шансы есть';
   top.innerHTML = `
-    <div class="sc-top-card">
+    <div class="sc-top-card" onclick="${openAcc}">
       <div class="sc-top-card__row">
         <div class="sc-top-card__num">${tickets}</div>
         <div>
@@ -191,6 +209,7 @@ function renderSweetCheckMy(data) {
           <div class="sc-top-card__h">${chance} на iPhone 17</div>
           <div class="sc-top-card__sub">Розыгрыш каждый квартал · купи нужный набор → +5 билетов</div>
         </div>
+        <div class="sc-top-card__chev">›</div>
       </div>
     </div>`;
 }
@@ -202,8 +221,16 @@ async function loadBirthdayPromo() {
   try {
     const data = await api('/api/me');
     if (!data || data.__unauthorized) { promo.style.display = 'none'; return; }
-    if (data.birthday) { promo.style.display = 'none'; return; }
+    // ДР указан → промо скрываем, chip показываем
+    if (data.birthday) {
+      promo.style.display = 'none';
+      try { renderBdayChip(data.birthday); } catch (e) { console.error('[bday-chip]', e); }
+      return;
+    }
+    // ДР не указан → промо показываем, chip скрываем
     promo.style.display = '';
+    const chip = document.getElementById('hero-bday-chip');
+    if (chip) chip.style.display = 'none';
   } catch {
     promo.style.display = 'none';
   }
@@ -258,6 +285,8 @@ async function renderLk() {
     renderSweetCheckMy(data);
     // Обновляем hero level progress (если LK дал year_spent)
     try { renderLevelProgress(data || {}); } catch (e) { console.error('[level]', e); }
+    try { renderHeroStats(data || {}); } catch (e) { console.error('[stats]', e); }
+    try { renderOnboarding(data || {}); } catch (e) { console.error('[onboard]', e); }
     if (data.__unauthorized || data.error) {
       section.style.display = 'none';
       return;
@@ -275,41 +304,21 @@ async function renderLk() {
       return;
     }
 
-    const tickets = (data.tickets || []).slice(0, 3);
-    const ticketsCount = Number(data.tickets_count || tickets.length || 0);
+    // Упрощённая LK-карточка — только баллы и последние заказы
+    // (имя/уровень/год дублируют hero — там уже есть chip + progress + stats)
     const orders = Array.isArray(data.orders) ? data.orders : [];
     card.innerHTML = `
-      <div class="lk-card__row">
-        <div>
-          <div class="lk-card__name">${escapeHtml(data.name || 'Участник клуба')}</div>
-          <div class="lk-card__level">${escapeHtml(data.level || 'Друзья')}</div>
-        </div>
-        <div class="lk-card__bal">
-          <div class="lk-card__bal-num">${data.balance.toLocaleString('ru-RU')}</div>
-          <div class="lk-card__bal-lb">баллов</div>
-        </div>
+      <div class="lk-card__bal-block">
+        <div class="lk-card__bal-num">${data.balance.toLocaleString('ru-RU')}</div>
+        <div class="lk-card__bal-lb">баллов на сайте</div>
+        <div class="lk-card__bal-hint">Доступно для оплаты до 30% от заказа</div>
       </div>
-      ${data.year_spent ? `<div class="lk-card__year">За 12 мес: <b>${data.year_spent.toLocaleString('ru-RU')} ₽</b></div>` : ''}
-      ${tickets.length ? `
-        <div class="lk-card__tickets">
-          <div class="lk-card__tt">🧾 Билеты «Сладкого чека»</div>
-          ${tickets.map((t) => `
-            <div class="lk-ti">
-              <span class="lk-ti__num">#${escapeHtml(String(t.id))}</span>
-              <span class="lk-ti__nm">${escapeHtml(t.name || 'Сладкий чек')}</span>
-              <span class="lk-ti__dt">${escapeHtml(String(t.date || '').slice(0, 10))}</span>
-            </div>`).join('')}
-        </div>` : (ticketsCount > 0 ? `
-        <div class="lk-card__tickets">
-          <div class="lk-card__tt">🧾 Билеты «Сладкого чека»: <b>${ticketsCount}</b></div>
-        </div>` : '')}
       ${orders.length ? `
         <div class="lk-card__orders">
-          <div class="lk-card__tt">🛍 Мои заказы (${orders.length})</div>
-          ${orders.slice(0, 5).map(renderOrderRow).join('')}
-          ${orders.length > 5 ? `<div class="lk-ord-more">…и ещё ${orders.length - 5}</div>` : ''}
+          <div class="lk-card__tt">🛍 Последние заказы (${orders.length})</div>
+          ${orders.slice(0, 3).map(renderOrderRow).join('')}
+          ${orders.length > 3 ? `<button class="btn-outline" onclick="profOpenOrders?.()" style="margin-top:8px;width:100%">Все заказы (${orders.length}) →</button>` : ''}
         </div>` : ''}
-      <button class="btn-outline" onclick="toggleHistory()">📜 История начислений</button>
     `;
     // Авто-link для номеров телефонов в LK
     window.linkifyPhones?.(card);
@@ -441,6 +450,79 @@ function renderLevelProgress(data) {
   }
 }
 window.renderLevelProgress = renderLevelProgress;
+
+// Рендерит inline-stats под hero (заказы · потрачено · билеты)
+function renderHeroStats(data) {
+  const wrap = document.getElementById('hero-stats');
+  if (!wrap) return;
+  if (!data || !data.configured || !data.found) {
+    wrap.style.display = 'none';
+    return;
+  }
+  const orders = Array.isArray(data.orders) ? data.orders.length : 0;
+  const yearSpent = Number(data.year_spent ?? 0);
+  const tickets = Number(data.tickets_count ?? 0);
+  if (orders === 0 && yearSpent === 0 && tickets === 0) {
+    wrap.style.display = 'none';
+    return;
+  }
+  const ord = document.getElementById('hero-stat-orders');
+  const sp = document.getElementById('hero-stat-spent');
+  const tk = document.getElementById('hero-stat-tickets');
+  if (ord) ord.textContent = `🛒 ${orders} ${plural(orders, ['заказ', 'заказа', 'заказов'])}`;
+  if (sp)  sp.textContent  = `💰 ${yearSpent.toLocaleString('ru-RU')} ₽`;
+  if (tk)  tk.textContent  = `🎟 ${tickets} ${plural(tickets, ['билет', 'билета', 'билетов'])}`;
+  wrap.style.display = '';
+}
+window.renderHeroStats = renderHeroStats;
+
+// ДР-chip — показываем когда ДР указан, считаем дни до скидки (±5 дней от ДР)
+function renderBdayChip(birthday) {
+  const chip = document.getElementById('hero-bday-chip');
+  if (!chip) return;
+  if (!birthday) { chip.style.display = 'none'; return; }
+  // birthday формат: "MM-DD" или "YYYY-MM-DD"
+  const m = String(birthday).match(/^(?:\d{4}-)?(\d{2})-(\d{2})$/);
+  if (!m) { chip.style.display = 'none'; return; }
+  const month = Number(m[1]), day = Number(m[2]);
+  const now = new Date();
+  // Ближайший ДР (этот год или следующий)
+  let target = new Date(now.getFullYear(), month - 1, day);
+  if (target < now && (now - target) > 5 * 86400000) {
+    target = new Date(now.getFullYear() + 1, month - 1, day);
+  }
+  // Активна ли скидка сейчас (±5 дней)
+  const diffDays = Math.round((target - now) / 86400000);
+  const monthName = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'][month - 1];
+  const isActive = Math.abs(diffDays) <= 5 || (diffDays > 360 && diffDays <= 365 && Math.abs(365 - diffDays) <= 5);
+
+  let html;
+  if (isActive) {
+    html = `<span class="loy-hero__bday-ic">🎂</span><b>Скидка активна!</b> · ДР ${day} ${monthName}`;
+  } else if (diffDays >= 0 && diffDays <= 30) {
+    html = `<span class="loy-hero__bday-ic">🎂</span>ДР ${day} ${monthName} · через ${diffDays} ${plural(diffDays, ['день', 'дня', 'дней'])}`;
+  } else {
+    html = `<span class="loy-hero__bday-ic">🎂</span>ДР: ${day} ${monthName}`;
+  }
+  chip.innerHTML = html;
+  chip.style.display = '';
+}
+window.renderBdayChip = renderBdayChip;
+
+// Onboarding для нового юзера (verified + 0 заказов)
+function renderOnboarding(data) {
+  const wrap = document.getElementById('club-onboarding');
+  if (!wrap) return;
+  const verified = !!CLUB_STATE?.phoneVerified;
+  const orders = Array.isArray(data?.orders) ? data.orders.length : 0;
+  // Показываем если verified И ещё нет заказов
+  if (verified && orders === 0) {
+    wrap.style.display = '';
+  } else {
+    wrap.style.display = 'none';
+  }
+}
+window.renderOnboarding = renderOnboarding;
 
 function renderDaily() {
   const d = CLUB_STATE.daily;

@@ -214,6 +214,16 @@
           <div class="loy-hero__prog-bar"><span class="loy-hero__prog-fill" id="hero-progress-fill" style="width:0%"></span></div>
           <div class="loy-hero__prog-txt" id="hero-progress-txt"></div>
         </div>
+        <!-- Inline stats: заказы · потрачено · билеты (только для verified+LK) -->
+        <div class="loy-hero__stats" id="hero-stats" style="display:none">
+          <span class="loy-hero__stat" id="hero-stat-orders">🛒 0</span>
+          <span class="loy-hero__stat-sep">·</span>
+          <span class="loy-hero__stat" id="hero-stat-spent">💰 0 ₽</span>
+          <span class="loy-hero__stat-sep">·</span>
+          <span class="loy-hero__stat" id="hero-stat-tickets">🎟 0</span>
+        </div>
+        <!-- ДР-chip — показывается когда ДР указан -->
+        <div class="loy-hero__bday" id="hero-bday-chip" style="display:none"></div>
         <!-- Скрытые поля для совместимости с club.js (внутренние баллы/звёзды отключены) -->
         <span id="hero-points" style="display:none">0</span>
         <span id="hero-stars" style="display:none">0</span>
@@ -241,6 +251,34 @@
 
       <!-- Sweet Check teaser/status — занимает видное место -->
       <div id="sc-my-top" style="display:none"></div>
+
+      <!-- Onboarding для нового юзера (verified + 0 заказов) -->
+      <div id="club-onboarding" style="display:none">
+        <div class="ob-card">
+          <div class="ob-card__h">Как это работает в три шага</div>
+          <div class="ob-step">
+            <div class="ob-step__num">1</div>
+            <div class="ob-step__body">
+              <div class="ob-step__t">Сделай первый заказ</div>
+              <div class="ob-step__s">На сайте maria-irk.ru или прямо здесь — баллы начислятся автоматически (5–10% от суммы)</div>
+            </div>
+          </div>
+          <div class="ob-step">
+            <div class="ob-step__num">2</div>
+            <div class="ob-step__body">
+              <div class="ob-step__t">Оплати баллами до 30%</div>
+              <div class="ob-step__s">Используй накопленные баллы при оформлении следующего заказа</div>
+            </div>
+          </div>
+          <div class="ob-step">
+            <div class="ob-step__num">3</div>
+            <div class="ob-step__body">
+              <div class="ob-step__t">Каждый чек = билет в розыгрыш</div>
+              <div class="ob-step__s">iPhone 17, MacBook, PS5 — разыгрываем каждый квартал</div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- Карточка-приглашение указать ДР (если не указан) -->
       <div id="bday-promo" class="bday-promo" style="display:none">
@@ -351,8 +389,16 @@
     <div class="acc__body">
       <p class="section-desc" style="padding-left:0;padding-right:0">По карте «Мария для своих» — привилегии у наших партнёров</p>
       <div id="partners-list"></div>
+      <button class="btn-outline" id="partners-show-all" onclick="openPartnersModal()" style="display:none;margin-top:10px">Все партнёры →</button>
     </div>
   </details>
+
+  <!-- Sticky CTA внизу клуба → ведёт в каталог -->
+  <div class="club-sticky">
+    <button class="btn-full club-sticky__btn" data-haptic="medium" onclick="switchTab('menu')">
+      🛒 Сделать заказ →
+    </button>
+  </div>
 </section>
 
 <!-- ═══ ЗАКАЗ ТОРТА ═══ -->

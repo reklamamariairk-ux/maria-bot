@@ -345,14 +345,11 @@ function usechip(btn) {
 }
 
 /* ── Partners ────────────────────────────────────────────────────────────── */
-function renderPartners(list) {
-  const el = document.getElementById('partners-list');
-  if (!el) return;
-  if (!list.length) {
-    el.innerHTML = '<p style="text-align:center;color:var(--muted);padding:20px">Партнёры скоро появятся</p>';
-    return;
-  }
-  el.innerHTML = list.map(p => `
+// Сохраняем полный список для модала
+let _allPartners = [];
+
+function renderPartnerCard(p) {
+  return `
     <div class="pcard">
       <div class="pcard__logo">${p.emoji}</div>
       <div class="pcard__info">
@@ -360,8 +357,63 @@ function renderPartners(list) {
         <div class="pcard__desc">${(p.desc || '').replace(/</g,'&lt;')}</div>
       </div>
       <div class="pcard__badge">${p.perk}</div>
-    </div>`).join('');
+    </div>`;
 }
+
+function renderPartners(list) {
+  _allPartners = list || [];
+  const el = document.getElementById('partners-list');
+  const all = document.getElementById('partners-show-all');
+  if (!el) return;
+  if (!list.length) {
+    el.innerHTML = '<p style="text-align:center;color:var(--muted);padding:20px">Партнёры скоро появятся</p>';
+    if (all) all.style.display = 'none';
+    return;
+  }
+  // Preview: показываем первые 4
+  const PREVIEW = 4;
+  const preview = list.slice(0, PREVIEW);
+  el.innerHTML = preview.map(renderPartnerCard).join('');
+  if (all) {
+    if (list.length > PREVIEW) {
+      all.style.display = '';
+      all.textContent = `Все партнёры (${list.length}) →`;
+    } else {
+      all.style.display = 'none';
+    }
+  }
+}
+
+// Modal со всеми партнёрами
+function openPartnersModal() {
+  let modal = document.getElementById('partners-all-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'partners-all-modal';
+    modal.className = 'cat-modal';
+    modal.style.display = 'none';
+    modal.onclick = (e) => { if (e.target === modal) closePartnersModal(); };
+    modal.innerHTML = `
+      <div class="cat-modal__sheet">
+        <button class="cat-modal__close" onclick="closePartnersModal()">×</button>
+        <div class="partners-modal__h">Партнёры клуба</div>
+        <p class="section-desc" style="text-align:center;padding-bottom:12px">По карте «Мария для своих» — привилегии у наших партнёров</p>
+        <div class="partners-modal__list" id="partners-modal-list"></div>
+      </div>`;
+    document.body.appendChild(modal);
+  }
+  const list = modal.querySelector('#partners-modal-list');
+  if (list) list.innerHTML = _allPartners.map(renderPartnerCard).join('');
+  modal.style.display = 'flex';
+  window.scrollLock?.();
+}
+window.openPartnersModal = openPartnersModal;
+function closePartnersModal() {
+  const m = document.getElementById('partners-all-modal');
+  if (m) m.style.display = 'none';
+  window.scrollUnlock?.();
+}
+window.closePartnersModal = closePartnersModal;
 
 async function loadPartners() {
   try {
