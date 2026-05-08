@@ -73,8 +73,11 @@ async function catLoadCategories() {
 function catRenderCategories() {
   const wrap = document.getElementById('menu-categories');
   if (!wrap) return;
-  // Скрываем fallback-категорию «Каталог» (товары без section_id) — их можно найти поиском
-  const visible = CATALOG_STATE.categories.filter((c) => c.name !== 'Каталог' && c.count > 0);
+  // Скрываем технические/дублирующие категории:
+  // - "Каталог" (fallback товары без section_id, мусор Bitrix)
+  // - "Торты на заказ" (есть отдельная вкладка "На заказ" с формой)
+  const HIDDEN = new Set(['Каталог', 'Торты на заказ']);
+  const visible = CATALOG_STATE.categories.filter((c) => !HIDDEN.has(c.name) && c.count > 0);
   wrap.innerHTML = visible.map((c) => {
     const icon = CATEGORY_ICONS[c.name] || '🍮';
     const bg = c.sample
@@ -366,9 +369,9 @@ async function catOpenProduct(id) {
       <div class="cat-modal__actions">
         <button class="btn-outline cat-modal__share" data-haptic="light" onclick="shareProduct(${p.id})" aria-label="Поделиться">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>
-          Поделиться
+          <span>Поделиться</span>
         </button>
-        <button class="btn-full" id="cat-modal-add">🛒 В корзину</button>
+        <button class="btn-full" id="cat-modal-add">${p.price ? `🛒 В корзину · ${Number(p.price).toLocaleString('ru-RU')} ₽` : '🛒 В корзину'}</button>
       </div>
     `;
     // Привязываем обработчик через addEventListener, чтобы не зависеть от inline-onclick (где нужно
