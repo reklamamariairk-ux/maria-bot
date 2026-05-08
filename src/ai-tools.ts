@@ -128,6 +128,26 @@ export const TOOL_DEFS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "get_today_special",
+      description:
+          "Возвращает 'торт месяца' — текущий хит со скидкой 20%. " +
+          "Используй когда клиент спрашивает 'что у вас сейчас по акции', 'торт месяца', 'самый популярный'.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_cake_types",
+      description:
+          "Возвращает список типов тортов (cake_type) с количеством — Бисквитный, Шоколадный, Сметанный, Детский и т.д. " +
+          "Используй когда клиент спрашивает 'какие у вас типы тортов', 'что есть для детей', 'есть ли бисквитные'.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
 ];
 
 // ─── Handlers ────────────────────────────────────────────────────────────────
@@ -139,14 +159,16 @@ export async function runTool(
 ): Promise<string> {
   try {
     switch (name) {
-      case "search_products":  return await handleSearch(args, ctx);
-      case "get_product":      return await handleGetProduct(args, ctx);
-      case "list_categories":  return handleCategories(ctx);
-      case "check_my_loyalty": return await handleLoyalty(ctx);
-      case "get_my_orders":    return await handleOrders(args, ctx);
-      case "list_partners":    return handlePartners(args);
-      case "add_to_cart":      return await handleAddToCart(args, ctx);
-      default:                 return JSON.stringify({ error: `unknown_tool:${name}` });
+      case "search_products":   return await handleSearch(args, ctx);
+      case "get_product":       return await handleGetProduct(args, ctx);
+      case "list_categories":   return handleCategories(ctx);
+      case "check_my_loyalty":  return await handleLoyalty(ctx);
+      case "get_my_orders":     return await handleOrders(args, ctx);
+      case "list_partners":     return handlePartners(args);
+      case "add_to_cart":       return await handleAddToCart(args, ctx);
+      case "get_today_special": return handleTodaySpecial(ctx);
+      case "get_cake_types":    return handleCakeTypes(ctx);
+      default:                  return JSON.stringify({ error: `unknown_tool:${name}` });
     }
   } catch (e) {
     return JSON.stringify({ error: (e as Error).message });
@@ -267,6 +289,35 @@ function handleCategories(ctx: ToolContext): string {
   for (const p of ctx.catalog) counts.set(p.category, (counts.get(p.category) ?? 0) + 1);
   const list = [...counts.entries()].map(([name, count]) => ({ name, count }));
   return JSON.stringify({ categories: list, total: ctx.catalog.length });
+}
+
+function handleTodaySpecial(ctx: ToolContext): string {
+  // Торт месяца: hit:true в категории Торты с скидкой
+  const candidates = ctx.catalog.filter((p) =>
+    p.hit && p.category === "Торты" && (p.discountPercent ?? 0) > 0
+  );
+  if (candidates.length === 0) {
+    // Fallback — просто первый hit
+    const fallback = ctx.catalog.find((p) => p.hit && p.category === "Торты");
+    if (!fallback) return JSON.stringify({ error: "no_special" });
+    if (fallback.id) ctx.surfacedProducts.set(fallback.id, summarizeProduct(fallback));
+    return JSON.stringify({ ...summarizeProduct(fallback), is_today_special: true });
+  }
+  // Берём первого со скидкой (обычно скидка применяется только на одного)
+  const c = candidates[0];
+  if (c.id) ctx.surfacedProducts.set(c.id, summarizeProduct(c));
+  return JSON.stringify({ ...summarizeProduct(c), is_today_special: true });
+}
+
+function handleCakeTypes(ctx: ToolContext): string {
+  const counts = new Map<string, number>();
+  for (const p of ctx.catalog) {
+    for (const t of p.cake_type ?? []) counts.set(t, (counts.get(t) ?? 0) + 1);
+  }
+  const list = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([type, count]) => ({ type, count }));
+  return JSON.stringify({ cake_types: list, total: list.reduce((s, t) => s + t.count, 0) });
 }
 
 async function handleLoyalty(ctx: ToolContext): Promise<string> {

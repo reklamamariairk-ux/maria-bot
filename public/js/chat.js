@@ -10,7 +10,7 @@ try {
   }
 } catch {}
 
-const CHAT_HISTORY_MAX = 40; // 20 пар user+assistant — достаточно для длинного диалога
+const CHAT_HISTORY_MAX = 100; // 50 пар user+assistant — длинная сессия
 const _chatInitData = window.Telegram?.WebApp?.initData ?? "";
 
 function trimChatHistory() {
