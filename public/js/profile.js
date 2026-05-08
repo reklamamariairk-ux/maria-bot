@@ -50,12 +50,10 @@ function profileRender(data) {
     }
   }
 
-  if (balanceEl && data.balance) {
-    balanceEl.textContent = (data.balance.points ?? 0).toLocaleString('ru-RU');
-  }
-  if (ticketsEl && data.balance) {
-    ticketsEl.textContent = (data.balance.tickets ?? 0);
-  }
+  // Внутренние "очки" / "билеты" из /api/me больше не используются.
+  // Баллы и билеты заполняются из LK (см. profileLoadOrdersCount → renderLkStats)
+  if (balanceEl) balanceEl.textContent = '—';
+  if (ticketsEl) ticketsEl.textContent = '—';
 
   // Если ДР не указан — показываем кнопку редактирования
   if (editBday) {
@@ -82,9 +80,17 @@ async function profileLoadOrdersCount() {
     const r = await fetch('/api/lk', { headers: { Authorization: 'tma ' + initData } });
     if (!r.ok) return;
     const data = await r.json();
-    const orders = Array.isArray(data?.data?.orders) ? data.data.orders : [];
+    const lk = data?.data || {};
+    const orders = Array.isArray(lk.orders) ? lk.orders : [];
+
+    // Заполняем все 3 stat'а из LK (Bitrix-данные единственный источник)
     const ordersEl = document.getElementById('prof-stat-orders');
+    const balanceEl = document.getElementById('prof-stat-balance');
+    const ticketsEl = document.getElementById('prof-stat-tickets');
     if (ordersEl) ordersEl.textContent = orders.length;
+    if (balanceEl) balanceEl.textContent = lk.found ? Number(lk.balance ?? 0).toLocaleString('ru-RU') : '—';
+    if (ticketsEl) ticketsEl.textContent = lk.found ? (lk.tickets_count ?? 0) : '—';
+
     _profileData = { ..._profileData, orders };
   } catch {}
 }

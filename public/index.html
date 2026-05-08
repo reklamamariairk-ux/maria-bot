@@ -36,9 +36,10 @@
        onerror="this.style.display='none';document.getElementById('lf').style.display='block'"/>
   <span class="header__name" id="lf" style="display:none">Мария</span>
   <div class="hdr-right">
-    <div class="hdr-counters" id="hdr-counters" style="display:none" onclick="switchTab('club')" title="Мои баллы">
-      <span class="hdr-c hdr-c--point" title="Баллы — оплата до 30% любого заказа.">💎 <b id="hdr-points">0</b></span>
-      <!-- Скрытое поле для совместимости с club.js -->
+    <!-- Header-counter полностью отключён — внутренние баллы/звёзды убраны.
+         Скрытые поля оставлены для backward-compat с club.js renderHdrCounters. -->
+    <div class="hdr-counters" id="hdr-counters" style="display:none">
+      <span id="hdr-points" style="display:none">0</span>
       <span id="hdr-stars" style="display:none">0</span>
     </div>
     <button class="header__cart" id="hdr-cart" data-haptic="light" onclick="cartOpen()" style="display:none">
@@ -73,8 +74,8 @@
   <div class="sc-banner" data-haptic="light" onclick="switchTab('club')">
     <div class="sc-banner__bg"></div>
     <div class="sc-banner__content">
-      <div class="sc-banner__eye"><span data-icon="ticket" data-size="14"></span> Кэшбэк до 10% + лотерея на iPhone 17</div>
-      <div class="sc-banner__h">Получи 100 баллов<br>за подтверждение номера</div>
+      <div class="sc-banner__eye"><span data-icon="ticket" data-size="14"></span> Программа лояльности «Мария для своих»</div>
+      <div class="sc-banner__h">Кэшбэк до 10%<br>+ розыгрыш на iPhone 17</div>
       <div class="sc-banner__sub">Каждый чек — билет в Сладкий чек: MacBook, PS5, Apple Watch, JBL · разыгрываем каждый квартал</div>
       <div class="sc-banner__cta">Открыть клуб <span data-icon="arrowRight" data-size="14"></span></div>
     </div>
@@ -184,8 +185,8 @@
       <div class="vbanner">
         <div class="vbanner__ic">📱</div>
         <h3 class="vbanner__h">Войди по номеру телефона</h3>
-        <p class="vbanner__p">Чтобы увидеть свой баланс баллов с сайта, билеты «Сладкого чека» и копить новые — оставь номер. Один раз, через Telegram, без SMS.</p>
-        <div class="vbanner__bonus">+ 100 💎 за вход</div>
+        <p class="vbanner__p">Чтобы увидеть свой баланс баллов с сайта и билеты «Сладкого чека» — оставь номер. Один раз, через Telegram, без SMS.</p>
+        <div class="vbanner__bonus">Доступ к балансу с сайта</div>
         <button class="btn-full" onclick="startVerification()">📱 Поделиться номером</button>
         <div class="vbanner__status" id="verify-status"></div>
         <div class="vbanner__note">Номер видим только нам, не передаётся третьим лицам.</div>
@@ -195,7 +196,7 @@
     <!-- Основной интерфейс -->
     <div id="club-main" style="display:none">
 
-      <!-- Hero — единый баланс + уровень + прогресс -->
+      <!-- Hero — приветствие + текущий уровень -->
       <div class="loy-hero">
         <div class="loy-hero__top">
           <div>
@@ -208,20 +209,15 @@
             <span class="loy-hero__lvl-pct" id="hero-level-pct">5%</span>
           </div>
         </div>
-        <div class="loy-hero__balance">
-          <span class="loy-hero__balance-num" id="hero-points">0</span>
-          <span class="loy-hero__balance-lb">баллов</span>
-        </div>
-        <!-- Скрытое поле для совместимости с club.js renderHero (звёзды в БД ещё могут быть, но UI не показываем) -->
-        <span id="hero-stars" style="display:none">0</span>
-        <!-- Progress до следующего уровня -->
+        <!-- Progress до следующего уровня (year_spent из LK) -->
         <div class="loy-hero__prog" id="hero-progress" style="display:none">
           <div class="loy-hero__prog-bar"><span class="loy-hero__prog-fill" id="hero-progress-fill" style="width:0%"></span></div>
           <div class="loy-hero__prog-txt" id="hero-progress-txt"></div>
         </div>
-        <button class="btn-full" id="hero-convert" onclick="openConvertModal()" style="display:none">
-          Обменять звёзды на баллы →
-        </button>
+        <!-- Скрытые поля для совместимости с club.js (внутренние баллы/звёзды отключены) -->
+        <span id="hero-points" style="display:none">0</span>
+        <span id="hero-stars" style="display:none">0</span>
+        <button id="hero-convert" style="display:none"></button>
       </div>
 
       <!-- Как это работает — 3 короткие карточки -->
@@ -229,12 +225,12 @@
         <div class="hiw">
           <div class="hiw__ic">🛒</div>
           <div class="hiw__t">Покупай</div>
-          <div class="hiw__s">Кэшбэк <b>5–10%</b> баллами</div>
+          <div class="hiw__s">Кэшбэк <b>5–10%</b> с заказа</div>
         </div>
         <div class="hiw">
-          <div class="hiw__ic">💎</div>
-          <div class="hiw__t">Трать баллы</div>
-          <div class="hiw__s">До <b>30%</b> от заказа</div>
+          <div class="hiw__ic">🎂</div>
+          <div class="hiw__t">В День рождения</div>
+          <div class="hiw__s">−5% вам, <b>−10%</b> детям</div>
         </div>
         <div class="hiw">
           <div class="hiw__ic">🎁</div>
@@ -243,7 +239,7 @@
         </div>
       </div>
 
-      <!-- Sweet Check «Мои билеты» — отображается если есть билеты (заполнится из LK) -->
+      <!-- Sweet Check teaser/status — занимает видное место -->
       <div id="sc-my-top" style="display:none"></div>
 
       <!-- Карточка-приглашение указать ДР (если не указан) -->
@@ -260,49 +256,22 @@
         </div>
       </div>
 
-      <!-- Стрик и daily -->
-      <div class="sh"><span class="sh__line"></span><span class="sh__text">Сегодня</span><span class="sh__line"></span></div>
-      <div class="daily">
-        <div class="daily__top">
-          <span class="daily__fire">🔥</span>
-          <span class="daily__txt">Стрик: <b id="daily-streak">0</b> дней</span>
-        </div>
-        <div class="daily__dots" id="daily-dots"></div>
-        <button class="btn-full" id="daily-claim-btn" onclick="claimDaily()">Получить +10 💎</button>
-        <div class="daily__hint">7 дней подряд → +100💎 бонус. 30 дней → +400💎</div>
-      </div>
-
-      <!-- Мой счёт на сайте maria-irk.ru -->
+      <!-- Мой счёт на сайте maria-irk.ru — единственный источник баллов -->
       <div id="lk-section" style="display:none">
-        <div class="sh"><span class="sh__line"></span><span class="sh__text">Мой счёт на сайте</span><span class="sh__line"></span></div>
+        <div class="sh"><span class="sh__line"></span><span class="sh__text">Мой счёт</span><span class="sh__line"></span></div>
         <div class="lk-card" id="lk-card"></div>
       </div>
 
-      <!-- Магазин наград -->
-      <div class="sh"><span class="sh__line"></span><span class="sh__text">Магазин наград</span><span class="sh__line"></span></div>
-      <div class="rewards-shop" id="rewards-shop"></div>
-
-      <!-- Мои промокоды -->
-      <div class="sh"><span class="sh__line"></span><span class="sh__text">Мои промокоды (<span id="my-rewards-count">0</span>)</span><span class="sh__line"></span></div>
-      <div id="my-rewards"></div>
-
-      <!-- Реферал — компактная карточка с одной кнопкой -->
-      <div class="ref-card" data-haptic="light" onclick="shareReferral()">
-        <div class="ref-card__ic">👥</div>
-        <div class="ref-card__body">
-          <div class="ref-card__h">Пригласи друга — <b>+300 💎</b></div>
-          <div class="ref-card__sub">Друг по твоей ссылке делает первый заказ → получаешь баллы</div>
-        </div>
-        <button class="ref-card__btn" data-haptic="medium" onclick="event.stopPropagation();shareReferral()">📤 Поделиться</button>
-      </div>
+      <!-- Скрытые DOM-узлы для совместимости с club.js (рендер не показывается) -->
+      <div id="rewards-shop" style="display:none"></div>
+      <div id="my-rewards" style="display:none"></div>
+      <span id="my-rewards-count" style="display:none">0</span>
       <input id="ref-link" readonly style="position:absolute;left:-9999px;width:1px;height:1px"/>
-
-      <!-- История -->
-      <div class="sh"><span class="sh__line"></span><span class="sh__text">История</span><span class="sh__line"></span></div>
-      <button class="btn-outline" onclick="toggleHistory()">Показать / скрыть</button>
-      <div id="history-wrap" style="display:none">
-        <div id="history-list"></div>
-      </div>
+      <div id="history-list" style="display:none"></div>
+      <div id="history-wrap" style="display:none"></div>
+      <div id="daily-streak" style="display:none">0</div>
+      <div id="daily-dots" style="display:none"></div>
+      <button id="daily-claim-btn" style="display:none"></button>
 
     </div>
   </div>
@@ -458,11 +427,11 @@
     </button>
   </div>
 
-  <!-- Stat-row: баллы / билеты / заказы -->
+  <!-- Stat-row: баллы Bitrix / билеты Sweet Check / заказы -->
   <div class="prof-stats">
     <button class="prof-stat" data-haptic="light" onclick="switchTab('club')">
       <div class="prof-stat__num" id="prof-stat-balance">—</div>
-      <div class="prof-stat__lbl">Баллы</div>
+      <div class="prof-stat__lbl">Баллы сайта</div>
     </button>
     <button class="prof-stat" data-haptic="light" onclick="switchTab('club')">
       <div class="prof-stat__num" id="prof-stat-tickets">—</div>
