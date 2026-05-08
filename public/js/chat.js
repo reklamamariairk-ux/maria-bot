@@ -272,6 +272,7 @@ function nowHM() {
   const d = new Date();
   return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
 }
+window.nowHM = nowHM;
 
 function escAttr(s) {
   return String(s ?? '').replace(/'/g,'&#39;').replace(/"/g,'&quot;');

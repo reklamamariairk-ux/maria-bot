@@ -159,8 +159,12 @@ function openAiChat() {
   window.scrollLock?.();
   window.tgBack?.show(() => closeAiChat());
   refreshChatChips();
+  // Дописываем timestamp к стартовому приветствию (один раз)
+  const firstBubble = document.querySelector('#chat-messages .msg--bot:first-child .msg__bubble');
+  if (firstBubble && !firstBubble.querySelector('.msg__time') && window.nowHM) {
+    firstBubble.insertAdjacentHTML('beforeend', `<span class="msg__time">${window.nowHM()}</span>`);
+  }
   setTimeout(() => document.getElementById('chat-input')?.focus(), 200);
-  // Прокрутка к низу истории
   setTimeout(() => {
     const wrap = document.getElementById('chat-messages');
     if (wrap) wrap.scrollTop = wrap.scrollHeight;
