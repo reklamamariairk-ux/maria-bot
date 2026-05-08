@@ -150,6 +150,46 @@ export const TOOL_DEFS = [
   },
 ];
 
+// ─── Кэш результатов tool-ов ─────────────────────────────────────────────────
+// Снижает Groq TPM расход (повторный вопрос → мгновенный ответ из кэша).
+// Кэшируем только pure (без юзер-контекста) и ненатурально-меняющиеся данные.
+// add_to_cart, check_my_loyalty, get_my_orders — НЕ кэшируем.
+type CacheEntry = { result: string; surfaced: Array<[number, Record<string, unknown>]>; expiresAt: number };
+const TOOL_CACHE = new Map<string, CacheEntry>();
+const TOOL_CACHE_MAX = 200;
+const TOOL_CACHE_TTL = 60_000; // 60 сек
+const CACHEABLE = new Set([
+  "search_products", "get_product", "list_categories",
+  "list_partners", "get_today_special", "get_cake_types",
+]);
+
+function cacheKey(name: string, args: Record<string, unknown>): string {
+  // Стабильная сериализация: сортируем ключи, чтобы {a:1,b:2} === {b:2,a:1}
+  const keys = Object.keys(args).sort();
+  const ordered: Record<string, unknown> = {};
+  for (const k of keys) ordered[k] = args[k];
+  return `${name}::${JSON.stringify(ordered)}`;
+}
+
+function cacheGet(key: string): CacheEntry | null {
+  const e = TOOL_CACHE.get(key);
+  if (!e) return null;
+  if (Date.now() > e.expiresAt) { TOOL_CACHE.delete(key); return null; }
+  // LRU: переместить в конец
+  TOOL_CACHE.delete(key);
+  TOOL_CACHE.set(key, e);
+  return e;
+}
+
+function cacheSet(key: string, result: string, surfaced: Array<[number, Record<string, unknown>]>): void {
+  if (TOOL_CACHE.size >= TOOL_CACHE_MAX) {
+    // Удаляем самый старый (первый в Map — это insertion order)
+    const oldestKey = TOOL_CACHE.keys().next().value;
+    if (oldestKey !== undefined) TOOL_CACHE.delete(oldestKey);
+  }
+  TOOL_CACHE.set(key, { result, surfaced, expiresAt: Date.now() + TOOL_CACHE_TTL });
+}
+
 // ─── Handlers ────────────────────────────────────────────────────────────────
 
 export async function runTool(
@@ -157,19 +197,42 @@ export async function runTool(
   args: Record<string, unknown>,
   ctx: ToolContext,
 ): Promise<string> {
-  try {
-    switch (name) {
-      case "search_products":   return await handleSearch(args, ctx);
-      case "get_product":       return await handleGetProduct(args, ctx);
-      case "list_categories":   return handleCategories(ctx);
-      case "check_my_loyalty":  return await handleLoyalty(ctx);
-      case "get_my_orders":     return await handleOrders(args, ctx);
-      case "list_partners":     return handlePartners(args);
-      case "add_to_cart":       return await handleAddToCart(args, ctx);
-      case "get_today_special": return handleTodaySpecial(ctx);
-      case "get_cake_types":    return handleCakeTypes(ctx);
-      default:                  return JSON.stringify({ error: `unknown_tool:${name}` });
+  // Кэш-хит → реплеим side-effect (surfacedProducts) и возвращаем сохранённый JSON
+  const useCache = CACHEABLE.has(name);
+  const key = useCache ? cacheKey(name, args) : "";
+  if (useCache) {
+    const hit = cacheGet(key);
+    if (hit) {
+      for (const [id, summary] of hit.surfaced) ctx.surfacedProducts.set(id, summary);
+      return hit.result;
     }
+  }
+
+  try {
+    // Запоминаем какие товары уже были в surfacedProducts ДО этого хендлера —
+    // чтобы кэшировать только diff (то что добавил именно этот вызов).
+    const beforeIds = new Set(ctx.surfacedProducts.keys());
+    let result: string;
+    switch (name) {
+      case "search_products":   result = await handleSearch(args, ctx); break;
+      case "get_product":       result = await handleGetProduct(args, ctx); break;
+      case "list_categories":   result = handleCategories(ctx); break;
+      case "check_my_loyalty":  result = await handleLoyalty(ctx); break;
+      case "get_my_orders":     result = await handleOrders(args, ctx); break;
+      case "list_partners":     result = handlePartners(args); break;
+      case "add_to_cart":       result = await handleAddToCart(args, ctx); break;
+      case "get_today_special": result = handleTodaySpecial(ctx); break;
+      case "get_cake_types":    result = handleCakeTypes(ctx); break;
+      default:                  result = JSON.stringify({ error: `unknown_tool:${name}` });
+    }
+    if (useCache) {
+      const surfaced: Array<[number, Record<string, unknown>]> = [];
+      for (const [id, summary] of ctx.surfacedProducts.entries()) {
+        if (!beforeIds.has(id)) surfaced.push([id, summary]);
+      }
+      cacheSet(key, result, surfaced);
+    }
+    return result;
   } catch (e) {
     return JSON.stringify({ error: (e as Error).message });
   }

@@ -536,6 +536,215 @@ function groqRequest(payload: Record<string, unknown>): Promise<Record<string, u
   });
 }
 
+// Streaming-вариант для Groq SSE. Возвращает async iterable объектов формата OpenAI delta:
+// { delta: { content?, tool_calls? }, finish_reason? }
+async function* groqStream(payload: Record<string, unknown>): AsyncGenerator<{
+  delta: { content?: string; tool_calls?: Array<{ index: number; id?: string; function?: { name?: string; arguments?: string } }> };
+  finish_reason?: string;
+}, void, void> {
+  const body = JSON.stringify({ ...payload, stream: true });
+  const req = await new Promise<import("http").IncomingMessage>((resolve, reject) => {
+    const r = https.request({
+      hostname: "api.groq.com",
+      path: "/openai/v1/chat/completions",
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${GROQ_KEY}`,
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(body),
+        Accept: "text/event-stream",
+      },
+    }, resolve);
+    r.on("error", reject);
+    r.setTimeout(60_000, () => {
+      r.destroy();
+      reject(Object.assign(new Error("Groq stream timeout"), { status: 0 } as GroqErr));
+    });
+    r.write(body);
+    r.end();
+  });
+
+  // Если статус не 200 — собираем тело и кидаем как ошибку
+  if ((req.statusCode ?? 0) !== 200) {
+    let errBody = "";
+    for await (const chunk of req) errBody += chunk.toString();
+    let parsed: { error?: { message?: string; code?: string } } = {};
+    try { parsed = JSON.parse(errBody); } catch {}
+    const e: GroqErr = new Error(`Groq stream ${req.statusCode}: ${parsed.error?.message ?? errBody.slice(0, 200)}`);
+    e.status = req.statusCode;
+    if (req.statusCode === 429 || parsed.error?.code === "rate_limit_exceeded") e.rateLimited = true;
+    throw e;
+  }
+
+  let buf = "";
+  for await (const chunk of req) {
+    buf += chunk.toString();
+    let nl: number;
+    while ((nl = buf.indexOf("\n\n")) !== -1) {
+      const evt = buf.slice(0, nl);
+      buf = buf.slice(nl + 2);
+      // SSE event: одна или несколько строк "data: ..."
+      const lines = evt.split("\n").filter((l) => l.startsWith("data:"));
+      for (const line of lines) {
+        const data = line.slice(5).trim();
+        if (data === "[DONE]" || !data) continue;
+        try {
+          const parsed = JSON.parse(data);
+          const choice = parsed?.choices?.[0];
+          if (!choice) continue;
+          yield { delta: choice.delta ?? {}, finish_reason: choice.finish_reason };
+        } catch { /* skipped malformed chunk */ }
+      }
+    }
+  }
+}
+
+// Streaming-агент: yield-ит события {type:'delta'|'tool'|'final'|'error'} для SSE
+type StreamEvent =
+  | { type: "delta"; text: string }
+  | { type: "tool"; name: string }
+  | { type: "final"; text: string; products: Record<string, unknown>[]; cart_actions: ToolContext["cartActions"] }
+  | { type: "error"; message: string };
+
+async function* chatAgentStream(
+  userMessages: ChatMessage[],
+  ctx: ToolContext,
+): AsyncGenerator<StreamEvent, void, void> {
+  const system: ChatMessage = {
+    role: "system",
+    content: `Ты — Маша, тёплый AI-помощник кондитерской «Мария» в Иркутске. Каталог: ${ctx.catalog.length} товаров.
+
+КОНТАКТЫ: maria-irk.ru, +7 (3952) 50-40-80, 17 кафе. Клуб «Мария для своих»: кэшбэк 5–10%, бонусы до 30%, ДР-скидка −5/−10%. Сладкий чек: лотерея на iPhone 17, MacBook, PS5.
+
+ИНСТРУМЕНТЫ:
+- search_products(query, contains?, exclude?) — поиск. Ищет по name, filling, cake_type, preview. Используй contains для точного матча.
+- get_product(id) — детали
+- get_today_special() — торт месяца со скидкой
+- get_cake_types() — список типов
+- list_categories() — категории
+- check_my_loyalty() — баллы/билеты (нужен verified телефон)
+- get_my_orders() — заказы клиента
+- list_partners(category?) — партнёры со скидками
+- add_to_cart(product_id) — добавить в корзину
+
+ПРАВИЛА:
+1. ВСЕГДА используй search_products перед ответом про товары. Не отвечай по памяти.
+2. Цены, имена, веса — ТОЛЬКО из tool результатов.
+3. Если нет — честно «нет», не подменяй.
+4. У нас НЕТ: торты с мармеладом, без яиц, веганские, без глютена. Безе содержит белок (это тоже яйца).
+5. Цена = price (итог со скидкой). Если discountPercent>0, упомяни: «1 856 ₽ (–20%, было 2 320 ₽)».
+6. Если первый search не нашёл — попробуй другие слова/contains. До 3 попыток.
+
+СТИЛЬ: тёплый, 1-2 эмодзи, 2-5 предложений, русский. UI рендерит карточки товаров — не вставляй ссылки/картинки текстом.`,
+  };
+
+  const trimmedUser = userMessages.length > 80 ? userMessages.slice(-80) : userMessages;
+  const messages: ChatMessage[] = [system, ...trimmedUser];
+  const MAX_ITERATIONS = 6;
+
+  let toolsBroken = false;
+  let currentModel = "llama-3.3-70b-versatile";
+  let finalText = "";
+
+  for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
+    const sendMessages = trimHistory(messages, 90);
+    const acc = { content: "", tool_calls: [] as Array<{ id: string; type: "function"; function: { name: string; arguments: string } }> };
+    let finishReason: string | undefined;
+
+    const callStream = async function* (model: string) {
+      yield* groqStream({
+        model,
+        max_tokens: 1024,
+        temperature: 0.3,
+        top_p: 0.9,
+        messages: sendMessages,
+        ...(toolsBroken ? {} : { tools: TOOL_DEFS, tool_choice: "auto" }),
+      });
+    };
+
+    try {
+      for await (const chunk of callStream(currentModel)) {
+        if (chunk.delta.content) {
+          acc.content += chunk.delta.content;
+          yield { type: "delta", text: chunk.delta.content };
+        }
+        if (chunk.delta.tool_calls) {
+          for (const tc of chunk.delta.tool_calls) {
+            if (!acc.tool_calls[tc.index]) {
+              acc.tool_calls[tc.index] = { id: tc.id || "", type: "function", function: { name: "", arguments: "" } };
+            }
+            const slot = acc.tool_calls[tc.index];
+            if (tc.id) slot.id = tc.id;
+            if (tc.function?.name) slot.function.name += tc.function.name;
+            if (tc.function?.arguments) slot.function.arguments += tc.function.arguments;
+          }
+        }
+        if (chunk.finish_reason) finishReason = chunk.finish_reason;
+      }
+    } catch (err) {
+      const e = err as GroqErr;
+      if (e.rateLimited && currentModel === "llama-3.3-70b-versatile") {
+        console.warn("[chatAgentStream] 70b rate-limited, fallback to 8b");
+        currentModel = "llama-3.1-8b-instant";
+        // Повторяем эту итерацию с 8b
+        iter--; continue;
+      }
+      yield { type: "error", message: e.message };
+      return;
+    }
+
+    // Сохраняем accumulated assistant message в историю
+    const validToolCalls = acc.tool_calls.filter((tc) => tc && tc.id && tc.function.name);
+    const asstMsg: ChatMessage = { role: "assistant", content: acc.content || null };
+    if (validToolCalls.length) asstMsg.tool_calls = validToolCalls;
+    messages.push(asstMsg);
+
+    finalText = acc.content;
+
+    // Если finish_reason !== tool_calls → это финальный ответ, выходим
+    if (finishReason !== "tool_calls" || validToolCalls.length === 0) {
+      yield {
+        type: "final",
+        text: finalText.trim(),
+        products: [...ctx.surfacedProducts.values()],
+        cart_actions: ctx.cartActions,
+      };
+      return;
+    }
+
+    // Иначе исполняем tools параллельно
+    const results = await Promise.all(
+      validToolCalls.map(async (tc) => {
+        let args: Record<string, unknown> = {};
+        try { args = JSON.parse(tc.function.arguments || "{}"); } catch {}
+        const out = await runTool(tc.function.name, args, ctx);
+        return { tool_call_id: tc.id, role: "tool" as const, name: tc.function.name, content: out };
+      })
+    );
+    for (const tc of validToolCalls) yield { type: "tool", name: tc.function.name };
+    messages.push(...results);
+  }
+
+  // MAX_ITERATIONS исчерпаны — финальный non-stream запрос без tools
+  try {
+    const final = await groqRequest({
+      model: "llama-3.1-8b-instant",
+      max_tokens: 768,
+      temperature: 0.3,
+      messages,
+    });
+    const finalChoice = (final.choices as Array<{ message: ChatMessage }>)?.[0];
+    yield {
+      type: "final",
+      text: (finalChoice?.message?.content ?? "Извини, не получилось разобраться. Попробуй переформулировать.").trim(),
+      products: [...ctx.surfacedProducts.values()],
+      cart_actions: ctx.cartActions,
+    };
+  } catch (e) {
+    yield { type: "error", message: (e as Error).message };
+  }
+}
+
 // Обрезаем историю если она слишком длинная — сохраняем system + последние N пар user/assistant
 // Tool messages и tool_calls идут парами, поэтому обрезаем по паре assistant→[tool…] чтобы не сломать логику
 function trimHistory(messages: ChatMessage[], maxNonSystem = 16): ChatMessage[] {
@@ -706,6 +915,106 @@ app.post("/api/chat", rateLimit(40), async (req, res) => {
     } else {
       res.status(502).json({ error: "ИИ временно недоступен. Попробуй через минуту или позвони +7 (3952) 50-40-80." });
     }
+  }
+});
+
+// Voice input: принимает WebM/MP4/WAV blob от MediaRecorder, пересылает в Groq Whisper.
+// Возвращает {text}. Клиент вставляет текст в input-поле, пользователь правит/отправляет.
+app.post("/api/transcribe",
+  rateLimit(20),
+  express.raw({ type: ["audio/*", "application/octet-stream"], limit: "6mb" }),
+  async (req, res) => {
+    const audio = req.body as Buffer;
+    if (!Buffer.isBuffer(audio) || audio.length === 0) {
+      res.status(400).json({ error: "audio body required" });
+      return;
+    }
+    if (audio.length > 5 * 1024 * 1024) {
+      res.status(413).json({ error: "audio too large (>5MB)" });
+      return;
+    }
+    // Определяем расширение по Content-Type
+    const ct = String(req.headers["content-type"] || "audio/webm");
+    const ext = /mp4|m4a/i.test(ct) ? "m4a" : /ogg/i.test(ct) ? "ogg" : /wav/i.test(ct) ? "wav" : "webm";
+
+    try {
+      const fd = new FormData();
+      // Blob поддерживается в Node 18+ глобально
+      fd.append("file", new Blob([audio], { type: ct }), `voice.${ext}`);
+      fd.append("model", "whisper-large-v3-turbo");
+      fd.append("language", "ru");
+      fd.append("response_format", "json");
+      fd.append("temperature", "0");
+
+      const resp = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${GROQ_KEY}` },
+        body: fd,
+      });
+
+      if (!resp.ok) {
+        const errText = await resp.text();
+        console.error(`[TRANSCRIBE] Groq ${resp.status}: ${errText.slice(0, 200)}`);
+        if (resp.status === 429) {
+          res.status(429).json({ error: "Распознавание временно недоступно (лимит). Попробуй через минуту." });
+        } else {
+          res.status(502).json({ error: "Распознавание не удалось. Попробуй ещё раз или напиши текстом." });
+        }
+        return;
+      }
+
+      const data = await resp.json() as { text?: string };
+      const text = (data.text ?? "").trim();
+      res.json({ text });
+    } catch (e) {
+      console.error("[TRANSCRIBE] error:", (e as Error).message);
+      res.status(500).json({ error: "Ошибка распознавания. Попробуй ещё раз." });
+    }
+  }
+);
+
+// SSE-стриминг чата: тот же формат, что /api/chat, но события приходят постепенно.
+// Клиент: fetch -> ReadableStream reader -> парсит "data: ..." и аппендит chunk-и в bubble.
+app.post("/api/chat-stream", rateLimit(40), async (req, res) => {
+  const { messages } = req.body as { messages: ChatMessage[] };
+  if (!Array.isArray(messages) || messages.length === 0) {
+    res.status(400).json({ error: "messages array is required" });
+    return;
+  }
+  const tgUser = getTgUser(req);
+  const chatId = tgUser?.id ?? 0;
+
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  // Heartbeat: каждые 15с пинг-комментарий, чтобы прокси не закрыли соединение
+  const heartbeat = setInterval(() => { try { res.write(": ping\n\n"); } catch {} }, 15_000);
+
+  const ctx: ToolContext = {
+    chatId,
+    catalog,
+    surfacedProducts: new Map(),
+    cartActions: [],
+  };
+
+  try {
+    for await (const ev of chatAgentStream(messages, ctx)) {
+      res.write(`data: ${JSON.stringify(ev)}\n\n`);
+      if (ev.type === "final" || ev.type === "error") break;
+    }
+  } catch (err) {
+    const e = err as GroqErr;
+    console.error(`[CHAT-STREAM] err: status=${e.status} msg=${e.message}`);
+    const userMsg = e.rateLimited
+      ? "ИИ временно занят (лимит). Подожди 10-20 секунд."
+      : "ИИ временно недоступен. Попробуй через минуту.";
+    try { res.write(`data: ${JSON.stringify({ type: "error", message: userMsg })}\n\n`); } catch {}
+  } finally {
+    clearInterval(heartbeat);
+    try { res.end(); } catch {}
   }
 });
 

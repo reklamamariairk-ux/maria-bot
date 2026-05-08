@@ -563,6 +563,9 @@
       </div>
       <div class="chat-row">
         <input class="chat-in" id="chat-input" type="text" placeholder="Напишите вопрос…" autocomplete="off" onkeydown="handleChatKey(event)"/>
+        <button class="chat-btn chat-btn--mic" id="chat-mic" data-haptic="light" onclick="toggleVoice()" aria-label="Голосовой ввод" title="Голосовой ввод">
+          <span data-icon="mic" data-size="18"></span>
+        </button>
         <button class="chat-btn" id="chat-send" data-haptic="light" onclick="sendMessage()" aria-label="Отправить">
           <span data-icon="arrowRight" data-size="18"></span>
         </button>

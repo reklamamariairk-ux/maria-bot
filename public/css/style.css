@@ -1378,6 +1378,10 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 .chat-btn:hover{transform:scale(1.08);box-shadow:0 6px 24px var(--red-glow)}
 .chat-btn:active{transform:scale(.9)}
 .chat-btn:disabled{background:#ddd;box-shadow:none;cursor:not-allowed}
+.chat-btn--mic{background:rgba(214,31,55,.08);color:var(--red);box-shadow:none;border:1.5px solid rgba(214,31,55,.18)}
+.chat-btn--mic:hover{background:rgba(214,31,55,.15);box-shadow:0 4px 14px var(--red-glow)}
+.chat-btn--mic.is-recording{background:var(--red);color:#fff;border-color:transparent;animation:micPulse 1.2s ease-in-out infinite}
+@keyframes micPulse{0%,100%{box-shadow:0 0 0 0 rgba(214,31,55,.55)}50%{box-shadow:0 0 0 10px rgba(214,31,55,0)}}
 
 /* ── BOTTOM NAV — премиум floating pill ──────────────────────────────────── */
 .bnav{
