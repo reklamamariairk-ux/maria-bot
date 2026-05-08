@@ -320,6 +320,14 @@ async function cartSubmit() {
     }
     // Запоминаем для будущих заказов
     checkoutSave({ name, phone, address, date, time });
+    // Сохраняем последний заказ для возможности «повторить»
+    try {
+      const lastOrder = items.map((it) => {
+        const cartItem = rawItems.find((x) => Number(x.id) === Number(it.id));
+        return cartItem ? { id: it.id, qty: it.qty, name: cartItem.name, price: cartItem.price, image: cartItem.image } : null;
+      }).filter(Boolean);
+      localStorage.setItem('maria_last_order', JSON.stringify(lastOrder));
+    } catch {}
     cartClear();
     window.tgMain?.hide();
     document.getElementById('cart-body').innerHTML = `
@@ -329,6 +337,7 @@ async function cartSubmit() {
         <div class="cart-success__h">Заказ #${data.orderId} принят!</div>
         <div class="cart-success__sub">${escHtml(data.message || 'Менеджер свяжется для подтверждения')}</div>
         <div class="cart-total">Сумма: <b>${Number(data.total || 0).toLocaleString('ru-RU')} ₽</b></div>
+        <button class="btn-outline" data-haptic="medium" onclick="cartRepeatLast()">↻ Повторить такой же заказ</button>
         <button class="btn-full" onclick="cartClose()">Готово</button>
       </div>`;
     window.haptic?.('success');
@@ -374,6 +383,20 @@ function pickTime(val, btn) {
   if (btn) btn.classList.add('chip-pick--on');
 }
 
+// Восстановить последний заказ — кладём товары обратно в корзину
+function cartRepeatLast() {
+  let last;
+  try { last = JSON.parse(localStorage.getItem('maria_last_order') || '[]'); } catch { return; }
+  if (!Array.isArray(last) || last.length === 0) return;
+  for (const it of last) {
+    if (!it.id || !window.cartAdd) continue;
+    cartAdd({ id: it.id, name: it.name, price: it.price, image: it.image });
+  }
+  window.haptic?.('success');
+  cartRender();
+}
+
+window.cartRepeatLast = cartRepeatLast;
 window.phoneMask = phoneMask;
 window.pickDate = pickDate;
 window.pickTime = pickTime;

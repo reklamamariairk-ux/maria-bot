@@ -18,15 +18,27 @@ exports.TOOL_DEFS = [
         type: "function",
         function: {
             name: "search_products",
-            description: "Ищет товары в каталоге кондитерской «Мария» по тексту запроса " +
-                "(название, ингредиенты, повод). Используй при вопросе клиента про конкретный десерт.",
+            description: "Ищет товары в каталоге кондитерской «Мария». Может фильтровать по тексту, " +
+                "категории, вкусу/начинке (filling) и исключать ингредиенты (exclude). " +
+                "Использует поля name, preview, description, filling, cake_type. " +
+                "Только доступные товары (available !== false).",
             parameters: {
                 type: "object",
                 properties: {
-                    query: { type: "string", description: "Запрос: «торт шоколадный», «пирог с курицей», «детский набор»" },
+                    query: { type: "string", description: "Запрос: «торт шоколадный», «пирог с курицей», «детский набор», «со сметаной»" },
                     category: {
                         type: "string",
-                        description: "Опционально: ограничить категорией (Торты, Пироги, Пирожные и десерты, Наборы, Торты на заказ, Для праздника, Пасха).",
+                        description: "Опционально: ограничить категорией (Торты, Пироги, Пирожные и десерты, Наборы, Торты на заказ, Для праздника).",
+                    },
+                    contains: {
+                        type: "array",
+                        items: { type: "string" },
+                        description: "Опционально: ингредиенты которые ДОЛЖНЫ быть («сметана», «ягода», «сырный крем»).",
+                    },
+                    exclude: {
+                        type: "array",
+                        items: { type: "string" },
+                        description: "Опционально: ингредиенты которые НЕ должны быть («орехи», «шоколад», «молоко»). Полезно для аллергиков.",
                     },
                 },
                 required: ["query"],
@@ -127,29 +139,61 @@ function summarizeProduct(p) {
     const category = p.category;
     const price = p.priceNumber
         ?? p.price;
+    const oldPrice = p.oldPriceNumber
+        ?? p.oldPrice;
+    const discountPercent = p.discountPercent;
     const weight = p.weight;
     const persons = p.persons;
     const hit = p.hit;
     const url = p.url;
     const image = p.image;
-    return { id, name, category, price, weight, persons, hit, url, image };
+    const out = { id, name, category, price, weight, persons, hit, url, image };
+    if (oldPrice && discountPercent && discountPercent > 0) {
+        out.oldPrice = oldPrice;
+        out.discountPercent = discountPercent;
+    }
+    return out;
 }
 async function handleSearch(args, ctx) {
     const query = String(args.query ?? "").trim();
     const category = args.category ? String(args.category) : "";
+    const contains = Array.isArray(args.contains) ? args.contains.map((s) => String(s).toLowerCase().trim()).filter(Boolean) : [];
+    const exclude = Array.isArray(args.exclude) ? args.exclude.map((s) => String(s).toLowerCase().trim()).filter(Boolean) : [];
     const limit = Math.max(1, Math.min(10, Number(args.limit ?? 5)));
-    let pool = ctx.catalog;
+    // Только доступные товары
+    let pool = ctx.catalog.filter((p) => p.available !== false);
     if (category) {
         const lc = category.toLowerCase();
         pool = pool.filter((p) => p.category.toLowerCase().includes(lc));
     }
-    const found = (0, scraper_2.searchCatalog)(pool, query, limit);
+    // Вспомогательная функция: вернёт «всё что знаем о составе» в одну строку
+    const productText = (p) => {
+        return [p.name, p.preview, p.weight, p.persons].filter(Boolean).join(" ").toLowerCase();
+    };
+    // Filter: должен содержать ВСЕ слова из contains
+    if (contains.length) {
+        pool = pool.filter((p) => {
+            const text = productText(p);
+            return contains.every((c) => text.includes(c));
+        });
+    }
+    // Filter: НЕ должен содержать ни одного из exclude
+    if (exclude.length) {
+        pool = pool.filter((p) => {
+            const text = productText(p);
+            return !exclude.some((e) => text.includes(e));
+        });
+    }
+    const found = (0, scraper_2.searchCatalog)(pool, query || "", limit);
     for (const p of found) {
         if (p.id)
             ctx.surfacedProducts.set(p.id, summarizeProduct(p));
     }
     return JSON.stringify({
-        query, category: category || null, count: found.length,
+        query, category: category || null,
+        contains: contains.length ? contains : undefined,
+        exclude: exclude.length ? exclude : undefined,
+        count: found.length,
         products: found.map(summarizeProduct),
     });
 }
