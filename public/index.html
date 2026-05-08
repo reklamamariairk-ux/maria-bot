@@ -420,6 +420,75 @@
   <div class="infobox" style="margin-top:16px">📞 Или позвоните: <a href="tel:+73952504080">+7 (3952) 50-40-80</a></div>
 </section>
 
+<!-- ═══ ПРОФИЛЬ ═══ -->
+<section class="tab" id="tab-profile">
+  <div class="prof-hero">
+    <div class="prof-hero__av" id="prof-av">👤</div>
+    <div class="prof-hero__info">
+      <div class="prof-hero__name" id="prof-name">Гость</div>
+      <div class="prof-hero__phone" id="prof-phone">Подтвердите телефон в клубе</div>
+    </div>
+    <button class="prof-hero__edit" id="prof-edit-bday" onclick="profEditBday()" aria-label="Указать ДР" title="День рождения" style="display:none">
+      <span data-icon="settings" data-size="18"></span>
+    </button>
+  </div>
+
+  <!-- Stat-row: баллы / билеты / заказы -->
+  <div class="prof-stats">
+    <button class="prof-stat" data-haptic="light" onclick="switchTab('club')">
+      <div class="prof-stat__num" id="prof-stat-balance">—</div>
+      <div class="prof-stat__lbl">Баллы</div>
+    </button>
+    <button class="prof-stat" data-haptic="light" onclick="switchTab('club')">
+      <div class="prof-stat__num" id="prof-stat-tickets">—</div>
+      <div class="prof-stat__lbl">Билетов</div>
+    </button>
+    <button class="prof-stat" data-haptic="light" onclick="profOpenOrders()">
+      <div class="prof-stat__num" id="prof-stat-orders">—</div>
+      <div class="prof-stat__lbl">Заказов</div>
+    </button>
+  </div>
+
+  <!-- Действия -->
+  <div class="prof-actions">
+    <button class="prof-row" data-haptic="light" onclick="profOpenOrders()">
+      <span class="prof-row__ic"><span data-icon="history" data-size="20"></span></span>
+      <span class="prof-row__t">Мои заказы</span>
+      <span class="prof-row__chev">›</span>
+    </button>
+    <button class="prof-row" data-haptic="light" onclick="switchTab('fun')">
+      <span class="prof-row__ic"><span data-icon="gamepad" data-size="20"></span></span>
+      <span class="prof-row__t">Игры</span>
+      <span class="prof-row__sub">Зарабатывай баллы за победы</span>
+      <span class="prof-row__chev">›</span>
+    </button>
+    <button class="prof-row" data-haptic="light" onclick="switchTab('club')">
+      <span class="prof-row__ic"><span data-icon="diamond" data-size="20"></span></span>
+      <span class="prof-row__t">Программа лояльности</span>
+      <span class="prof-row__sub">Кэшбэк, скидки, лотерея</span>
+      <span class="prof-row__chev">›</span>
+    </button>
+    <button class="prof-row" data-haptic="light" onclick="openShopsModal()">
+      <span class="prof-row__ic"><span data-icon="pin" data-size="20"></span></span>
+      <span class="prof-row__t">17 кафе на карте</span>
+      <span class="prof-row__chev">›</span>
+    </button>
+    <a class="prof-row" href="tel:+73952504080" data-haptic="light" style="text-decoration:none">
+      <span class="prof-row__ic"><span data-icon="phone" data-size="20"></span></span>
+      <span class="prof-row__t">Поддержка · 50-40-80</span>
+      <span class="prof-row__chev">›</span>
+    </a>
+  </div>
+
+  <!-- Modal для списка заказов -->
+  <div id="prof-orders" style="display:none">
+    <div class="cat-bread">
+      <button class="cat-bread__back" onclick="profCloseOrders()">← Назад в профиль</button>
+    </div>
+    <div id="prof-orders-list" class="prof-orders-list"></div>
+  </div>
+</section>
+
 <!-- ═══ ИГРЫ ═══ -->
 <section class="tab" id="tab-fun">
 
@@ -646,8 +715,8 @@
   <button class="nb" id="nav-club" data-haptic="selection" onclick="switchTab('club')">
     <span class="nb__ic" data-icon="diamond" data-size="22"></span><span class="nb__lb">Клуб</span>
   </button>
-  <button class="nb" id="nav-fun" data-haptic="selection" onclick="switchTab('fun')">
-    <span class="nb__ic" data-icon="gamepad" data-size="22"></span><span class="nb__lb">Игры</span>
+  <button class="nb" id="nav-profile" data-haptic="selection" onclick="switchTab('profile')">
+    <span class="nb__ic" data-icon="user" data-size="22"></span><span class="nb__lb">Профиль</span>
   </button>
   <button class="nb" id="nav-order" data-haptic="selection" onclick="switchTab('order')">
     <span class="nb__ic" data-icon="palette" data-size="22"></span><span class="nb__lb">На заказ</span>
@@ -660,6 +729,7 @@
 <script src="/js/bakery.js" defer></script>
 <script src="/js/chat.js" defer></script>
 <script src="/js/catalog.js" defer></script>
+<script src="/js/profile.js" defer></script>
 <script src="/js/club.js" defer></script>
 <script src="/js/cart.js" defer></script>
 </body>

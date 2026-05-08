@@ -262,7 +262,8 @@ async function loadHomeHits() {
 window.loadHomeHits = loadHomeHits;
 
 /* ── Tabs ────────────────────────────────────────────────────────────────── */
-const TAB_ORDER = ['home','menu','club','fun','order'];
+// 'fun' остаётся как доступная вкладка (открывается из Профиля), но в bottom-nav заменили на 'profile'
+const TAB_ORDER = ['home','menu','club','profile','order'];
 let _lastTab = 'home';
 function switchTab(name) {
   // Определяем направление перехода (вправо/влево) для slide-анимации
@@ -291,6 +292,9 @@ function switchTab(name) {
     if (typeof hkBoot === 'function') {
       try { hkBoot(); } catch (e) { console.error('[hkBoot]', e); }
     }
+  }
+  if (name === 'profile') {
+    try { profileLoad?.(); } catch (e) { console.error('[profile]', e); }
   }
   // Останавливаем flappy при переходе на любую вкладку кроме fun (экономим CPU)
   if (name !== 'fun' && typeof flappyStop === 'function') {
