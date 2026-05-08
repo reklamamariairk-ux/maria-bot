@@ -1040,10 +1040,10 @@ app.post("/api/chat-stream", rateLimit(40), async (req, res) => {
     }
   } catch (err) {
     const e = err as GroqErr;
-    console.error(`[CHAT-STREAM] err: status=${e.status} msg=${e.message}`);
+    console.error(`[CHAT-STREAM] err: status=${e.status} msg=${e.message}\nstack=${e.stack}`);
     const userMsg = e.rateLimited
       ? "ИИ временно занят (лимит). Подожди 10-20 секунд."
-      : "ИИ временно недоступен. Попробуй через минуту.";
+      : `ИИ временно недоступен (${e.message?.slice(0, 100) || "unknown"}).`;
     try { res.write(`data: ${JSON.stringify({ type: "error", message: userMsg })}\n\n`); } catch {}
   } finally {
     clearInterval(heartbeat);
