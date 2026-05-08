@@ -590,17 +590,39 @@ async function chatAgent(
   const MAX_ITERATIONS = 6;  // 4 → 6: даём AI возможность сделать несколько уточняющих tool calls
 
   let toolsBroken = false;
+  // Модель: 70b точнее, но имеет жёсткий TPM лимит. При 429 fallback на 8b.
+  let currentModel = "llama-3.3-70b-versatile";
   for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
     // Для каждой итерации обрезаем messages если они выросли с tool-результатами
     const sendMessages = trimHistory(messages, 90);
-    const response = await groqRequest({
-      model: "llama-3.3-70b-versatile",
-      max_tokens: 1024,         // компактные ответы для экономии Groq TPM
-      temperature: 0.3,         // меньше галлюцинаций
-      top_p: 0.9,
-      messages: sendMessages,
-      ...(toolsBroken ? {} : { tools: TOOL_DEFS, tool_choice: "auto" }),
-    });
+    let response: Record<string, unknown>;
+    try {
+      response = await groqRequest({
+        model: currentModel,
+        max_tokens: 1024,
+        temperature: 0.3,
+        top_p: 0.9,
+        messages: sendMessages,
+        ...(toolsBroken ? {} : { tools: TOOL_DEFS, tool_choice: "auto" }),
+      });
+    } catch (err) {
+      const e = err as GroqErr;
+      // Auto-fallback на быструю модель при rate-limit
+      if (e.rateLimited && currentModel === "llama-3.3-70b-versatile") {
+        console.warn("[chatAgent] 70b rate-limited, fallback to llama-3.1-8b-instant");
+        currentModel = "llama-3.1-8b-instant";
+        response = await groqRequest({
+          model: currentModel,
+          max_tokens: 1024,
+          temperature: 0.3,
+          top_p: 0.9,
+          messages: sendMessages,
+          ...(toolsBroken ? {} : { tools: TOOL_DEFS, tool_choice: "auto" }),
+        });
+      } else {
+        throw err;
+      }
+    }
 
     const choice = (response.choices as Array<{ message: ChatMessage; finish_reason: string }>)?.[0];
     if (!choice) {
@@ -641,11 +663,11 @@ async function chatAgent(
 
   // Если за MAX_ITERATIONS не успели — финальный запрос без tools
   const final = await groqRequest({
-    model: "llama-3.3-70b-versatile",
-    max_tokens: 1024,
+    model: "llama-3.1-8b-instant",  // быстрый fallback — гарантированно ответит
+    max_tokens: 768,
     temperature: 0.3,
     messages,
-  });
+  }).catch(() => ({ choices: [] } as Record<string, unknown>));
   const finalChoice = (final.choices as Array<{ message: ChatMessage }>)?.[0];
   return {
     text: (finalChoice?.message?.content ?? "Извини, не получилось разобраться. Попробуй переформулировать.").trim(),
