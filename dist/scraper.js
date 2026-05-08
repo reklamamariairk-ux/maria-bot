@@ -184,6 +184,12 @@ async function fetchFromApi() {
             preview: p.preview ? String(p.preview) : "",
             sectionCode: sec?.code,
             sectionId: sid,
+            occasion: Array.isArray(p.occasion) ? p.occasion.map(String) : undefined,
+            filling: Array.isArray(p.filling) ? p.filling.map(String) : undefined,
+            cake_type: Array.isArray(p.cake_type) ? p.cake_type.map(String) : undefined,
+            pie_type: Array.isArray(p.pie_type) ? p.pie_type.map(String) : undefined,
+            dessert_type: Array.isArray(p.dessert_type) ? p.dessert_type.map(String) : undefined,
+            whom: Array.isArray(p.whom) ? p.whom.map(String) : undefined,
         };
     });
 }
