@@ -194,12 +194,17 @@
     <!-- Основной интерфейс -->
     <div id="club-main" style="display:none">
 
-      <!-- Hero с балансами -->
+      <!-- Hero с балансами + уровень + прогресс -->
       <div class="loy-hero">
         <div class="loy-hero__top">
           <div>
             <div class="loy-hero__hi">Привет,</div>
             <div class="loy-hero__name" id="hero-name">Друг</div>
+          </div>
+          <div class="loy-hero__lvl" id="hero-level-chip" onclick="document.querySelector('#tab-club details.acc:first-of-type')?.setAttribute('open','')" title="Уровни и привилегии">
+            <span class="loy-hero__lvl-ic">🤝</span>
+            <span class="loy-hero__lvl-name" id="hero-level-name">Друзья</span>
+            <span class="loy-hero__lvl-pct" id="hero-level-pct">5%</span>
           </div>
         </div>
         <div class="loy-hero__bals">
@@ -213,6 +218,11 @@
             <span class="loy-bal__num" id="hero-points">0</span>
             <span class="loy-bal__lb">баллов</span>
           </div>
+        </div>
+        <!-- Progress до следующего уровня -->
+        <div class="loy-hero__prog" id="hero-progress" style="display:none">
+          <div class="loy-hero__prog-bar"><span class="loy-hero__prog-fill" id="hero-progress-fill" style="width:0%"></span></div>
+          <div class="loy-hero__prog-txt" id="hero-progress-txt"></div>
         </div>
         <button class="btn-full" id="hero-convert" onclick="openConvertModal()" style="display:none">
           Обменять звёзды на баллы →
@@ -262,15 +272,16 @@
       <div class="sh"><span class="sh__line"></span><span class="sh__text">Мои промокоды (<span id="my-rewards-count">0</span>)</span><span class="sh__line"></span></div>
       <div id="my-rewards"></div>
 
-      <!-- Реферал -->
-      <div class="sh"><span class="sh__line"></span><span class="sh__text">Пригласи друга</span><span class="sh__line"></span></div>
-      <div class="ref">
-        <div class="ref__txt">Когда друг зайдёт по ссылке и сделает первый заказ — тебе <b>+300 💎</b></div>
-        <div class="ref__row">
-          <input class="ref__inp" id="ref-link" readonly/>
-          <button class="ref__btn" onclick="shareReferral()">📤 Поделиться</button>
+      <!-- Реферал — компактная карточка с одной кнопкой -->
+      <div class="ref-card" data-haptic="light" onclick="shareReferral()">
+        <div class="ref-card__ic">👥</div>
+        <div class="ref-card__body">
+          <div class="ref-card__h">Пригласи друга — <b>+300 💎</b></div>
+          <div class="ref-card__sub">Друг по твоей ссылке делает первый заказ → получаешь баллы</div>
         </div>
+        <button class="ref-card__btn" data-haptic="medium" onclick="event.stopPropagation();shareReferral()">📤 Поделиться</button>
       </div>
+      <input id="ref-link" readonly style="position:absolute;left:-9999px;width:1px;height:1px"/>
 
       <!-- История -->
       <div class="sh"><span class="sh__line"></span><span class="sh__text">История</span><span class="sh__line"></span></div>

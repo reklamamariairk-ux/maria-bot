@@ -151,23 +151,36 @@ function scJoin() {
 window.scJoin = scJoin;
 
 function renderSweetCheckMy(data) {
-  // Старый блок внутри accordion — не используем больше, оставлен для обратной совместимости
   const oldWrap = document.getElementById('sc-my');
   if (oldWrap) oldWrap.style.display = 'none';
 
-  // Новый top-card на верху клуба
   const top = document.getElementById('sc-my-top');
   if (!top) return;
-  if (!data || !data.configured || !data.found) {
+  // Если LK не настроен — не показываем (нет смысла без покупок в кафе)
+  if (!data || !data.configured) {
     top.style.display = 'none';
     return;
   }
   const tickets = Number(data.tickets_count || 0);
+  top.style.display = '';
+
   if (tickets === 0) {
-    top.style.display = 'none';
+    // Teaser для тех, у кого нет билетов — promotion
+    top.innerHTML = `
+      <div class="sc-top-card sc-top-card--teaser" onclick="document.querySelector('#tab-club details.acc:nth-of-type(2)')?.setAttribute('open','')">
+        <div class="sc-top-card__row">
+          <div class="sc-top-card__num sc-top-card__num--gift">🎁</div>
+          <div>
+            <div class="sc-top-card__lb">Сладкий чек · iPhone 17</div>
+            <div class="sc-top-card__h">Получи первый билет</div>
+            <div class="sc-top-card__sub">Купи нужный набор в кафе → +5 билетов на квартальный розыгрыш</div>
+          </div>
+          <div class="sc-top-card__chev">›</div>
+        </div>
+      </div>`;
     return;
   }
-  top.style.display = '';
+
   const chance = tickets >= 10 ? 'Высокий шанс' : tickets >= 3 ? 'Хорошие шансы' : 'Шансы есть';
   top.innerHTML = `
     <div class="sc-top-card">
@@ -243,6 +256,8 @@ async function renderLk() {
   try {
     const data = await api('/api/lk');
     renderSweetCheckMy(data);
+    // Обновляем hero level progress (если LK дал year_spent)
+    try { renderLevelProgress(data || {}); } catch (e) { console.error('[level]', e); }
     if (data.__unauthorized || data.error) {
       section.style.display = 'none';
       return;
@@ -362,38 +377,159 @@ function renderHero() {
   convertBtn.style.display = CLUB_STATE.balance.stars >= 50 ? "" : "none";
 }
 
+// Уровни клуба: год.траты → имя/иконка/процент. Threshold = от какой суммы доступен.
+const CLUB_LEVELS = [
+  { name: "Друзья",         icon: "🤝", pct: 5,  threshold: 0      },
+  { name: "Лучшие друзья",  icon: "💛", pct: 7,  threshold: 10000  },
+  { name: "Семья",          icon: "❤️", pct: 10, threshold: 50000  },
+];
+
+function getCurrentLevel(yearSpent, lkLevelName) {
+  // Если LK прислал имя уровня — пытаемся сопоставить
+  if (lkLevelName) {
+    const matched = CLUB_LEVELS.find((l) => l.name.toLowerCase() === String(lkLevelName).toLowerCase());
+    if (matched) return matched;
+  }
+  // Иначе считаем по year_spent
+  let cur = CLUB_LEVELS[0];
+  for (const lv of CLUB_LEVELS) {
+    if (yearSpent >= lv.threshold) cur = lv;
+  }
+  return cur;
+}
+
+function renderLevelProgress(data) {
+  const yearSpent = Number(data?.year_spent ?? 0);
+  const lkLevel = data?.level ?? null;
+  const cur = getCurrentLevel(yearSpent, lkLevel);
+  const idx = CLUB_LEVELS.indexOf(cur);
+  const next = CLUB_LEVELS[idx + 1] || null;
+
+  // Chip с текущим уровнем
+  const ic = document.querySelector('.loy-hero__lvl-ic');
+  const nm = document.getElementById('hero-level-name');
+  const pc = document.getElementById('hero-level-pct');
+  if (ic) ic.textContent = cur.icon;
+  if (nm) nm.textContent = cur.name;
+  if (pc) pc.textContent = cur.pct + '%';
+
+  // Progress bar
+  const wrap = document.getElementById('hero-progress');
+  const fill = document.getElementById('hero-progress-fill');
+  const txt = document.getElementById('hero-progress-txt');
+  if (!wrap) return;
+
+  if (!next) {
+    // Достиг максимума
+    wrap.style.display = '';
+    if (fill) fill.style.width = '100%';
+    if (txt) txt.innerHTML = `🏆 Максимальный уровень — кэшбэк ${cur.pct}%`;
+    return;
+  }
+
+  const fromBase = next.threshold - cur.threshold;
+  const earned = Math.max(0, yearSpent - cur.threshold);
+  const pct = Math.min(100, Math.max(0, Math.round((earned / fromBase) * 100)));
+  const toGo = Math.max(0, next.threshold - yearSpent);
+
+  wrap.style.display = '';
+  if (fill) fill.style.width = pct + '%';
+  if (txt) {
+    txt.innerHTML = toGo > 0
+      ? `Ещё <b>${toGo.toLocaleString('ru-RU')} ₽</b> до уровня ${next.icon} ${next.name} (+${next.pct - cur.pct}% к кэшбэку)`
+      : `Уровень ${next.icon} ${next.name} разблокирован!`;
+  }
+}
+window.renderLevelProgress = renderLevelProgress;
+
 function renderDaily() {
   const d = CLUB_STATE.daily;
-  document.getElementById("daily-streak").textContent = d.currentStreak;
+  const streak = Number(d.currentStreak ?? 0);
+  document.getElementById("daily-streak").textContent = streak;
+
   const dots = document.getElementById("daily-dots");
   dots.innerHTML = "";
-  const filled = Math.min(d.currentStreak % 7 || (d.currentStreak >= 7 ? 7 : 0), 7);
+
+  // Прогресс в текущей семидневке (mod 7), но если streak >= 7 и кратно — показываем все 7 заполненными
+  const filled = streak === 0 ? 0 : (streak % 7 === 0 ? 7 : streak % 7);
+  const todayClaimed = !!d.loginClaimedToday;
+
   for (let i = 0; i < 7; i++) {
-    const dot = document.createElement("span");
-    dot.className = "ddot " + (i < filled ? "ddot--on" : "");
+    const dot = document.createElement("div");
+    let state = '';
+    if (i < filled) state = 'ddot--done';
+    else if (i === filled && !todayClaimed) state = 'ddot--today';
+    // i > filled — будущие дни остаются пустыми
+    dot.className = `ddot ${state}`;
+    // Иконка/число внутри
+    if (i < filled) dot.innerHTML = '<span class="ddot__check">✓</span>';
+    else if (i === filled && !todayClaimed) dot.innerHTML = '<span class="ddot__num">+10</span>';
+    else dot.innerHTML = `<span class="ddot__day">${i + 1}</span>`;
     dots.appendChild(dot);
   }
+
   const btn = document.getElementById("daily-claim-btn");
-  if (d.loginClaimedToday) {
+  if (todayClaimed) {
     btn.disabled = true;
     btn.textContent = "Сегодня уже получено ✓";
   } else {
     btn.disabled = false;
     btn.textContent = "Получить +10 💎";
   }
+
+  // Обновляем hint — динамически в зависимости от стрика
+  const hint = document.querySelector('.daily__hint');
+  if (hint) {
+    if (streak >= 30) {
+      hint.textContent = '🔥 30+ дней — ты в зоне фанатиков. Продолжай!';
+    } else if (streak >= 7) {
+      const toThirty = 30 - streak;
+      hint.textContent = `Ещё ${toThirty} ${plural(toThirty, ['день', 'дня', 'дней'])} до бонуса +400 💎`;
+    } else {
+      const toSeven = 7 - streak;
+      hint.textContent = `Ещё ${toSeven} ${plural(toSeven, ['день', 'дня', 'дней'])} до бонуса +100 💎`;
+    }
+  }
 }
 
+// Плюрализация русских слов: 1 день / 2 дня / 5 дней
+function plural(n, forms) {
+  const mod10 = n % 10, mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return forms[0];
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return forms[1];
+  return forms[2];
+}
+
+// Рендер preview магазина наград — 2 ближайшие по достижимости + кнопка "Все"
 function renderShop() {
   const wrap = document.getElementById("rewards-shop");
+  if (!wrap) return;
   wrap.innerHTML = "";
   const points = CLUB_STATE.balance.points;
-  CLUB_STATE.catalog.forEach((r) => {
+  const all = CLUB_STATE.catalog || [];
+  if (all.length === 0) {
+    wrap.innerHTML = '<div class="rcard__empty">Награды скоро появятся 🎁</div>';
+    return;
+  }
+
+  // Сортируем: сперва доступные (хватает баллов), затем по cost asc — показываем самые "близкие"
+  const sorted = [...all].sort((a, b) => {
+    const aCan = points >= a.cost_points ? 0 : 1;
+    const bCan = points >= b.cost_points ? 0 : 1;
+    if (aCan !== bCan) return aCan - bCan;
+    return a.cost_points - b.cost_points;
+  });
+  const preview = sorted.slice(0, 2);
+
+  const grid = document.createElement('div');
+  grid.className = 'rewards-grid';
+  for (const r of preview) {
     const can = points >= r.cost_points;
     const card = document.createElement("div");
     card.className = "rcard" + (can ? "" : " rcard--locked");
     card.innerHTML = `
-      <div class="rcard__title">${r.title}</div>
-      <div class="rcard__sub">${r.description ?? ""}</div>
+      <div class="rcard__title">${escapeHtml(r.title)}</div>
+      <div class="rcard__sub">${escapeHtml(r.description ?? "")}</div>
       <div class="rcard__min">от ${r.min_order} ₽</div>
       <div class="rcard__cost">${r.cost_points} 💎</div>
       <button class="rcard__btn" ${can ? "" : "disabled"} data-id="${r.id}">
@@ -401,9 +537,63 @@ function renderShop() {
       </button>
     `;
     card.querySelector(".rcard__btn").addEventListener("click", () => openRedeemModal(r));
-    wrap.appendChild(card);
-  });
+    grid.appendChild(card);
+  }
+  wrap.appendChild(grid);
+
+  if (all.length > 2) {
+    const more = document.createElement('button');
+    more.className = 'btn-outline rewards-shop__all';
+    more.textContent = `Все награды (${all.length}) →`;
+    more.onclick = () => openShopModal();
+    wrap.appendChild(more);
+  }
 }
+
+// Modal со всеми наградами
+function openShopModal() {
+  let modal = document.getElementById('shop-all-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'shop-all-modal';
+    modal.className = 'cat-modal';
+    modal.style.display = 'none';
+    modal.onclick = (e) => { if (e.target === modal) closeShopModal(); };
+    modal.innerHTML = `
+      <div class="cat-modal__sheet">
+        <button class="cat-modal__close" onclick="closeShopModal()">×</button>
+        <div class="shop-modal__h">Магазин наград</div>
+        <div class="shop-modal__sub">Меняй баллы 💎 на промокоды</div>
+        <div class="shop-modal__list" id="shop-modal-list"></div>
+      </div>`;
+    document.body.appendChild(modal);
+  }
+  const list = modal.querySelector('#shop-modal-list');
+  list.innerHTML = '';
+  const points = CLUB_STATE.balance.points;
+  for (const r of CLUB_STATE.catalog || []) {
+    const can = points >= r.cost_points;
+    const card = document.createElement('div');
+    card.className = 'rcard' + (can ? '' : ' rcard--locked');
+    card.innerHTML = `
+      <div class="rcard__title">${escapeHtml(r.title)}</div>
+      <div class="rcard__sub">${escapeHtml(r.description ?? '')}</div>
+      <div class="rcard__min">от ${r.min_order} ₽</div>
+      <div class="rcard__cost">${r.cost_points} 💎</div>
+      <button class="rcard__btn" ${can ? '' : 'disabled'}>${can ? 'Получить' : 'Не хватает'}</button>`;
+    card.querySelector('.rcard__btn').addEventListener('click', () => { closeShopModal(); openRedeemModal(r); });
+    list.appendChild(card);
+  }
+  modal.style.display = 'flex';
+  window.scrollLock?.();
+}
+window.openShopModal = openShopModal;
+function closeShopModal() {
+  const m = document.getElementById('shop-all-modal');
+  if (m) m.style.display = 'none';
+  window.scrollUnlock?.();
+}
+window.closeShopModal = closeShopModal;
 
 async function renderMyRewardsBlock() {
   await loadMyRewards();
