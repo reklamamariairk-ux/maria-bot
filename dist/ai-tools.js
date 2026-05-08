@@ -160,8 +160,9 @@ async function handleSearch(args, ctx) {
     const contains = Array.isArray(args.contains) ? args.contains.map((s) => String(s).toLowerCase().trim()).filter(Boolean) : [];
     const exclude = Array.isArray(args.exclude) ? args.exclude.map((s) => String(s).toLowerCase().trim()).filter(Boolean) : [];
     const limit = Math.max(1, Math.min(10, Number(args.limit ?? 5)));
-    // Только доступные товары
-    let pool = ctx.catalog.filter((p) => p.available !== false);
+    // available:false означает «нет в кафе» (актуально для заказных тортов),
+    // но НЕ означает что товар недоступен — заказные торты можно заказать.
+    let pool = ctx.catalog.slice();
     if (category) {
         const lc = category.toLowerCase();
         pool = pool.filter((p) => p.category.toLowerCase().includes(lc));

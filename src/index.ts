@@ -1049,20 +1049,15 @@ app.get("/api/catalog/categories", (_req, res) => {
   res.json({ categories, total: catalog.length, updated: catalogAge() });
 });
 
-// Доступные товары — скрываем явно помеченные available:false (нет в наличии).
-// Если поле отсутствует — считаем доступным (по умолчанию).
-function onlyAvailable(p: Product): boolean {
-  return p.available !== false;
-}
-
+// ВАЖНО: НЕ фильтруем по available. В Bitrix available:false ставится для
+// заказных тортов («Торт под заказ Подарок» и пр.) — их физически нет в кафе,
+// но они доступны под заказ. Скрывать их нельзя.
 app.get("/api/catalog/products", (req, res) => {
   const category = String(req.query.category ?? "").trim();
   const limit = Math.min(Number(req.query.limit ?? 30), 100);
   const offset = Number(req.query.offset ?? 0);
-  const includeUnavailable = req.query.all === "1";
 
-  let filtered = catalog.filter(onlyAvailable);
-  if (includeUnavailable) filtered = catalog.slice();
+  let filtered = catalog.slice();
   if (category) filtered = filtered.filter((p) => p.category === category);
 
   const products = filtered.slice(offset, offset + limit);
@@ -1075,8 +1070,7 @@ app.get("/api/catalog/search", (req, res) => {
     res.json({ products: [], total: 0 });
     return;
   }
-  const all = searchCatalog(catalog, q, 60);
-  const products = all.filter(onlyAvailable).slice(0, 30);
+  const products = searchCatalog(catalog, q, 30);
   res.json({ products, total: products.length });
 });
 
