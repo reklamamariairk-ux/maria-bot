@@ -502,6 +502,19 @@ const _origRefresh = refreshCatalog;
 global.__refreshCatalogPatched = false;
 // ─── Groq chat (agent с tool calling) ───────────────────────────────────────
 const ai_tools_1 = require("./ai-tools");
+// Парсит «try again in 2.639s» / «retry after 1.5s» из текста ошибки Groq
+function parseRetryAfter(msg, headerVal) {
+    if (headerVal) {
+        const v = parseFloat(headerVal);
+        if (!isNaN(v))
+            return Math.min(10000, Math.ceil(v * 1000));
+    }
+    const m = msg.match(/(?:try again in|retry after)\s+([\d.]+)\s*s/i);
+    if (m)
+        return Math.min(10000, Math.ceil(parseFloat(m[1]) * 1000));
+    return 0;
+}
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 function groqRequest(payload) {
     return new Promise((resolve, reject) => {
         const body = JSON.stringify(payload);
@@ -523,9 +536,10 @@ function groqRequest(payload) {
                 try {
                     const parsed = JSON.parse(d);
                     if (status === 429 || (parsed.error?.code === "rate_limit_exceeded")) {
-                        const e = new Error(`Groq rate limit (${status})`);
+                        const e = new Error(parsed.error?.message ?? `Groq rate limit (${status})`);
                         e.status = status;
                         e.rateLimited = true;
+                        e.retryAfterMs = parseRetryAfter(parsed.error?.message ?? "", r.headers["retry-after"]);
                         reject(e);
                         return;
                     }
@@ -545,9 +559,9 @@ function groqRequest(payload) {
             });
         });
         req.on("error", reject);
-        req.setTimeout(30000, () => {
+        req.setTimeout(45000, () => {
             req.destroy();
-            const e = new Error("Groq timeout (30s)");
+            const e = new Error("Groq timeout (45s)");
             e.status = 0;
             reject(e);
         });
@@ -591,8 +605,10 @@ async function* groqStream(payload) {
         catch { }
         const e = new Error(`Groq stream ${req.statusCode}: ${parsed.error?.message ?? errBody.slice(0, 200)}`);
         e.status = req.statusCode;
-        if (req.statusCode === 429 || parsed.error?.code === "rate_limit_exceeded")
+        if (req.statusCode === 429 || parsed.error?.code === "rate_limit_exceeded") {
             e.rateLimited = true;
+            e.retryAfterMs = parseRetryAfter(parsed.error?.message ?? "", req.headers["retry-after"]);
+        }
         throw e;
     }
     let buf = "";
@@ -648,20 +664,23 @@ async function* chatAgentStream(userMessages, ctx) {
 
 СТИЛЬ: тёплый, 1-2 эмодзи, 2-5 предложений, русский. UI рендерит карточки товаров — не вставляй ссылки/картинки текстом.`,
     };
-    const trimmedUser = userMessages.length > 80 ? userMessages.slice(-80) : userMessages;
+    // Жёсткое ограничение истории — Groq free-tier 6000 TPM, длинная история убивает запрос.
+    // 16 последних сообщений ~= 2000 токенов, плюс system+tools = ~2800 → влезает с запасом.
+    const trimmedUser = userMessages.length > 16 ? userMessages.slice(-16) : userMessages;
     const messages = [system, ...trimmedUser];
     const MAX_ITERATIONS = 6;
     let toolsBroken = false;
     let currentModel = "llama-3.3-70b-versatile";
     let finalText = "";
+    let retried429 = false;
     for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
-        const sendMessages = trimHistory(messages, 90);
+        const sendMessages = trimHistory(messages, 20);
         const acc = { content: "", tool_calls: [] };
         let finishReason;
         const callStream = async function* (model) {
             yield* groqStream({
                 model,
-                max_tokens: 1024,
+                max_tokens: 768,
                 temperature: 0.3,
                 top_p: 0.9,
                 messages: sendMessages,
@@ -694,12 +713,24 @@ async function* chatAgentStream(userMessages, ctx) {
         }
         catch (err) {
             const e = err;
-            if (e.rateLimited && currentModel === "llama-3.3-70b-versatile") {
-                console.warn("[chatAgentStream] 70b rate-limited, fallback to 8b");
-                currentModel = "llama-3.1-8b-instant";
-                // Повторяем эту итерацию с 8b
-                iter--;
-                continue;
+            if (e.rateLimited) {
+                // Стратегия:
+                // 1. Если на 70b — fallback на 8b сразу (другой пул limit-ов)
+                // 2. Если уже на 8b — ждём retry-after из ответа Groq и повторяем (один раз)
+                if (currentModel === "llama-3.3-70b-versatile") {
+                    console.warn("[chatAgentStream] 70b rate-limited, fallback to 8b");
+                    currentModel = "llama-3.1-8b-instant";
+                    iter--;
+                    continue;
+                }
+                if (!retried429) {
+                    const wait = e.retryAfterMs && e.retryAfterMs > 0 ? e.retryAfterMs : 3000;
+                    console.warn(`[chatAgentStream] 8b rate-limited, waiting ${wait}ms and retrying`);
+                    await sleep(wait);
+                    retried429 = true;
+                    iter--;
+                    continue;
+                }
             }
             yield { type: "error", message: e.message };
             return;
@@ -798,23 +829,21 @@ async function chatAgent(userMessages, ctx) {
 
 СТИЛЬ: тёплый, 1-2 эмодзи, 2-5 предложений, русский. UI рендерит карточки товаров — не вставляй ссылки/картинки текстом.`,
     };
-    // Обрезаем историю — оставляем последние ~80 сообщений + system.
-    // Llama-3.3-70b на Groq имеет 32K context, средний тур ~150 токенов →
-    // 80 сообщений ≈ 12K токенов помещается с запасом для tool-результатов.
-    const trimmedUser = userMessages.length > 80 ? userMessages.slice(-80) : userMessages;
+    // Жёсткое урезание истории — Groq free-tier 6000 TPM.
+    // 16 последних сообщений ~= 2000 токенов, плюс system+tools = ~2800 → влезает с запасом.
+    const trimmedUser = userMessages.length > 16 ? userMessages.slice(-16) : userMessages;
     const messages = [system, ...trimmedUser];
-    const MAX_ITERATIONS = 6; // 4 → 6: даём AI возможность сделать несколько уточняющих tool calls
+    const MAX_ITERATIONS = 6;
     let toolsBroken = false;
-    // Модель: 70b точнее, но имеет жёсткий TPM лимит. При 429 fallback на 8b.
     let currentModel = "llama-3.3-70b-versatile";
+    let retried429 = false;
     for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
-        // Для каждой итерации обрезаем messages если они выросли с tool-результатами
-        const sendMessages = trimHistory(messages, 90);
+        const sendMessages = trimHistory(messages, 20);
         let response;
         try {
             response = await groqRequest({
                 model: currentModel,
-                max_tokens: 1024,
+                max_tokens: 768,
                 temperature: 0.3,
                 top_p: 0.9,
                 messages: sendMessages,
@@ -823,22 +852,23 @@ async function chatAgent(userMessages, ctx) {
         }
         catch (err) {
             const e = err;
-            // Auto-fallback на быструю модель при rate-limit
-            if (e.rateLimited && currentModel === "llama-3.3-70b-versatile") {
-                console.warn("[chatAgent] 70b rate-limited, fallback to llama-3.1-8b-instant");
-                currentModel = "llama-3.1-8b-instant";
-                response = await groqRequest({
-                    model: currentModel,
-                    max_tokens: 1024,
-                    temperature: 0.3,
-                    top_p: 0.9,
-                    messages: sendMessages,
-                    ...(toolsBroken ? {} : { tools: ai_tools_1.TOOL_DEFS, tool_choice: "auto" }),
-                });
+            if (e.rateLimited) {
+                if (currentModel === "llama-3.3-70b-versatile") {
+                    console.warn("[chatAgent] 70b rate-limited, fallback to 8b");
+                    currentModel = "llama-3.1-8b-instant";
+                    iter--;
+                    continue;
+                }
+                if (!retried429) {
+                    const wait = e.retryAfterMs && e.retryAfterMs > 0 ? e.retryAfterMs : 3000;
+                    console.warn(`[chatAgent] 8b rate-limited, waiting ${wait}ms and retrying`);
+                    await sleep(wait);
+                    retried429 = true;
+                    iter--;
+                    continue;
+                }
             }
-            else {
-                throw err;
-            }
+            throw err;
         }
         const choice = response.choices?.[0];
         if (!choice) {
