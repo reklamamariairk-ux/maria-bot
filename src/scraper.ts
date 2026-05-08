@@ -285,29 +285,37 @@ export function catalogAge(): string | null {
 }
 
 // ─── Search ───────────────────────────────────────────────────────────────────
+// Нормализация: латинские буквы-гомоглифы → кириллица
+// (в каталоге Bitrix часто 'Cметана' с латинским C, 'A' вместо 'А' и т.п.)
+const HOMOGLYPHS: Record<string, string> = {
+  "a":"а","b":"в","c":"с","e":"е","h":"н","k":"к","m":"м","o":"о","p":"р","t":"т","x":"х","y":"у",
+  "A":"А","B":"В","C":"С","E":"Е","H":"Н","K":"К","M":"М","O":"О","P":"Р","T":"Т","X":"Х","Y":"У",
+};
+function normalizeStr(s: string): string {
+  return s.toLowerCase().replace(/[a-zA-Z]/g, (c) => HOMOGLYPHS[c] || c);
+}
+
 export function searchCatalog(catalog: Product[], query: string, limit = 6): Product[] {
   if (!catalog.length) return [];
-  const q = query.toLowerCase();
-  // Корни — часть слова без окончания (стемминг для русского).
-  // «сметанный/сметана/сметанного» → «сметан». Берём слова >2 символов.
+  const q = normalizeStr(query);
+  // Стемминг для русского: убираем стандартные окончания
   const stems = q.split(/\s+/)
     .filter((w) => w.length > 2)
-    .map((w) => w.replace(/(ого|ому|ыми|ами|ями|ой|ей|ие|ый|ая|ое|ые|ый|ы|и|а|у|е)$/u, ""))
+    .map((w) => w.replace(/(ого|ому|ыми|ами|ями|ной|ный|ная|ное|ные|ой|ей|ие|ый|ая|ое|ые|ы|и|а|у|е)$/u, ""))
     .filter((w) => w.length > 2);
   if (!stems.length) return catalog.slice(0, limit);
 
-  // Для каждого товара собираем все текстовые поля
   return catalog
     .map((p) => {
       const fields = {
-        name:     (p.name || "").toLowerCase(),
-        category: (p.category || "").toLowerCase(),
-        preview:  (p.preview || "").toLowerCase(),
-        types:    [...(p.cake_type || []), ...(p.pie_type || []), ...(p.dessert_type || [])].join(" ").toLowerCase(),
-        filling:  (p.filling || []).join(" ").toLowerCase(),
-        occasion: (p.occasion || []).join(" ").toLowerCase(),
+        name:     normalizeStr(p.name || ""),
+        category: normalizeStr(p.category || ""),
+        preview:  normalizeStr(p.preview || ""),
+        types:    normalizeStr([...(p.cake_type || []), ...(p.pie_type || []), ...(p.dessert_type || [])].join(" ")),
+        filling:  normalizeStr((p.filling || []).join(" ")),
+        occasion: normalizeStr((p.occasion || []).join(" ")),
       };
-      // Веса: name × 5, category/types × 3, filling × 4, preview × 2
+      // Веса: name × 5, types/filling × 4, category/occasion × 2, preview × 1
       let score = 0;
       for (const stem of stems) {
         if (fields.name.includes(stem))     score += 5;

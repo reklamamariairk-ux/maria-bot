@@ -177,19 +177,29 @@ function summarizeProduct(p) {
 async function handleSearch(args, ctx) {
     const query = String(args.query ?? "").trim();
     const category = args.category ? String(args.category) : "";
-    const contains = Array.isArray(args.contains) ? args.contains.map((s) => String(s).toLowerCase().trim()).filter(Boolean) : [];
-    const exclude = Array.isArray(args.exclude) ? args.exclude.map((s) => String(s).toLowerCase().trim()).filter(Boolean) : [];
+    // Нормализация: латинские гомоглифы → кириллица + lowercase
+    const HG = { a: "а", b: "в", c: "с", e: "е", h: "н", k: "к", m: "м", o: "о", p: "р", t: "т", x: "х", y: "у" };
+    const norm = (s) => s.toLowerCase().replace(/[a-z]/g, (c) => HG[c] || c);
+    const contains = Array.isArray(args.contains) ? args.contains.map((s) => norm(String(s).trim())).filter(Boolean) : [];
+    const exclude = Array.isArray(args.exclude) ? args.exclude.map((s) => norm(String(s).trim())).filter(Boolean) : [];
     const limit = Math.max(1, Math.min(10, Number(args.limit ?? 5)));
     // available:false означает «нет в кафе» (актуально для заказных тортов),
     // но НЕ означает что товар недоступен — заказные торты можно заказать.
     let pool = ctx.catalog.slice();
     if (category) {
-        const lc = category.toLowerCase();
-        pool = pool.filter((p) => p.category.toLowerCase().includes(lc));
+        const lc = norm(category);
+        pool = pool.filter((p) => norm(p.category).includes(lc));
     }
-    // Вспомогательная функция: вернёт «всё что знаем о составе» в одну строку
+    // Вспомогательная функция: вернёт «всё что знаем о товаре» в одну нормализованную строку
     const productText = (p) => {
-        return [p.name, p.preview, p.weight, p.persons].filter(Boolean).join(" ").toLowerCase();
+        return norm([
+            p.name, p.preview, p.weight, p.persons,
+            ...(p.filling || []),
+            ...(p.cake_type || []),
+            ...(p.pie_type || []),
+            ...(p.dessert_type || []),
+            ...(p.occasion || []),
+        ].filter(Boolean).join(" "));
     };
     // Filter: должен содержать ВСЕ слова из contains
     if (contains.length) {
