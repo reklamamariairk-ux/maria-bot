@@ -2145,6 +2145,39 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 .loy-bal--star .loy-bal__num{color:#ffd166}
 .loy-bal--point .loy-bal__num{color:#ff8a99}
 
+/* Единый balance — большая цифра по центру hero */
+.loy-hero__balance{
+  display:flex;align-items:baseline;justify-content:center;gap:10px;
+  margin:8px 0 14px;
+}
+.loy-hero__balance-num{
+  font-family:'Playfair Display',serif;font-size:54px;font-weight:800;
+  line-height:1;letter-spacing:-1px;
+  background:linear-gradient(135deg,#ffe9b5,#fff,#ffd166);
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;color:transparent;
+  font-feature-settings:"tnum" 1;
+}
+.loy-hero__balance-lb{
+  font-size:14px;color:rgba(255,255,255,.85);font-weight:600;
+  text-transform:uppercase;letter-spacing:.6px;
+}
+
+/* "Как это работает" — 3 inline-карточки */
+.how-it-works{
+  display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;
+  padding:0 14px 14px;
+}
+.hiw{
+  background:var(--surface);border:1px solid rgba(0,0,0,.06);
+  border-radius:14px;padding:14px 8px;text-align:center;
+  transition:transform var(--t-fast);
+}
+.hiw__ic{font-size:24px;margin-bottom:6px}
+.hiw__t{font-size:12px;font-weight:700;color:var(--text);line-height:1.2}
+.hiw__s{font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.35}
+.hiw__s b{color:var(--red);font-weight:800;font-feature-settings:"tnum" 1}
+
 /* Уровневая chip + прогресс */
 .loy-hero__lvl{
   display:inline-flex;align-items:center;gap:6px;

@@ -36,9 +36,10 @@
        onerror="this.style.display='none';document.getElementById('lf').style.display='block'"/>
   <span class="header__name" id="lf" style="display:none">Мария</span>
   <div class="hdr-right">
-    <div class="hdr-counters" id="hdr-counters" style="display:none" onclick="switchTab('club')" title="Звёзды и баллы программы лояльности">
-      <span class="hdr-c hdr-c--star" title="Звёзды — за игры и активность. Конвертируются в баллы.">⭐ <b id="hdr-stars">0</b></span>
+    <div class="hdr-counters" id="hdr-counters" style="display:none" onclick="switchTab('club')" title="Мои баллы">
       <span class="hdr-c hdr-c--point" title="Баллы — оплата до 30% любого заказа.">💎 <b id="hdr-points">0</b></span>
+      <!-- Скрытое поле для совместимости с club.js -->
+      <span id="hdr-stars" style="display:none">0</span>
     </div>
     <button class="header__cart" id="hdr-cart" data-haptic="light" onclick="cartOpen()" style="display:none">
       <span data-icon="cart" data-size="16"></span> <b id="hdr-cart-count">0</b>
@@ -194,7 +195,7 @@
     <!-- Основной интерфейс -->
     <div id="club-main" style="display:none">
 
-      <!-- Hero с балансами + уровень + прогресс -->
+      <!-- Hero — единый баланс + уровень + прогресс -->
       <div class="loy-hero">
         <div class="loy-hero__top">
           <div>
@@ -207,18 +208,12 @@
             <span class="loy-hero__lvl-pct" id="hero-level-pct">5%</span>
           </div>
         </div>
-        <div class="loy-hero__bals">
-          <div class="loy-bal loy-bal--star">
-            <span class="loy-bal__ic">⭐</span>
-            <span class="loy-bal__num" id="hero-stars">0</span>
-            <span class="loy-bal__lb">звёзд</span>
-          </div>
-          <div class="loy-bal loy-bal--point">
-            <span class="loy-bal__ic">💎</span>
-            <span class="loy-bal__num" id="hero-points">0</span>
-            <span class="loy-bal__lb">баллов</span>
-          </div>
+        <div class="loy-hero__balance">
+          <span class="loy-hero__balance-num" id="hero-points">0</span>
+          <span class="loy-hero__balance-lb">баллов</span>
         </div>
+        <!-- Скрытое поле для совместимости с club.js renderHero (звёзды в БД ещё могут быть, но UI не показываем) -->
+        <span id="hero-stars" style="display:none">0</span>
         <!-- Progress до следующего уровня -->
         <div class="loy-hero__prog" id="hero-progress" style="display:none">
           <div class="loy-hero__prog-bar"><span class="loy-hero__prog-fill" id="hero-progress-fill" style="width:0%"></span></div>
@@ -227,6 +222,25 @@
         <button class="btn-full" id="hero-convert" onclick="openConvertModal()" style="display:none">
           Обменять звёзды на баллы →
         </button>
+      </div>
+
+      <!-- Как это работает — 3 короткие карточки -->
+      <div class="how-it-works">
+        <div class="hiw">
+          <div class="hiw__ic">🛒</div>
+          <div class="hiw__t">Покупай</div>
+          <div class="hiw__s">Кэшбэк <b>5–10%</b> баллами</div>
+        </div>
+        <div class="hiw">
+          <div class="hiw__ic">💎</div>
+          <div class="hiw__t">Трать баллы</div>
+          <div class="hiw__s">До <b>30%</b> от заказа</div>
+        </div>
+        <div class="hiw">
+          <div class="hiw__ic">🎁</div>
+          <div class="hiw__t">Каждый чек</div>
+          <div class="hiw__s">Билет в розыгрыш на iPhone</div>
+        </div>
       </div>
 
       <!-- Sweet Check «Мои билеты» — отображается если есть билеты (заполнится из LK) -->
