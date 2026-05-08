@@ -21,34 +21,20 @@ export interface ToolContext {
   cartActions: Array<{ action: "add"; id: number; qty: number; name?: string }>;
 }
 
+// Compact tool defs — каждое описание ужато для экономии Groq TPM (~600 ткн вместо ~1500)
 export const TOOL_DEFS = [
   {
     type: "function",
     function: {
       name: "search_products",
-      description:
-          "Ищет товары в каталоге кондитерской «Мария». Может фильтровать по тексту, " +
-          "категории, вкусу/начинке (filling) и исключать ингредиенты (exclude). " +
-          "Использует поля name, preview, description, filling, cake_type. " +
-          "Только доступные товары (available !== false).",
+      description: "Поиск товаров. contains — что должно быть, exclude — чего быть не должно (для аллергий).",
       parameters: {
         type: "object",
         properties: {
-          query: { type: "string", description: "Запрос: «торт шоколадный», «пирог с курицей», «детский набор», «со сметаной»" },
-          category: {
-            type: "string",
-            description: "Опционально: ограничить категорией (Торты, Пироги, Пирожные и десерты, Наборы, Торты на заказ, Для праздника).",
-          },
-          contains: {
-            type: "array",
-            items: { type: "string" },
-            description: "Опционально: ингредиенты которые ДОЛЖНЫ быть («сметана», «ягода», «сырный крем»).",
-          },
-          exclude: {
-            type: "array",
-            items: { type: "string" },
-            description: "Опционально: ингредиенты которые НЕ должны быть («орехи», «шоколад», «молоко»). Полезно для аллергиков.",
-          },
+          query: { type: "string" },
+          category: { type: "string" },
+          contains: { type: "array", items: { type: "string" } },
+          exclude: { type: "array", items: { type: "string" } },
         },
         required: ["query"],
       },
@@ -58,95 +44,45 @@ export const TOOL_DEFS = [
     type: "function",
     function: {
       name: "get_product",
-      description:
-          "Возвращает полные детали товара по ID (описание, состав, вес, фото). " +
-          "Используй когда клиент уточняет «расскажи подробнее про этот торт».",
-      parameters: {
-        type: "object",
-        properties: {
-          id: { type: "number", description: "ID товара (число)" },
-        },
-        required: ["id"],
-      },
+      description: "Детали товара по ID.",
+      parameters: { type: "object", properties: { id: { type: "number" } }, required: ["id"] },
     },
   },
   {
     type: "function",
-    function: {
-      name: "list_categories",
-      description: "Возвращает список всех категорий каталога с количеством товаров.",
-      parameters: { type: "object", properties: {} },
-    },
+    function: { name: "list_categories", description: "Категории каталога.", parameters: { type: "object", properties: {} } },
   },
   {
     type: "function",
-    function: {
-      name: "check_my_loyalty",
-      description:
-          "Возвращает баланс баллов и билеты «Сладкого чека» текущего пользователя. " +
-          "Работает только если пользователь подтвердил телефон. Иначе вернёт {error}.",
-      parameters: { type: "object", properties: {} },
-    },
+    function: { name: "check_my_loyalty", description: "Баллы и билеты юзера (нужен verified phone).", parameters: { type: "object", properties: {} } },
   },
   {
     type: "function",
-    function: {
-      name: "get_my_orders",
-      description:
-          "Возвращает последние заказы пользователя с сайта (номер, дата, сумма, состав). " +
-          "Работает только при верифицированном телефоне.",
-      parameters: { type: "object", properties: {} },
-    },
+    function: { name: "get_my_orders", description: "Заказы юзера (нужен verified phone).", parameters: { type: "object", properties: {} } },
   },
   {
     type: "function",
     function: {
       name: "add_to_cart",
-      description:
-          "Добавляет товар в корзину пользователя. Используй когда клиент явно просит «добавь в корзину», «возьму», «оформляю», «положи мне». " +
-          "ID берётся из результатов search_products или get_product.",
-      parameters: {
-        type: "object",
-        properties: {
-          product_id: { type: "number", description: "ID товара (из каталога)" },
-        },
-        required: ["product_id"],
-      },
+      description: "Добавить в корзину. ID берётся из search_products/get_product.",
+      parameters: { type: "object", properties: { product_id: { type: "number" } }, required: ["product_id"] },
     },
   },
   {
     type: "function",
     function: {
       name: "list_partners",
-      description:
-          "Возвращает партнёров клуба «Мария для своих» — заведения, дающие скидки/подарки участникам клуба.",
-      parameters: {
-        type: "object",
-        properties: {
-          category: { type: "string", description: "Опционально: фильтр по категории (Здоровье, Красота, Рестораны, Отдых, Дом, Авто)" },
-        },
-      },
+      description: "Партнёры клуба (со скидками).",
+      parameters: { type: "object", properties: { category: { type: "string" } } },
     },
   },
   {
     type: "function",
-    function: {
-      name: "get_today_special",
-      description:
-          "Возвращает 'торт месяца' — текущий хит со скидкой 20%. " +
-          "Используй когда клиент спрашивает 'что у вас сейчас по акции', 'торт месяца', 'самый популярный'.",
-      parameters: { type: "object", properties: {} },
-    },
+    function: { name: "get_today_special", description: "Торт месяца со скидкой 20%.", parameters: { type: "object", properties: {} } },
   },
   {
     type: "function",
-    function: {
-      name: "get_cake_types",
-      description:
-          "Возвращает список типов тортов (cake_type) с количеством — Бисквитный, Шоколадный, Сметанный, Детский и т.д. " +
-          "Используй когда клиент спрашивает 'какие у вас типы тортов', 'что есть для детей', 'есть ли бисквитные'.",
-      parameters: { type: "object", properties: {} },
-    },
+    function: { name: "get_cake_types", description: "Типы тортов с количеством.", parameters: { type: "object", properties: {} } },
   },
 ];
 

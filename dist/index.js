@@ -502,16 +502,21 @@ const _origRefresh = refreshCatalog;
 global.__refreshCatalogPatched = false;
 // ─── Groq chat (agent с tool calling) ───────────────────────────────────────
 const ai_tools_1 = require("./ai-tools");
-// Парсит «try again in 2.639s» / «retry after 1.5s» из текста ошибки Groq
+// Парсит «try again in 2.639s» или «try again in 160ms» из текста ошибки Groq
 function parseRetryAfter(msg, headerVal) {
     if (headerVal) {
         const v = parseFloat(headerVal);
         if (!isNaN(v))
             return Math.min(10000, Math.ceil(v * 1000));
     }
-    const m = msg.match(/(?:try again in|retry after)\s+([\d.]+)\s*s/i);
-    if (m)
-        return Math.min(10000, Math.ceil(parseFloat(m[1]) * 1000));
+    // ms-формат: «in 160ms»
+    const ms = msg.match(/(?:try again in|retry after)\s+([\d.]+)\s*ms/i);
+    if (ms)
+        return Math.min(10000, Math.max(100, Math.ceil(parseFloat(ms[1]))));
+    // s-формат: «in 1.5s»
+    const s = msg.match(/(?:try again in|retry after)\s+([\d.]+)\s*s/i);
+    if (s)
+        return Math.min(10000, Math.ceil(parseFloat(s[1]) * 1000));
     return 0;
 }
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
