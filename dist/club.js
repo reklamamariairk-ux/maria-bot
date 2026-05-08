@@ -349,10 +349,12 @@ async function claimDailyLogin(chatId) {
     }
 }
 // ─── Game results ────────────────────────────────────────────────────────────
+// Звёзды за игры временно отключены (по решению команды). Личные рекорды
+// продолжают записываться — это самостоятельная gamification без награды.
 const STAR_RATES = {
-    flappy_cake: (s) => Math.floor(s / 5),
-    memory: (s) => 30 + (s >= 100 ? 10 : 0), // s = quality score 0-100, 100 = no hints
-    bakery: (s) => Math.min(Math.floor(s / 25), 50), // diminishing past 200 clicks → cap 50/session
+    flappy_cake: () => 0,
+    memory: () => 0,
+    bakery: () => 0,
 };
 async function recordGameResult(chatId, game, score) {
     const rateFn = STAR_RATES[game];
@@ -370,11 +372,11 @@ async function recordGameResult(chatId, game, score) {
         await db_1.pool.query(`INSERT INTO game_records (chat_id, game, record, updated_at)
        VALUES ($1, $2, $3, NOW())
        ON CONFLICT (chat_id, game) DO UPDATE SET record = $3, updated_at = NOW()`, [chatId, game, score]);
-        if (prev > 0) {
-            // Only bonus on subsequent records (first record = base only)
-            const bonusRes = await earnStars(chatId, 50, "record_bonus", { game, score, prev });
-            recordBonus = bonusRes.awarded;
-        }
+        // Бонус за рекорд тоже отключён (вместе с базовыми звёздами за игры)
+        // if (prev > 0) {
+        //   const bonusRes = await earnStars(chatId, 50, "record_bonus", { game, score, prev });
+        //   recordBonus = bonusRes.awarded;
+        // }
     }
     return {
         starsAwarded: baseRes.awarded,
