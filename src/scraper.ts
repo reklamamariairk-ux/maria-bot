@@ -116,7 +116,7 @@ function parsePage(html: string, category: string): Product[] {
 }
 
 // ─── Fetch JSON helper ───────────────────────────────────────────────────────
-function fetchJson(url: string): Promise<unknown> {
+function fetchJson(url: string, timeoutMs = 60_000): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const req = https.get(url, { rejectUnauthorized: false }, (r) => {
       let body = "";
@@ -126,15 +126,30 @@ function fetchJson(url: string): Promise<unknown> {
       });
     });
     req.on("error", reject);
-    req.setTimeout(30_000, () => { req.destroy(); reject(new Error("Timeout")); });
+    req.setTimeout(timeoutMs, () => { req.destroy(); reject(new Error("Timeout")); });
   });
+}
+
+// Retry helper — для медленных первых запросов (cold cache)
+async function fetchJsonWithRetry(url: string, attempts = 3, timeoutMs = 60_000): Promise<unknown> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fetchJson(url, timeoutMs);
+    } catch (e) {
+      lastErr = e;
+      console.warn(`[fetch] attempt ${i+1}/${attempts} failed:`, (e as Error).message);
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
+  throw lastErr;
 }
 
 // ─── API source — читаем из /api/catalog.php ────────────────────────────────
 async function fetchFromApi(): Promise<Product[]> {
   const sep = CATALOG_API.includes("?") ? "&" : "?";
   const url = `${CATALOG_API}${sep}token=${encodeURIComponent(CATALOG_TOKEN)}&limit=500`;
-  const raw = (await fetchJson(url)) as {
+  const raw = (await fetchJsonWithRetry(url, 3, 60_000)) as {
     sections?: Array<{ id: number; code: string; name: string }>;
     products?: Array<Record<string, unknown>>;
   };

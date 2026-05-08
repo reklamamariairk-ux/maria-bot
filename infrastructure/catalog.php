@@ -61,10 +61,10 @@ if ($mode === 'search') {
 
 // Default: list mode
 $section = trim((string)($_GET['section'] ?? ''));
-$limit   = max(1, min(200, (int)($_GET['limit'] ?? 200)));
+$limit   = max(1, min(500, (int)($_GET['limit'] ?? 200)));
 $offset  = max(0, (int)($_GET['offset'] ?? 0));
 
-$cacheId = 'catalog_v1_' . md5("$section|$limit|$offset");
+$cacheId = 'catalog_v2_disc_' . md5("$section|$limit|$offset");
 $cache = \Bitrix\Main\Data\Cache::createInstance();
 header('Cache-Control: public, max-age=300');
 if ($cache->initCache(CACHE_TTL, $cacheId, '/maria_catalog')) {
