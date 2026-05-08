@@ -287,13 +287,36 @@ export function catalogAge(): string | null {
 // ─── Search ───────────────────────────────────────────────────────────────────
 export function searchCatalog(catalog: Product[], query: string, limit = 6): Product[] {
   if (!catalog.length) return [];
-  const words = query.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
-  if (!words.length) return catalog.slice(0, limit);
+  const q = query.toLowerCase();
+  // Корни — часть слова без окончания (стемминг для русского).
+  // «сметанный/сметана/сметанного» → «сметан». Берём слова >2 символов.
+  const stems = q.split(/\s+/)
+    .filter((w) => w.length > 2)
+    .map((w) => w.replace(/(ого|ому|ыми|ами|ями|ой|ей|ие|ый|ая|ое|ые|ый|ы|и|а|у|е)$/u, ""))
+    .filter((w) => w.length > 2);
+  if (!stems.length) return catalog.slice(0, limit);
 
+  // Для каждого товара собираем все текстовые поля
   return catalog
     .map((p) => {
-      const text  = `${p.name} ${p.category}`.toLowerCase();
-      const score = words.reduce((s, w) => s + (text.includes(w) ? 1 : 0), 0);
+      const fields = {
+        name:     (p.name || "").toLowerCase(),
+        category: (p.category || "").toLowerCase(),
+        preview:  (p.preview || "").toLowerCase(),
+        types:    [...(p.cake_type || []), ...(p.pie_type || []), ...(p.dessert_type || [])].join(" ").toLowerCase(),
+        filling:  (p.filling || []).join(" ").toLowerCase(),
+        occasion: (p.occasion || []).join(" ").toLowerCase(),
+      };
+      // Веса: name × 5, category/types × 3, filling × 4, preview × 2
+      let score = 0;
+      for (const stem of stems) {
+        if (fields.name.includes(stem))     score += 5;
+        if (fields.types.includes(stem))    score += 4;
+        if (fields.filling.includes(stem))  score += 4;
+        if (fields.category.includes(stem)) score += 2;
+        if (fields.occasion.includes(stem)) score += 2;
+        if (fields.preview.includes(stem))  score += 1;
+      }
       return { p, score };
     })
     .filter(({ score }) => score > 0)
