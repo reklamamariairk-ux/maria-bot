@@ -85,11 +85,13 @@ const CACHEABLE = new Set([
     "list_partners", "get_today_special", "get_cake_types",
 ]);
 function cacheKey(name, args) {
+    // Защита: модель может передать arguments:"null" → парсинг даёт null → Object.keys(null) бросит
+    const safe = (args && typeof args === "object") ? args : {};
     // Стабильная сериализация: сортируем ключи, чтобы {a:1,b:2} === {b:2,a:1}
-    const keys = Object.keys(args).sort();
+    const keys = Object.keys(safe).sort();
     const ordered = {};
     for (const k of keys)
-        ordered[k] = args[k];
+        ordered[k] = safe[k];
     return `${name}::${JSON.stringify(ordered)}`;
 }
 function cacheGet(key) {

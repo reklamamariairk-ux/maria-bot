@@ -100,10 +100,12 @@ const CACHEABLE = new Set([
 ]);
 
 function cacheKey(name: string, args: Record<string, unknown>): string {
+  // Защита: модель может передать arguments:"null" → парсинг даёт null → Object.keys(null) бросит
+  const safe = (args && typeof args === "object") ? args : {};
   // Стабильная сериализация: сортируем ключи, чтобы {a:1,b:2} === {b:2,a:1}
-  const keys = Object.keys(args).sort();
+  const keys = Object.keys(safe).sort();
   const ordered: Record<string, unknown> = {};
-  for (const k of keys) ordered[k] = args[k];
+  for (const k of keys) ordered[k] = safe[k];
   return `${name}::${JSON.stringify(ordered)}`;
 }
 

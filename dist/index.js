@@ -761,7 +761,9 @@ async function* chatAgentStream(userMessages, ctx) {
         const results = await Promise.all(validToolCalls.map(async (tc) => {
             let args = {};
             try {
-                args = JSON.parse(tc.function.arguments || "{}");
+                const parsed = JSON.parse(tc.function.arguments || "{}");
+                if (parsed && typeof parsed === "object")
+                    args = parsed;
             }
             catch { }
             const out = await (0, ai_tools_1.runTool)(tc.function.name, args, ctx);
@@ -902,7 +904,9 @@ async function chatAgent(userMessages, ctx) {
         const results = await Promise.all(msg.tool_calls.map(async (tc) => {
             let args = {};
             try {
-                args = JSON.parse(tc.function.arguments || "{}");
+                const parsed = JSON.parse(tc.function.arguments || "{}");
+                if (parsed && typeof parsed === "object")
+                    args = parsed;
             }
             catch { }
             const out = await (0, ai_tools_1.runTool)(tc.function.name, args, ctx);
