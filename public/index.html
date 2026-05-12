@@ -466,9 +466,14 @@
 <!-- ═══ ПРОФИЛЬ ═══ -->
 <section class="tab" id="tab-profile">
   <div class="prof-hero">
-    <div class="prof-hero__av" id="prof-av">👤</div>
+    <div class="prof-hero__av" id="prof-av">А</div>
     <div class="prof-hero__info">
-      <div class="prof-hero__name" id="prof-name">Гость</div>
+      <div class="prof-hero__name">
+        <span id="prof-name">Гость</span>
+        <span class="prof-hero__verified" id="prof-verified-badge" style="display:none" title="Телефон подтверждён">
+          <span data-icon="badgeCheck" data-size="18"></span>
+        </span>
+      </div>
       <div class="prof-hero__phone" id="prof-phone">Подтвердите телефон в клубе</div>
     </div>
     <button class="prof-hero__edit" id="prof-edit-bday" onclick="profEditBday()" aria-label="Указать ДР" title="День рождения" style="display:none">
@@ -497,29 +502,29 @@
     <button class="prof-row" data-haptic="light" onclick="profOpenOrders()">
       <span class="prof-row__ic"><span data-icon="history" data-size="20"></span></span>
       <span class="prof-row__t">Мои заказы</span>
-      <span class="prof-row__chev">›</span>
+      <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
     </button>
     <button class="prof-row" data-haptic="light" onclick="switchTab('fun')">
       <span class="prof-row__ic"><span data-icon="gamepad" data-size="20"></span></span>
       <span class="prof-row__t">Игры</span>
       <span class="prof-row__sub">Пекарня · Мемори · Флаппи</span>
-      <span class="prof-row__chev">›</span>
+      <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
     </button>
     <button class="prof-row" data-haptic="light" onclick="switchTab('club')">
       <span class="prof-row__ic"><span data-icon="diamond" data-size="20"></span></span>
       <span class="prof-row__t">Программа лояльности</span>
       <span class="prof-row__sub">Кэшбэк, скидки, лотерея</span>
-      <span class="prof-row__chev">›</span>
+      <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
     </button>
     <button class="prof-row" data-haptic="light" onclick="openShopsModal()">
       <span class="prof-row__ic"><span data-icon="pin" data-size="20"></span></span>
       <span class="prof-row__t">17 кафе на карте</span>
-      <span class="prof-row__chev">›</span>
+      <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
     </button>
     <a class="prof-row" href="tel:+73952504080" data-haptic="light" style="text-decoration:none">
       <span class="prof-row__ic"><span data-icon="phone" data-size="20"></span></span>
       <span class="prof-row__t">Поддержка · 50-40-80</span>
-      <span class="prof-row__chev">›</span>
+      <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
     </a>
   </div>
 

@@ -4,10 +4,14 @@ let _profileData = null;
 
 async function profileLoad(force) {
   if (_profileLoaded && !force) return _profileData;
+  // Инфлейтим SVG-иконки в Профиле (chevronRight на каждой строке + badgeCheck)
+  if (window.IconInflate) {
+    const tab = document.getElementById('tab-profile');
+    if (tab) window.IconInflate(tab);
+  }
   const tg = window.Telegram?.WebApp;
   const initData = tg?.initData ?? "";
   if (!initData) {
-    // Не открыто через Telegram — показываем гостевой режим
     profileRenderGuest();
     return null;
   }
@@ -37,21 +41,24 @@ function profileRender(data) {
   const balanceEl = document.getElementById('prof-stat-balance');
   const ticketsEl = document.getElementById('prof-stat-tickets');
   const editBday = document.getElementById('prof-edit-bday');
+  const verifiedBadge = document.getElementById('prof-verified-badge');
 
-  // Аватар: первая буква имени (или 👤)
-  if (av && u.first_name) av.textContent = u.first_name[0]?.toUpperCase() || '👤';
+  // Аватар: первая буква имени или ?
+  if (av) av.textContent = u.first_name?.[0]?.toUpperCase() || '?';
   if (nameEl) nameEl.textContent = u.first_name || (u.username ? '@' + u.username : 'Гость');
+
+  // Verified badge — blue checkmark рядом с именем (как в клубе)
+  if (verifiedBadge) verifiedBadge.style.display = data.phoneVerified ? 'inline-flex' : 'none';
 
   if (phoneEl) {
     if (data.phoneVerified) {
-      phoneEl.innerHTML = '<span style="color:#16a34a">✓ Телефон подтверждён</span>';
+      phoneEl.textContent = 'Участник клуба';
     } else {
-      phoneEl.innerHTML = '<a href="#" onclick="event.preventDefault();switchTab(\'club\')" style="color:var(--red);text-decoration:none">Подтвердите телефон в клубе →</a>';
+      phoneEl.innerHTML = '<a href="#" onclick="event.preventDefault();switchTab(\'club\')">Подтвердите телефон в клубе →</a>';
     }
   }
 
-  // Внутренние "очки" / "билеты" из /api/me больше не используются.
-  // Баллы и билеты заполняются из LK (см. profileLoadOrdersCount → renderLkStats)
+  // Баллы и билеты заполняются из LK
   if (balanceEl) balanceEl.textContent = '—';
   if (ticketsEl) ticketsEl.textContent = '—';
 
@@ -62,14 +69,20 @@ function profileRender(data) {
 }
 
 function profileRenderGuest() {
+  const av = document.getElementById('prof-av');
   const nameEl = document.getElementById('prof-name');
   const phoneEl = document.getElementById('prof-phone');
   const balanceEl = document.getElementById('prof-stat-balance');
   const ticketsEl = document.getElementById('prof-stat-tickets');
+  const ordersEl = document.getElementById('prof-stat-orders');
+  const verifiedBadge = document.getElementById('prof-verified-badge');
+  if (av) av.textContent = '?';
   if (nameEl) nameEl.textContent = 'Гость';
   if (phoneEl) phoneEl.textContent = 'Открой через Telegram, чтобы войти в клуб';
+  if (verifiedBadge) verifiedBadge.style.display = 'none';
   if (balanceEl) balanceEl.textContent = '—';
   if (ticketsEl) ticketsEl.textContent = '—';
+  if (ordersEl) ordersEl.textContent = '—';
 }
 
 async function profileLoadOrdersCount() {
@@ -131,22 +144,24 @@ async function profOpenOrders() {
       list.innerHTML = '<div class="cat-empty">Заказов пока нет. Загляни в меню!</div>';
       return;
     }
+    const fmtDate = window.formatRelativeDate || ((s) => s);
+    const statusInfo = window.orderStatusInfo || (() => ({ label: '', cls: 'ord-tag--neutral' }));
     list.innerHTML = orders.slice(0, 20).map((o) => {
       const items = Array.isArray(o.items) ? o.items.slice(0, 3).map((i) => `${i.qty}× ${i.name}`).join(', ') : '';
       const more = (o.items?.length ?? 0) > 3 ? ` +${o.items.length - 3}` : '';
       const sum = o.sum ? Number(o.sum).toLocaleString('ru-RU') + ' ₽' : '';
-      const status = o.status || '';
-      const paid = o.paid ? '<span style="color:#16a34a">✓ оплачен</span>' : '';
+      const status = statusInfo(o.status, o.paid);
+      const dateText = fmtDate(o.date);
       return `
         <div class="prof-order">
           <div class="prof-order__head">
             <span class="prof-order__num">№ ${escAttr(String(o.id || ''))}</span>
-            <span class="prof-order__date">${escAttr(o.date || '')}</span>
+            <span class="prof-order__date">${escAttr(dateText)}</span>
           </div>
-          <div class="prof-order__items">${escAttr(items)}${more}</div>
+          ${items ? `<div class="prof-order__items">${escAttr(items)}${more}</div>` : ''}
           <div class="prof-order__foot">
             <span class="prof-order__sum">${escAttr(sum)}</span>
-            <span class="prof-order__status">${escAttr(status)} ${paid}</span>
+            <span class="ord-tag ${o.canceled ? 'ord-tag--cancelled' : status.cls}">${escAttr(o.canceled ? '✗ Отменён' : status.label)}</span>
           </div>
         </div>`;
     }).join('');
