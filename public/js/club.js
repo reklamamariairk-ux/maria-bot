@@ -12,7 +12,7 @@ async function api(path, opts = {}) {
   return res.json();
 }
 
-// Cached state
+// Cached state — экспортируется в window для использования из других скриптов
 let CLUB_STATE = {
   user: null,
   phoneVerified: false,
@@ -20,7 +20,9 @@ let CLUB_STATE = {
   daily: { loginClaimedToday: false, currentStreak: 0, starsEarnedToday: 0, starCap: 300 },
   catalog: [],
   myRewards: [],
+  scActiveTask: null,
 };
+window.CLUB_STATE = CLUB_STATE;
 
 /* ── Header counters ─────────────────────────────────────────────────────── */
 function renderHeaderCounters() {
@@ -121,9 +123,7 @@ async function loadSweetCheckWeek() {
     const oldWrap = document.getElementById('sc-week');
     if (oldWrap) oldWrap.style.display = 'none';
     // Сохраняем в стейт и перерисовываем sweet check
-    if (window.CLUB_STATE) {
-      window.CLUB_STATE.scActiveTask = d?.active ?? null;
-    }
+    CLUB_STATE.scActiveTask = d?.active ?? null;
     // Перерисовываем единую smart-карточку с актуальными данными
     try { renderSweetCheckMy(window._lastLkData || {}); } catch (e) { console.error('[sc-rerender]', e); }
   } catch {}
