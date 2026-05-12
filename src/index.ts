@@ -26,7 +26,7 @@ import {
 } from "./club";
 import { requireTgUser, getTgUser, tryGetTgUser } from "./auth";
 import { getPartners, getPartnersMeta, syncPartners } from "./partners";
-import { fetchLk } from "./lk";
+import { fetchLk, getVerifiedPhone } from "./lk";
 import { createOrder, OrderRequest } from "./order";
 
 // ─── Env ────────────────────────────────────────────────────────────────────
@@ -1233,22 +1233,35 @@ app.post("/api/birthday", requireTgUser, async (req, res) => {
 app.get("/api/me", requireTgUser, async (req, res) => {
   const u = getTgUser(req)!;
   try {
-    // touchSubscriber заодно бьёт launch_count и last_seen_at; addSubscriber оставлен для совместимости
     await touchSubscriber(u.id, u.username, u.first_name).catch(() => {});
-    const [verified, balance, daily, myRewards, birthday] = await Promise.all([
+    const [verified, balance, daily, myRewards, birthday, subInfo, phone] = await Promise.all([
       isPhoneVerified(u.id),
       getBalance(u.id),
       getDailyStatus(u.id),
       getMyRewards(u.id),
       getUserBirthday(u.id),
+      getSubscriberInfo(u.id),
+      getVerifiedPhone(u.id),
     ]);
+    // Маскируем телефон: +7 (***) ***-12-34 — показываем только последние 4 цифры
+    let phoneMasked: string | null = null;
+    if (phone) {
+      const digits = phone.replace(/\D/g, "");
+      if (digits.length >= 11) {
+        const last4 = digits.slice(-4);
+        phoneMasked = `+7 (***) ***-${last4.slice(0,2)}-${last4.slice(2)}`;
+      }
+    }
     res.json({
       user: { id: u.id, first_name: u.first_name, username: u.username },
       phoneVerified: verified,
+      phoneMasked,
       balance,
       daily,
       activeRewards: myRewards.length,
       birthday,
+      joinedAt: subInfo?.joined_at ?? null,
+      launchCount: subInfo?.launch_count ?? 0,
     });
   } catch (e) {
     console.error("[API /me]", (e as Error).message);

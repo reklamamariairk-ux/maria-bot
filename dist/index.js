@@ -1231,22 +1231,35 @@ app.post("/api/birthday", auth_1.requireTgUser, async (req, res) => {
 app.get("/api/me", auth_1.requireTgUser, async (req, res) => {
     const u = (0, auth_1.getTgUser)(req);
     try {
-        // touchSubscriber заодно бьёт launch_count и last_seen_at; addSubscriber оставлен для совместимости
         await (0, db_1.touchSubscriber)(u.id, u.username, u.first_name).catch(() => { });
-        const [verified, balance, daily, myRewards, birthday] = await Promise.all([
+        const [verified, balance, daily, myRewards, birthday, subInfo, phone] = await Promise.all([
             (0, club_1.isPhoneVerified)(u.id),
             (0, club_1.getBalance)(u.id),
             (0, club_1.getDailyStatus)(u.id),
             (0, club_1.getMyRewards)(u.id),
             getUserBirthday(u.id),
+            (0, db_1.getSubscriberInfo)(u.id),
+            (0, lk_1.getVerifiedPhone)(u.id),
         ]);
+        // Маскируем телефон: +7 (***) ***-12-34 — показываем только последние 4 цифры
+        let phoneMasked = null;
+        if (phone) {
+            const digits = phone.replace(/\D/g, "");
+            if (digits.length >= 11) {
+                const last4 = digits.slice(-4);
+                phoneMasked = `+7 (***) ***-${last4.slice(0, 2)}-${last4.slice(2)}`;
+            }
+        }
         res.json({
             user: { id: u.id, first_name: u.first_name, username: u.username },
             phoneVerified: verified,
+            phoneMasked,
             balance,
             daily,
             activeRewards: myRewards.length,
             birthday,
+            joinedAt: subInfo?.joined_at ?? null,
+            launchCount: subInfo?.launch_count ?? 0,
         });
     }
     catch (e) {

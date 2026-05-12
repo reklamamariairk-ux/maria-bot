@@ -1572,6 +1572,53 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 }
 #tab-profile .prof-hero__verified svg{width:18px;height:18px}
 
+/* Joined date sub-line */
+#tab-profile .prof-hero__joined{
+  margin-top:3px;font-size:12px;color:var(--ap-grey-2);
+}
+
+/* Group header (Apple Settings caption) */
+#tab-profile .prof-group{margin-bottom:18px}
+#tab-profile .prof-group__h{
+  font-size:11px;color:var(--ap-grey);font-weight:600;
+  letter-spacing:.4px;text-transform:uppercase;
+  padding:0 32px 6px;
+}
+
+/* Info row (только текст, без chevron) */
+#tab-profile .prof-row--info{
+  cursor:default;
+}
+#tab-profile .prof-row--info:hover,
+#tab-profile .prof-row--info:active{background:#fff}
+
+/* Row with value (Apple Settings — текст справа) */
+#tab-profile .prof-row__val{
+  grid-column:3;grid-row:1 / span 2;
+  font-size:14px;color:var(--ap-grey);
+  margin-right:6px;align-self:center;
+  font-feature-settings:"tnum" 1;
+  text-align:right;
+  max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+#tab-profile .prof-row__t:has(+ .prof-row__val){grid-row:1 / span 2}
+
+/* Grid template когда есть value (4 колонки: icon + t + val + chev) */
+#tab-profile .prof-row:has(.prof-row__val){
+  grid-template-columns:32px 1fr auto 16px;
+  gap:0 12px;
+}
+#tab-profile .prof-row:has(.prof-row__val) .prof-row__val{grid-column:3}
+#tab-profile .prof-row:has(.prof-row__val) .prof-row__chev{grid-column:4}
+
+/* Footer с версией */
+#tab-profile .prof-footer{
+  text-align:center;padding:24px 16px 24px;
+  font-size:11px;color:var(--ap-grey-2);
+}
+#tab-profile .prof-footer__brand{font-weight:500;margin-bottom:2px}
+#tab-profile .prof-footer__ver{font-feature-settings:"tnum" 1;letter-spacing:.3px}
+
 /* TG-style typing indicator (3 пульсирующие точки) */
 .msg__bubble--typing{padding:10px 14px}
 .typing-dots{display:inline-flex;gap:3px;align-items:center;height:14px}

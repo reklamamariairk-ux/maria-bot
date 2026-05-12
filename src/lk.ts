@@ -42,7 +42,7 @@ function fetchJson(url: string): Promise<unknown> {
   });
 }
 
-async function getVerifiedPhone(chatId: number): Promise<string | null> {
+export async function getVerifiedPhone(chatId: number): Promise<string | null> {
   const { rows } = await pool.query(
     `SELECT phone FROM subscribers WHERE chat_id = $1 AND phone_verified_at IS NOT NULL`,
     [chatId]

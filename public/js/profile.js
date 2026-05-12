@@ -38,16 +38,16 @@ function profileRender(data) {
   const av = document.getElementById('prof-av');
   const nameEl = document.getElementById('prof-name');
   const phoneEl = document.getElementById('prof-phone');
+  const joinedEl = document.getElementById('prof-joined');
   const balanceEl = document.getElementById('prof-stat-balance');
   const ticketsEl = document.getElementById('prof-stat-tickets');
-  const editBday = document.getElementById('prof-edit-bday');
   const verifiedBadge = document.getElementById('prof-verified-badge');
 
   // Аватар: первая буква имени или ?
   if (av) av.textContent = u.first_name?.[0]?.toUpperCase() || '?';
   if (nameEl) nameEl.textContent = u.first_name || (u.username ? '@' + u.username : 'Гость');
 
-  // Verified badge — blue checkmark рядом с именем (как в клубе)
+  // Verified badge — blue checkmark рядом с именем
   if (verifiedBadge) verifiedBadge.style.display = data.phoneVerified ? 'inline-flex' : 'none';
 
   if (phoneEl) {
@@ -58,31 +58,84 @@ function profileRender(data) {
     }
   }
 
-  // Баллы и билеты заполняются из LK
+  // Дата регистрации: "В клубе с янв 2024"
+  if (joinedEl) {
+    if (data.joinedAt) {
+      const d = new Date(data.joinedAt);
+      if (!isNaN(d.getTime())) {
+        const months = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+        joinedEl.textContent = `В клубе с ${months[d.getMonth()]} ${d.getFullYear()}`;
+        joinedEl.style.display = '';
+      } else {
+        joinedEl.style.display = 'none';
+      }
+    } else {
+      joinedEl.style.display = 'none';
+    }
+  }
+
+  // Личные данные (раздел "Личные данные")
+  const infoName = document.getElementById('prof-info-name');
+  const infoPhone = document.getElementById('prof-info-phone');
+  const infoBday = document.getElementById('prof-info-bday');
+  if (infoName) infoName.textContent = u.first_name || (u.username ? '@' + u.username : '—');
+  if (infoPhone) {
+    if (data.phoneVerified && data.phoneMasked) {
+      infoPhone.textContent = data.phoneMasked;
+      infoPhone.style.color = 'var(--ap-ink)';
+    } else if (data.phoneVerified) {
+      infoPhone.textContent = 'подтверждён';
+      infoPhone.style.color = '#16a34a';
+    } else {
+      infoPhone.textContent = 'подтвердить';
+      infoPhone.style.color = 'var(--ap-red)';
+    }
+  }
+  if (infoBday) {
+    if (data.birthday) {
+      const m = String(data.birthday).match(/^(?:\d{4}-)?(\d{2})-(\d{2})$/);
+      if (m) {
+        const day = Number(m[2]);
+        const monthName = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'][Number(m[1]) - 1];
+        infoBday.textContent = `${day} ${monthName}`;
+        infoBday.style.color = 'var(--ap-ink)';
+      } else {
+        infoBday.textContent = String(data.birthday);
+      }
+    } else {
+      infoBday.textContent = 'указать';
+      infoBday.style.color = 'var(--ap-red)';
+    }
+  }
+
+  // Баллы и билеты заполняются из LK (см. profileLoadOrdersCount)
   if (balanceEl) balanceEl.textContent = '—';
   if (ticketsEl) ticketsEl.textContent = '—';
-
-  // Если ДР не указан — показываем кнопку редактирования
-  if (editBday) {
-    editBday.style.display = data.birthday ? 'none' : 'flex';
-  }
 }
 
 function profileRenderGuest() {
   const av = document.getElementById('prof-av');
   const nameEl = document.getElementById('prof-name');
   const phoneEl = document.getElementById('prof-phone');
+  const joinedEl = document.getElementById('prof-joined');
   const balanceEl = document.getElementById('prof-stat-balance');
   const ticketsEl = document.getElementById('prof-stat-tickets');
   const ordersEl = document.getElementById('prof-stat-orders');
   const verifiedBadge = document.getElementById('prof-verified-badge');
+  const infoName = document.getElementById('prof-info-name');
+  const infoPhone = document.getElementById('prof-info-phone');
+  const infoBday = document.getElementById('prof-info-bday');
   if (av) av.textContent = '?';
   if (nameEl) nameEl.textContent = 'Гость';
   if (phoneEl) phoneEl.textContent = 'Открой через Telegram, чтобы войти в клуб';
+  if (joinedEl) joinedEl.style.display = 'none';
   if (verifiedBadge) verifiedBadge.style.display = 'none';
   if (balanceEl) balanceEl.textContent = '—';
   if (ticketsEl) ticketsEl.textContent = '—';
   if (ordersEl) ordersEl.textContent = '—';
+  if (infoName) infoName.textContent = '—';
+  if (infoPhone) { infoPhone.textContent = 'не подтверждён'; infoPhone.style.color = 'var(--ap-grey)'; }
+  if (infoBday) { infoBday.textContent = 'указать'; infoBday.style.color = 'var(--ap-red)'; }
 }
 
 async function profileLoadOrdersCount() {
