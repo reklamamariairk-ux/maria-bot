@@ -326,6 +326,14 @@ async function catOpenProduct(id) {
   if (!modal || !body) {
     return;
   }
+  // Track recently viewed (последние 8 уникальных)
+  try {
+    const recent = JSON.parse(localStorage.getItem('maria_recent_viewed') || '[]');
+    const numId = Number(id);
+    const filtered = recent.filter((x) => Number(x) !== numId);
+    filtered.unshift(numId);
+    localStorage.setItem('maria_recent_viewed', JSON.stringify(filtered.slice(0, 8)));
+  } catch {}
   body.innerHTML = '<div class="cat-loading">Загружаем карточку…</div>';
   modal.style.display = 'flex';
   window.scrollLock?.();
@@ -335,6 +343,11 @@ async function catOpenProduct(id) {
     const res = await fetch('/api/catalog/product/' + encodeURIComponent(id));
     const data = await res.json();
     const p = data.product;
+    // Кэшируем для отображения thumbnails в Profile (Любимое / Недавно)
+    if (p && p.id) {
+      window._catalogCache = window._catalogCache || {};
+      window._catalogCache[p.id] = p;
+    }
     if (!p) {
       body.innerHTML = '<div class="cat-empty">Товар не найден</div>';
       return;

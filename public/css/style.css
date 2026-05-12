@@ -1703,6 +1703,96 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 }
 .about-modal__body p{margin-bottom:10px}
 
+/* Achievements row (бейджи под Stats) */
+#tab-profile .prof-ach{
+  margin:0 16px 16px;
+  overflow-x:auto;-webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+}
+#tab-profile .prof-ach::-webkit-scrollbar{display:none}
+#tab-profile .prof-ach__list{
+  display:flex;gap:8px;padding:2px 0;
+}
+#tab-profile .prof-ach__item{
+  flex-shrink:0;display:flex;align-items:center;gap:6px;
+  background:#fff;padding:8px 12px;border-radius:10px;
+  box-shadow:0 1px 3px rgba(0,0,0,.04);
+  font-size:12px;font-weight:500;color:var(--ap-ink);
+  letter-spacing:-.1px;
+}
+#tab-profile .prof-ach__ic{font-size:14px;line-height:1}
+#tab-profile .prof-ach__t{white-space:nowrap}
+
+/* Product thumbnails (Любимое / Недавно смотрели) */
+#tab-profile .prof-row--withthumbs{
+  grid-template-columns:32px 1fr auto 20px 16px;
+}
+#tab-profile .prof-row__thumbs{
+  grid-column:3;grid-row:1 / span 2;
+  display:flex;gap:-6px;align-self:center;margin-right:8px;
+  pointer-events:none;
+}
+#tab-profile .prof-thumb{
+  width:28px;height:28px;border-radius:50%;
+  overflow:hidden;background:#f2f2f7;
+  border:2px solid #fff;margin-left:-8px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;
+  box-shadow:0 1px 2px rgba(0,0,0,.05);
+}
+#tab-profile .prof-thumb:first-child{margin-left:0}
+#tab-profile .prof-thumb img{width:100%;height:100%;object-fit:cover}
+#tab-profile .prof-thumb--ph{color:var(--ap-grey-2);background:#fff}
+
+/* QR-карточка клуба — modal */
+.prof-qr{padding:24px 20px 28px;text-align:center}
+.prof-qr__h{
+  font-size:18px;font-weight:700;color:#0a0a0a;
+  letter-spacing:-.3px;margin-bottom:4px;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",system-ui,sans-serif;
+}
+.prof-qr__sub{font-size:13px;color:#6e6e73;margin-bottom:20px}
+.prof-qr__img{
+  display:flex;justify-content:center;
+  margin:8px auto 18px;padding:16px;
+  background:#fff;border-radius:18px;
+  box-shadow:0 6px 18px rgba(0,0,0,.06);
+  width:fit-content;
+}
+.prof-qr__img img{display:block;border-radius:8px}
+.prof-qr__name{
+  font-size:18px;font-weight:700;color:#0a0a0a;
+  letter-spacing:-.3px;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",system-ui,sans-serif;
+}
+.prof-qr__id{font-size:13px;color:#6e6e73;margin-top:2px;font-feature-settings:"tnum" 1}
+.prof-qr__hint{
+  margin-top:18px;padding:10px;
+  background:#f2f2f7;border-radius:10px;
+  font-size:12px;color:#6e6e73;
+}
+
+/* Address modal */
+.prof-addr{padding:24px 20px 24px}
+.prof-addr__h{
+  font-size:18px;font-weight:700;color:#0a0a0a;
+  letter-spacing:-.3px;margin-bottom:4px;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",system-ui,sans-serif;
+}
+.prof-addr__sub{font-size:13px;color:#6e6e73;margin-bottom:14px}
+.prof-addr__input{
+  width:100%;padding:12px 14px;
+  background:#f2f2f7;border:none;border-radius:10px;
+  font-size:15px;color:#0a0a0a;line-height:1.4;
+  resize:vertical;min-height:80px;outline:none;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",system-ui,sans-serif;
+}
+.prof-addr__input:focus{box-shadow:0 0 0 3px rgba(214,31,55,.15)}
+.prof-addr__hint{font-size:11px;color:#98989d;margin-top:6px;text-align:center}
+.prof-addr__btns{display:flex;gap:10px;margin-top:18px}
+.prof-addr__btns .btn-outline{flex:1;height:48px;border-radius:12px;font-size:14px;font-weight:600}
+.prof-addr__save{flex:1;height:48px;border-radius:12px;font-size:14px;font-weight:600}
+
 /* TG-style typing indicator (3 пульсирующие точки) */
 .msg__bubble--typing{padding:10px 14px}
 .typing-dots{display:inline-flex;gap:3px;align-items:center;height:14px}

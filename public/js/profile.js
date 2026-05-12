@@ -48,7 +48,7 @@ function profileRender(data) {
   const ticketsEl = document.getElementById('prof-stat-tickets');
   const verifiedBadge = document.getElementById('prof-verified-badge');
 
-  // Аватар: photo_url из Telegram → fallback на инициал
+  // Аватар: photo_url из Telegram → fallback на coloured gradient с инициалом
   const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
   const photoUrl = tgUser?.photo_url || data.photoUrl;
   if (avInit) avInit.textContent = u.first_name?.[0]?.toUpperCase() || '?';
@@ -60,6 +60,19 @@ function profileRender(data) {
     } else {
       avImg.style.display = 'none';
     }
+  }
+  // Coloured gradient на основе hash имени (как iMessage)
+  const avEl = document.getElementById('prof-av');
+  if (avEl && !photoUrl) {
+    const name = u.first_name || u.username || 'guest';
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = ((h << 5) - h + name.charCodeAt(i)) | 0;
+    const hue = Math.abs(h % 360);
+    avEl.style.background = `linear-gradient(135deg, hsl(${hue}, 65%, 60%), hsl(${(hue + 40) % 360}, 70%, 50%))`;
+    avEl.style.color = '#fff';
+  } else if (avEl) {
+    avEl.style.background = '';
+    avEl.style.color = '';
   }
   if (nameEl) nameEl.textContent = u.first_name || (u.username ? '@' + u.username : 'Гость');
 
@@ -239,6 +252,34 @@ async function profileLoadOrdersCount() {
       chipEl.style.display = 'none';
     }
 
+    // Achievements badges
+    try { renderAchievements(_profileData, orders); } catch (e) { console.error('[ach]', e); }
+
+    // QR-card row visibility (только для verified)
+    const qrRow = document.getElementById('prof-card-row');
+    if (qrRow) qrRow.style.display = _profileData?.phoneVerified ? '' : 'none';
+
+    // Wishlist thumbnails (первые 4 товара)
+    try {
+      const wish = JSON.parse(localStorage.getItem('maria_wishlist') || '[]');
+      const wishCount = renderProductThumbs('prof-wish-thumbs', wish, 4);
+      const wishCountEl = document.getElementById('prof-info-wishcount');
+      if (wishCountEl) wishCountEl.textContent = wish.length;
+      // Если wishlist пустой — скрываем thumbs container (val уже покажет 0)
+    } catch {}
+
+    // Recently viewed thumbnails (последние 4)
+    try {
+      const recent = JSON.parse(localStorage.getItem('maria_recent_viewed') || '[]');
+      const recentRow = document.getElementById('prof-recent-row');
+      if (recent.length > 0 && recentRow) {
+        recentRow.style.display = '';
+        renderProductThumbs('prof-recent-thumbs', recent, 4);
+      } else if (recentRow) {
+        recentRow.style.display = 'none';
+      }
+    } catch {}
+
     _profileData = { ..._profileData, orders };
   } catch {}
 }
@@ -251,6 +292,189 @@ function profOpenWishlist() {
   }
 }
 window.profOpenWishlist = profOpenWishlist;
+
+// Recently viewed — открыть последний просмотренный
+function profOpenRecent() {
+  try {
+    const recent = JSON.parse(localStorage.getItem('maria_recent_viewed') || '[]');
+    if (recent.length && window.catOpenProduct) {
+      window.switchTab('menu');
+      setTimeout(() => { try { window.catOpenProduct(recent[0]); } catch {} }, 250);
+    }
+  } catch {}
+}
+window.profOpenRecent = profOpenRecent;
+
+// Рендер thumbnails для Любимое / Недавно
+function renderProductThumbs(containerId, ids, maxCount = 4) {
+  const el = document.getElementById(containerId);
+  if (!el) return 0;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    el.innerHTML = '';
+    return 0;
+  }
+  // Поиск товаров в catalog state (загружен в catalog.js)
+  const catState = window.CATALOG_STATE;
+  const products = catState?.products || [];
+  // Также LAST_VIEWED_PRODUCTS из catalog кэша
+  const cache = window._catalogCache || {};
+  const found = ids.slice(0, maxCount).map((id) => {
+    return products.find((p) => Number(p.id) === Number(id)) || cache[id] || null;
+  }).filter(Boolean);
+
+  el.innerHTML = found.map((p) => {
+    const img = (p.images && p.images[0]) || p.image || '';
+    return img
+      ? `<span class="prof-thumb"><img src="/img?u=${encodeURIComponent(img)}" alt="" loading="lazy"/></span>`
+      : `<span class="prof-thumb prof-thumb--ph">🍰</span>`;
+  }).join('');
+  return found.length;
+}
+
+// QR-карточка клуба — modal с QR (через api.qrserver.com)
+function profOpenQrCard() {
+  const tg = window.Telegram?.WebApp;
+  if (!_profileData?.phoneVerified) {
+    tg?.showAlert?.('Подтверди номер в Клубе чтобы получить карточку') || alert('Подтверди номер в Клубе');
+    return;
+  }
+  const userId = _profileData?.user?.id || tg?.initDataUnsafe?.user?.id || 0;
+  if (!userId) return;
+  let modal = document.getElementById('prof-qr-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'prof-qr-modal';
+    modal.className = 'cat-modal';
+    modal.style.display = 'none';
+    modal.onclick = (e) => { if (e.target === modal) profCloseQr(); };
+    modal.innerHTML = `
+      <div class="cat-modal__sheet prof-qr">
+        <button class="cat-modal__close" onclick="profCloseQr()">×</button>
+        <div class="prof-qr__h">Карточка клуба</div>
+        <div class="prof-qr__sub">Покажи кассиру в кафе</div>
+        <div class="prof-qr__img" id="prof-qr-img"></div>
+        <div class="prof-qr__name" id="prof-qr-name"></div>
+        <div class="prof-qr__id" id="prof-qr-id"></div>
+        <div class="prof-qr__hint">Кэшбэк начисляется автоматически</div>
+      </div>`;
+    document.body.appendChild(modal);
+  }
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=10&data=maria-club:${userId}&color=0a0a0a&bgcolor=ffffff`;
+  modal.querySelector('#prof-qr-img').innerHTML = `<img src="${qrUrl}" alt="QR" width="240" height="240"/>`;
+  modal.querySelector('#prof-qr-name').textContent = _profileData?.user?.first_name || 'Клуб «Мария»';
+  modal.querySelector('#prof-qr-id').textContent = `№ ${userId}`;
+  modal.style.display = 'flex';
+  window.scrollLock?.();
+  // Haptic при открытии
+  window.haptic?.('medium');
+}
+window.profOpenQrCard = profOpenQrCard;
+function profCloseQr() {
+  const m = document.getElementById('prof-qr-modal');
+  if (m) m.style.display = 'none';
+  window.scrollUnlock?.();
+}
+window.profCloseQr = profCloseQr;
+
+// Achievements — вычисляем badges из имеющихся данных
+function renderAchievements(data, orders) {
+  const wrap = document.getElementById('prof-ach');
+  const list = document.getElementById('prof-ach-list');
+  if (!wrap || !list) return;
+  const ach = [];
+  const joinedDays = data?.joinedAt
+    ? Math.floor((Date.now() - new Date(data.joinedAt).getTime()) / 86400000)
+    : 0;
+  if (joinedDays >= 365) ach.push({ ic:'🏆', t:'Год+ в клубе' });
+  else if (joinedDays >= 90) ach.push({ ic:'🎉', t:'3+ месяца' });
+  else if (joinedDays >= 30) ach.push({ ic:'✨', t:'Новичок' });
+
+  const ordersCount = Array.isArray(orders) ? orders.length : 0;
+  if (ordersCount >= 25) ach.push({ ic:'🛍', t:'25+ заказов' });
+  else if (ordersCount >= 10) ach.push({ ic:'🛒', t:'10+ заказов' });
+  else if (ordersCount >= 5) ach.push({ ic:'⭐', t:'5 заказов' });
+
+  const launches = Number(data?.launchCount || 0);
+  if (launches >= 100) ach.push({ ic:'🔥', t:'100+ запусков' });
+  else if (launches >= 50) ach.push({ ic:'💯', t:'50+ запусков' });
+
+  if (data?.phoneVerified) ach.push({ ic:'✓', t:'Verified' });
+  if (data?.birthday) ach.push({ ic:'🎂', t:'ДР указан' });
+
+  // ДР рядом (±14 дней)
+  if (data?.birthday) {
+    const m = String(data.birthday).match(/^(?:\d{4}-)?(\d{2})-(\d{2})$/);
+    if (m) {
+      const month = Number(m[1]), day = Number(m[2]);
+      const now = new Date();
+      let target = new Date(now.getFullYear(), month - 1, day);
+      if (target < now) target = new Date(now.getFullYear() + 1, month - 1, day);
+      const dd = Math.round((target - now) / 86400000);
+      if (dd >= 0 && dd <= 14) ach.push({ ic:'🎁', t:'ДР скоро' });
+    }
+  }
+
+  if (ach.length === 0) {
+    wrap.style.display = 'none';
+    return;
+  }
+  list.innerHTML = ach.map((a) => `
+    <div class="prof-ach__item">
+      <div class="prof-ach__ic">${a.ic}</div>
+      <div class="prof-ach__t">${a.t}</div>
+    </div>`).join('');
+  wrap.style.display = '';
+}
+window.renderAchievements = renderAchievements;
+
+// Address modal — полноценный с input и Save
+function profEditAddress() {
+  let modal = document.getElementById('prof-address-modal');
+  const current = localStorage.getItem('maria_default_address') || '';
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'prof-address-modal';
+    modal.className = 'cat-modal';
+    modal.style.display = 'none';
+    modal.onclick = (e) => { if (e.target === modal) profCloseAddressModal(); };
+    modal.innerHTML = `
+      <div class="cat-modal__sheet prof-addr">
+        <button class="cat-modal__close" onclick="profCloseAddressModal()">×</button>
+        <div class="prof-addr__h">Адрес доставки</div>
+        <div class="prof-addr__sub">Сохраним по умолчанию для следующих заказов</div>
+        <textarea class="prof-addr__input" id="prof-addr-input" rows="3" placeholder="Иркутск, ул. Ленина 1, кв. 38"></textarea>
+        <div class="prof-addr__hint">Хранится только на вашем устройстве</div>
+        <div class="prof-addr__btns">
+          <button class="btn-outline" onclick="profCloseAddressModal()">Отмена</button>
+          <button class="btn-full prof-addr__save" onclick="profSaveAddress()">Сохранить</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+  }
+  document.getElementById('prof-addr-input').value = current;
+  modal.style.display = 'flex';
+  window.scrollLock?.();
+  setTimeout(() => { document.getElementById('prof-addr-input')?.focus(); }, 200);
+}
+window.profEditAddress = profEditAddress;
+function profCloseAddressModal() {
+  const m = document.getElementById('prof-address-modal');
+  if (m) m.style.display = 'none';
+  window.scrollUnlock?.();
+}
+window.profCloseAddressModal = profCloseAddressModal;
+function profSaveAddress() {
+  const inp = document.getElementById('prof-addr-input');
+  if (!inp) return;
+  const v = inp.value.trim();
+  if (v) localStorage.setItem('maria_default_address', v);
+  else localStorage.removeItem('maria_default_address');
+  profCloseAddressModal();
+  const tg = window.Telegram?.WebApp;
+  tg?.HapticFeedback?.notificationOccurred?.('success');
+  profileLoad(true);
+}
+window.profSaveAddress = profSaveAddress;
 
 // Адрес доставки — простой prompt с сохранением в localStorage
 function profEditAddress() {
@@ -282,8 +506,32 @@ function profShareApp() {
 }
 window.profShareApp = profShareApp;
 
-// Modal «О приложении» / Privacy / Terms
+// Modal «О приложении» / Privacy / Terms / FAQ / Whatsnew
 const ABOUT_CONTENT = {
+  faq: {
+    title: 'Частые вопросы',
+    html: `
+      <h3>Как использовать баллы?</h3>
+      <p>Баллы начисляются автоматически после заказов на сайте maria-irk.ru. При оформлении заказа можно оплатить ими до 30% суммы.</p>
+      <h3>Где забрать заказ?</h3>
+      <p>Выбираете кафе из 17 точек при оформлении или заказываете доставку (бесплатно от 1 000 ₽).</p>
+      <h3>Как отменить заказ?</h3>
+      <p>Позвоните +7 (3952) 50-40-80 не позже чем за 4 часа до готовности (для индивидуальных тортов — за 24 часа).</p>
+      <h3>Что такое «Сладкий чек»?</h3>
+      <p>Лотерея с призами iPhone 17 / MacBook / PS5 / Apple Watch. Каждый чек даёт билет — чем больше билетов, тем выше шанс выиграть. Розыгрыш каждый квартал.</p>
+      <h3>Как изменить телефон?</h3>
+      <p>В Профиле → «Отвязать телефон» → пере-подтвердите новый в Клубе.</p>
+      <h3>Где найти индивидуальный торт?</h3>
+      <p>Вкладка «На заказ» в нижнем меню. Заполните форму — менеджер свяжется в течение часа.</p>`
+  },
+  whatsnew: {
+    title: 'Что нового',
+    html: `
+      <h3>v1.0.1 (актуальная)</h3>
+      <p>• Новый Профиль в стиле Apple Wallet<br>• Клубная QR-карточка для кафе<br>• Бейджи достижений<br>• Уведомления preferences<br>• Список последних заказов с статусами</p>
+      <h3>v1.0.0</h3>
+      <p>• Telegram Mini App запущен<br>• Программа лояльности «Мария для своих»<br>• Каталог с 250 товарами<br>• AI-ассистент Маша<br>• 14 партнёров клуба</p>`
+  },
   privacy: {
     title: 'Политика конфиденциальности',
     html: `<p>Мы собираем минимум данных, необходимых для работы программы лояльности и оформления заказов:</p>

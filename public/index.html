@@ -504,6 +504,11 @@
     </button>
   </div>
 
+  <!-- Achievements / Badges -->
+  <div class="prof-ach" id="prof-ach" style="display:none">
+    <div class="prof-ach__list" id="prof-ach-list"></div>
+  </div>
+
   <!-- ЛИЧНЫЕ ДАННЫЕ -->
   <div class="prof-group">
     <div class="prof-group__h">Личные данные</div>
@@ -531,6 +536,12 @@
         <span class="prof-row__val" id="prof-info-address">указать</span>
         <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
       </button>
+      <button class="prof-row" id="prof-card-row" data-haptic="medium" onclick="profOpenQrCard()" style="display:none">
+        <span class="prof-row__ic"><span data-icon="creditCard" data-size="18"></span></span>
+        <span class="prof-row__t">Моя клубная карточка</span>
+        <span class="prof-row__sub">QR-код для кафе</span>
+        <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
+      </button>
     </div>
   </div>
 
@@ -543,10 +554,17 @@
         <span class="prof-row__t">Мои заказы</span>
         <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
       </button>
-      <button class="prof-row" data-haptic="light" onclick="haptic('light');profOpenWishlist()">
+      <button class="prof-row prof-row--withthumbs" data-haptic="light" onclick="haptic('light');profOpenWishlist()">
         <span class="prof-row__ic"><span data-icon="star" data-size="18"></span></span>
         <span class="prof-row__t">Любимое</span>
+        <span class="prof-row__thumbs" id="prof-wish-thumbs"></span>
         <span class="prof-row__val" id="prof-info-wishcount">0</span>
+        <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
+      </button>
+      <button class="prof-row prof-row--withthumbs" id="prof-recent-row" data-haptic="light" onclick="haptic('light');profOpenRecent()" style="display:none">
+        <span class="prof-row__ic"><span data-icon="history" data-size="18"></span></span>
+        <span class="prof-row__t">Недавно смотрели</span>
+        <span class="prof-row__thumbs" id="prof-recent-thumbs"></span>
         <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
       </button>
       <button class="prof-row" data-haptic="light" onclick="haptic('light');switchTab('fun')">
@@ -626,16 +644,25 @@
   <div class="prof-group">
     <div class="prof-group__h">О приложении</div>
     <div class="prof-actions">
+      <button class="prof-row" data-haptic="light" onclick="haptic('light');profOpenAbout('faq')">
+        <span class="prof-row__t">Частые вопросы</span>
+        <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
+      </button>
+      <button class="prof-row" data-haptic="light" onclick="haptic('light');profOpenAbout('whatsnew')">
+        <span class="prof-row__t">Что нового</span>
+        <span class="prof-row__val" id="prof-version-badge">v1.0.1</span>
+        <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
+      </button>
+      <button class="prof-row" data-haptic="light" onclick="haptic('light');profOpenAbout('about')">
+        <span class="prof-row__t">О кондитерской «Мария»</span>
+        <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
+      </button>
       <button class="prof-row" data-haptic="light" onclick="haptic('light');profOpenAbout('privacy')">
         <span class="prof-row__t">Политика конфиденциальности</span>
         <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
       </button>
       <button class="prof-row" data-haptic="light" onclick="haptic('light');profOpenAbout('terms')">
         <span class="prof-row__t">Условия использования</span>
-        <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
-      </button>
-      <button class="prof-row" data-haptic="light" onclick="haptic('light');profOpenAbout('about')">
-        <span class="prof-row__t">О кондитерской «Мария»</span>
         <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
       </button>
     </div>
