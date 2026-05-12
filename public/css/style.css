@@ -3455,6 +3455,14 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 #tab-club .sc-card__status-txt{color:var(--ap-ink)}
 #tab-club .sc-card__status-txt b{color:var(--ap-ink);font-weight:600}
 
+/* Verified badge рядом с именем */
+#tab-club .loy-hero__verified{
+  display:inline-flex;vertical-align:middle;margin-left:6px;
+  color:#0a84ff;
+}
+#tab-club .loy-hero__verified svg{width:18px;height:18px;display:block}
+#tab-club .loy-hero__name{display:flex;align-items:center;gap:6px}
+
 /* ── LK card — Apple Wallet pass ─────────────────────────────────────────── */
 #tab-club .lk-card{
   margin:0 16px 16px;padding:24px 20px 18px;background:#fff;
@@ -3462,6 +3470,82 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
   box-shadow:0 1px 3px rgba(0,0,0,.04);
 }
 #tab-club .lk-card__bal-block{text-align:left;padding:0 0 14px;border-bottom:1px solid var(--ap-hairline);margin-bottom:14px}
+#tab-club .lk-card__use-btn{
+  margin-top:14px;padding:10px 16px;
+  background:var(--ap-red);color:#fff;border:none;
+  border-radius:10px;
+  font-size:13px;font-weight:600;cursor:pointer;
+  display:inline-flex;align-items:center;gap:6px;
+  transition:background var(--t-fast);letter-spacing:-.2px;
+}
+#tab-club .lk-card__use-btn:hover{background:#b51a2f}
+#tab-club .lk-card__use-btn:active{transform:scale(.98)}
+#tab-club .lk-card__all-orders{
+  display:block;width:100%;margin-top:10px;padding:10px;
+  background:none;border:1px solid var(--ap-hairline);
+  border-radius:10px;font-size:13px;font-weight:600;
+  color:var(--ap-red);cursor:pointer;
+}
+#tab-club .lk-card__all-orders:hover{background:#f2f2f7;border-color:transparent}
+#tab-club .lk-card__hint-row{
+  margin-top:10px;font-size:11.5px;color:var(--ap-grey-2);text-align:right;
+}
+#tab-club .lk-card__empty{margin-top:10px;padding:8px 0;text-align:left}
+#tab-club .lk-card__empty-h{font-size:14px;font-weight:600;color:var(--ap-ink);margin-bottom:3px}
+#tab-club .lk-card__empty-s{font-size:12px;color:var(--ap-grey)}
+
+/* Order rows — Apple list style + status tags */
+#tab-club .lk-ord{
+  padding:10px 0;font-size:13px;color:var(--ap-ink);
+  border-top:1px solid var(--ap-hairline);
+}
+#tab-club .lk-ord:first-of-type{border-top:none;padding-top:6px}
+#tab-club .lk-ord__row{
+  display:flex;justify-content:space-between;align-items:center;gap:8px;
+  margin-bottom:4px;
+}
+#tab-club .lk-ord__row:last-child{margin-bottom:0}
+#tab-club .lk-ord__id{font-weight:600;color:var(--ap-ink);font-feature-settings:"tnum" 1}
+#tab-club .lk-ord__dt{color:var(--ap-grey);font-size:12px}
+#tab-club .lk-ord__sum{font-weight:600;color:var(--ap-ink);font-feature-settings:"tnum" 1}
+#tab-club .lk-ord__items{
+  flex:1;color:var(--ap-grey);font-size:12px;line-height:1.4;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+#tab-club .lk-ord__repeat{
+  margin-top:8px;width:100%;padding:8px;
+  background:none;border:1px solid var(--ap-hairline);
+  border-radius:8px;font-size:12px;color:var(--ap-ink);cursor:pointer;
+}
+#tab-club .lk-ord--cancel{opacity:.6}
+#tab-club .lk-ord--cancel .lk-ord__sum{text-decoration:line-through}
+
+/* Order status tags */
+.ord-tag{
+  display:inline-flex;align-items:center;
+  font-size:10.5px;font-weight:600;
+  padding:2px 7px;border-radius:6px;
+  white-space:nowrap;letter-spacing:-.1px;
+}
+.ord-tag--done{background:rgba(52,199,89,.12);color:#0a8a36}
+.ord-tag--active{background:rgba(10,132,255,.1);color:#0a84ff}
+.ord-tag--pending{background:rgba(255,159,10,.12);color:#b86200}
+.ord-tag--cancelled{background:#f2f2f7;color:var(--ap-grey-2);text-decoration:line-through}
+.ord-tag--neutral{background:#f2f2f7;color:var(--ap-grey)}
+
+/* Skeleton placeholders (для загрузки) */
+#tab-club .skeleton{
+  background:linear-gradient(90deg, #f2f2f7 0%, #e8e8ed 50%, #f2f2f7 100%);
+  background-size:200% 100%;
+  border-radius:8px;
+  animation:skel 1.4s ease-in-out infinite;
+}
+#tab-club .skeleton-text{height:14px;margin:6px 0;border-radius:6px}
+#tab-club .skeleton-text--lg{height:22px;width:60%}
+@keyframes skel{
+  0%{background-position:200% 0}
+  100%{background-position:-200% 0}
+}
 #tab-club .lk-card__bal-num{
   font-size:44px;font-weight:700;color:var(--ap-ink);
   letter-spacing:-2px;line-height:1;
@@ -3482,16 +3566,42 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 #tab-club .lk-ord:first-of-type{border-top:none;padding-top:0}
 #tab-club .lk-ord b{color:var(--ap-ink);font-weight:600}
 
-/* ── Привилегии клуба — Apple list rows ──────────────────────────────────── */
+/* ── Привилегии клуба — Apple list rows с группами ──────────────────────── */
 #tab-club .club-benefits{
   margin:0 16px 16px;padding:18px 20px;background:#fff;
   border-radius:var(--ap-radius);
   box-shadow:0 1px 3px rgba(0,0,0,.04);
 }
 #tab-club .club-benefits__h{
-  font-size:11px;color:var(--ap-grey);font-weight:600;
-  letter-spacing:.4px;text-transform:uppercase;margin-bottom:14px;
+  font-size:18px;color:var(--ap-ink);font-weight:700;
+  letter-spacing:-.4px;text-transform:none;margin-bottom:18px;
 }
+#tab-club .cb-group{margin-bottom:18px}
+#tab-club .cb-group:last-child{margin-bottom:0}
+#tab-club .cb-group__h{
+  font-size:11px;color:var(--ap-grey);font-weight:600;
+  letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px;
+}
+#tab-club .club-benefits__levels .cb-group__h{margin-top:8px;padding-top:14px;border-top:1px solid var(--ap-hairline)}
+
+/* ── Партнёры preview — отдельный блок наверх ──────────────────────────── */
+#tab-club .club-partners{
+  margin:0 16px 16px;
+}
+#tab-club .club-partners__h{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:0 4px 10px;
+}
+#tab-club .club-partners__h > span{
+  font-size:11px;color:var(--ap-grey);font-weight:600;
+  letter-spacing:.5px;text-transform:uppercase;
+}
+#tab-club .club-partners__all{
+  background:none;border:none;cursor:pointer;
+  font-size:13px;color:var(--ap-red);font-weight:600;
+  padding:4px 6px;border-radius:6px;
+}
+#tab-club .club-partners__all:hover{background:rgba(214,31,55,.06)}
 #tab-club .club-benefits__list{margin-bottom:18px}
 #tab-club .club-benefits__list li{
   font-size:14px;color:var(--ap-ink);padding:6px 0;gap:10px;
@@ -3576,19 +3686,25 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 }
 #tab-club .pcard__btn:hover{background:var(--ap-red);color:#fff}
 
-/* ── Sticky CTA — Apple-style filled button ─────────────────────────────── */
+/* ── Sticky CTA — fixed позиционирование над bottom-nav ───────────────────── */
 #tab-club .club-sticky{
-  padding:14px 16px calc(env(safe-area-inset-bottom, 12px) + 12px);
-  background:linear-gradient(to top, #f2f2f7 60%, rgba(242,242,247,.4) 90%, rgba(242,242,247,0));
+  position:fixed;left:0;right:0;
+  bottom:calc(var(--nh, 64px) + env(safe-area-inset-bottom, 0px) + 8px);
+  padding:0 16px;
+  background:transparent;z-index:30;
+  pointer-events:none;
 }
 #tab-club .club-sticky__btn{
   background:var(--ap-red);color:#fff;
   height:50px;border-radius:14px;
   font-size:15px;font-weight:600;letter-spacing:-.2px;
-  box-shadow:none;
+  pointer-events:auto;
+  box-shadow:0 10px 28px -8px rgba(214,31,55,.3), 0 4px 8px rgba(214,31,55,.16);
 }
 #tab-club .club-sticky__btn:hover{background:#b51a2f}
 #tab-club .club-sticky__btn::after{display:none}
+/* Резерв места под sticky кнопку внизу клуба */
+#tab-club #club-content{padding-bottom:90px}
 
 /* ── Club hero compact (без logo) ────────────────────────────────────────── */
 #tab-club .club-hero--compact{

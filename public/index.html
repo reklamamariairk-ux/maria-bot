@@ -200,7 +200,12 @@
         <div class="loy-hero__top">
           <div>
             <div class="loy-hero__hi">Привет,</div>
-            <div class="loy-hero__name" id="hero-name">Друг</div>
+            <div class="loy-hero__name">
+              <span id="hero-name">Друг</span>
+              <span class="loy-hero__verified" id="hero-verified-badge" style="display:none" title="Телефон подтверждён">
+                <span data-icon="badgeCheck" data-size="16"></span>
+              </span>
+            </div>
           </div>
           <div class="loy-hero__lvl" id="hero-level-chip" onclick="document.querySelector('#tab-club .club-benefits')?.scrollIntoView({behavior:'smooth'})" title="Уровни и привилегии">
             <span class="loy-hero__lvl-name" id="hero-level-name">Друзья</span>
@@ -293,24 +298,51 @@
         <div class="lk-card" id="lk-card"></div>
       </div>
 
-      <!-- Привилегии — inline-список с галочками -->
+      <!-- Привилегии — сгруппированный inline-список -->
       <div class="club-benefits">
         <div class="club-benefits__h">Привилегии клуба</div>
-        <ul class="club-benefits__list">
-          <li><span class="cb-tick">✓</span> Кэшбэк до 10% баллами на сайте</li>
-          <li><span class="cb-tick">✓</span> −5% вам и партнёру в День рождения</li>
-          <li><span class="cb-tick">✓</span> −10% детям в День рождения</li>
-          <li><span class="cb-tick">✓</span> Билет в Сладкий чек с каждого чека</li>
-          <li><span class="cb-tick">✓</span> Оплата до 30% заказа баллами</li>
-          <li><span class="cb-tick">✓</span> Партнёрские скидки в 14 заведениях</li>
-          <li><span class="cb-tick">✓</span> Торт месяца −20% ежедневно</li>
-        </ul>
+
+        <div class="cb-group">
+          <div class="cb-group__h">Бонусы</div>
+          <ul class="club-benefits__list">
+            <li><span class="cb-tick">✓</span> Кэшбэк до 10% баллами на сайте</li>
+            <li><span class="cb-tick">✓</span> Оплата до 30% заказа баллами</li>
+          </ul>
+        </div>
+
+        <div class="cb-group">
+          <div class="cb-group__h">Скидки</div>
+          <ul class="club-benefits__list">
+            <li><span class="cb-tick">✓</span> −5% вам и партнёру в День рождения</li>
+            <li><span class="cb-tick">✓</span> −10% детям в День рождения</li>
+            <li><span class="cb-tick">✓</span> Торт месяца −20% ежедневно</li>
+          </ul>
+        </div>
+
+        <div class="cb-group">
+          <div class="cb-group__h">Дополнительно</div>
+          <ul class="club-benefits__list">
+            <li><span class="cb-tick">✓</span> Билет в Сладкий чек с каждого чека</li>
+            <li><span class="cb-tick">✓</span> Скидки в 14 партнёрских заведениях</li>
+          </ul>
+        </div>
+
         <div class="club-benefits__levels">
+          <div class="cb-group__h">Уровни</div>
           <div class="cb-lvl"><span class="cb-lvl-n">Друзья</span><span class="cb-lvl-c">от 0 ₽</span><span class="cb-lvl-p">5%</span></div>
           <div class="cb-lvl"><span class="cb-lvl-n">Лучшие друзья</span><span class="cb-lvl-c">от 10 000 ₽</span><span class="cb-lvl-p">7%</span></div>
           <div class="cb-lvl"><span class="cb-lvl-n">Семья</span><span class="cb-lvl-c">от 50 000 ₽</span><span class="cb-lvl-p">10%</span></div>
         </div>
         <div class="club-benefits__note">Скидки и бонусы не суммируются — применяется максимальная выгода</div>
+      </div>
+
+      <!-- Партнёры — preview прямо в Club (раньше был в accordion) -->
+      <div class="club-partners">
+        <div class="club-partners__h">
+          <span>Партнёры клуба</span>
+          <button class="club-partners__all" onclick="openPartnersModal()">Все →</button>
+        </div>
+        <div id="partners-list"></div>
       </div>
 
       <!-- Скрытые DOM-узлы для совместимости с club.js (рендер не показывается) -->
@@ -361,18 +393,8 @@
     </div>
   </details>
 
-  <details class="acc">
-    <summary class="acc__sum">
-      <span class="acc__ic"><span data-icon="sparkles" data-size="20"></span></span>
-      <span class="acc__t">Партнёры клуба</span>
-      <span class="acc__chev"><span data-icon="arrowRight" data-size="16"></span></span>
-    </summary>
-    <div class="acc__body">
-      <p class="section-desc" style="padding-left:0;padding-right:0">По карте «Мария для своих» — привилегии у наших партнёров</p>
-      <div id="partners-list"></div>
-      <button class="btn-outline" id="partners-show-all" onclick="openPartnersModal()" style="display:none;margin-top:10px">Все партнёры →</button>
-    </div>
-  </details>
+  <!-- Скрытое поле для backward-compat с app.js renderPartners() -->
+  <button id="partners-show-all" style="display:none"></button>
 
   <!-- Sticky CTA внизу клуба → ведёт в каталог -->
   <div class="club-sticky">

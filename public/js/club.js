@@ -273,7 +273,17 @@ async function renderLk() {
   const card = document.getElementById('lk-card');
   if (!section || !card) return;
 
-  card.innerHTML = '<div class="lk-card__loading">Загружаем баланс…</div>';
+  // Apple-style skeleton placeholder во время загрузки
+  card.innerHTML = `
+    <div class="lk-card__bal-block">
+      <div class="skeleton skeleton-text skeleton-text--lg" style="height:44px;width:50%;margin-bottom:10px"></div>
+      <div class="skeleton skeleton-text" style="width:40%"></div>
+    </div>
+    <div class="skeleton skeleton-text" style="width:30%;margin-top:14px;margin-bottom:10px"></div>
+    <div class="skeleton skeleton-text" style="width:80%"></div>
+    <div class="skeleton skeleton-text" style="width:75%"></div>
+    <div class="skeleton skeleton-text" style="width:70%"></div>
+  `;
   section.style.display = '';
 
   try {
@@ -294,28 +304,41 @@ async function renderLk() {
     }
     if (!data.found) {
       card.innerHTML = `
-        <div class="lk-card__title">Пока без покупок 🍰</div>
-        <div class="lk-card__sub">Сделай первый заказ — и баллы появятся автоматически. Менеджер свяжется по подтверждённому номеру.</div>
-        <button class="btn-full" onclick="switchTab('menu')">Перейти в меню →</button>`;
+        <div class="lk-card__bal-block">
+          <div class="lk-card__bal-num">0</div>
+          <div class="lk-card__bal-lb">баллов на сайте</div>
+          <div class="lk-card__bal-hint">Сделай первый заказ и получи 5–10% кэшбэк</div>
+        </div>
+        <button class="lk-card__use-btn" data-haptic="medium" onclick="haptic('light');switchTab('menu')">Перейти в каталог →</button>`;
       return;
     }
 
-    // Упрощённая LK-карточка — только баллы и последние заказы
-    // (имя/уровень/год дублируют hero — там уже есть chip + progress + stats)
+    // Apple Wallet-style: большая цифра + CTA + список заказов
     const orders = Array.isArray(data.orders) ? data.orders : [];
+    const balance = Number(data.balance || 0);
     card.innerHTML = `
       <div class="lk-card__bal-block">
-        <div class="lk-card__bal-num">${data.balance.toLocaleString('ru-RU')}</div>
+        <div class="lk-card__bal-num" id="lk-bal-anim" data-target="${balance}">0</div>
         <div class="lk-card__bal-lb">баллов на сайте</div>
         <div class="lk-card__bal-hint">Доступно для оплаты до 30% от заказа</div>
+        ${balance > 0 ? `<button class="lk-card__use-btn" data-haptic="medium" onclick="haptic('light');switchTab('menu')">Использовать в каталоге →</button>` : ''}
       </div>
       ${orders.length ? `
         <div class="lk-card__orders">
-          <div class="lk-card__tt">🛍 Последние заказы (${orders.length})</div>
+          <div class="lk-card__tt">Последние заказы</div>
           ${orders.slice(0, 3).map(renderOrderRow).join('')}
-          ${orders.length > 3 ? `<button class="btn-outline" onclick="profOpenOrders?.()" style="margin-top:8px;width:100%">Все заказы (${orders.length}) →</button>` : ''}
-        </div>` : ''}
+          ${orders.length > 3 ? `<button class="lk-card__all-orders" onclick="haptic('light');profOpenOrders?.()">Все заказы (${orders.length}) →</button>` : `<div class="lk-card__hint-row">Всего заказов: ${orders.length}</div>`}
+        </div>
+      ` : `
+        <div class="lk-card__empty">
+          <div class="lk-card__empty-h">Заказов пока нет</div>
+          <div class="lk-card__empty-s">Сделай первый заказ → 5–10% кэшбэк баллами</div>
+        </div>
+      `}
     `;
+    // Animated counter для баланса (от 0 до целевого за 700ms)
+    const balEl = document.getElementById('lk-bal-anim');
+    if (balEl) animateCounter(balEl, balance, 700);
     // Авто-link для номеров телефонов в LK
     window.linkifyPhones?.(card);
   } catch {
@@ -329,26 +352,101 @@ function escapeHtml(s) {
   );
 }
 
+// Человекочитаемая дата: "вчера" / "3 дня назад" / "28 апр" / "14 янв 2025"
+function formatRelativeDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) {
+    // Попробуем формат "DD.MM.YYYY"
+    const m = String(dateStr).match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})$/);
+    if (!m) return String(dateStr);
+    const yy = m[3].length === 2 ? '20' + m[3] : m[3];
+    d.setTime(Date.parse(`${yy}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`));
+  }
+  if (isNaN(d.getTime())) return String(dateStr);
+  const now = new Date();
+  const diffMs = now - d;
+  const diffDays = Math.floor(diffMs / 86400000);
+  const months = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+  if (diffDays < 0) return `${d.getDate()} ${months[d.getMonth()]}`;
+  if (diffDays === 0) return 'сегодня';
+  if (diffDays === 1) return 'вчера';
+  if (diffDays < 7) return `${diffDays} ${pluralDays(diffDays)} назад`;
+  if (now.getFullYear() === d.getFullYear()) return `${d.getDate()} ${months[d.getMonth()]}`;
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+function pluralDays(n){
+  const mod10 = n % 10, mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'день';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'дня';
+  return 'дней';
+}
+window.formatRelativeDate = formatRelativeDate;
+
+// Статус заказа → читаемый tag + цвет
+function orderStatusInfo(status, paid) {
+  const s = String(status || '').toLowerCase();
+  if (s.includes('доставл') || s.includes('выдан') || s.includes('заверш')) {
+    return { label: '✓ Доставлен', cls: 'ord-tag--done' };
+  }
+  if (s.includes('готов') || s.includes('пути') || s.includes('исполн')) {
+    return { label: '● Готовится', cls: 'ord-tag--active' };
+  }
+  if (s.includes('отмен')) {
+    return { label: '✗ Отменён', cls: 'ord-tag--cancelled' };
+  }
+  if (s.includes('ожид') || s.includes('обраб')) {
+    return { label: '○ В обработке', cls: 'ord-tag--pending' };
+  }
+  return paid ? { label: '✓ Оплачен', cls: 'ord-tag--done' } : { label: status || 'В работе', cls: 'ord-tag--neutral' };
+}
+window.orderStatusInfo = orderStatusInfo;
+
+// Animated counter (от 0 до target за ~600ms)
+function animateCounter(el, target, duration = 600) {
+  if (!el || target == null) return;
+  const start = 0;
+  const startTime = performance.now();
+  function tick(now) {
+    const t = Math.min(1, (now - startTime) / duration);
+    // ease-out cubic
+    const e = 1 - Math.pow(1 - t, 3);
+    const val = Math.floor(start + (target - start) * e);
+    el.textContent = val.toLocaleString('ru-RU');
+    if (t < 1) requestAnimationFrame(tick);
+    else el.textContent = target.toLocaleString('ru-RU');
+  }
+  requestAnimationFrame(tick);
+}
+window.animateCounter = animateCounter;
+
+// Haptic feedback shortcut
+function haptic(type) {
+  const hf = window.Telegram?.WebApp?.HapticFeedback;
+  if (!hf) return;
+  if (type === 'selection') { try { hf.selectionChanged(); } catch {} }
+  else { try { hf.impactOccurred(type || 'light'); } catch {} }
+}
+
 function renderOrderRow(o) {
-  const dateShort = String(o.date || '').slice(0, 10);
+  const dateRel = formatRelativeDate(o.date);
   const items = (o.items || []).slice(0, 2).map(i => `${i.qty}× ${i.name}`).join(', ');
   const more = (o.items || []).length > 2 ? ` +${o.items.length - 2}` : '';
-  const statusCls = o.canceled ? 'lk-ord__st--cancel' : (o.paid ? 'lk-ord__st--paid' : '');
-  // Можем повторить заказ если есть товары с id
+  const status = orderStatusInfo(o.status, o.paid);
+  const cancelledCls = o.canceled ? 'lk-ord--cancel' : '';
   const itemsWithId = (o.items || []).filter(i => i.id || i.product_id);
   const canRepeat = itemsWithId.length > 0 && !o.canceled;
-  // JSON для повтора (id+qty)
   const reorderData = JSON.stringify(itemsWithId.map(i => ({ id: i.id || i.product_id, qty: i.qty || 1, name: i.name, price: i.price }))).replace(/"/g, '&quot;');
   return `
-    <div class="lk-ord">
+    <div class="lk-ord ${cancelledCls}">
       <div class="lk-ord__row">
-        <span class="lk-ord__id">#${o.id}</span>
-        <span class="lk-ord__dt">${escapeHtml(dateShort)}</span>
+        <span class="lk-ord__id">№ ${escapeHtml(String(o.id || ''))}</span>
+        <span class="lk-ord__dt">${escapeHtml(dateRel)}</span>
         <span class="lk-ord__sum">${Number(o.sum).toLocaleString('ru-RU')} ₽</span>
       </div>
       <div class="lk-ord__row">
         <span class="lk-ord__items">${escapeHtml(items)}${more}</span>
-        <span class="lk-ord__st ${statusCls}">${escapeHtml(o.status || '')}</span>
+        <span class="lk-ord__st ord-tag ${o.canceled ? 'ord-tag--cancelled' : status.cls}">${escapeHtml(o.canceled ? '✗ Отменён' : status.label)}</span>
       </div>
       ${canRepeat ? `<button class="lk-ord__repeat" data-haptic="medium" onclick='reorderItems(${reorderData})'>↻ Повторить заказ</button>` : ''}
     </div>`;
@@ -380,6 +478,10 @@ function renderHero() {
 
   const convertBtn = document.getElementById("hero-convert");
   convertBtn.style.display = CLUB_STATE.balance.stars >= 50 ? "" : "none";
+
+  // Verified-badge — показываем если телефон подтверждён
+  const vb = document.getElementById('hero-verified-badge');
+  if (vb) vb.style.display = CLUB_STATE.phoneVerified ? '' : 'none';
 }
 
 // Уровни клуба: год.траты → имя/иконка/процент. Threshold = от какой суммы доступен.
