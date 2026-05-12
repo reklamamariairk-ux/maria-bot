@@ -164,12 +164,12 @@ function renderSweetCheckMy(data) {
   const task = CLUB_STATE?.scActiveTask;
   const openAcc = `document.querySelector('#tab-club details.acc:nth-of-type(1)')?.setAttribute('open','')`;
 
-  // Footer-блок: статус билетов
+  // Footer-блок: статус билетов (SVG-иконки вместо emoji)
   let statusHtml = '';
   if (!verified) {
-    statusHtml = `<div class="sc-card__status sc-card__status--cta"><span class="sc-card__status-ic">📱</span>Подтверди номер чтобы участвовать</div>`;
+    statusHtml = `<div class="sc-card__status sc-card__status--cta">Подтверди номер чтобы участвовать</div>`;
   } else if (tickets === 0) {
-    statusHtml = `<div class="sc-card__status sc-card__status--cta"><span class="sc-card__status-ic">🎟</span>Получи первый билет в кафе</div>`;
+    statusHtml = `<div class="sc-card__status sc-card__status--cta">Получи первый билет в кафе</div>`;
   } else {
     const chance = tickets >= 10 ? 'высокий шанс' : tickets >= 3 ? 'хорошие шансы' : 'шансы есть';
     statusHtml = `<div class="sc-card__status sc-card__status--active">
@@ -188,7 +188,7 @@ function renderSweetCheckMy(data) {
         </div>
         <div class="sc-card__task-h">${escapeHtml(task.name || 'Текущая неделя')}</div>
         ${task.task ? `<div class="sc-card__task-d">${escapeHtml(task.task)}</div>` : ''}
-        ${task.reward ? `<div class="sc-card__task-reward">🎟 ${escapeHtml(String(task.reward))}</div>` : ''}
+        ${task.reward ? `<div class="sc-card__task-reward"><span data-icon="ticket" data-size="14"></span> ${escapeHtml(String(task.reward))}</div>` : ''}
       </div>`;
   } else {
     bodyHtml = `
@@ -207,6 +207,7 @@ function renderSweetCheckMy(data) {
       ${bodyHtml}
       ${statusHtml}
     </div>`;
+  if (window.IconInflate) window.IconInflate(top);
 }
 
 // День рождения — карточка-промо в клубе
@@ -409,11 +410,9 @@ function renderLevelProgress(data) {
   const idx = CLUB_LEVELS.indexOf(cur);
   const next = CLUB_LEVELS[idx + 1] || null;
 
-  // Chip с текущим уровнем
-  const ic = document.querySelector('.loy-hero__lvl-ic');
+  // Chip с текущим уровнем (без emoji — Apple-style)
   const nm = document.getElementById('hero-level-name');
   const pc = document.getElementById('hero-level-pct');
-  if (ic) ic.textContent = cur.icon;
   if (nm) nm.textContent = cur.name;
   if (pc) pc.textContent = cur.pct + '%';
 
@@ -427,7 +426,7 @@ function renderLevelProgress(data) {
     // Достиг максимума
     wrap.style.display = '';
     if (fill) fill.style.width = '100%';
-    if (txt) txt.innerHTML = `🏆 Максимальный уровень — кэшбэк ${cur.pct}%`;
+    if (txt) txt.innerHTML = `Максимальный уровень · кэшбэк ${cur.pct}%`;
     return;
   }
 
@@ -440,8 +439,8 @@ function renderLevelProgress(data) {
   if (fill) fill.style.width = pct + '%';
   if (txt) {
     txt.innerHTML = toGo > 0
-      ? `Ещё <b>${toGo.toLocaleString('ru-RU')} ₽</b> до уровня ${next.icon} ${next.name} (+${next.pct - cur.pct}% к кэшбэку)`
-      : `Уровень ${next.icon} ${next.name} разблокирован!`;
+      ? `Ещё <b>${toGo.toLocaleString('ru-RU')} ₽</b> до уровня <b>${next.name}</b> (+${next.pct - cur.pct}% к кэшбэку)`
+      : `Уровень <b>${next.name}</b> разблокирован!`;
   }
 }
 window.renderLevelProgress = renderLevelProgress;
@@ -472,14 +471,15 @@ function renderBdayChip(birthday) {
 
   let html;
   if (isActive) {
-    html = `<span class="loy-hero__bday-ic">🎂</span><b>Скидка активна!</b> · ДР ${day} ${monthName}`;
+    html = `<span class="loy-hero__bday-ic"><span data-icon="cake" data-size="14"></span></span><b>Скидка активна</b> · ДР ${day} ${monthName}`;
   } else if (diffDays > 0 && diffDays <= 365) {
-    // Всегда показываем дни до ДР (а не только в течение 30 дней)
-    html = `<span class="loy-hero__bday-ic">🎂</span>ДР ${day} ${monthName} · до скидки <b>${diffDays}</b> ${plural(diffDays, ['день', 'дня', 'дней'])}`;
+    html = `<span class="loy-hero__bday-ic"><span data-icon="cake" data-size="14"></span></span>ДР ${day} ${monthName} · до скидки <b>${diffDays}</b> ${plural(diffDays, ['день', 'дня', 'дней'])}`;
   } else {
-    html = `<span class="loy-hero__bday-ic">🎂</span>ДР: ${day} ${monthName}`;
+    html = `<span class="loy-hero__bday-ic"><span data-icon="cake" data-size="14"></span></span>ДР: ${day} ${monthName}`;
   }
   chip.innerHTML = html;
+  // Прогоняем через icons.js auto-replace (для свежевставленных data-icon)
+  if (window.IconInflate) window.IconInflate(chip);
   chip.style.display = '';
 }
 window.renderBdayChip = renderBdayChip;

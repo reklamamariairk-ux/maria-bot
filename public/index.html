@@ -202,8 +202,7 @@
             <div class="loy-hero__hi">Привет,</div>
             <div class="loy-hero__name" id="hero-name">Друг</div>
           </div>
-          <div class="loy-hero__lvl" id="hero-level-chip" onclick="document.querySelector('#tab-club details.acc:first-of-type')?.setAttribute('open','')" title="Уровни и привилегии">
-            <span class="loy-hero__lvl-ic">🤝</span>
+          <div class="loy-hero__lvl" id="hero-level-chip" onclick="document.querySelector('#tab-club .club-benefits')?.scrollIntoView({behavior:'smooth'})" title="Уровни и привилегии">
             <span class="loy-hero__lvl-name" id="hero-level-name">Друзья</span>
             <span class="loy-hero__lvl-pct" id="hero-level-pct">5%</span>
           </div>
@@ -223,22 +222,22 @@
         <button id="hero-convert" style="display:none"></button>
       </div>
 
-      <!-- Как это работает — 3 короткие карточки -->
+      <!-- Как это работает — 3 короткие карточки с SVG-иконками -->
       <div class="how-it-works">
         <div class="hiw">
-          <div class="hiw__ic">🛒</div>
+          <div class="hiw__ic"><span data-icon="trendingUp" data-size="24"></span></div>
           <div class="hiw__t">Покупай</div>
           <div class="hiw__s">Кэшбэк <b>5–10%</b> с заказа</div>
         </div>
         <div class="hiw">
-          <div class="hiw__ic">🎂</div>
+          <div class="hiw__ic"><span data-icon="cake" data-size="24"></span></div>
           <div class="hiw__t">В День рождения</div>
           <div class="hiw__s">−5% вам, <b>−10%</b> детям</div>
         </div>
         <div class="hiw">
-          <div class="hiw__ic">🎁</div>
+          <div class="hiw__ic"><span data-icon="gift" data-size="24"></span></div>
           <div class="hiw__t">Каждый чек</div>
-          <div class="hiw__s">Билет в розыгрыш на iPhone</div>
+          <div class="hiw__s">Билет в розыгрыш</div>
         </div>
       </div>
 
@@ -307,9 +306,9 @@
           <li><span class="cb-tick">✓</span> Торт месяца −20% ежедневно</li>
         </ul>
         <div class="club-benefits__levels">
-          <div class="cb-lvl"><span class="cb-lvl-ic">🤝</span><span class="cb-lvl-n">Друзья</span><span class="cb-lvl-c">от 0 ₽</span><span class="cb-lvl-p">5%</span></div>
-          <div class="cb-lvl"><span class="cb-lvl-ic">💛</span><span class="cb-lvl-n">Лучшие друзья</span><span class="cb-lvl-c">от 10 000 ₽</span><span class="cb-lvl-p">7%</span></div>
-          <div class="cb-lvl"><span class="cb-lvl-ic">❤️</span><span class="cb-lvl-n">Семья</span><span class="cb-lvl-c">от 50 000 ₽</span><span class="cb-lvl-p">10%</span></div>
+          <div class="cb-lvl"><span class="cb-lvl-n">Друзья</span><span class="cb-lvl-c">от 0 ₽</span><span class="cb-lvl-p">5%</span></div>
+          <div class="cb-lvl"><span class="cb-lvl-n">Лучшие друзья</span><span class="cb-lvl-c">от 10 000 ₽</span><span class="cb-lvl-p">7%</span></div>
+          <div class="cb-lvl"><span class="cb-lvl-n">Семья</span><span class="cb-lvl-c">от 50 000 ₽</span><span class="cb-lvl-p">10%</span></div>
         </div>
         <div class="club-benefits__note">Скидки и бонусы не суммируются — применяется максимальная выгода</div>
       </div>

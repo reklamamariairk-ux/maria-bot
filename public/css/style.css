@@ -3286,3 +3286,337 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
   color:var(--gold-d);
 }
 .cat-chip--mood:hover{background:var(--mesh-gold);color:#fff;border-color:transparent}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CLUB v4 — Apple Wallet minimal overrides
+   Все .loy-hero, .hiw, .sc-card, .lk-card, .club-benefits, .acc, .pcard,
+   .club-sticky, .bday-promo, .ob-card  внутри #tab-club переопределяются.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Tokens специфично для Apple-стиля */
+#tab-club{
+  --ap-ink:        #0a0a0a;
+  --ap-ink-2:      #3c3c43;
+  --ap-grey:       #6e6e73;
+  --ap-grey-2:     #98989d;
+  --ap-grey-3:     #c7c7cc;
+  --ap-hairline:   rgba(60,60,67,.12);
+  --ap-bg:         #f2f2f7;
+  --ap-card:       #fff;
+  --ap-red:        #d61f37;
+  --ap-radius:     14px;
+  --ap-pad:        20px;
+}
+
+/* Page background — Apple grey */
+#tab-club.active{background:#f2f2f7}
+
+/* Apple system font везде в клубе (Inter fallback на не-Apple платформах) */
+#tab-club, #tab-club *{
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Inter","Helvetica Neue",system-ui,sans-serif;
+}
+/* Убираем Playfair из всего клуба */
+#tab-club .loy-hero__name,
+#tab-club .lk-card__bal-num,
+#tab-club .ob-card__h,
+#tab-club .club-benefits__h,
+#tab-club .sc-card__title{
+  font-family:inherit;
+  letter-spacing:-.5px;
+}
+
+/* ── Hero pass — Apple Wallet style ────────────────────────────────────── */
+#tab-club .loy-hero{
+  background:#fff;
+  color:var(--ap-ink);
+  border-radius:var(--ap-radius);
+  padding:20px;margin:16px;
+  box-shadow:0 1px 3px rgba(0,0,0,.04);
+  border:none;
+}
+#tab-club .loy-hero::before,
+#tab-club .loy-hero::after{display:none}
+
+#tab-club .loy-hero__top{margin-bottom:16px;align-items:flex-start}
+#tab-club .loy-hero__hi{
+  font-size:11px;font-weight:600;color:var(--ap-grey);
+  text-transform:uppercase;letter-spacing:.6px;
+}
+#tab-club .loy-hero__name{
+  font-size:28px;font-weight:700;color:var(--ap-ink);
+  letter-spacing:-.8px;line-height:1.05;margin-top:4px;
+}
+
+/* Level chip — monochrome */
+#tab-club .loy-hero__lvl{
+  background:#f2f2f7;
+  border:none;
+  color:var(--ap-ink);
+  padding:6px 10px;border-radius:8px;
+  font-size:12px;font-weight:600;gap:6px;
+  letter-spacing:-.1px;
+}
+#tab-club .loy-hero__lvl-ic{display:none}
+#tab-club .loy-hero__lvl-name{color:var(--ap-ink);font-weight:600}
+#tab-club .loy-hero__lvl-pct{
+  background:transparent;color:var(--ap-grey);
+  padding:0;font-weight:600;font-size:12px;
+}
+#tab-club .loy-hero__lvl-pct::before{content:'· '}
+
+/* Progress — thin Apple-style hairline */
+#tab-club .loy-hero__prog{margin-top:0;padding-top:16px;border-top:1px solid var(--ap-hairline)}
+#tab-club .loy-hero__prog-bar{
+  height:4px;border-radius:2px;background:#f2f2f7;overflow:hidden;
+}
+#tab-club .loy-hero__prog-fill{
+  background:var(--ap-red);border-radius:2px;
+  animation:none;
+}
+#tab-club .loy-hero__prog-txt{
+  font-size:13px;color:var(--ap-grey);margin-top:10px;text-align:left;
+}
+#tab-club .loy-hero__prog-txt b{color:var(--ap-ink);font-weight:600}
+
+/* ДР chip — monochrome  */
+#tab-club .loy-hero__bday{
+  margin:14px 0 0;
+  background:#f2f2f7;
+  border:none;color:var(--ap-ink);
+  padding:8px 12px;border-radius:10px;
+  font-size:13px;font-weight:500;
+}
+#tab-club .loy-hero__bday-ic{font-size:13px;color:var(--ap-grey)}
+
+/* ── How it works — Apple Wallet-like row tiles ──────────────────────────── */
+#tab-club .how-it-works{
+  display:grid;grid-template-columns:1fr 1fr 1fr;
+  gap:8px;padding:0 16px 16px;
+}
+#tab-club .hiw{
+  background:#fff;border-radius:var(--ap-radius);padding:16px 10px;text-align:center;
+  box-shadow:0 1px 3px rgba(0,0,0,.04);
+  border:none;
+}
+#tab-club .hiw:hover{box-shadow:0 2px 8px rgba(0,0,0,.06)}
+#tab-club .hiw__ic{
+  width:32px;height:32px;margin:0 auto 8px;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--ap-red);font-size:0;
+}
+#tab-club .hiw__ic svg{width:24px;height:24px}
+#tab-club .hiw__t{font-size:12.5px;font-weight:600;color:var(--ap-ink);letter-spacing:-.1px}
+#tab-club .hiw__s{font-size:11px;color:var(--ap-grey);margin-top:3px;line-height:1.35}
+#tab-club .hiw__s b{color:var(--ap-ink);font-weight:600}
+
+/* ── Sweet Check smart card — Apple list row ─────────────────────────────── */
+#tab-club .sc-card{
+  margin:0 16px 16px;padding:18px 20px;background:#fff;
+  border-radius:var(--ap-radius);
+  box-shadow:0 1px 3px rgba(0,0,0,.04);
+  cursor:pointer;
+}
+#tab-club .sc-card:hover{box-shadow:0 2px 8px rgba(0,0,0,.06)}
+#tab-club .sc-card__head{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:14px;
+}
+#tab-club .sc-card__title{
+  font-size:15px;font-weight:700;color:var(--ap-ink);letter-spacing:-.3px;
+}
+#tab-club .sc-card__chev{color:var(--ap-grey-2);font-size:20px;font-weight:600}
+#tab-club .sc-card__task-tag{
+  font-size:11px;font-weight:600;color:var(--ap-grey);
+  letter-spacing:.4px;text-transform:uppercase;
+}
+#tab-club .sc-card__task-h{
+  font-size:14px;font-weight:600;color:var(--ap-ink);margin:6px 0 4px;
+}
+#tab-club .sc-card__task-d{font-size:13px;color:var(--ap-grey);line-height:1.4;margin-bottom:10px}
+#tab-club .sc-card__task-reward{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:4px 10px;background:#f2f2f7;color:var(--ap-ink);
+  border-radius:8px;font-size:12px;font-weight:600;
+}
+#tab-club .sc-card__teaser-h{font-size:14px;font-weight:600;color:var(--ap-ink);line-height:1.3;margin-bottom:4px}
+#tab-club .sc-card__teaser-d{font-size:13px;color:var(--ap-grey);line-height:1.4}
+#tab-club .sc-card__status{
+  margin-top:14px;padding-top:14px;
+  border-top:1px solid var(--ap-hairline);
+  font-size:13px;color:var(--ap-grey);
+}
+#tab-club .sc-card__status--cta{color:var(--ap-red);font-weight:600}
+#tab-club .sc-card__status-ic{display:inline-flex;align-items:center;margin-right:6px}
+#tab-club .sc-card__status-ic svg{width:14px;height:14px}
+#tab-club .sc-card__status-num{
+  font-size:22px;font-weight:700;color:var(--ap-ink);letter-spacing:-.5px;
+  margin-right:8px;
+}
+#tab-club .sc-card__status-txt{color:var(--ap-ink)}
+#tab-club .sc-card__status-txt b{color:var(--ap-ink);font-weight:600}
+
+/* ── LK card — Apple Wallet pass ─────────────────────────────────────────── */
+#tab-club .lk-card{
+  margin:0 16px 16px;padding:24px 20px 18px;background:#fff;
+  border-radius:var(--ap-radius);
+  box-shadow:0 1px 3px rgba(0,0,0,.04);
+}
+#tab-club .lk-card__bal-block{text-align:left;padding:0 0 14px;border-bottom:1px solid var(--ap-hairline);margin-bottom:14px}
+#tab-club .lk-card__bal-num{
+  font-size:44px;font-weight:700;color:var(--ap-ink);
+  letter-spacing:-2px;line-height:1;
+}
+#tab-club .lk-card__bal-lb{
+  font-size:13px;color:var(--ap-grey);margin-top:6px;
+  font-weight:500;text-transform:none;letter-spacing:0;
+}
+#tab-club .lk-card__bal-hint{font-size:11px;color:var(--ap-grey-2);margin-top:3px}
+#tab-club .lk-card__tt{
+  font-size:11px;color:var(--ap-grey);font-weight:600;
+  letter-spacing:.4px;text-transform:uppercase;margin-bottom:8px;
+}
+#tab-club .lk-ord{
+  padding:8px 0;font-size:13px;color:var(--ap-ink);
+  border-top:1px solid var(--ap-hairline);
+}
+#tab-club .lk-ord:first-of-type{border-top:none;padding-top:0}
+#tab-club .lk-ord b{color:var(--ap-ink);font-weight:600}
+
+/* ── Привилегии клуба — Apple list rows ──────────────────────────────────── */
+#tab-club .club-benefits{
+  margin:0 16px 16px;padding:18px 20px;background:#fff;
+  border-radius:var(--ap-radius);
+  box-shadow:0 1px 3px rgba(0,0,0,.04);
+}
+#tab-club .club-benefits__h{
+  font-size:11px;color:var(--ap-grey);font-weight:600;
+  letter-spacing:.4px;text-transform:uppercase;margin-bottom:14px;
+}
+#tab-club .club-benefits__list{margin-bottom:18px}
+#tab-club .club-benefits__list li{
+  font-size:14px;color:var(--ap-ink);padding:6px 0;gap:10px;
+}
+#tab-club .cb-tick{
+  background:transparent;color:var(--ap-red);
+  font-size:14px;font-weight:600;width:18px;height:18px;
+  margin-top:0;
+}
+#tab-club .club-benefits__levels{
+  display:flex;flex-direction:column;gap:0;
+  padding-top:0;border-top:1px solid var(--ap-hairline);
+}
+#tab-club .cb-lvl{
+  grid-template-columns:1fr auto auto;gap:10px;
+  padding:12px 0;border-bottom:1px solid var(--ap-hairline);font-size:14px;
+}
+#tab-club .cb-lvl:last-child{border-bottom:none}
+#tab-club .cb-lvl-ic{display:none}
+#tab-club .cb-lvl-n{color:var(--ap-ink);font-weight:600}
+#tab-club .cb-lvl-c{font-size:12px;color:var(--ap-grey)}
+#tab-club .cb-lvl-p{
+  background:transparent;color:var(--ap-ink);padding:0;
+  font-weight:700;font-size:14px;
+}
+#tab-club .club-benefits__note{
+  font-size:12px;color:var(--ap-grey);
+  border-top:1px solid var(--ap-hairline);padding-top:14px;
+}
+
+/* ── Accordion — iOS settings row style ──────────────────────────────────── */
+#tab-club .acc{
+  margin:0 16px 8px;background:#fff;
+  border-radius:var(--ap-radius);
+  box-shadow:0 1px 3px rgba(0,0,0,.04);
+}
+#tab-club .acc:hover{box-shadow:0 2px 8px rgba(0,0,0,.06)}
+#tab-club .acc[open]{box-shadow:0 4px 14px rgba(0,0,0,.05)}
+#tab-club .acc__sum{
+  padding:16px 18px;font-size:15px;font-weight:600;color:var(--ap-ink);
+  letter-spacing:-.2px;
+}
+#tab-club .acc__ic{
+  width:30px;height:30px;border-radius:8px;
+  background:#f2f2f7;color:var(--ap-red);
+  box-shadow:none;
+}
+#tab-club .acc__ic svg{width:18px;height:18px}
+#tab-club .acc__chev{color:var(--ap-grey-2)}
+#tab-club .acc__body{font-size:13.5px;color:var(--ap-ink-2);padding:0 18px 18px}
+
+/* ── Partner card — Apple list row ───────────────────────────────────────── */
+#tab-club .pcard{
+  background:#fff;border:none;
+  margin:0;border-radius:0;
+  border-bottom:1px solid var(--ap-hairline);
+  box-shadow:none;
+  padding:14px 18px;
+}
+#tab-club .pcard:last-of-type{border-bottom:none}
+#tab-club #partners-list{
+  background:#fff;border-radius:var(--ap-radius);
+  box-shadow:0 1px 3px rgba(0,0,0,.04);
+  overflow:hidden;margin-bottom:10px;
+}
+#tab-club .pcard__logo{
+  background:#f2f2f7;border-radius:10px;
+  width:44px;height:44px;font-size:18px;
+}
+#tab-club .pcard__name{font-size:14px;font-weight:600;color:var(--ap-ink)}
+#tab-club .pcard__desc{font-size:12px;color:var(--ap-grey);line-height:1.4}
+#tab-club .pcard__badge{
+  background:#f2f2f7;color:var(--ap-ink);
+  padding:3px 8px;border-radius:6px;
+  font-size:11px;font-weight:600;
+}
+#tab-club .pcard__btn{
+  margin-top:8px;padding:6px 11px;
+  background:#f2f2f7;color:var(--ap-red);
+  border:none;border-radius:8px;
+  font-size:12px;font-weight:600;
+}
+#tab-club .pcard__btn:hover{background:var(--ap-red);color:#fff}
+
+/* ── Sticky CTA — Apple-style filled button ─────────────────────────────── */
+#tab-club .club-sticky{
+  padding:14px 16px calc(env(safe-area-inset-bottom, 12px) + 12px);
+  background:linear-gradient(to top, #f2f2f7 60%, rgba(242,242,247,.4) 90%, rgba(242,242,247,0));
+}
+#tab-club .club-sticky__btn{
+  background:var(--ap-red);color:#fff;
+  height:50px;border-radius:14px;
+  font-size:15px;font-weight:600;letter-spacing:-.2px;
+  box-shadow:none;
+}
+#tab-club .club-sticky__btn:hover{background:#b51a2f}
+#tab-club .club-sticky__btn::after{display:none}
+
+/* ── Club hero compact (без logo) ────────────────────────────────────────── */
+#tab-club .club-hero--compact{
+  background:#f2f2f7;
+  border-bottom:none;padding:20px 16px 12px;
+}
+#tab-club .club-hero--compact::after{display:none}
+#tab-club .club-hero__h{
+  font-family:inherit;font-size:24px;font-weight:700;
+  color:var(--ap-ink);letter-spacing:-.6px;
+  background:none;-webkit-text-fill-color:initial;color:var(--ap-ink);
+}
+#tab-club .club-hero__p{
+  font-size:11px;color:var(--ap-grey);letter-spacing:.5px;
+}
+
+/* ── ОВ-card / bday-promo — Apple light cards ────────────────────────────── */
+#tab-club .ob-card,
+#tab-club .bday-promo{
+  margin:0 16px 16px;background:#fff;
+  border-radius:var(--ap-radius);
+  box-shadow:0 1px 3px rgba(0,0,0,.04);
+  padding:18px 20px;
+}
+#tab-club .ob-card__h{font-size:15px;font-weight:700;color:var(--ap-ink);letter-spacing:-.3px}
+#tab-club .ob-step__num{
+  background:#f2f2f7;color:var(--ap-red);width:24px;height:24px;font-size:12px;
+}
+#tab-club .ob-step__t{font-size:14px;font-weight:600}
+#tab-club .ob-step__s{font-size:12px;color:var(--ap-grey)}
+#tab-club .bday-promo__ic{background:#f2f2f7;color:var(--ap-red);width:36px;height:36px;border-radius:10px}
