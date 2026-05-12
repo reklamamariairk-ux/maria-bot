@@ -101,6 +101,40 @@ function profileRender(data) {
     }
   }
 
+  // ЛИЧНЫЕ ДАННЫЕ — Имя / Телефон (masked) / ДР
+  const infoName = document.getElementById('prof-info-name');
+  const infoPhone = document.getElementById('prof-info-phone');
+  const infoBday = document.getElementById('prof-info-bday');
+  if (infoName) infoName.textContent = u.first_name || (u.username ? '@' + u.username : '—');
+  if (infoPhone) {
+    if (data.phoneVerified && data.phoneMasked) {
+      infoPhone.textContent = data.phoneMasked;
+      infoPhone.style.color = 'var(--ap-ink)';
+    } else if (data.phoneVerified) {
+      infoPhone.textContent = 'подтверждён';
+      infoPhone.style.color = '#16a34a';
+    } else {
+      infoPhone.textContent = 'подтвердить';
+      infoPhone.style.color = 'var(--ap-red)';
+    }
+  }
+  if (infoBday) {
+    if (data.birthday) {
+      const m = String(data.birthday).match(/^(?:\d{4}-)?(\d{2})-(\d{2})$/);
+      if (m) {
+        const day = Number(m[2]);
+        const monthName = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'][Number(m[1]) - 1];
+        infoBday.textContent = `${day} ${monthName}`;
+        infoBday.style.color = 'var(--ap-ink)';
+      } else {
+        infoBday.textContent = String(data.birthday);
+      }
+    } else {
+      infoBday.textContent = 'указать';
+      infoBday.style.color = 'var(--ap-red)';
+    }
+  }
+
   // Destructive row "Отвязать телефон" виден только верифицированным
   const destrEl = document.getElementById('prof-destructive');
   if (destrEl) destrEl.style.display = data.phoneVerified ? '' : 'none';
@@ -136,45 +170,6 @@ function pluralLaunch(n) {
   if (mod10 === 1 && mod100 !== 11) return 'запуск';
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'запуска';
   return 'запусков';
-}
-
-  // Личные данные (раздел "Личные данные")
-  const infoName = document.getElementById('prof-info-name');
-  const infoPhone = document.getElementById('prof-info-phone');
-  const infoBday = document.getElementById('prof-info-bday');
-  if (infoName) infoName.textContent = u.first_name || (u.username ? '@' + u.username : '—');
-  if (infoPhone) {
-    if (data.phoneVerified && data.phoneMasked) {
-      infoPhone.textContent = data.phoneMasked;
-      infoPhone.style.color = 'var(--ap-ink)';
-    } else if (data.phoneVerified) {
-      infoPhone.textContent = 'подтверждён';
-      infoPhone.style.color = '#16a34a';
-    } else {
-      infoPhone.textContent = 'подтвердить';
-      infoPhone.style.color = 'var(--ap-red)';
-    }
-  }
-  if (infoBday) {
-    if (data.birthday) {
-      const m = String(data.birthday).match(/^(?:\d{4}-)?(\d{2})-(\d{2})$/);
-      if (m) {
-        const day = Number(m[2]);
-        const monthName = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'][Number(m[1]) - 1];
-        infoBday.textContent = `${day} ${monthName}`;
-        infoBday.style.color = 'var(--ap-ink)';
-      } else {
-        infoBday.textContent = String(data.birthday);
-      }
-    } else {
-      infoBday.textContent = 'указать';
-      infoBday.style.color = 'var(--ap-red)';
-    }
-  }
-
-  // Баллы и билеты заполняются из LK (см. profileLoadOrdersCount)
-  if (balanceEl) balanceEl.textContent = '—';
-  if (ticketsEl) ticketsEl.textContent = '—';
 }
 
 function profileRenderGuest() {
