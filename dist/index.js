@@ -1284,6 +1284,19 @@ app.post("/api/verify-phone", auth_1.requireTgUser, async (req, res) => {
         res.status(500).json({ error: "internal" });
     }
 });
+// Отвязать телефон — обнуляем phone_verified_at и phone
+app.post("/api/unverify-phone", auth_1.requireTgUser, async (req, res) => {
+    const u = (0, auth_1.getTgUser)(req);
+    try {
+        const { pool } = await Promise.resolve().then(() => __importStar(require("./db")));
+        await pool.query(`UPDATE subscribers SET phone = NULL, phone_verified_at = NULL WHERE chat_id = $1`, [u.id]);
+        res.json({ ok: true });
+    }
+    catch (e) {
+        console.error("[API /unverify-phone]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
+});
 app.post("/api/daily/claim", auth_1.requireTgUser, async (req, res) => {
     const u = (0, auth_1.getTgUser)(req);
     try {

@@ -490,7 +490,9 @@ const CLUB_LEVELS = [
   { name: "Лучшие друзья",  icon: "💛", pct: 7,  threshold: 10000  },
   { name: "Семья",          icon: "❤️", pct: 10, threshold: 50000  },
 ];
+window.CLUB_LEVELS = CLUB_LEVELS;
 
+window.getCurrentLevel = getCurrentLevel;
 function getCurrentLevel(yearSpent, lkLevelName) {
   // Если LK прислал имя уровня — пытаемся сопоставить
   if (lkLevelName) {

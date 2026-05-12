@@ -1286,6 +1286,22 @@ app.post("/api/verify-phone", requireTgUser, async (req, res) => {
   }
 });
 
+// Отвязать телефон — обнуляем phone_verified_at и phone
+app.post("/api/unverify-phone", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  try {
+    const { pool } = await import("./db");
+    await pool.query(
+      `UPDATE subscribers SET phone = NULL, phone_verified_at = NULL WHERE chat_id = $1`,
+      [u.id]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[API /unverify-phone]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
+});
+
 app.post("/api/daily/claim", requireTgUser, async (req, res) => {
   const u = getTgUser(req)!;
   try {

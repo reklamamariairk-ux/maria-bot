@@ -1619,6 +1619,90 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 #tab-profile .prof-footer__brand{font-weight:500;margin-bottom:2px}
 #tab-profile .prof-footer__ver{font-feature-settings:"tnum" 1;letter-spacing:.3px}
 
+/* Photo avatar (если есть photo_url из TG) */
+#tab-profile .prof-hero__av{position:relative;overflow:hidden}
+#tab-profile .prof-hero__av-init{position:relative;z-index:1}
+#tab-profile .prof-hero__av-img{
+  position:absolute;inset:0;width:100%;height:100%;
+  object-fit:cover;border-radius:50%;z-index:2;
+}
+
+/* Activity sub-line (запусков и last seen) */
+#tab-profile .prof-hero__activity{
+  margin-top:3px;font-size:11px;color:var(--ap-grey-2);
+}
+
+/* Mini-progress chip (уровень + до next) в hero — Apple Wallet style */
+#tab-profile .prof-hero__levelchip{
+  margin-top:10px;display:flex;align-items:center;gap:8px;
+  font-size:12px;padding:8px 12px;
+  background:#f2f2f7;border-radius:10px;
+  color:var(--ap-ink);
+}
+#tab-profile .prof-hero__levelchip-name{font-weight:600}
+#tab-profile .prof-hero__levelchip-prog{
+  color:var(--ap-grey);font-size:11.5px;
+  font-feature-settings:"tnum" 1;
+}
+#tab-profile .prof-hero__levelchip-prog::before{content:'·';margin:0 4px;color:var(--ap-grey-2)}
+
+/* Group note (под группой) */
+#tab-profile .prof-group__note{
+  padding:6px 32px 0;font-size:11px;
+  color:var(--ap-grey-2);line-height:1.4;
+}
+
+/* Toggle row (Apple Settings switch) */
+#tab-profile .prof-row--toggle{cursor:default}
+#tab-profile .prof-row--toggle:hover{background:#fff}
+#tab-profile .prof-row--toggle:active{background:#fff}
+#tab-profile .prof-toggle{
+  grid-column:3 / span 2;grid-row:1 / span 2;
+  align-self:center;justify-self:end;
+  display:inline-flex;cursor:pointer;
+  position:relative;width:51px;height:31px;
+}
+#tab-profile .prof-toggle input{position:absolute;opacity:0;pointer-events:none}
+#tab-profile .prof-toggle__sw{
+  position:absolute;inset:0;background:#e9e9eb;
+  border-radius:16px;transition:background .2s;
+}
+#tab-profile .prof-toggle__sw::before{
+  content:'';position:absolute;left:2px;top:2px;
+  width:27px;height:27px;background:#fff;border-radius:50%;
+  transition:transform .2s, box-shadow .2s;
+  box-shadow:0 3px 8px rgba(0,0,0,.15), 0 0 0 1px rgba(0,0,0,.04);
+}
+#tab-profile .prof-toggle input:checked + .prof-toggle__sw{background:#34c759}
+#tab-profile .prof-toggle input:checked + .prof-toggle__sw::before{transform:translateX(20px)}
+
+/* Destructive row (отвязать) */
+#tab-profile .prof-row--destructive{
+  display:flex;justify-content:center;color:var(--ap-red);
+  grid-template-columns:none;padding:14px;
+  font-weight:500;font-size:15px;
+}
+#tab-profile .prof-row--destructive .prof-row__t{
+  color:var(--ap-red);text-align:center;width:100%;
+  grid-row:1;grid-column:1;
+}
+
+/* About modal содержимое */
+.about-modal__body{
+  padding:18px 20px 30px;
+  font-size:14px;color:var(--text);line-height:1.55;
+  max-height:75vh;overflow-y:auto;
+}
+.about-modal__body h2{
+  font-size:18px;font-weight:700;margin-bottom:12px;
+  letter-spacing:-.3px;
+}
+.about-modal__body h3{
+  font-size:14px;font-weight:700;margin:14px 0 6px;
+  letter-spacing:-.2px;
+}
+.about-modal__body p{margin-bottom:10px}
+
 /* TG-style typing indicator (3 пульсирующие точки) */
 .msg__bubble--typing{padding:10px 14px}
 .typing-dots{display:inline-flex;gap:3px;align-items:center;height:14px}

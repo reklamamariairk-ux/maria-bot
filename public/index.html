@@ -466,7 +466,10 @@
 <!-- ═══ ПРОФИЛЬ ═══ -->
 <section class="tab" id="tab-profile">
   <div class="prof-hero">
-    <div class="prof-hero__av" id="prof-av">А</div>
+    <div class="prof-hero__av" id="prof-av">
+      <span class="prof-hero__av-init" id="prof-av-init">А</span>
+      <img class="prof-hero__av-img" id="prof-av-img" alt="" style="display:none"/>
+    </div>
     <div class="prof-hero__info">
       <div class="prof-hero__name">
         <span id="prof-name">Гость</span>
@@ -476,6 +479,12 @@
       </div>
       <div class="prof-hero__phone" id="prof-phone">Подтвердите телефон в клубе</div>
       <div class="prof-hero__joined" id="prof-joined" style="display:none"></div>
+      <div class="prof-hero__activity" id="prof-activity" style="display:none"></div>
+      <!-- Мини прогресс уровня (как в клубе) -->
+      <div class="prof-hero__levelchip" id="prof-level-chip" style="display:none">
+        <span class="prof-hero__levelchip-name" id="prof-level-name">Друзья</span>
+        <span class="prof-hero__levelchip-prog" id="prof-level-prog"></span>
+      </div>
     </div>
   </div>
 
@@ -516,6 +525,12 @@
         <span class="prof-row__val" id="prof-info-bday">указать</span>
         <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
       </button>
+      <button class="prof-row" data-haptic="light" onclick="profEditAddress()">
+        <span class="prof-row__ic"><span data-icon="pin" data-size="18"></span></span>
+        <span class="prof-row__t">Адрес доставки</span>
+        <span class="prof-row__val" id="prof-info-address">указать</span>
+        <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
+      </button>
     </div>
   </div>
 
@@ -528,6 +543,12 @@
         <span class="prof-row__t">Мои заказы</span>
         <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
       </button>
+      <button class="prof-row" data-haptic="light" onclick="haptic('light');profOpenWishlist()">
+        <span class="prof-row__ic"><span data-icon="star" data-size="18"></span></span>
+        <span class="prof-row__t">Любимое</span>
+        <span class="prof-row__val" id="prof-info-wishcount">0</span>
+        <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
+      </button>
       <button class="prof-row" data-haptic="light" onclick="haptic('light');switchTab('fun')">
         <span class="prof-row__ic"><span data-icon="gamepad" data-size="18"></span></span>
         <span class="prof-row__t">Игры</span>
@@ -535,6 +556,34 @@
         <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
       </button>
     </div>
+  </div>
+
+  <!-- УВЕДОМЛЕНИЯ -->
+  <div class="prof-group">
+    <div class="prof-group__h">Уведомления</div>
+    <div class="prof-actions">
+      <div class="prof-row prof-row--toggle">
+        <span class="prof-row__ic"><span data-icon="history" data-size="18"></span></span>
+        <span class="prof-row__t">Статусы заказов</span>
+        <label class="prof-toggle"><input type="checkbox" data-pref="notif_orders" checked/><span class="prof-toggle__sw"></span></label>
+      </div>
+      <div class="prof-row prof-row--toggle">
+        <span class="prof-row__ic"><span data-icon="sparkles" data-size="18"></span></span>
+        <span class="prof-row__t">Акции и скидки</span>
+        <label class="prof-toggle"><input type="checkbox" data-pref="notif_promo" checked/><span class="prof-toggle__sw"></span></label>
+      </div>
+      <div class="prof-row prof-row--toggle">
+        <span class="prof-row__ic"><span data-icon="cake" data-size="18"></span></span>
+        <span class="prof-row__t">Скидка в День рождения</span>
+        <label class="prof-toggle"><input type="checkbox" data-pref="notif_bday" checked/><span class="prof-toggle__sw"></span></label>
+      </div>
+      <div class="prof-row prof-row--toggle">
+        <span class="prof-row__ic"><span data-icon="ticket" data-size="18"></span></span>
+        <span class="prof-row__t">Сладкий чек</span>
+        <label class="prof-toggle"><input type="checkbox" data-pref="notif_sweet" checked/><span class="prof-toggle__sw"></span></label>
+      </div>
+    </div>
+    <div class="prof-group__note">Настройки сохраняются на устройстве. Пуши в Telegram приходят от @mariatortik_bot.</div>
   </div>
 
   <!-- КЛУБ И ПОДДЕРЖКА -->
@@ -545,6 +594,12 @@
         <span class="prof-row__ic"><span data-icon="diamond" data-size="18"></span></span>
         <span class="prof-row__t">Программа лояльности</span>
         <span class="prof-row__sub">Кэшбэк, скидки, лотерея</span>
+        <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
+      </button>
+      <button class="prof-row" data-haptic="light" onclick="haptic('light');profShareApp()">
+        <span class="prof-row__ic"><span data-icon="share" data-size="18"></span></span>
+        <span class="prof-row__t">Поделиться приложением</span>
+        <span class="prof-row__sub">Расскажи другу о «Марии»</span>
         <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
       </button>
       <button class="prof-row" data-haptic="light" onclick="haptic('light');openShopsModal()">
@@ -563,6 +618,34 @@
         <span class="prof-row__t">Чат с Машей</span>
         <span class="prof-row__sub">Спроси про торты или заказ</span>
         <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
+      </button>
+    </div>
+  </div>
+
+  <!-- О ПРИЛОЖЕНИИ -->
+  <div class="prof-group">
+    <div class="prof-group__h">О приложении</div>
+    <div class="prof-actions">
+      <button class="prof-row" data-haptic="light" onclick="haptic('light');profOpenAbout('privacy')">
+        <span class="prof-row__t">Политика конфиденциальности</span>
+        <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
+      </button>
+      <button class="prof-row" data-haptic="light" onclick="haptic('light');profOpenAbout('terms')">
+        <span class="prof-row__t">Условия использования</span>
+        <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
+      </button>
+      <button class="prof-row" data-haptic="light" onclick="haptic('light');profOpenAbout('about')">
+        <span class="prof-row__t">О кондитерской «Мария»</span>
+        <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Destructive action — отвязать телефон (только если verified) -->
+  <div class="prof-group" id="prof-destructive" style="display:none">
+    <div class="prof-actions">
+      <button class="prof-row prof-row--destructive" data-haptic="medium" onclick="profUnverifyConfirm()">
+        <span class="prof-row__t">Отвязать телефон</span>
       </button>
     </div>
   </div>

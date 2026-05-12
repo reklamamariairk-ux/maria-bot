@@ -38,16 +38,29 @@ window.profileRender = _profileRenderRef;
 
 function profileRender(data) {
   const u = data.user || {};
-  const av = document.getElementById('prof-av');
+  const avInit = document.getElementById('prof-av-init');
+  const avImg = document.getElementById('prof-av-img');
   const nameEl = document.getElementById('prof-name');
   const phoneEl = document.getElementById('prof-phone');
   const joinedEl = document.getElementById('prof-joined');
+  const activityEl = document.getElementById('prof-activity');
   const balanceEl = document.getElementById('prof-stat-balance');
   const ticketsEl = document.getElementById('prof-stat-tickets');
   const verifiedBadge = document.getElementById('prof-verified-badge');
 
-  // Аватар: первая буква имени или ?
-  if (av) av.textContent = u.first_name?.[0]?.toUpperCase() || '?';
+  // Аватар: photo_url из Telegram → fallback на инициал
+  const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+  const photoUrl = tgUser?.photo_url || data.photoUrl;
+  if (avInit) avInit.textContent = u.first_name?.[0]?.toUpperCase() || '?';
+  if (avImg) {
+    if (photoUrl) {
+      avImg.src = photoUrl;
+      avImg.style.display = '';
+      avImg.onerror = () => { avImg.style.display = 'none'; };
+    } else {
+      avImg.style.display = 'none';
+    }
+  }
   if (nameEl) nameEl.textContent = u.first_name || (u.username ? '@' + u.username : 'Гость');
 
   // Verified badge — blue checkmark рядом с именем
@@ -76,6 +89,54 @@ function profileRender(data) {
       joinedEl.style.display = 'none';
     }
   }
+
+  // Активность: запусков · last seen
+  if (activityEl) {
+    const launches = Number(data.launchCount || 0);
+    if (launches > 0) {
+      activityEl.textContent = `${launches} ${pluralLaunch(launches)}`;
+      activityEl.style.display = '';
+    } else {
+      activityEl.style.display = 'none';
+    }
+  }
+
+  // Destructive row "Отвязать телефон" виден только верифицированным
+  const destrEl = document.getElementById('prof-destructive');
+  if (destrEl) destrEl.style.display = data.phoneVerified ? '' : 'none';
+
+  // Wishlist count
+  const wishEl = document.getElementById('prof-info-wishcount');
+  if (wishEl) {
+    try {
+      const wish = JSON.parse(localStorage.getItem('maria_wishlist') || '[]');
+      wishEl.textContent = Array.isArray(wish) ? wish.length : 0;
+    } catch { wishEl.textContent = 0; }
+  }
+
+  // Адрес доставки из localStorage
+  const addrEl = document.getElementById('prof-info-address');
+  if (addrEl) {
+    const addr = localStorage.getItem('maria_default_address') || '';
+    if (addr) {
+      addrEl.textContent = addr.length > 28 ? addr.slice(0, 26) + '…' : addr;
+      addrEl.style.color = 'var(--ap-ink)';
+    } else {
+      addrEl.textContent = 'указать';
+      addrEl.style.color = 'var(--ap-red)';
+    }
+  }
+
+  // Mini level-chip (если уровень есть в LK)
+  // (заполняется в profileLoadOrdersCount после LK fetch)
+}
+
+function pluralLaunch(n) {
+  const mod10 = n % 10, mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'запуск';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'запуска';
+  return 'запусков';
+}
 
   // Личные данные (раздел "Личные данные")
   const infoName = document.getElementById('prof-info-name');
@@ -160,9 +221,183 @@ async function profileLoadOrdersCount() {
     if (balanceEl) balanceEl.textContent = lk.found ? Number(lk.balance ?? 0).toLocaleString('ru-RU') : '—';
     if (ticketsEl) ticketsEl.textContent = lk.found ? (lk.tickets_count ?? 0) : '—';
 
+    // Mini level-chip в hero (если есть year_spent)
+    const chipEl = document.getElementById('prof-level-chip');
+    const nameChipEl = document.getElementById('prof-level-name');
+    const progEl = document.getElementById('prof-level-prog');
+    if (chipEl && lk.found && window.getCurrentLevel) {
+      const cur = window.getCurrentLevel(Number(lk.year_spent || 0), lk.level || null);
+      const CLUB_LEVELS = window.CLUB_LEVELS || [];
+      const idx = CLUB_LEVELS.findIndex((l) => l && l.name === cur?.name);
+      const next = idx >= 0 ? CLUB_LEVELS[idx + 1] : null;
+      if (nameChipEl) nameChipEl.textContent = `${cur.name} · ${cur.pct}%`;
+      if (progEl) {
+        if (next) {
+          const toGo = Math.max(0, next.threshold - Number(lk.year_spent || 0));
+          progEl.textContent = `до ${next.name}: ${toGo.toLocaleString('ru-RU')} ₽`;
+        } else {
+          progEl.textContent = 'максимум';
+        }
+      }
+      chipEl.style.display = '';
+    } else if (chipEl) {
+      chipEl.style.display = 'none';
+    }
+
     _profileData = { ..._profileData, orders };
   } catch {}
 }
+
+// Wishlist preview — переключаемся в каталог с открытым избранным
+function profOpenWishlist() {
+  if (typeof window.switchTab === 'function') {
+    window.switchTab('menu');
+    setTimeout(() => { try { window.catShowWishlist?.(); } catch {} }, 250);
+  }
+}
+window.profOpenWishlist = profOpenWishlist;
+
+// Адрес доставки — простой prompt с сохранением в localStorage
+function profEditAddress() {
+  const tg = window.Telegram?.WebApp;
+  const current = localStorage.getItem('maria_default_address') || '';
+  const v = prompt('Адрес доставки по умолчанию:', current);
+  if (v === null) return;
+  const trimmed = String(v).trim();
+  if (trimmed.length > 0) {
+    localStorage.setItem('maria_default_address', trimmed);
+  } else {
+    localStorage.removeItem('maria_default_address');
+  }
+  tg?.HapticFeedback?.notificationOccurred?.('success');
+  profileLoad(true);
+}
+window.profEditAddress = profEditAddress;
+
+// Поделиться приложением через TG share-link
+function profShareApp() {
+  const tg = window.Telegram?.WebApp;
+  const botName = 'mariatortik_bot'; // имя нашего бота
+  const url = `https://t.me/${botName}`;
+  const text = 'Кондитерская «Мария» — закажи торты, получай кэшбэк, участвуй в розыгрыше iPhone';
+  const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
+  if (tg?.openTelegramLink) tg.openTelegramLink(shareUrl);
+  else if (navigator.share) navigator.share({ title: 'Мария', text, url }).catch(()=>{});
+  else window.open(shareUrl, '_blank');
+}
+window.profShareApp = profShareApp;
+
+// Modal «О приложении» / Privacy / Terms
+const ABOUT_CONTENT = {
+  privacy: {
+    title: 'Политика конфиденциальности',
+    html: `<p>Мы собираем минимум данных, необходимых для работы программы лояльности и оформления заказов:</p>
+      <h3>Какие данные мы используем</h3>
+      <p>• Имя из Telegram-профиля<br>• Номер телефона (только при подтверждении в клубе)<br>• История заказов с сайта maria-irk.ru<br>• День рождения (если вы его указали)</p>
+      <h3>Кому передаём</h3>
+      <p>Только нашим внутренним системам: сайту maria-irk.ru, Bitrix24 для обработки заказов, базе клуба «Мария для своих». Третьим лицам не передаём.</p>
+      <h3>Хранение</h3>
+      <p>Данные хранятся столько, сколько вы пользуетесь приложением. Удалить телефон можно через «Отвязать» в Профиле.</p>`
+  },
+  terms: {
+    title: 'Условия использования',
+    html: `<p>Используя приложение, вы соглашаетесь с правилами кондитерской «Мария»:</p>
+      <h3>Программа лояльности</h3>
+      <p>• Кэшбэк начисляется баллами на сайте maria-irk.ru (5–10% в зависимости от уровня)<br>• Баллами можно оплатить до 30% заказа<br>• Скидки в День рождения активны ±5 дней<br>• Скидки и бонусы не суммируются</p>
+      <h3>Сладкий чек</h3>
+      <p>Билеты в розыгрыш начисляются за выполнение еженедельных заданий в кафе. Розыгрыш каждый квартал среди всех участников клуба.</p>
+      <h3>Заказы</h3>
+      <p>Минимальный заказ для бесплатной доставки — 1000 ₽. Сроки изготовления индивидуальных тортов — от 24 часов.</p>`
+  },
+  about: {
+    title: 'О кондитерской «Мария»',
+    html: `<p>Кондитерская «Мария» работает в Иркутске с 1993 года — 33 года на рынке.</p>
+      <h3>17 кафе</h3>
+      <p>Сеть кафе по всему городу. Свежая выпечка каждый день, традиционные рецепты + современные десерты.</p>
+      <h3>Производство</h3>
+      <p>Собственная фабрика, мастера-кондитеры, индивидуальные торты под заказ. Доставка по Иркутску.</p>
+      <h3>Контакты</h3>
+      <p>Сайт: <a href="https://maria-irk.ru" target="_blank">maria-irk.ru</a><br>Телефон: <a href="tel:+73952504080">+7 (3952) 50-40-80</a></p>`
+  }
+};
+function profOpenAbout(section) {
+  const data = ABOUT_CONTENT[section];
+  if (!data) return;
+  let modal = document.getElementById('about-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'about-modal';
+    modal.className = 'cat-modal';
+    modal.style.display = 'none';
+    modal.onclick = (e) => { if (e.target === modal) profCloseAbout(); };
+    modal.innerHTML = `
+      <div class="cat-modal__sheet">
+        <button class="cat-modal__close" onclick="profCloseAbout()">×</button>
+        <div class="about-modal__body" id="about-modal-body"></div>
+      </div>`;
+    document.body.appendChild(modal);
+  }
+  const body = modal.querySelector('#about-modal-body');
+  body.innerHTML = `<h2>${data.title}</h2>${data.html}`;
+  modal.style.display = 'flex';
+  window.scrollLock?.();
+}
+window.profOpenAbout = profOpenAbout;
+function profCloseAbout() {
+  const m = document.getElementById('about-modal');
+  if (m) m.style.display = 'none';
+  window.scrollUnlock?.();
+}
+window.profCloseAbout = profCloseAbout;
+
+// Отвязать телефон
+function profUnverifyConfirm() {
+  const tg = window.Telegram?.WebApp;
+  const msg = 'Отвязать телефон? Вы перестанете получать кэшбэк и баллы, билеты Sweet Check будут заморожены.';
+  if (tg?.showConfirm) {
+    tg.showConfirm(msg, async (ok) => { if (ok) await profUnverifyDo(); });
+  } else if (confirm(msg)) {
+    profUnverifyDo();
+  }
+}
+window.profUnverifyConfirm = profUnverifyConfirm;
+async function profUnverifyDo() {
+  const tg = window.Telegram?.WebApp;
+  const initData = tg?.initData ?? '';
+  if (!initData) return;
+  try {
+    const r = await fetch('/api/unverify-phone', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'tma ' + initData },
+    });
+    if (r.ok) {
+      tg?.showAlert?.('Телефон отвязан.') || alert('Телефон отвязан.');
+      profileLoad(true);
+    } else {
+      tg?.showAlert?.('Не удалось отвязать. Попробуй позже.') || alert('Не удалось отвязать.');
+    }
+  } catch {
+    tg?.showAlert?.('Ошибка сети.') || alert('Ошибка сети.');
+  }
+}
+
+// Notification preferences — сохраняем в localStorage (UI-фичей, backend TBD)
+function profInitNotificationPrefs() {
+  const inputs = document.querySelectorAll('#tab-profile input[data-pref]');
+  inputs.forEach((inp) => {
+    const key = inp.dataset.pref;
+    const stored = localStorage.getItem('maria_pref_' + key);
+    if (stored !== null) inp.checked = stored === '1';
+    inp.addEventListener('change', () => {
+      localStorage.setItem('maria_pref_' + key, inp.checked ? '1' : '0');
+      const tg = window.Telegram?.WebApp;
+      tg?.HapticFeedback?.selectionChanged?.();
+    });
+  });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  profInitNotificationPrefs();
+});
 
 async function profOpenOrders() {
   const wrap = document.getElementById('prof-orders');
