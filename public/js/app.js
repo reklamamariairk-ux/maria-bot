@@ -349,14 +349,25 @@ function usechip(btn) {
 let _allPartners = [];
 
 function renderPartnerCard(p) {
+  const name = (p.name || '').replace(/</g,'&lt;');
+  const desc = (p.desc || '').replace(/</g,'&lt;');
+  const perk = (p.perk || '').replace(/</g,'&lt;');
+  const url = p.url ? String(p.url).replace(/"/g, '&quot;') : '';
+  const logoSrc = p.logo_url || '';
+  const logoHtml = logoSrc
+    ? `<img class="pcard__logo-img" src="${logoSrc.replace(/"/g,'&quot;')}" alt="" loading="lazy" onerror="this.style.display='none';this.parentElement.textContent='${p.emoji || '🎁'}'"/>`
+    : `${p.emoji || '🎁'}`;
   return `
     <div class="pcard">
-      <div class="pcard__logo">${p.emoji}</div>
+      <div class="pcard__logo">${logoHtml}</div>
       <div class="pcard__info">
-        <div class="pcard__name">${p.name}</div>
-        <div class="pcard__desc">${(p.desc || '').replace(/</g,'&lt;')}</div>
+        <div class="pcard__row">
+          <div class="pcard__name">${name}</div>
+          ${perk ? `<div class="pcard__badge">${perk}</div>` : ''}
+        </div>
+        <div class="pcard__desc">${desc}</div>
+        ${url ? `<a class="pcard__btn" href="${url}" target="_blank" rel="noopener" data-haptic="light" onclick="window.Telegram?.WebApp?.openLink?.('${url}');event.preventDefault?.()">Перейти на сайт →</a>` : ''}
       </div>
-      <div class="pcard__badge">${p.perk}</div>
     </div>`;
 }
 

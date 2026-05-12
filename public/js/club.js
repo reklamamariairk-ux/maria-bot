@@ -118,16 +118,22 @@ async function loadSweetCheckWeek() {
   try {
     const r = await fetch('/api/sweet-check/active', {cache: 'no-store'});
     const d = await r.json();
-    const wrap = document.getElementById('sc-week');
-    if (!wrap) return;
-    if (!d?.active) { wrap.style.display = 'none'; return; }
-    wrap.style.display = '';
-    wrap.innerHTML = `
-      <div class="sc-week">
-        <div class="sc-week__tag">🟢 Активно · ${escapeHtml(d.active.dates || '')}</div>
-        <div class="sc-week__h">${escapeHtml(d.active.name || 'Текущая неделя')}</div>
-        ${d.active.task ? `<div class="sc-week__task">${escapeHtml(d.active.task)}</div>` : ''}
-        ${d.active.reward ? `<div class="sc-week__reward">+${escapeHtml(String(d.active.reward))}</div>` : ''}
+    const top = document.getElementById('sc-week-top');
+    const oldWrap = document.getElementById('sc-week');
+    if (oldWrap) oldWrap.style.display = 'none';
+    if (!top) return;
+    if (!d?.active) { top.style.display = 'none'; return; }
+
+    top.style.display = '';
+    top.innerHTML = `
+      <div class="sc-week-card" onclick="document.querySelector('#tab-club details.acc:nth-of-type(2)')?.setAttribute('open','')">
+        <div class="sc-week-card__head">
+          <span class="sc-week-card__tag">Задание этой недели</span>
+          <span class="sc-week-card__dates">${escapeHtml(d.active.dates || '')}</span>
+        </div>
+        <div class="sc-week-card__h">${escapeHtml(d.active.name || 'Текущая неделя')}</div>
+        ${d.active.task ? `<div class="sc-week-card__task">${escapeHtml(d.active.task)}</div>` : ''}
+        ${d.active.reward ? `<div class="sc-week-card__reward"><span class="sc-week-card__rw-ic">🎟</span> ${escapeHtml(String(d.active.reward))}</div>` : ''}
       </div>`;
   } catch {}
 }
@@ -469,9 +475,9 @@ function renderHeroStats(data) {
   const ord = document.getElementById('hero-stat-orders');
   const sp = document.getElementById('hero-stat-spent');
   const tk = document.getElementById('hero-stat-tickets');
-  if (ord) ord.textContent = `🛒 ${orders} ${plural(orders, ['заказ', 'заказа', 'заказов'])}`;
-  if (sp)  sp.textContent  = `💰 ${yearSpent.toLocaleString('ru-RU')} ₽`;
-  if (tk)  tk.textContent  = `🎟 ${tickets} ${plural(tickets, ['билет', 'билета', 'билетов'])}`;
+  if (ord) ord.innerHTML = `<b>${orders}</b><span>${plural(orders, ['заказ', 'заказа', 'заказов'])}</span>`;
+  if (sp)  sp.innerHTML  = `<b>${yearSpent.toLocaleString('ru-RU')}</b><span>₽ за год</span>`;
+  if (tk)  tk.innerHTML  = `<b>${tickets}</b><span>${plural(tickets, ['билет', 'билета', 'билетов'])}</span>`;
   wrap.style.display = '';
 }
 window.renderHeroStats = renderHeroStats;
