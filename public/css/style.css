@@ -2123,12 +2123,45 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 
 /* ── LOYALTY HERO ────────────────────────────────────────────────────────── */
 .loy-hero{
-  background:linear-gradient(135deg,var(--dark),#2a0510);
+  position:relative;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(212,160,48,.22) 0%, transparent 50%),
+    radial-gradient(circle at 80% 100%, rgba(214,31,55,.28) 0%, transparent 55%),
+    linear-gradient(135deg,#1a050b 0%, #2a0a14 50%, #1a050b 100%);
   color:#fff;
-  border-radius:var(--r);
-  padding:18px;margin:18px;
-  box-shadow:var(--shadow);
+  border-radius:24px;
+  padding:22px 20px;margin:18px;
+  box-shadow:
+    0 24px 48px -16px rgba(20,2,8,.55),
+    0 8px 16px -8px rgba(214,31,55,.18),
+    inset 0 1px 0 rgba(255,255,255,.08);
+  overflow:hidden;
 }
+/* Glassmorphism overlay для "premium wallet card" feel */
+.loy-hero::before{
+  content:'';position:absolute;inset:0;border-radius:24px;
+  background:linear-gradient(180deg, rgba(255,255,255,.06) 0%, transparent 30%);
+  pointer-events:none;z-index:0;
+}
+/* Sparkles overlay — 7 крошечных мерцающих точек */
+.loy-hero::after{
+  content:'';position:absolute;inset:0;border-radius:24px;
+  background-image:
+    radial-gradient(2px 2px at 18% 22%, rgba(255,222,150,.85), transparent),
+    radial-gradient(1.5px 1.5px at 88% 18%, rgba(255,255,255,.7), transparent),
+    radial-gradient(1.5px 1.5px at 75% 78%, rgba(255,222,150,.6), transparent),
+    radial-gradient(1px 1px at 30% 65%, rgba(255,255,255,.5), transparent),
+    radial-gradient(2px 2px at 55% 35%, rgba(255,222,150,.5), transparent),
+    radial-gradient(1px 1px at 90% 55%, rgba(255,255,255,.6), transparent),
+    radial-gradient(1.5px 1.5px at 12% 80%, rgba(255,222,150,.7), transparent);
+  animation:loyHeroSparkle 4s ease-in-out infinite alternate;
+  pointer-events:none;z-index:0;
+}
+@keyframes loyHeroSparkle{
+  0%, 100%{opacity:.5}
+  50%{opacity:1}
+}
+.loy-hero > *{position:relative;z-index:1}
 .loy-hero__top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
 .loy-hero__hi{font-size:13px;opacity:.7}
 .loy-hero__name{font-family:'Playfair Display',serif;font-size:24px;font-weight:800}
@@ -2145,16 +2178,32 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 .loy-bal--star .loy-bal__num{color:#ffd166}
 .loy-bal--point .loy-bal__num{color:#ff8a99}
 
-/* Inline-stats под hero (заказы · потрачено · билеты) */
+/* Inline-stats под hero — цветные pill-chips */
 .loy-hero__stats{
-  display:flex;justify-content:center;align-items:center;gap:8px;
-  margin-top:12px;font-size:12px;color:rgba(255,255,255,.85);
-  flex-wrap:wrap;
+  display:flex;justify-content:center;align-items:center;gap:6px;
+  margin-top:14px;flex-wrap:wrap;
 }
 .loy-hero__stat{
-  font-weight:600;font-feature-settings:"tnum" 1;white-space:nowrap;
+  font-size:11.5px;font-weight:700;font-feature-settings:"tnum" 1;
+  white-space:nowrap;padding:6px 12px;border-radius:22px;
+  background:rgba(255,255,255,.1);
+  border:1px solid rgba(255,255,255,.16);
+  color:#fff;backdrop-filter:blur(6px);
 }
-.loy-hero__stat-sep{color:rgba(255,255,255,.4)}
+/* Цветовые акценты для каждого stat (по nth-child) */
+.loy-hero__stat:nth-child(1){
+  background:linear-gradient(135deg, rgba(56,189,248,.22), rgba(56,189,248,.08));
+  border-color:rgba(56,189,248,.35);
+}
+.loy-hero__stat:nth-child(3){
+  background:linear-gradient(135deg, rgba(74,222,128,.22), rgba(74,222,128,.08));
+  border-color:rgba(74,222,128,.35);
+}
+.loy-hero__stat:nth-child(5){
+  background:linear-gradient(135deg, rgba(255,209,102,.28), rgba(255,209,102,.08));
+  border-color:rgba(255,209,102,.4);
+}
+.loy-hero__stat-sep{display:none}
 
 /* ДР-chip в hero */
 .loy-hero__bday{
@@ -2169,11 +2218,13 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 
 /* Onboarding для нового юзера (3 шага) */
 .ob-card{
-  margin:14px;padding:18px;
-  background:var(--surface);
-  border:1px solid rgba(0,0,0,.06);
-  border-radius:18px;
-  box-shadow:0 4px 16px rgba(0,0,0,.04);
+  margin:14px;padding:20px;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(214,31,55,.04) 0%, transparent 40%),
+    linear-gradient(180deg, #fff, #fafafa);
+  border:none;
+  border-radius:20px;
+  box-shadow:0 8px 24px -4px rgba(0,0,0,.06), 0 2px 6px rgba(0,0,0,.03);
 }
 .ob-card__h{
   font-family:'Playfair Display',serif;
@@ -2197,16 +2248,36 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 .ob-step__t{font-size:14px;font-weight:700;color:var(--text);line-height:1.3}
 .ob-step__s{font-size:12px;color:var(--muted);line-height:1.45;margin-top:3px}
 
-/* Sticky CTA внизу клуба */
+/* Sticky CTA внизу клуба — glow button */
 .club-sticky{
   position:sticky;bottom:0;left:0;right:0;
-  padding:14px 14px calc(env(safe-area-inset-bottom, 14px) + 14px);
-  background:linear-gradient(to top, #fff 60%, rgba(255,255,255,0));
-  z-index:5;margin-top:14px;
+  padding:18px 14px calc(env(safe-area-inset-bottom, 14px) + 14px);
+  background:linear-gradient(to top, #fff 50%, rgba(255,255,255,.7) 80%, rgba(255,255,255,0));
+  z-index:5;margin-top:18px;
 }
 .club-sticky__btn{
-  width:100%;height:50px;font-size:15px;border-radius:14px;
-  box-shadow:0 8px 24px rgba(214,31,55,.2);
+  width:100%;height:56px;font-size:16px;font-weight:800;
+  border-radius:16px;
+  background:linear-gradient(135deg, var(--red) 0%, var(--red-d) 100%);
+  box-shadow:
+    0 12px 32px -6px rgba(214,31,55,.45),
+    0 4px 12px -2px rgba(214,31,55,.25),
+    inset 0 1px 0 rgba(255,255,255,.2);
+  position:relative;overflow:hidden;
+  transition:transform .15s ease;
+}
+.club-sticky__btn:hover{transform:translateY(-2px)}
+.club-sticky__btn:active{transform:scale(.98)}
+/* Shimmer-overlay поверх кнопки */
+.club-sticky__btn::after{
+  content:'';position:absolute;top:0;left:-100%;
+  width:60%;height:100%;
+  background:linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent);
+  animation:ctaShimmer 3.5s ease-in-out infinite;
+}
+@keyframes ctaShimmer{
+  0%{left:-100%}
+  50%, 100%{left:200%}
 }
 
 /* Партнёры — modal со всеми */
@@ -2234,20 +2305,39 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
   text-transform:uppercase;letter-spacing:.6px;
 }
 
-/* "Как это работает" — 3 inline-карточки */
+/* "Как это работает" — 3 vibrant tiles разных цветов */
 .how-it-works{
-  display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;
+  display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;
   padding:0 14px 14px;
 }
 .hiw{
-  background:var(--surface);border:1px solid rgba(0,0,0,.06);
-  border-radius:14px;padding:14px 8px;text-align:center;
-  transition:transform var(--t-fast);
+  border-radius:18px;padding:18px 10px;text-align:center;
+  border:none;
+  transition:transform .2s ease;
+  position:relative;overflow:hidden;
 }
-.hiw__ic{font-size:24px;margin-bottom:6px}
-.hiw__t{font-size:12px;font-weight:700;color:var(--text);line-height:1.2}
-.hiw__s{font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.35}
+.hiw:hover{transform:translateY(-3px)}
+/* Tile 1 — pink soft (покупки) */
+.hiw:nth-child(1){
+  background:linear-gradient(165deg, #fff0f3 0%, #ffe0e7 100%);
+  box-shadow:0 6px 20px -8px rgba(214,31,55,.18);
+}
+/* Tile 2 — gold soft (ДР) */
+.hiw:nth-child(2){
+  background:linear-gradient(165deg, #fff8dc 0%, #ffeead 100%);
+  box-shadow:0 6px 20px -8px rgba(212,160,48,.22);
+}
+/* Tile 3 — lilac soft (Sweet Check) */
+.hiw:nth-child(3){
+  background:linear-gradient(165deg, #f3eeff 0%, #e7dcff 100%);
+  box-shadow:0 6px 20px -8px rgba(124,58,237,.18);
+}
+.hiw__ic{font-size:30px;margin-bottom:8px;line-height:1}
+.hiw__t{font-size:12px;font-weight:800;color:var(--text);line-height:1.2;letter-spacing:-.2px}
+.hiw__s{font-size:10.5px;color:#555;margin-top:5px;line-height:1.4}
 .hiw__s b{color:var(--red);font-weight:800;font-feature-settings:"tnum" 1}
+.hiw:nth-child(2) .hiw__s b{color:#b8870b}
+.hiw:nth-child(3) .hiw__s b{color:#5b21b6}
 
 /* Уровневая chip + прогресс */
 .loy-hero__lvl{
@@ -2273,9 +2363,16 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 }
 .loy-hero__prog-fill{
   display:block;height:100%;
-  background:linear-gradient(90deg,#ffd166,#fff);
+  background:linear-gradient(90deg,#ffd166 0%,#fff 50%,#ffd166 100%);
+  background-size:200% 100%;
   border-radius:6px;transition:width .6s ease-out;
   box-shadow:0 0 12px rgba(255,209,102,.6);
+  position:relative;overflow:hidden;
+  animation:progShimmer 2.4s ease-in-out infinite;
+}
+@keyframes progShimmer{
+  0%, 100%{background-position:0% 0}
+  50%{background-position:-100% 0}
 }
 .loy-hero__prog-txt{
   margin-top:8px;font-size:12px;color:rgba(255,255,255,.92);
@@ -2457,11 +2554,34 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 
 /* ── LK CARD (личный кабинет с сайта) ────────────────────────────────────── */
 .lk-card{
-  background:linear-gradient(140deg,#fff,var(--gold-l));
-  border:1px solid rgba(232,160,48,.3);border-radius:var(--r);
-  padding:18px;margin:0 18px 16px;
-  box-shadow:var(--shadow-card);
+  position:relative;
+  background:
+    linear-gradient(135deg, #fff5e0 0%, #fffaf0 40%, #fff5e0 100%);
+  border:none;
+  border-radius:20px;
+  padding:20px 18px;margin:0 18px 16px;
+  box-shadow:
+    0 20px 40px -16px rgba(180,130,30,.28),
+    0 4px 8px -2px rgba(180,130,30,.12),
+    inset 0 1px 0 rgba(255,255,255,.7);
+  overflow:hidden;
 }
+/* Marble-like texture overlay */
+.lk-card::before{
+  content:'';position:absolute;inset:0;border-radius:20px;
+  background:
+    radial-gradient(circle at 10% 100%, rgba(255,209,102,.18) 0%, transparent 40%),
+    radial-gradient(circle at 100% 0%, rgba(214,31,55,.08) 0%, transparent 35%);
+  pointer-events:none;z-index:0;
+}
+/* Логотип-watermark Марии в углу */
+.lk-card::after{
+  content:'';position:absolute;top:14px;right:14px;
+  width:36px;height:36px;border-radius:50%;
+  background:url('/logo.svg') center/contain no-repeat;
+  opacity:.12;pointer-events:none;z-index:0;
+}
+.lk-card > *{position:relative;z-index:1}
 .lk-card__loading{font-size:13px;color:var(--muted);text-align:center;padding:20px}
 .lk-card__title{font-family:'Playfair Display',serif;font-size:18px;color:var(--dark);margin-bottom:8px}
 .lk-card__sub{font-size:13px;color:#444;margin-bottom:14px;line-height:1.5}
@@ -2632,14 +2752,41 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 
 /* ── Accordion (details / summary) ────────────────────────────────────────── */
 .acc{
-  margin:8px 14px;
-  background:#fff;border:1px solid var(--border);
+  margin:10px 14px;
+  background:#fff;border:none;
   border-radius:18px;
   overflow:hidden;
-  box-shadow:var(--shadow-xs);
-  transition:box-shadow var(--t);
+  box-shadow:
+    0 2px 8px rgba(0,0,0,.04),
+    0 1px 2px rgba(0,0,0,.03);
+  transition:box-shadow .25s ease, transform .25s ease;
 }
-.acc[open]{box-shadow:var(--shadow-sm)}
+.acc:hover{box-shadow:0 6px 18px rgba(0,0,0,.06), 0 2px 4px rgba(0,0,0,.04)}
+.acc[open]{
+  box-shadow:
+    0 12px 30px -6px rgba(0,0,0,.08),
+    0 4px 10px rgba(0,0,0,.04);
+  transform:translateY(-1px);
+}
+
+/* Sweets watermark — едва заметный background-pattern на клубе */
+#tab-club.active{
+  background:
+    radial-gradient(circle at 10% 5%, rgba(214,31,55,.025) 0%, transparent 35%),
+    radial-gradient(circle at 90% 95%, rgba(212,160,48,.03) 0%, transparent 40%),
+    #fcfcfd;
+}
+
+/* Уровневая chip — обновлённый стиль с золотым акцентом */
+.loy-hero__lvl{
+  background:
+    linear-gradient(135deg, rgba(255,209,102,.22), rgba(255,209,102,.08));
+  border:1px solid rgba(255,209,102,.35);
+  backdrop-filter:blur(8px);
+}
+.loy-hero__lvl:hover{
+  background:linear-gradient(135deg, rgba(255,209,102,.35), rgba(255,209,102,.15));
+}
 .acc__sum{
   display:flex;align-items:center;gap:12px;
   padding:16px 18px;cursor:pointer;
@@ -2651,10 +2798,12 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 }
 .acc__sum::-webkit-details-marker{display:none}
 .acc__ic{
-  width:36px;height:36px;flex-shrink:0;
+  width:38px;height:38px;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;
-  background:var(--red-xl);color:var(--red);
-  border-radius:10px;
+  background:linear-gradient(135deg, rgba(214,31,55,.12), rgba(214,31,55,.05));
+  color:var(--red);
+  border-radius:12px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.5);
 }
 .acc__t{flex:1}
 .acc__chev{
@@ -2803,10 +2952,25 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 
 /* Sweet Check Мои билеты на верху клуба — премиум */
 .sc-top-card{
-  margin:14px;padding:18px;
-  background:var(--mesh-premium);color:#fff;
-  border-radius:18px;position:relative;overflow:hidden;
-  box-shadow:0 14px 36px -10px rgba(40,8,20,.4);
+  margin:14px;padding:18px 18px 18px 16px;
+  background:
+    radial-gradient(circle at 92% 8%, rgba(255,209,102,.35) 0%, transparent 28%),
+    radial-gradient(circle at 5% 90%, rgba(214,31,55,.42) 0%, transparent 32%),
+    linear-gradient(135deg, #1a050b 0%, #3a0a18 50%, #1a050b 100%);
+  color:#fff;
+  border-radius:20px;position:relative;overflow:hidden;
+  box-shadow:0 16px 40px -10px rgba(40,8,20,.5);
+  cursor:pointer;
+  transition:transform .2s ease, box-shadow .2s ease;
+}
+.sc-top-card:hover{transform:translateY(-2px);box-shadow:0 22px 48px -10px rgba(40,8,20,.6)}
+/* Floating prize icons — иллюстративный задний план */
+.sc-top-card::before{
+  content:'📱 💻 🎮 ⌚ 🔊';
+  position:absolute;top:-12px;right:-8px;
+  font-size:14px;opacity:.08;letter-spacing:8px;
+  pointer-events:none;transform:rotate(-12deg);
+  white-space:nowrap;
 }
 .sc-top-card::before{
   content:'';position:absolute;inset:0;border-radius:18px;
