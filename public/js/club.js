@@ -118,23 +118,14 @@ async function loadSweetCheckWeek() {
   try {
     const r = await fetch('/api/sweet-check/active', {cache: 'no-store'});
     const d = await r.json();
-    const top = document.getElementById('sc-week-top');
     const oldWrap = document.getElementById('sc-week');
     if (oldWrap) oldWrap.style.display = 'none';
-    if (!top) return;
-    if (!d?.active) { top.style.display = 'none'; return; }
-
-    top.style.display = '';
-    top.innerHTML = `
-      <div class="sc-week-card" onclick="document.querySelector('#tab-club details.acc:nth-of-type(2)')?.setAttribute('open','')">
-        <div class="sc-week-card__head">
-          <span class="sc-week-card__tag">Задание этой недели</span>
-          <span class="sc-week-card__dates">${escapeHtml(d.active.dates || '')}</span>
-        </div>
-        <div class="sc-week-card__h">${escapeHtml(d.active.name || 'Текущая неделя')}</div>
-        ${d.active.task ? `<div class="sc-week-card__task">${escapeHtml(d.active.task)}</div>` : ''}
-        ${d.active.reward ? `<div class="sc-week-card__reward"><span class="sc-week-card__rw-ic">🎟</span> ${escapeHtml(String(d.active.reward))}</div>` : ''}
-      </div>`;
+    // Сохраняем в стейт и перерисовываем sweet check
+    if (window.CLUB_STATE) {
+      window.CLUB_STATE.scActiveTask = d?.active ?? null;
+    }
+    // Перерисовываем единую smart-карточку с актуальными данными
+    try { renderSweetCheckMy(window._lastLkData || {}); } catch (e) { console.error('[sc-rerender]', e); }
   } catch {}
 }
 
@@ -156,6 +147,7 @@ function scJoin() {
 }
 window.scJoin = scJoin;
 
+// Единая smart-карточка Sweet Check: task этой недели + статус билетов
 function renderSweetCheckMy(data) {
   const oldWrap = document.getElementById('sc-my');
   if (oldWrap) oldWrap.style.display = 'none';
@@ -164,59 +156,56 @@ function renderSweetCheckMy(data) {
   if (!top) return;
   top.style.display = '';
 
+  // Сохраняем последние LK данные для повторного рендера (race-free)
+  if (data && typeof data === 'object') window._lastLkData = data;
+
   const verified = !!CLUB_STATE?.phoneVerified;
   const tickets = Number(data?.tickets_count || 0);
+  const task = CLUB_STATE?.scActiveTask;
+  const openAcc = `document.querySelector('#tab-club details.acc:nth-of-type(1)')?.setAttribute('open','')`;
 
-  // Click handler — open Sweet Check accordion
-  const openAcc = `document.querySelector('#tab-club details.acc:nth-of-type(2)')?.setAttribute('open','')`;
-
-  // Состояние 1: не verified
+  // Footer-блок: статус билетов
+  let statusHtml = '';
   if (!verified) {
-    top.innerHTML = `
-      <div class="sc-top-card sc-top-card--teaser" onclick="document.querySelector('#tab-club details.acc:nth-of-type(2)')?.setAttribute('open','')">
-        <div class="sc-top-card__row">
-          <div class="sc-top-card__num sc-top-card__num--gift">📱</div>
-          <div>
-            <div class="sc-top-card__lb">Сладкий чек · iPhone 17</div>
-            <div class="sc-top-card__h">Подтверди номер чтобы участвовать</div>
-            <div class="sc-top-card__sub">Каждый чек становится билетом в квартальный розыгрыш</div>
-          </div>
-          <div class="sc-top-card__chev">›</div>
-        </div>
-      </div>`;
-    return;
+    statusHtml = `<div class="sc-card__status sc-card__status--cta"><span class="sc-card__status-ic">📱</span>Подтверди номер чтобы участвовать</div>`;
+  } else if (tickets === 0) {
+    statusHtml = `<div class="sc-card__status sc-card__status--cta"><span class="sc-card__status-ic">🎟</span>Получи первый билет в кафе</div>`;
+  } else {
+    const chance = tickets >= 10 ? 'высокий шанс' : tickets >= 3 ? 'хорошие шансы' : 'шансы есть';
+    statusHtml = `<div class="sc-card__status sc-card__status--active">
+      <span class="sc-card__status-num">${tickets}</span>
+      <span class="sc-card__status-txt">${tickets === 1 ? 'билет' : 'билета'} · <b>${chance}</b> на iPhone 17</span>
+    </div>`;
   }
 
-  // Состояние 2: verified, 0 билетов
-  if (tickets === 0) {
-    top.innerHTML = `
-      <div class="sc-top-card sc-top-card--teaser" onclick="${openAcc}">
-        <div class="sc-top-card__row">
-          <div class="sc-top-card__num sc-top-card__num--gift">🎁</div>
-          <div>
-            <div class="sc-top-card__lb">Сладкий чек · iPhone 17</div>
-            <div class="sc-top-card__h">Получи первый билет</div>
-            <div class="sc-top-card__sub">Купи нужный набор в кафе → +5 билетов на квартальный розыгрыш</div>
-          </div>
-          <div class="sc-top-card__chev">›</div>
+  // Body: либо текущее задание (если есть), либо общий teaser
+  let bodyHtml;
+  if (task) {
+    bodyHtml = `
+      <div class="sc-card__task">
+        <div class="sc-card__task-head">
+          <span class="sc-card__task-tag">Задание этой недели · ${escapeHtml(task.dates || '')}</span>
         </div>
+        <div class="sc-card__task-h">${escapeHtml(task.name || 'Текущая неделя')}</div>
+        ${task.task ? `<div class="sc-card__task-d">${escapeHtml(task.task)}</div>` : ''}
+        ${task.reward ? `<div class="sc-card__task-reward">🎟 ${escapeHtml(String(task.reward))}</div>` : ''}
       </div>`;
-    return;
+  } else {
+    bodyHtml = `
+      <div class="sc-card__teaser">
+        <div class="sc-card__teaser-h">Розыгрыш на iPhone 17 каждый квартал</div>
+        <div class="sc-card__teaser-d">Купи нужный набор в кафе → +5 билетов в розыгрыш</div>
+      </div>`;
   }
 
-  // Состояние 3: verified + есть билеты
-  const chance = tickets >= 10 ? 'Высокий шанс' : tickets >= 3 ? 'Хорошие шансы' : 'Шансы есть';
   top.innerHTML = `
-    <div class="sc-top-card" onclick="${openAcc}">
-      <div class="sc-top-card__row">
-        <div class="sc-top-card__num">${tickets}</div>
-        <div>
-          <div class="sc-top-card__lb">${tickets === 1 ? 'Билет' : 'Билетов'} в розыгрыше</div>
-          <div class="sc-top-card__h">${chance} на iPhone 17</div>
-          <div class="sc-top-card__sub">Розыгрыш каждый квартал · купи нужный набор → +5 билетов</div>
-        </div>
-        <div class="sc-top-card__chev">›</div>
+    <div class="sc-card" onclick="${openAcc}">
+      <div class="sc-card__head">
+        <span class="sc-card__title">Сладкий чек</span>
+        <span class="sc-card__chev">›</span>
       </div>
+      ${bodyHtml}
+      ${statusHtml}
     </div>`;
 }
 
@@ -457,29 +446,8 @@ function renderLevelProgress(data) {
 }
 window.renderLevelProgress = renderLevelProgress;
 
-// Рендерит inline-stats под hero (заказы · потрачено · билеты)
-function renderHeroStats(data) {
-  const wrap = document.getElementById('hero-stats');
-  if (!wrap) return;
-  if (!data || !data.configured || !data.found) {
-    wrap.style.display = 'none';
-    return;
-  }
-  const orders = Array.isArray(data.orders) ? data.orders.length : 0;
-  const yearSpent = Number(data.year_spent ?? 0);
-  const tickets = Number(data.tickets_count ?? 0);
-  if (orders === 0 && yearSpent === 0 && tickets === 0) {
-    wrap.style.display = 'none';
-    return;
-  }
-  const ord = document.getElementById('hero-stat-orders');
-  const sp = document.getElementById('hero-stat-spent');
-  const tk = document.getElementById('hero-stat-tickets');
-  if (ord) ord.innerHTML = `<b>${orders}</b><span>${plural(orders, ['заказ', 'заказа', 'заказов'])}</span>`;
-  if (sp)  sp.innerHTML  = `<b>${yearSpent.toLocaleString('ru-RU')}</b><span>₽ за год</span>`;
-  if (tk)  tk.innerHTML  = `<b>${tickets}</b><span>${plural(tickets, ['билет', 'билета', 'билетов'])}</span>`;
-  wrap.style.display = '';
-}
+// Hero stats отключены — данные дублировались с LK card
+function renderHeroStats(_data) { /* no-op */ }
 window.renderHeroStats = renderHeroStats;
 
 // ДР-chip — показываем когда ДР указан, считаем дни до скидки (±5 дней от ДР)
@@ -505,8 +473,9 @@ function renderBdayChip(birthday) {
   let html;
   if (isActive) {
     html = `<span class="loy-hero__bday-ic">🎂</span><b>Скидка активна!</b> · ДР ${day} ${monthName}`;
-  } else if (diffDays >= 0 && diffDays <= 30) {
-    html = `<span class="loy-hero__bday-ic">🎂</span>ДР ${day} ${monthName} · через ${diffDays} ${plural(diffDays, ['день', 'дня', 'дней'])}`;
+  } else if (diffDays > 0 && diffDays <= 365) {
+    // Всегда показываем дни до ДР (а не только в течение 30 дней)
+    html = `<span class="loy-hero__bday-ic">🎂</span>ДР ${day} ${monthName} · до скидки <b>${diffDays}</b> ${plural(diffDays, ['день', 'дня', 'дней'])}`;
   } else {
     html = `<span class="loy-hero__bday-ic">🎂</span>ДР: ${day} ${monthName}`;
   }

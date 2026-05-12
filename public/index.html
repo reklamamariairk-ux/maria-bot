@@ -156,8 +156,7 @@
 
 <!-- ═══ КЛУБ ═══ -->
 <section class="tab" id="tab-club">
-  <div class="club-hero">
-    <img src="/logo.svg" class="club-hero__logo" alt="" onerror="this.style.display='none'"/>
+  <div class="club-hero club-hero--compact">
     <h2 class="club-hero__h">Мария для своих</h2>
     <p class="club-hero__p">Программа лояльности</p>
   </div>
@@ -214,14 +213,8 @@
           <div class="loy-hero__prog-bar"><span class="loy-hero__prog-fill" id="hero-progress-fill" style="width:0%"></span></div>
           <div class="loy-hero__prog-txt" id="hero-progress-txt"></div>
         </div>
-        <!-- Inline stats: заказы · потрачено · билеты (только для verified+LK) -->
-        <div class="loy-hero__stats" id="hero-stats" style="display:none">
-          <span class="loy-hero__stat" id="hero-stat-orders">🛒 0</span>
-          <span class="loy-hero__stat-sep">·</span>
-          <span class="loy-hero__stat" id="hero-stat-spent">💰 0 ₽</span>
-          <span class="loy-hero__stat-sep">·</span>
-          <span class="loy-hero__stat" id="hero-stat-tickets">🎟 0</span>
-        </div>
+        <!-- Hero stats убраны — данные есть в LK card ниже (no duplication) -->
+        <div class="loy-hero__stats" id="hero-stats" style="display:none"></div>
         <!-- ДР-chip — показывается когда ДР указан -->
         <div class="loy-hero__bday" id="hero-bday-chip" style="display:none"></div>
         <!-- Скрытые поля для совместимости с club.js (внутренние баллы/звёзды отключены) -->
@@ -249,10 +242,9 @@
         </div>
       </div>
 
-      <!-- Sweet Check teaser/status — занимает видное место -->
+      <!-- Sweet Check — единая smart-карточка: task этой недели + статус билетов -->
       <div id="sc-my-top" style="display:none"></div>
-
-      <!-- Задание этой недели Сладкого чека — загружается из API -->
+      <!-- Скрытый узел для backward-compat (старый sc-week-top больше не используется) -->
       <div id="sc-week-top" style="display:none"></div>
 
       <!-- Onboarding для нового юзера (verified + 0 заказов) -->
@@ -299,8 +291,27 @@
 
       <!-- Мой счёт на сайте maria-irk.ru — единственный источник баллов -->
       <div id="lk-section" style="display:none">
-        <div class="sh"><span class="sh__line"></span><span class="sh__text">Мой счёт</span><span class="sh__line"></span></div>
         <div class="lk-card" id="lk-card"></div>
+      </div>
+
+      <!-- Привилегии — inline-список с галочками -->
+      <div class="club-benefits">
+        <div class="club-benefits__h">Привилегии клуба</div>
+        <ul class="club-benefits__list">
+          <li><span class="cb-tick">✓</span> Кэшбэк до 10% баллами на сайте</li>
+          <li><span class="cb-tick">✓</span> −5% вам и партнёру в День рождения</li>
+          <li><span class="cb-tick">✓</span> −10% детям в День рождения</li>
+          <li><span class="cb-tick">✓</span> Билет в Сладкий чек с каждого чека</li>
+          <li><span class="cb-tick">✓</span> Оплата до 30% заказа баллами</li>
+          <li><span class="cb-tick">✓</span> Партнёрские скидки в 14 заведениях</li>
+          <li><span class="cb-tick">✓</span> Торт месяца −20% ежедневно</li>
+        </ul>
+        <div class="club-benefits__levels">
+          <div class="cb-lvl"><span class="cb-lvl-ic">🤝</span><span class="cb-lvl-n">Друзья</span><span class="cb-lvl-c">от 0 ₽</span><span class="cb-lvl-p">5%</span></div>
+          <div class="cb-lvl"><span class="cb-lvl-ic">💛</span><span class="cb-lvl-n">Лучшие друзья</span><span class="cb-lvl-c">от 10 000 ₽</span><span class="cb-lvl-p">7%</span></div>
+          <div class="cb-lvl"><span class="cb-lvl-ic">❤️</span><span class="cb-lvl-n">Семья</span><span class="cb-lvl-c">от 50 000 ₽</span><span class="cb-lvl-p">10%</span></div>
+        </div>
+        <div class="club-benefits__note">Скидки и бонусы не суммируются — применяется максимальная выгода</div>
       </div>
 
       <!-- Скрытые DOM-узлы для совместимости с club.js (рендер не показывается) -->
@@ -318,38 +329,6 @@
   </div>
 
   <!-- ── Дополнительная информация — accordion-секции ──────────────── -->
-
-  <details class="acc">
-    <summary class="acc__sum">
-      <span class="acc__ic"><span data-icon="trophy" data-size="20"></span></span>
-      <span class="acc__t">Уровни и привилегии</span>
-      <span class="acc__chev"><span data-icon="arrowRight" data-size="16"></span></span>
-    </summary>
-    <div class="acc__body">
-      <div class="levels">
-        <div class="lv lv--1">
-          <div class="lv__left"><div class="lv__icon">🤝</div><div><div class="lv__name">Друзья</div><div class="lv__cond">от 0 ₽ в год</div></div></div>
-          <div class="lv__pct">5%</div>
-        </div>
-        <div class="lv lv--2">
-          <div class="lv__left"><div class="lv__icon">💛</div><div><div class="lv__name">Лучшие друзья</div><div class="lv__cond">от 10 000 ₽ в год</div></div></div>
-          <div class="lv__pct">7%</div>
-        </div>
-        <div class="lv lv--3">
-          <div class="lv__left"><div class="lv__icon">❤️</div><div><div class="lv__name">Семья</div><div class="lv__cond">от 50 000 ₽ в год</div></div></div>
-          <div class="lv__pct">10%</div>
-        </div>
-      </div>
-      <div class="benefits" style="margin-top:14px">
-        <div class="bf"><span class="bf__ic">💰</span><div><b>Оплата бонусами до 30%</b><div class="bf__sub">Накопленные баллы — до 30% любого заказа</div></div></div>
-        <div class="bf"><span class="bf__ic">🎂</span><div><b>Скидка в день рождения</b><div class="bf__sub">Вам и партнёру — 5%, детям — 10% (±5 дней)</div></div></div>
-        <div class="bf"><span class="bf__ic">🏅</span><div><b>Торт месяца −20% ежедневно</b><div class="bf__sub">Постоянная скидка для участников клуба</div></div></div>
-        <div class="bf"><span class="bf__ic">🎟</span><div><b>Закрытые распродажи</b><div class="bf__sub">Ранний доступ к новинкам, дегустации, мероприятия</div></div></div>
-        <div class="bf"><span class="bf__ic">🤝</span><div><b>Скидки у партнёров</b><div class="bf__sub">Рестораны, фитнес, салоны красоты, клиники</div></div></div>
-      </div>
-      <div class="infobox" style="margin-top:12px">ℹ️ Скидки и бонусы не суммируются — применяется максимальная выгода</div>
-    </div>
-  </details>
 
   <details class="acc">
     <summary class="acc__sum">
