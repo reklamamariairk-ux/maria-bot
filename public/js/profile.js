@@ -33,7 +33,8 @@ async function profileLoad(force) {
 }
 window.profileLoad = profileLoad;
 // Экспорт для прямого вызова из тестов/моков
-window.profileRender = (data) => profileRender(data);
+const _profileRenderRef = profileRender;
+window.profileRender = _profileRenderRef;
 
 function profileRender(data) {
   const u = data.user || {};
