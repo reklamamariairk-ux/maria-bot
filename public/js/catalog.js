@@ -17,11 +17,28 @@ let CATALOG_STATE = {
   categories: [],
   loading: false,
   searchTimer: null,
-  sort: 'default',     // default | price-asc | price-desc | popular
-  priceMax: 0,         // 0 = без ограничения
-  currentCategory: '', // для фильтрации повторно
-  lastProducts: [],    // последний загруженный список
+  sort: 'default',
+  priceMax: 0,
+  currentCategory: '',
+  lastProducts: [],
+  visibleCount: 20, // pagination — сколько товаров показано сейчас
+  pageSize: 20,
 };
+window.CATALOG_STATE = CATALOG_STATE;
+
+// Форматирование веса: "1.250" → "1.25 кг", "0.800" → "800 г", "1" → "1 кг"
+function fmtWeight(w) {
+  if (!w) return '';
+  const s = String(w).trim().replace(',', '.');
+  const num = parseFloat(s);
+  if (isNaN(num)) return s;
+  if (num >= 1) return num.toFixed(num % 1 === 0 ? 0 : 2).replace(/\.?0+$/, '') + ' кг';
+  return Math.round(num * 1000) + ' г';
+}
+window.fmtWeight = fmtWeight;
+
+// Popular searches для suggested
+const POPULAR_SEARCHES = ['шоколадный', 'медовик', 'наполеон', 'эклер', 'детский', 'без орехов', 'на день рождения', 'наборы'];
 
 // Wishlist (избранное) — localStorage
 const WISH_KEY = 'maria_wishlist_v1';
@@ -95,13 +112,16 @@ function catRenderCategories() {
 async function catShowProducts(category) {
   document.getElementById('menu-categories').style.display = 'none';
   document.getElementById('menu-products').style.display = '';
-  document.getElementById('menu-bread').style.display = '';
-  document.getElementById('menu-bread-name').textContent = category;
+  document.getElementById('menu-bread').style.display = 'none'; // старый bread больше не нужен — теперь sticky
   document.getElementById('menu-empty').style.display = 'none';
   // Скрываем chip-фильтры в категории
   const chips = document.getElementById('menu-chips');
   if (chips) chips.style.display = 'none';
   CATALOG_STATE.currentCategory = category;
+  CATALOG_STATE.visibleCount = CATALOG_STATE.pageSize; // сброс pagination
+
+  // Рендерим sticky category switcher
+  catRenderStickyCats(category);
 
   const grid = document.getElementById('menu-products');
   // Skeleton loader — 6 placeholder-карточек
@@ -124,27 +144,180 @@ async function catShowProducts(category) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// Применяем sort + price-фильтр к lastProducts и рендерим
+// Sticky category switcher — горизонтальный chip-row над товарами
+function catRenderStickyCats(active) {
+  const wrap = document.getElementById('menu-stickycats');
+  if (!wrap) return;
+  const HIDDEN = new Set(['Каталог', 'Торты на заказ']);
+  const cats = (CATALOG_STATE.categories || []).filter((c) => !HIDDEN.has(c.name) && c.count > 0);
+  const allBtn = `<button class="sticky-cat" onclick="haptic('light');catShowCategories()">← Все</button>`;
+  const chips = cats.map((c) => {
+    const isActive = c.name === active;
+    const icon = CATEGORY_ICONS[c.name] || '🍮';
+    return `<button class="sticky-cat ${isActive ? 'sticky-cat--active' : ''}" data-haptic="light" onclick="haptic('light');catShowProducts('${escapeAttr(c.name)}')">${icon} ${escapeHtml(c.name)}</button>`;
+  }).join('');
+  wrap.innerHTML = allBtn + chips;
+  wrap.style.display = '';
+}
+
+// Применяем sort + price-фильтр + pagination к lastProducts и рендерим
 function catRenderToolbarAndProducts() {
   let products = [...(CATALOG_STATE.lastProducts || [])];
-  // Filter по цене
   if (CATALOG_STATE.priceMax > 0) {
     products = products.filter((p) => {
       const price = Number(p.priceNumber) || 0;
       return price > 0 && price <= CATALOG_STATE.priceMax;
     });
   }
-  // Sort
   const s = CATALOG_STATE.sort;
   if (s === 'price-asc')  products.sort((a,b) => (a.priceNumber||0) - (b.priceNumber||0));
   if (s === 'price-desc') products.sort((a,b) => (b.priceNumber||0) - (a.priceNumber||0));
   if (s === 'popular')    products.sort((a,b) => Number(b.hit||0) - Number(a.hit||0));
-  // Toolbar над сеткой
-  const toolbar = catRenderToolbar(products.length);
+  // Pagination
+  const total = products.length;
+  const visible = Math.min(CATALOG_STATE.visibleCount, total);
+  const pageProducts = products.slice(0, visible);
+  const toolbar = catRenderToolbar(total);
   const grid = document.getElementById('menu-products');
-  grid.innerHTML = toolbar + '<div class="cat-products-grid">' + catRenderProductsHtml(products) + '</div>';
+  grid.innerHTML = toolbar + '<div class="cat-products-grid">' + catRenderProductsHtml(pageProducts) + '</div>';
+  // Load-more sentinel
+  const more = document.getElementById('menu-load-more');
+  if (more) more.style.display = (visible < total) ? '' : 'none';
   if (window.IconInflate) window.IconInflate(grid);
+  // Setup infinite scroll observer (once)
+  catInitInfiniteScroll();
 }
+
+// Lazy load: show ещё page при достижении конца списка
+let _ioObserver = null;
+function catInitInfiniteScroll() {
+  if (_ioObserver) return;
+  const target = document.getElementById('menu-load-more');
+  if (!target || !('IntersectionObserver' in window)) return;
+  _ioObserver = new IntersectionObserver((entries) => {
+    entries.forEach((e) => {
+      if (e.isIntersecting) catLoadMore();
+    });
+  }, { rootMargin: '200px' });
+  _ioObserver.observe(target);
+}
+
+function catLoadMore() {
+  const total = CATALOG_STATE.lastProducts?.length || 0;
+  if (CATALOG_STATE.visibleCount >= total) return;
+  CATALOG_STATE.visibleCount = Math.min(total, CATALOG_STATE.visibleCount + CATALOG_STATE.pageSize);
+  catRenderToolbarAndProducts();
+}
+window.catLoadMore = catLoadMore;
+
+// Плюрализация для "человек"
+function pluralPersons(n) {
+  if (!n) return '';
+  const mod10 = n % 10, mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'человека';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'человек';
+  return 'человек';
+}
+
+// Detect allergens из описания/начинки/состава
+function detectAllergens(p) {
+  const text = [
+    p.name || '', p.preview || '', p.description_text || '',
+    ...(p.filling || []), ...(p.cake_type || [])
+  ].join(' ').toLowerCase();
+  const rules = [
+    { kw: ['орех', 'фундук', 'миндал', 'фисташ', 'грецк', 'арахис', 'кешью'], icon: '🥜', label: 'Орехи' },
+    { kw: ['молок', 'сливк', 'сметан', 'сыр', 'творог', 'йогурт', 'кефир'], icon: '🥛', label: 'Молочное' },
+    { kw: ['яйц', 'белок', 'желток', 'безе', 'мерен'], icon: '🥚', label: 'Яйца' },
+    { kw: ['мука', 'пшениц', 'злак', 'клейков', 'глютен'], icon: '🌾', label: 'Глютен' },
+    { kw: ['шокол', 'какао'], icon: '🍫', label: 'Шоколад' },
+    { kw: ['мёд', 'мед '], icon: '🍯', label: 'Мёд' },
+  ];
+  return rules.filter((r) => r.kw.some((k) => text.includes(k))).slice(0, 4);
+}
+
+// Quantity selector
+function catQtyInc() {
+  window._modalQty = Math.min(20, (window._modalQty || 1) + 1);
+  catUpdateQtyUI();
+}
+function catQtyDec() {
+  window._modalQty = Math.max(1, (window._modalQty || 1) - 1);
+  catUpdateQtyUI();
+}
+function catUpdateQtyUI() {
+  const valEl = document.getElementById('cat-modal-qty');
+  const addBtn = document.getElementById('cat-modal-add');
+  const qty = window._modalQty || 1;
+  if (valEl) valEl.textContent = qty;
+  if (addBtn) {
+    const base = Number(addBtn.dataset.basePrice || 0);
+    const total = base * qty;
+    addBtn.textContent = total > 0 ? `В корзину · ${total.toLocaleString('ru-RU')} ₽` : 'В корзину';
+  }
+  // Update TG MainButton too
+  const base = Number(window._modalBasePrice || 0);
+  if (base > 0 && window.tgMain?.show) {
+    window.tgMain.show(`Добавить · ${(base * qty).toLocaleString('ru-RU')} ₽`);
+  }
+  window.haptic?.('selection');
+}
+window.catQtyInc = catQtyInc;
+window.catQtyDec = catQtyDec;
+
+// Похожие товары (из той же категории) — render 3-4 thumbnails
+function renderSimilarProducts(p) {
+  const wrap = document.getElementById('cat-modal-similar');
+  if (!wrap || !p?.category) return;
+  // Берём из текущего CATALOG_STATE.lastProducts если совпадает категория
+  let pool = (CATALOG_STATE.lastProducts || []).filter((x) =>
+    x.category === p.category && x.id !== p.id && x.image
+  );
+  if (pool.length < 3) {
+    // Fallback — все каталог из catalog cache
+    const cache = window._catalogCache || {};
+    pool = Object.values(cache).filter((x) => x.id !== p.id && x.image && x.category === p.category);
+  }
+  if (pool.length < 3) { wrap.innerHTML = ''; return; }
+  // Random shuffle, берём 3
+  const similar = pool.sort(() => 0.5 - Math.random()).slice(0, 3);
+  wrap.innerHTML = `
+    <div class="cat-modal__similar-h">Похожие товары</div>
+    <div class="cat-modal__similar-grid">
+      ${similar.map((s) => {
+        const sPrice = s.price ? `${Number(s.price).toLocaleString('ru-RU')} ₽` : (s.priceNumber ? `${Number(s.priceNumber).toLocaleString('ru-RU')} ₽` : '');
+        return `
+          <div class="cat-modal__similar-item" onclick="catOpenProduct(${s.id})">
+            <img src="/img?u=${encodeURIComponent(s.image)}" alt="${escapeAttr(s.name)}" loading="lazy"/>
+            <div class="cat-modal__similar-name">${escapeHtml(s.name)}</div>
+            <div class="cat-modal__similar-price">${escapeHtml(sPrice)}</div>
+          </div>`;
+      }).join('')}
+    </div>`;
+}
+
+// Photo zoom modal — fullscreen
+function catOpenPhotoZoom(src) {
+  if (!src) return;
+  let m = document.getElementById('photo-zoom-modal');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'photo-zoom-modal';
+    m.className = 'photo-zoom';
+    m.onclick = () => catClosePhotoZoom();
+    m.innerHTML = `<button class="photo-zoom__close" onclick="catClosePhotoZoom()">×</button><img id="photo-zoom-img" alt=""/>`;
+    document.body.appendChild(m);
+  }
+  m.querySelector('#photo-zoom-img').src = src;
+  m.style.display = 'flex';
+  window.haptic?.('light');
+}
+window.catOpenPhotoZoom = catOpenPhotoZoom;
+function catClosePhotoZoom() {
+  const m = document.getElementById('photo-zoom-modal');
+  if (m) m.style.display = 'none';
+}
+window.catClosePhotoZoom = catClosePhotoZoom;
 
 function catRenderToolbar(count) {
   const sortLabel = {
@@ -232,6 +405,10 @@ function catShowCategories() {
   document.getElementById('menu-products').style.display = 'none';
   document.getElementById('menu-bread').style.display = 'none';
   document.getElementById('menu-empty').style.display = 'none';
+  const sticky = document.getElementById('menu-stickycats');
+  if (sticky) sticky.style.display = 'none';
+  const more = document.getElementById('menu-load-more');
+  if (more) more.style.display = 'none';
   const chips = document.getElementById('menu-chips');
   if (chips) chips.style.display = '';
   const inp = document.getElementById('menu-search');
@@ -284,7 +461,7 @@ function catRenderProductsHtml(products) {
     const hitBadge = hasDiscount
       ? `<span class="pcard-pr__hit pcard-pr__hit--sale">−${p.discountPercent}%</span>`
       : (p.hit ? '<span class="pcard-pr__hit">★ Хит</span>' : '');
-    const weight   = p.weight ? `<span class="pcard-pr__w">${escapeHtml(p.weight)}</span>` : '';
+    const weight   = p.weight ? `<span class="pcard-pr__w">${escapeHtml(fmtWeight(p.weight))}</span>` : '';
     const addBtn = hasId && priceNum > 0
       ? `<button class="pcard-pr__add" aria-label="В корзину" onclick="event.stopPropagation();catQuickAdd(${p.id},this)">+</button>`
       : '';
@@ -358,19 +535,32 @@ async function catOpenProduct(id) {
     const oldPriceTxt = p.oldPrice ? `${Number(p.oldPrice).toLocaleString('ru-RU')} ₽` : '';
     const hasDiscount = p.discountPercent && p.discountPercent > 0;
     const desc = (p.description_text || p.preview || '').trim();
+
+    // Properties — Вес (форматированный), Персон, Начинка, Тип
     const props = [];
-    if (p.weight)  props.push(`<span><b>Вес:</b> ${escapeHtml(String(p.weight))}</span>`);
-    if (p.persons) props.push(`<span><b>Персон:</b> ${escapeHtml(String(p.persons))}</span>`);
+    if (p.weight)  props.push(`<span><b>Вес:</b> ${escapeHtml(fmtWeight(p.weight))}</span>`);
+    if (p.persons) props.push(`<span><b>На:</b> ${escapeHtml(String(p.persons))} ${pluralPersons(Number(p.persons) || 0)}</span>`);
     const filling = (p.filling || []).join(', ');
     if (filling)   props.push(`<span><b>Начинка:</b> ${escapeHtml(filling)}</span>`);
     const types = [...(p.cake_type || []), ...(p.pie_type || []), ...(p.dessert_type || [])].join(', ');
     if (types)     props.push(`<span><b>Тип:</b> ${escapeHtml(types)}</span>`);
 
+    // Allergen chips — detect из описания/состава/начинки
+    const allergens = detectAllergens(p);
+    const allergenHtml = allergens.length ? `
+      <div class="cat-modal__allergens">
+        <div class="cat-modal__allergens-h">Содержит:</div>
+        <div class="cat-modal__allergens-list">
+          ${allergens.map((a) => `<span class="allerg-chip">${a.icon} ${a.label}</span>`).join('')}
+        </div>
+      </div>` : '';
+
     body.innerHTML = `
       <button class="cat-modal__close" onclick="catCloseProduct()">×</button>
-      <div class="cat-modal__hero">
+      <div class="cat-modal__hero" onclick="catOpenPhotoZoom('${img ? '/img?u=' + encodeURIComponent(img) : ''}')">
         ${img ? `<img class="cat-modal__pic" src="/img?u=${encodeURIComponent(img)}" alt="${escapeAttr(p.name)}" loading="eager" decoding="async" fetchpriority="high">` : '<span class="pcard-pr__noimg" style="font-size:64px">🍰</span>'}
         ${p.hit ? '<span class="cat-modal__hit">★ Хит</span>' : ''}
+        ${hasDiscount ? `<span class="cat-modal__sale">−${p.discountPercent}%</span>` : ''}
       </div>
       <div class="cat-modal__title">${escapeHtml(p.name)}</div>
       <div class="cat-modal__price">
@@ -378,24 +568,40 @@ async function catOpenProduct(id) {
         ${hasDiscount && oldPriceTxt ? `<span class="cat-modal__old">${escapeHtml(oldPriceTxt)}</span> <span class="cat-modal__pct">−${p.discountPercent}%</span>` : ''}
       </div>
       ${props.length ? `<div class="cat-modal__props">${props.join('')}</div>` : ''}
+      ${allergenHtml}
       ${desc ? `<div class="cat-modal__desc">${escapeHtml(desc)}</div>` : ''}
+      <div class="cat-modal__similar" id="cat-modal-similar"></div>
       <div class="cat-modal__actions">
-        <button class="btn-outline cat-modal__share" data-haptic="light" onclick="shareProduct(${p.id})" aria-label="Поделиться">
+        <div class="cat-modal__qty">
+          <button class="cat-modal__qty-btn" onclick="catQtyDec()" aria-label="Меньше">−</button>
+          <span class="cat-modal__qty-val" id="cat-modal-qty">1</span>
+          <button class="cat-modal__qty-btn" onclick="catQtyInc()" aria-label="Больше">+</button>
+        </div>
+        <button class="cat-modal__share" data-haptic="light" onclick="shareProduct(${p.id})" aria-label="Поделиться">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>
-          <span>Поделиться</span>
         </button>
-        <button class="btn-full" id="cat-modal-add">${p.price ? `🛒 В корзину · ${Number(p.price).toLocaleString('ru-RU')} ₽` : '🛒 В корзину'}</button>
+        <button class="btn-full cat-modal__add-main" id="cat-modal-add" data-base-price="${Number(p.price || 0)}">${p.price ? `В корзину · ${Number(p.price).toLocaleString('ru-RU')} ₽` : 'В корзину'}</button>
       </div>
     `;
-    // Привязываем обработчик через addEventListener, чтобы не зависеть от inline-onclick (где нужно
-    // экранировать ' " < > и т.п. в имени товара)
+    // Render similar products (3 из той же категории)
+    renderSimilarProducts(p);
+
+    // Quantity selector state
+    window._modalQty = 1;
+    window._modalBasePrice = Number(p.price || 0);
+
     const addBtn = document.getElementById('cat-modal-add');
     const productSnap = { id: p.id, name: p.name, price: p.price, image: img };
-    if (addBtn) addBtn.onclick = () => { window.cartAdd?.(productSnap); catCloseProduct(); };
-    // Нативная Telegram MainButton — для добавления в корзину одним тапом
-    const priceLabel = p.price ? `Добавить в корзину · ${Number(p.price).toLocaleString('ru-RU')} ₽` : 'Добавить в корзину';
+    if (addBtn) addBtn.onclick = () => {
+      const qty = window._modalQty || 1;
+      for (let i = 0; i < qty; i++) window.cartAdd?.(productSnap);
+      catCloseProduct();
+    };
+    // Нативная Telegram MainButton с qty
+    const priceLabel = p.price ? `Добавить · ${Number(p.price).toLocaleString('ru-RU')} ₽` : 'Добавить в корзину';
     window.tgMain?.show(priceLabel, () => {
-      window.cartAdd?.(productSnap);
+      const qty = window._modalQty || 1;
+      for (let i = 0; i < qty; i++) window.cartAdd?.(productSnap);
       catCloseProduct();
     });
   } catch (e) {
@@ -420,17 +626,69 @@ async function catSearch(query) {
   document.getElementById('menu-bread').style.display = 'none';
   document.getElementById('menu-products').style.display = '';
   document.getElementById('menu-empty').style.display = 'none';
+  // Скрываем suggested и sticky cats при активном поиске
+  const sug = document.getElementById('menu-suggested');
+  if (sug) sug.style.display = 'none';
+  const sticky = document.getElementById('menu-stickycats');
+  if (sticky) sticky.style.display = 'none';
+
   const wrap = document.getElementById('menu-products');
   wrap.innerHTML = '<div class="cat-loading">Ищем…</div>';
 
   try {
     const res = await fetch('/api/catalog/search?q=' + encodeURIComponent(q));
     const data = await res.json();
-    catRenderProducts(data.products || []);
+    const products = data.products || [];
+    if (products.length === 0) {
+      wrap.innerHTML = `
+        <div class="cat-search-empty">
+          <div class="cat-search-empty__ic">🔍</div>
+          <div class="cat-search-empty__h">Ничего не нашлось по «${escapeHtml(q)}»</div>
+          <div class="cat-search-empty__s">Попробуй другие слова или категорию</div>
+          <button class="btn-outline" onclick="catClearSearch()">Сбросить поиск</button>
+        </div>`;
+      const more = document.getElementById('menu-load-more');
+      if (more) more.style.display = 'none';
+      return;
+    }
+    // Header с counter
+    const counter = `<div class="cat-search-counter">По запросу <b>«${escapeHtml(q)}»</b> — ${products.length} ${products.length === 1 ? 'товар' : (products.length < 5 ? 'товара' : 'товаров')}</div>`;
+    wrap.innerHTML = counter + '<div class="cat-products-grid">' + catRenderProductsHtml(products) + '</div>';
+    const more = document.getElementById('menu-load-more');
+    if (more) more.style.display = 'none';
   } catch {
     wrap.innerHTML = '<div class="cat-empty">Ошибка поиска</div>';
   }
 }
+
+// Suggested searches при focus на пустом поле
+function catShowSuggested() {
+  const wrap = document.getElementById('menu-suggested');
+  if (!wrap) return;
+  wrap.innerHTML = `
+    <div class="cat-suggested__h">Популярное</div>
+    <div class="cat-suggested__chips">
+      ${POPULAR_SEARCHES.map((q) => `<button class="cat-suggested__chip" onclick="catRunSuggestedSearch('${escapeAttr(q)}')">${escapeHtml(q)}</button>`).join('')}
+    </div>`;
+  wrap.style.display = '';
+}
+function catHideSuggested() {
+  const wrap = document.getElementById('menu-suggested');
+  if (wrap) wrap.style.display = 'none';
+}
+function catRunSuggestedSearch(q) {
+  const inp = document.getElementById('menu-search');
+  if (!inp) return;
+  inp.value = q;
+  inp.dispatchEvent(new Event('input', { bubbles: true }));
+  catHideSuggested();
+}
+function catClearSearch() {
+  const inp = document.getElementById('menu-search');
+  if (inp) { inp.value = ''; inp.dispatchEvent(new Event('input', { bubbles: true })); }
+}
+window.catRunSuggestedSearch = catRunSuggestedSearch;
+window.catClearSearch = catClearSearch;
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -447,7 +705,16 @@ document.addEventListener('DOMContentLoaded', () => {
       clearTimeout(CATALOG_STATE.searchTimer);
       const v = inp.value;
       clear.style.display = v ? '' : 'none';
+      if (!v) catShowSuggested();
+      else catHideSuggested();
       CATALOG_STATE.searchTimer = setTimeout(() => catSearch(v), 250);
+    });
+    inp.addEventListener('focus', () => {
+      if (!inp.value) catShowSuggested();
+    });
+    inp.addEventListener('blur', () => {
+      // Delay чтобы tap по suggested chip успел сработать
+      setTimeout(() => catHideSuggested(), 200);
     });
   }
   if (clear) {
