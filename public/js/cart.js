@@ -119,8 +119,8 @@ function cartOpen() {
   const m = document.getElementById('cart-modal');
   if (!m) return;
   m.style.display = 'flex';
+  document.body.classList.add('cart-open'); // opaque overlay (фикс прозрачного фона)
   window.scrollLock?.();
-  // Telegram BackButton — нативная "← назад" вверху TG
   window.tgBack?.show(() => cartClose());
   cartRender();
 }
@@ -128,6 +128,7 @@ function cartOpen() {
 function cartClose() {
   const m = document.getElementById('cart-modal');
   if (m) m.style.display = 'none';
+  document.body.classList.remove('cart-open');
   window.scrollUnlock?.();
   window.tgBack?.hide();
   window.tgMain?.hide();
