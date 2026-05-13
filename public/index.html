@@ -488,6 +488,24 @@
     </div>
   </div>
 
+  <!-- Profile completion meter (LinkedIn / Yandex Plus style) -->
+  <div class="prof-completion" id="prof-completion" style="display:none">
+    <div class="prof-completion__row">
+      <div class="prof-completion__t">Профиль заполнен на <b id="prof-completion-pct">0%</b></div>
+      <div class="prof-completion__hint" id="prof-completion-hint"></div>
+    </div>
+    <div class="prof-completion__bar">
+      <span class="prof-completion__fill" id="prof-completion-fill" style="width:0%"></span>
+    </div>
+  </div>
+
+  <!-- Quick re-order card (последний заказ → повторить) -->
+  <div class="prof-reorder" id="prof-reorder" style="display:none">
+    <div class="prof-reorder__head">Заказать как в прошлый раз?</div>
+    <div class="prof-reorder__body" id="prof-reorder-body"></div>
+    <button class="prof-reorder__btn" id="prof-reorder-btn" data-haptic="medium">↻ Повторить заказ</button>
+  </div>
+
   <!-- Stat-row: баллы Bitrix / билеты Sweet Check / заказы -->
   <div class="prof-stats">
     <button class="prof-stat" data-haptic="light" onclick="switchTab('club')">
@@ -507,6 +525,21 @@
   <!-- Achievements / Badges -->
   <div class="prof-ach" id="prof-ach" style="display:none">
     <div class="prof-ach__list" id="prof-ach-list"></div>
+  </div>
+
+  <!-- Photo gallery — последние заказанные товары -->
+  <div class="prof-gallery" id="prof-gallery" style="display:none">
+    <div class="prof-gallery__h">
+      <span>Твои недавние</span>
+      <button class="prof-gallery__all" onclick="haptic('light');profOpenOrders()">Все заказы →</button>
+    </div>
+    <div class="prof-gallery__row" id="prof-gallery-row"></div>
+  </div>
+
+  <!-- Categories breakdown -->
+  <div class="prof-cats" id="prof-cats" style="display:none">
+    <div class="prof-cats__h">Твои предпочтения</div>
+    <div class="prof-cats__list" id="prof-cats-list"></div>
   </div>
 
   <!-- ЛИЧНЫЕ ДАННЫЕ -->

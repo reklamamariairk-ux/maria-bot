@@ -176,6 +176,9 @@ function profileRender(data) {
 
   // Mini level-chip (если уровень есть в LK)
   // (заполняется в profileLoadOrdersCount после LK fetch)
+
+  // Completion meter — обновляем при каждом render
+  try { renderProfileCompletion(data); } catch (e) { console.error('[completion]', e); }
 }
 
 function pluralLaunch(n) {
@@ -254,6 +257,12 @@ async function profileLoadOrdersCount() {
 
     // Achievements badges
     try { renderAchievements(_profileData, orders); } catch (e) { console.error('[ach]', e); }
+
+    // Quick re-order card + Photo gallery + Categories breakdown
+    try { renderReorderCard(orders); } catch (e) { console.error('[reorder]', e); }
+    try { renderPhotoGallery(orders); } catch (e) { console.error('[gallery]', e); }
+    try { renderCategoriesBreakdown(orders); } catch (e) { console.error('[cats]', e); }
+    try { renderProfileCompletion(_profileData); } catch (e) { console.error('[completion]', e); }
 
     // QR-card row visibility (только для verified)
     const qrRow = document.getElementById('prof-card-row');
@@ -378,6 +387,171 @@ function profCloseQr() {
   window.scrollUnlock?.();
 }
 window.profCloseQr = profCloseQr;
+
+// Profile completion meter — 5 чекпойнтов
+function renderProfileCompletion(data) {
+  const wrap = document.getElementById('prof-completion');
+  if (!wrap) return;
+  const checks = [
+    { key: 'photo', label: 'фото', done: !!(window.Telegram?.WebApp?.initDataUnsafe?.user?.photo_url) },
+    { key: 'phone', label: 'телефон', done: !!data?.phoneVerified },
+    { key: 'bday',  label: 'день рождения', done: !!data?.birthday },
+    { key: 'address', label: 'адрес доставки', done: !!localStorage.getItem('maria_default_address') },
+    { key: 'wishlist', label: 'избранное', done: (() => { try { return JSON.parse(localStorage.getItem('maria_wishlist') || '[]').length > 0; } catch { return false; } })() },
+  ];
+  const doneCount = checks.filter((c) => c.done).length;
+  const pct = Math.round((doneCount / checks.length) * 100);
+  const missing = checks.find((c) => !c.done);
+
+  const pctEl = document.getElementById('prof-completion-pct');
+  const fillEl = document.getElementById('prof-completion-fill');
+  const hintEl = document.getElementById('prof-completion-hint');
+  if (pctEl) pctEl.textContent = pct + '%';
+  if (fillEl) fillEl.style.width = pct + '%';
+  if (hintEl) {
+    if (missing) {
+      const cta = {
+        photo: 'добавь фото в TG',
+        phone: 'подтверди телефон → +5% кэшбэк',
+        bday: 'укажи ДР → −5% скидка',
+        address: 'укажи адрес → быстрый чекаут',
+        wishlist: 'добавь товары в избранное',
+      }[missing.key] || `укажи ${missing.label}`;
+      hintEl.textContent = cta;
+    } else {
+      hintEl.textContent = 'Готово! 🎉';
+    }
+  }
+  // Показываем только если меньше 100%
+  wrap.style.display = pct < 100 ? '' : 'none';
+}
+window.renderProfileCompletion = renderProfileCompletion;
+
+// Quick re-order card — последний заказ
+function renderReorderCard(orders) {
+  const wrap = document.getElementById('prof-reorder');
+  const body = document.getElementById('prof-reorder-body');
+  const btn = document.getElementById('prof-reorder-btn');
+  if (!wrap || !body || !btn) return;
+  if (!Array.isArray(orders) || orders.length === 0) {
+    wrap.style.display = 'none';
+    return;
+  }
+  // Берём последний non-cancelled заказ с items
+  const last = orders.find((o) => !o.canceled && Array.isArray(o.items) && o.items.length > 0);
+  if (!last) {
+    wrap.style.display = 'none';
+    return;
+  }
+  const items = last.items.slice(0, 3);
+  const itemsTxt = items.map((i) => `${i.qty}× ${i.name}`).join(', ');
+  const more = last.items.length > 3 ? ` +${last.items.length - 3}` : '';
+  const sum = last.sum ? Number(last.sum).toLocaleString('ru-RU') + ' ₽' : '';
+
+  // Подбираем фото первого продукта из catalog cache
+  const cache = window._catalogCache || {};
+  const firstItem = items[0];
+  const matched = firstItem && (firstItem.id || firstItem.product_id) ? cache[firstItem.id || firstItem.product_id] : null;
+  const img = matched?.image || (matched?.images && matched.images[0]) || '';
+
+  body.innerHTML = `
+    <div class="prof-reorder__thumb">${img ? `<img src="/img?u=${encodeURIComponent(img)}" alt=""/>` : '🍰'}</div>
+    <div class="prof-reorder__info">
+      <div class="prof-reorder__items">${escAttr(itemsTxt)}${more}</div>
+      <div class="prof-reorder__meta">${escAttr(formatRelativeDate?.(last.date) || '')}${sum ? ' · ' + escAttr(sum) : ''}</div>
+    </div>`;
+
+  // Привязка к reorderItems
+  const itemsWithId = last.items.filter((i) => i.id || i.product_id);
+  btn.onclick = () => {
+    haptic?.('medium');
+    if (typeof window.reorderItems === 'function') {
+      window.reorderItems(itemsWithId.map((i) => ({ id: i.id || i.product_id, qty: i.qty || 1, name: i.name, price: i.price })));
+    }
+  };
+  wrap.style.display = '';
+}
+window.renderReorderCard = renderReorderCard;
+
+// Photo gallery — thumbnails недавних заказанных товаров
+function renderPhotoGallery(orders) {
+  const wrap = document.getElementById('prof-gallery');
+  const row = document.getElementById('prof-gallery-row');
+  if (!wrap || !row) return;
+  if (!Array.isArray(orders) || orders.length === 0) {
+    wrap.style.display = 'none';
+    return;
+  }
+  // Собираем уникальные products из последних 5 заказов
+  const cache = window._catalogCache || {};
+  const seen = new Set();
+  const products = [];
+  for (const o of orders.slice(0, 5)) {
+    for (const i of (o.items || [])) {
+      const id = i.id || i.product_id;
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      const cached = cache[id];
+      products.push({ id, name: i.name, image: cached?.image || (cached?.images && cached.images[0]) || '' });
+      if (products.length >= 8) break;
+    }
+    if (products.length >= 8) break;
+  }
+  if (products.length === 0) {
+    wrap.style.display = 'none';
+    return;
+  }
+  row.innerHTML = products.map((p) => {
+    const img = p.image
+      ? `<img src="/img?u=${encodeURIComponent(p.image)}" alt="${escAttr(p.name || '')}" loading="lazy"/>`
+      : `<span class="prof-gallery__ph">🍰</span>`;
+    return `<button class="prof-gallery__item" data-haptic="light" onclick="haptic('light');catOpenProduct?.(${p.id})">${img}</button>`;
+  }).join('');
+  wrap.style.display = '';
+}
+window.renderPhotoGallery = renderPhotoGallery;
+
+// Categories breakdown — для каждого ordered item ищем category в catalog
+function renderCategoriesBreakdown(orders) {
+  const wrap = document.getElementById('prof-cats');
+  const list = document.getElementById('prof-cats-list');
+  if (!wrap || !list) return;
+  if (!Array.isArray(orders) || orders.length < 3) {
+    wrap.style.display = 'none';
+    return;
+  }
+  const cache = window._catalogCache || {};
+  const cats = {};
+  let total = 0;
+  for (const o of orders) {
+    for (const i of (o.items || [])) {
+      const id = i.id || i.product_id;
+      const cached = id ? cache[id] : null;
+      const cat = cached?.category || 'Другое';
+      cats[cat] = (cats[cat] || 0) + (Number(i.qty) || 1);
+      total += Number(i.qty) || 1;
+    }
+  }
+  if (total === 0) { wrap.style.display = 'none'; return; }
+  const sorted = Object.entries(cats).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  const icons = { 'Торты': '🍰', 'Пироги': '🥧', 'Пирожные и десерты': '🥐', 'Наборы': '🎁', 'Для праздника': '🎉', 'Другое': '🍪' };
+  list.innerHTML = sorted.map(([name, count]) => {
+    const pct = Math.round((count / total) * 100);
+    return `
+      <div class="prof-cat">
+        <div class="prof-cat__ic">${icons[name] || '🍪'}</div>
+        <div class="prof-cat__body">
+          <div class="prof-cat__row">
+            <span class="prof-cat__name">${escAttr(name)}</span>
+            <span class="prof-cat__pct">${pct}%</span>
+          </div>
+          <div class="prof-cat__bar"><span class="prof-cat__fill" style="width:${pct}%"></span></div>
+        </div>
+      </div>`;
+  }).join('');
+  wrap.style.display = '';
+}
+window.renderCategoriesBreakdown = renderCategoriesBreakdown;
 
 // Achievements — вычисляем badges из имеющихся данных
 function renderAchievements(data, orders) {
