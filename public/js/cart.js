@@ -176,19 +176,45 @@ function cartRender(view) {
       </div>`;
   }).join('');
 
+  // Хинты: cashback (5% по умолчанию для verified юзера), free delivery, min order
+  const total = cartTotal();
+  const FREE_DELIVERY_MIN = 1000;
+  const MIN_ORDER = 300;
+  const cashback = Math.round(total * 0.05); // 5% базовый кэшбэк
+  const remaining = Math.max(0, FREE_DELIVERY_MIN - total);
+  const freeDeliveryHtml = remaining > 0
+    ? `<div class="cart-hint cart-hint--info">🚚 Ещё <b>${remaining.toLocaleString('ru-RU')} ₽</b> до бесплатной доставки</div>`
+    : `<div class="cart-hint cart-hint--success">✓ Доставка бесплатно</div>`;
+  const cashbackHtml = total >= MIN_ORDER
+    ? `<div class="cart-hint cart-hint--bonus">💎 <b>+${cashback.toLocaleString('ru-RU')} ₽</b> кэшбэка после заказа (5%)</div>`
+    : '';
+  const minOrderHtml = total < MIN_ORDER
+    ? `<div class="cart-hint cart-hint--warn">⚠ Минимальный заказ ${MIN_ORDER} ₽ — добавьте ещё на ${(MIN_ORDER - total).toLocaleString('ru-RU')} ₽</div>`
+    : '';
+  const canCheckout = total >= MIN_ORDER;
+
   wrap.innerHTML = `
     <button class="cat-modal__close" onclick="cartClose()">×</button>
     <div class="cart-h">🛒 Корзина · ${cartCount()} шт.</div>
     <div class="cart-list">${lines}</div>
+    <div class="cart-hints">
+      ${freeDeliveryHtml}
+      ${cashbackHtml}
+      ${minOrderHtml}
+    </div>
     <div class="cart-foot">
-      <div class="cart-total">Итого: <b>${cartTotal().toLocaleString('ru-RU')} ₽</b></div>
+      <div class="cart-total">Итого: <b>${total.toLocaleString('ru-RU')} ₽</b></div>
       <button class="btn-outline" onclick="cartClearConfirm()">Очистить</button>
-      <button class="btn-full cart-foot__cta" onclick="cartRender('checkout')">Оформить →</button>
+      <button class="btn-full cart-foot__cta" ${canCheckout ? '' : 'disabled style="opacity:.5;cursor:not-allowed"'} onclick="${canCheckout ? "cartRender('checkout')" : ''}">Оформить →</button>
     </div>
   `;
   // Нативная Telegram MainButton — снизу, прилипает к клавиатуре
-  const total = cartTotal().toLocaleString('ru-RU');
-  window.tgMain?.show(`Оформить · ${total} ₽`, () => cartRender('checkout'));
+  const totalLabel = total.toLocaleString('ru-RU');
+  if (canCheckout) {
+    window.tgMain?.show(`Оформить · ${totalLabel} ₽`, () => cartRender('checkout'));
+  } else {
+    window.tgMain?.hide?.();
+  }
 }
 
 // Сохранённые данные клиента для повторного оформления
@@ -215,13 +241,37 @@ function cartRenderCheckout() {
   const u = tg?.initDataUnsafe?.user;
   const tgName = u ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : '';
   const saved = checkoutLoad();
+  // Auto-fill адреса: 1) saved checkout 2) Profile address 3) пусто
+  const profileAddress = (() => { try { return localStorage.getItem('maria_default_address') || ''; } catch { return ''; } })();
   const defName    = saved.name    || tgName || '';
   const defPhone   = saved.phone   || '';
-  const defAddress = saved.address || '';
-  const defDate    = saved.date    || dateLabel(1); // завтра по умолчанию
+  const defAddress = saved.address || profileAddress || '';
+  const defDate    = saved.date    || dateLabel(1);
   const defTime    = saved.time    || '';
+  const defType    = saved.deliveryType || (defAddress ? 'delivery' : 'delivery');
+  const defShop    = saved.shopId  || '';
+  const defGift    = saved.gift === true;
+  const defPromo   = saved.promo   || '';
 
-  // Дата-чипы: сегодня/завтра/послезавтра/+5 дней
+  // Items summary — compact list для checkout
+  const items = cartLoad();
+  const itemsHtml = items.map((it) => {
+    const sum = (Number(it.price) || 0) * (Number(it.qty) || 0);
+    const img = it.image
+      ? `<img src="/img?u=${encodeURIComponent(it.image)}" alt="" loading="lazy"/>`
+      : `<span class="co-sum__ph">🍰</span>`;
+    return `
+      <div class="co-sum__row">
+        <div class="co-sum__img">${img}</div>
+        <div class="co-sum__body">
+          <div class="co-sum__name">${escHtml(it.name)}</div>
+          <div class="co-sum__meta">${it.qty} × ${Number(it.price).toLocaleString('ru-RU')} ₽</div>
+        </div>
+        <div class="co-sum__price">${sum.toLocaleString('ru-RU')} ₽</div>
+      </div>`;
+  }).join('');
+
+  // Дата-чипы
   const dateChips = [
     { v: dateLabel(0), label: 'Сегодня' },
     { v: dateLabel(1), label: 'Завтра' },
@@ -230,49 +280,194 @@ function cartRenderCheckout() {
   ];
   const timeChips = ['10:00–12:00','12:00–14:00','14:00–16:00','16:00–18:00','18:00–20:00'];
 
+  // Breakdown
+  const subtotal = cartTotal();
+  const FREE_DELIVERY_MIN = 1000;
+  const deliveryFee = (defType === 'pickup' || subtotal >= FREE_DELIVERY_MIN) ? 0 : 250;
+  const total = subtotal + deliveryFee;
+  const cashback = Math.round(subtotal * 0.05);
+
   wrap.innerHTML = `
     <button class="cat-modal__close" onclick="cartClose()">×</button>
     <div class="cart-h">Оформление заказа</div>
+
+    <!-- Summary заказа -->
+    <details class="co-summary" open>
+      <summary class="co-summary__head">
+        <span>Состав заказа · ${items.length} ${items.length === 1 ? 'товар' : items.length < 5 ? 'товара' : 'товаров'}</span>
+        <span class="co-summary__chev">▾</span>
+      </summary>
+      <div class="co-summary__list">${itemsHtml}</div>
+    </details>
+
     <div class="cart-form">
+      <!-- Самовывоз / Доставка tabs -->
+      <div class="co-deltype">
+        <button type="button" class="co-deltype__tab${defType === 'delivery' ? ' co-deltype__tab--on' : ''}" onclick="coSetDelType('delivery')">
+          🚚 Доставка${deliveryFee === 0 ? ' · бесплатно' : ' · 250 ₽'}
+        </button>
+        <button type="button" class="co-deltype__tab${defType === 'pickup' ? ' co-deltype__tab--on' : ''}" onclick="coSetDelType('pickup')">
+          🏬 Самовывоз · 0 ₽
+        </button>
+      </div>
+      <input id="co-deltype" type="hidden" value="${escAttr(defType)}" />
+
       <label>Имя <span class="lbl-req">*</span>
         <input id="co-name" type="text" placeholder="Как к вам обращаться" value="${escAttr(defName)}" autocomplete="name" />
       </label>
       <label>Телефон <span class="lbl-req">*</span>
         <input id="co-phone" type="tel" placeholder="+7 (999) 123-45-67" value="${escAttr(defPhone)}" inputmode="tel" autocomplete="tel" oninput="phoneMask(this)" />
       </label>
-      <label>Адрес доставки <span class="lbl-hint">(пусто = самовывоз)</span>
-        <input id="co-address" type="text" placeholder="г Иркутск, ул ..." value="${escAttr(defAddress)}" autocomplete="street-address" />
-      </label>
-      <label>Дата доставки</label>
+
+      <!-- Адрес или Кафе (зависит от deltype) -->
+      <div id="co-address-block" style="${defType === 'delivery' ? '' : 'display:none'}">
+        <label>Адрес доставки <span class="lbl-req">*</span>
+          <input id="co-address" type="text" placeholder="г Иркутск, ул ..." value="${escAttr(defAddress)}" autocomplete="street-address" />
+        </label>
+      </div>
+      <div id="co-shop-block" style="${defType === 'pickup' ? '' : 'display:none'}">
+        <label>Кафе для самовывоза <span class="lbl-req">*</span>
+          <button type="button" class="co-shop-btn" id="co-shop-btn" onclick="coOpenShopPicker()">${defShop ? escHtml(defShop) : 'Выберите кафе →'}</button>
+        </label>
+        <input id="co-shop" type="hidden" value="${escAttr(defShop)}" />
+      </div>
+
+      <label>Дата ${defType === 'pickup' ? 'самовывоза' : 'доставки'}</label>
       <div class="chip-group" id="co-date-chips">
         ${dateChips.map((c) => `<button type="button" class="chip-pick${c.v === defDate ? ' chip-pick--on' : ''}" data-haptic="selection" onclick="pickDate('${c.v}',this)">${c.label}<small>${c.v.slice(0,5)}</small></button>`).join('')}
       </div>
+      <input id="co-date-picker" type="date" class="co-date-picker" value="${escAttr(defDate)}" min="${dateLabel(0)}" onchange="coPickCustomDate(this.value)" />
       <input id="co-date" type="hidden" value="${escAttr(defDate)}" />
-      <label>Время доставки</label>
+
+      <label>Время</label>
       <div class="chip-group" id="co-time-chips">
         ${timeChips.map((t) => `<button type="button" class="chip-pick${t === defTime ? ' chip-pick--on' : ''}" data-haptic="selection" onclick="pickTime('${t}',this)">${t}</button>`).join('')}
       </div>
       <input id="co-time" type="hidden" value="${escAttr(defTime)}" />
+
+      <!-- Подарочная упаковка checkbox -->
+      <label class="co-checkbox">
+        <input id="co-gift" type="checkbox" ${defGift ? 'checked' : ''} />
+        <span class="co-checkbox__t">🎁 Подарочная упаковка</span>
+        <span class="co-checkbox__s">Бесплатно, фирменная коробка с лентой</span>
+      </label>
+
+      <!-- Promo code field -->
+      <label>Промокод <span class="lbl-hint">(если есть)</span>
+        <input id="co-promo" type="text" placeholder="Например, MARIA10" value="${escAttr(defPromo)}" />
+      </label>
+
       <label>Комментарий
         <textarea id="co-comment" rows="2" placeholder="Уточнения для менеджера"></textarea>
       </label>
       <div class="cart-form__hint">Менеджер позвонит для подтверждения. Оплата при получении.</div>
-      <div class="cart-total" style="margin-top:8px">К оплате: <b>${cartTotal().toLocaleString('ru-RU')} ₽</b></div>
+
+      <!-- Breakdown -->
+      <div class="co-breakdown">
+        <div class="co-breakdown__row"><span>Товары</span><b>${subtotal.toLocaleString('ru-RU')} ₽</b></div>
+        <div class="co-breakdown__row"><span>${defType === 'pickup' ? 'Самовывоз' : 'Доставка'}</span><b>${deliveryFee === 0 ? 'бесплатно' : deliveryFee.toLocaleString('ru-RU') + ' ₽'}</b></div>
+        ${cashback > 0 ? `<div class="co-breakdown__row co-breakdown__row--bonus"><span>💎 Кэшбэк (5%, после заказа)</span><b>+${cashback.toLocaleString('ru-RU')} ₽</b></div>` : ''}
+        <div class="co-breakdown__row co-breakdown__row--total"><span>Итого</span><b>${total.toLocaleString('ru-RU')} ₽</b></div>
+      </div>
+
       <button class="btn-outline" onclick="cartRender()">← Назад в корзину</button>
-      <button class="btn-full cart-foot__cta" onclick="cartSubmit()">Оформить заказ</button>
+      <button class="btn-full cart-foot__cta" onclick="cartSubmit()">Оформить заказ · ${total.toLocaleString('ru-RU')} ₽</button>
       <div class="cart-form__status" id="co-status"></div>
     </div>
   `;
-  const total = cartTotal().toLocaleString('ru-RU');
-  window.tgMain?.show(`Подтвердить заказ · ${total} ₽`, () => cartSubmit());
+  window.tgMain?.show(`Подтвердить · ${total.toLocaleString('ru-RU')} ₽`, () => cartSubmit());
 }
+
+// Переключение Доставка/Самовывоз
+function coSetDelType(type) {
+  const hiddenInput = document.getElementById('co-deltype');
+  if (hiddenInput) hiddenInput.value = type;
+  // Сохраняем
+  const saved = checkoutLoad();
+  saved.deliveryType = type;
+  checkoutSave(saved);
+  // Re-render checkout
+  cartRenderCheckout();
+  window.haptic?.('selection');
+}
+window.coSetDelType = coSetDelType;
+
+// Custom date picker (beyond chips)
+function coPickCustomDate(v) {
+  const hidden = document.getElementById('co-date');
+  if (hidden) hidden.value = v;
+  // Снимаем active со всех chip
+  document.querySelectorAll('#co-date-chips .chip-pick').forEach((c) => c.classList.remove('chip-pick--on'));
+  window.haptic?.('selection');
+}
+window.coPickCustomDate = coPickCustomDate;
+
+// Выбор кафе для самовывоза
+function coOpenShopPicker() {
+  let modal = document.getElementById('shop-picker-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'shop-picker-modal';
+    modal.className = 'cat-modal';
+    modal.style.display = 'none';
+    modal.onclick = (e) => { if (e.target === modal) coCloseShopPicker(); };
+    modal.innerHTML = `
+      <div class="cat-modal__sheet">
+        <button class="cat-modal__close" onclick="coCloseShopPicker()">×</button>
+        <div class="shop-picker__h">Выберите кафе</div>
+        <div class="shop-picker__list" id="shop-picker-list"></div>
+      </div>`;
+    document.body.appendChild(modal);
+  }
+  // Fetch shops через существующий API/openShopsModal data
+  const SHOPS = window.MARIA_SHOPS || [
+    { id: 'lenina-1', name: 'ул. Ленина, 1', area: 'Центр' },
+    { id: 'karla-marksa-24', name: 'ул. Карла Маркса, 24', area: 'Центр' },
+    { id: 'sovetskaya-58', name: 'ул. Советская, 58', area: 'Свердловский' },
+    { id: 'baikalskaya-105', name: 'ул. Байкальская, 105', area: 'Октябрьский' },
+    { id: 'dekabristov-37', name: 'ул. Декабристов, 37', area: 'Свердловский' },
+    { id: 'partizanskaya-21', name: 'ул. Партизанская, 21', area: 'Центр' },
+  ];
+  const list = modal.querySelector('#shop-picker-list');
+  list.innerHTML = SHOPS.map((s) => `
+    <button class="shop-picker__item" onclick="coPickShop('${escAttr(s.name)}')">
+      <div class="shop-picker__pin">📍</div>
+      <div class="shop-picker__body">
+        <div class="shop-picker__name">${escHtml(s.name)}</div>
+        <div class="shop-picker__area">${escHtml(s.area || '')}</div>
+      </div>
+    </button>`).join('');
+  modal.style.display = 'flex';
+}
+window.coOpenShopPicker = coOpenShopPicker;
+function coCloseShopPicker() {
+  const m = document.getElementById('shop-picker-modal');
+  if (m) m.style.display = 'none';
+}
+window.coCloseShopPicker = coCloseShopPicker;
+function coPickShop(name) {
+  const hidden = document.getElementById('co-shop');
+  const btn = document.getElementById('co-shop-btn');
+  if (hidden) hidden.value = name;
+  if (btn) btn.textContent = name;
+  const saved = checkoutLoad();
+  saved.shopId = name;
+  checkoutSave(saved);
+  coCloseShopPicker();
+  window.haptic?.('selection');
+}
+window.coPickShop = coPickShop;
 
 async function cartSubmit() {
   const name    = document.getElementById('co-name')?.value?.trim() || '';
   const phone   = document.getElementById('co-phone')?.value?.trim() || '';
+  const deltype = document.getElementById('co-deltype')?.value?.trim() || 'delivery';
   const address = document.getElementById('co-address')?.value?.trim() || '';
+  const shop    = document.getElementById('co-shop')?.value?.trim() || '';
   const date    = document.getElementById('co-date')?.value?.trim() || '';
   const time    = document.getElementById('co-time')?.value?.trim() || '';
+  const gift    = !!document.getElementById('co-gift')?.checked;
+  const promo   = document.getElementById('co-promo')?.value?.trim() || '';
   const comment = document.getElementById('co-comment')?.value?.trim() || '';
   const status  = document.getElementById('co-status');
 
@@ -280,6 +475,22 @@ async function cartSubmit() {
     if (status) status.innerHTML = '<span style="color:var(--red)">Заполни имя и телефон</span>';
     return;
   }
+  // Validation: для доставки нужен адрес, для самовывоза — кафе
+  if (deltype === 'delivery' && !address) {
+    if (status) status.innerHTML = '<span style="color:var(--red)">Укажите адрес доставки</span>';
+    return;
+  }
+  if (deltype === 'pickup' && !shop) {
+    if (status) status.innerHTML = '<span style="color:var(--red)">Выберите кафе для самовывоза</span>';
+    return;
+  }
+  // Объединяем комментарий с дополнительной инфой
+  const extraNote = [
+    gift ? '🎁 Подарочная упаковка' : '',
+    promo ? `Промокод: ${promo}` : '',
+    deltype === 'pickup' ? `Самовывоз: ${shop}` : '',
+  ].filter(Boolean).join(' · ');
+  const fullComment = [comment, extraNote].filter(Boolean).join('\n');
 
   // Берём только корректные позиции — id > 0, qty > 0
   const rawItems = cartLoad();
@@ -300,11 +511,13 @@ async function cartSubmit() {
   try {
     const headers = { 'Content-Type': 'application/json' };
     if (_cartInitData) headers['Authorization'] = 'tma ' + _cartInitData;
+    // Address: для самовывоза передаём название кафе как address (backend остаётся unchanged)
+    const finalAddress = deltype === 'pickup' ? `Самовывоз · ${shop}` : address;
     const res = await fetch('/api/order', {
       method: 'POST', headers,
       body: JSON.stringify({
-        name, phone, address, items,
-        delivery_date: date, delivery_time: time, comment,
+        name, phone, address: finalAddress, items,
+        delivery_date: date, delivery_time: time, comment: fullComment,
         useVerifiedPhone: !phone,
       }),
     });
