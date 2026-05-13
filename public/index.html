@@ -848,16 +848,37 @@
     </div>
     <div class="chat-wrap">
       <div class="chat-messages" id="chat-messages">
-        <div class="msg msg--bot fade-in">
+        <!-- Welcome bubble — текст заполняется JS персонализированно -->
+        <div class="msg msg--bot fade-in" id="chat-welcome">
           <div class="msg__avatar">🍰</div>
-          <div class="msg__bubble">Привет! Я ИИ-ассистент Марии. Спросите про акции, программу лояльности или помогу с выбором 😊</div>
+          <div class="msg__bubble" id="chat-welcome-text">Привет! Я Маша. Спроси про торты, заказ или клуб 😊</div>
+        </div>
+        <!-- Empty state visual entry buttons (видны до первого сообщения) -->
+        <div class="chat-empty-cats" id="chat-empty-cats">
+          <button class="chat-empty-cat" onclick="usechipText('Торт на день рождения')">
+            <span class="chat-empty-cat__ic">🎂</span>
+            <span class="chat-empty-cat__t">Торт на ДР</span>
+          </button>
+          <button class="chat-empty-cat" onclick="usechipText('Что в Сладком чеке?')">
+            <span class="chat-empty-cat__ic">🎁</span>
+            <span class="chat-empty-cat__t">Сладкий чек</span>
+          </button>
+          <button class="chat-empty-cat" onclick="usechipText('Сколько у меня баллов')">
+            <span class="chat-empty-cat__ic">💎</span>
+            <span class="chat-empty-cat__t">Мой клуб</span>
+          </button>
         </div>
       </div>
       <div class="chat-chips" id="chat-chips">
-        <button class="chip" onclick="usechip(this)">Торт на день рождения?</button>
-        <button class="chip" onclick="usechip(this)">Как оформить заказ?</button>
-        <button class="chip" onclick="usechip(this)">Расскажи про клуб</button>
+        <button class="chip" onclick="usechip(this)">Торт месяца</button>
+        <button class="chip" onclick="usechip(this)">Шоколадный без орехов</button>
+        <button class="chip" onclick="usechip(this)">На свадьбу</button>
+        <button class="chip" onclick="usechip(this)">Что в акциях?</button>
+        <button class="chip" onclick="usechip(this)">Доставка</button>
+        <button class="chip" onclick="usechip(this)">Как использовать баллы</button>
       </div>
+      <!-- Follow-up suggestions container (заполняется JS после AI ответа) -->
+      <div class="chat-followup" id="chat-followup" style="display:none"></div>
       <div class="chat-row">
         <input class="chat-in" id="chat-input" type="text" placeholder="Напишите вопрос…" autocomplete="off" onkeydown="handleChatKey(event)"/>
         <button class="chat-btn chat-btn--mic" id="chat-mic" data-haptic="light" onclick="toggleVoice()" aria-label="Голосовой ввод" title="Голосовой ввод">

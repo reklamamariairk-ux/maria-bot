@@ -52,9 +52,13 @@ async function sendMessage() {
   if (!text) return;
 
   document.querySelector('.chat-suggestions')?.style && (document.querySelector('.chat-suggestions').style.display = 'none');
-  // Скрываем chip-suggestions после первого сообщения
+  // Скрываем chip-suggestions, empty-cats и follow-up после первого сообщения
   const chipsWrap = document.getElementById('chat-chips');
   if (chipsWrap) chipsWrap.style.display = 'none';
+  const emptyCats = document.getElementById('chat-empty-cats');
+  if (emptyCats) emptyCats.style.display = 'none';
+  const followup = document.getElementById('chat-followup');
+  if (followup) followup.style.display = 'none';
 
   input.value = '';
   appendMessage('user', text);
@@ -187,14 +191,15 @@ async function streamChat(headers, typing) {
             // Лёгкий статус-индикатор — пока без UI, но можно расширить
           } else if (parsed.type === 'final') {
             ensureBubble();
-            // Итоговый текст (заменяем — на случай если delta потерялась)
+            // Итоговый текст: markdown rendering + long-message collapse
             if (parsed.text) {
               bubbleText = parsed.text;
-              bubble.innerHTML = esc(bubbleText).replace(/\n/g, '<br>');
+              const renderedHtml = renderMarkdown(bubbleText);
+              bubble.innerHTML = maybeCollapseLong(renderedHtml, bubbleText);
             }
             finalProducts = parsed.products || [];
             finalCart = parsed.cart_actions || [];
-            // Timestamp в углу, потом карточки
+            // Timestamp + product cards
             bubble.insertAdjacentHTML('beforeend', `<span class="msg__time">${nowHM()}</span>`);
             if (finalProducts.length) {
               const grid = renderProductGrid(finalProducts);
@@ -202,6 +207,8 @@ async function streamChat(headers, typing) {
             }
             window.linkifyPhones?.(bubble.parentElement);
             wrap.scrollTop = wrap.scrollHeight;
+            // Follow-up suggestions
+            renderFollowupSuggestions(finalProducts, bubbleText);
           } else if (parsed.type === 'error') {
             typing.remove();
             if (createdBubble) {
@@ -235,13 +242,18 @@ function renderProductGrid(products) {
     const id = p.id;
     const onClick = id && window.catOpenProduct ? `catOpenProduct(${id})` : `openSite('${escAttr(p.url || '')}')`;
     const priceTxt = p.price != null ? `${Number(p.price).toLocaleString('ru-RU')} ₽` : '';
+    const priceNum = Number(p.price || 0);
     const img = p.image || '';
     const imgEl = img
       ? `<img class="ai-pcard__pic" src="/img?u=${encodeURIComponent(img)}" alt="${escAttr(p.name||'')}" loading="lazy" decoding="async">`
       : '<span style="font-size:24px;opacity:.5">🍰</span>';
+    // + В корзину button — добавляет товар напрямую без перехода в catalog
+    const addBtn = id && priceNum > 0
+      ? `<button class="ai-pcard__add" onclick="event.stopPropagation();chatAddToCart(${id},${JSON.stringify(p.name || '').replace(/"/g,'&quot;')},${priceNum},'${escAttr(img)}')" aria-label="В корзину">+</button>`
+      : '';
     return `
       <div class="ai-pcard" onclick="${onClick}">
-        <div class="ai-pcard__img">${imgEl}${p.hit ? '<span class="ai-pcard__hit">★</span>' : ''}</div>
+        <div class="ai-pcard__img">${imgEl}${p.hit ? '<span class="ai-pcard__hit">★</span>' : ''}${addBtn}</div>
         <div class="ai-pcard__body">
           <div class="ai-pcard__name">${esc(p.name || '')}</div>
           <div class="ai-pcard__price">${esc(priceTxt)}</div>
@@ -251,20 +263,96 @@ function renderProductGrid(products) {
   return `<div class="ai-pgrid">${cards}</div>`;
 }
 
+// Add to cart прямо из чата + toast feedback
+function chatAddToCart(id, name, price, image) {
+  if (!window.cartAdd) return;
+  window.cartAdd({ id, name: name || `Товар #${id}`, price, image: image || null });
+  // Animated feedback на button
+  event.target.classList.add('ai-pcard__add--added');
+  setTimeout(() => event.target?.classList?.remove('ai-pcard__add--added'), 1200);
+  window.haptic?.('medium');
+}
+window.chatAddToCart = chatAddToCart;
+
+// Simple markdown rendering (только bold **text** и lists - item)
+function renderMarkdown(text) {
+  if (!text) return '';
+  let html = esc(text);
+  // bold: **text** → <b>text</b>
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+  // italic: __text__ → <i>text</i>
+  html = html.replace(/__([^_]+)__/g, '<i>$1</i>');
+  // Markdown lists: lines starting with "- " or "• "
+  html = html.replace(/(?:^|\n)([-•]\s.+(?:\n[-•]\s.+)*)/gm, (m, list) => {
+    const items = list.split('\n').map((l) => l.replace(/^[-•]\s/, '').trim()).filter(Boolean);
+    return '<ul class="msg-list">' + items.map((i) => `<li>${i}</li>`).join('') + '</ul>';
+  });
+  // Single newlines → <br>
+  html = html.replace(/\n/g, '<br>');
+  return html;
+}
+
+// Long message collapse (если > 350 char) — "Показать ещё"
+function maybeCollapseLong(html, text) {
+  if (!text || text.length <= 350) return html;
+  // Возьмём первые 280 символов как preview, остальное в hidden div
+  const previewText = text.slice(0, 280).trim() + '…';
+  return `
+    <div class="msg-collapse" data-full="${escAttr(html)}">
+      <span class="msg-collapse__preview">${renderMarkdown(previewText)}</span>
+      <button class="msg-collapse__btn" onclick="msgExpand(this)">Показать ещё</button>
+    </div>`;
+}
+
+function msgExpand(btn) {
+  const wrap = btn.closest('.msg-collapse');
+  if (!wrap) return;
+  const full = wrap.dataset.full || '';
+  wrap.innerHTML = full;
+}
+window.msgExpand = msgExpand;
+
+// Follow-up suggestions после ответа AI — статические подсказки в context
+function renderFollowupSuggestions(products, lastText) {
+  const wrap = document.getElementById('chat-followup');
+  if (!wrap) return;
+  const has = Array.isArray(products) && products.length > 0;
+  // Если AI показал товары → suggest "Показать ещё", "Заказать", "Что-то другое"
+  // Иначе если ответ про клуб → suggest конкретные вопросы
+  let chips = [];
+  if (has) {
+    chips = ['Показать ещё варианты', 'Расскажи про первый', 'Что-то другое'];
+  } else if (lastText && /клуб|баллов|кэшбэк|карт/i.test(lastText)) {
+    chips = ['Как использовать баллы', 'Что такое Сладкий чек', 'Партнёры клуба'];
+  } else if (lastText && /заказ|доставк/i.test(lastText)) {
+    chips = ['Минимальная сумма', 'Время доставки', 'Самовывоз'];
+  } else {
+    chips = ['Торт месяца', 'Что в акциях?', 'Шоколадный без орехов'];
+  }
+  wrap.innerHTML = chips.map((q) => `<button class="chip" onclick="usechipText('${escAttr(q)}')">${esc(q)}</button>`).join('');
+  wrap.style.display = '';
+}
+window.renderFollowupSuggestions = renderFollowupSuggestions;
+
 function appendMessage(role, text, products) {
   const wrap = document.getElementById('chat-messages');
   const div  = document.createElement('div');
-  // Группировка: если предыдущее сообщение того же автора — не показываем аватар, ужимаем gap
   const prev = wrap.lastElementChild;
   const grouped = prev && prev.classList.contains('msg') && prev.classList.contains(`msg--${role}`);
   div.className = `msg msg--${role} fade-in${grouped ? ' msg--grouped' : ''}`;
   const avatar = role === 'bot' ? '<div class="msg__avatar">🍰</div>' : '';
   const cardsHtml = renderProductGrid(products);
   const timeHtml = `<span class="msg__time">${nowHM()}</span>`;
-  div.innerHTML = `${avatar}<div class="msg__bubble">${esc(text).replace(/\n/g,'<br>')}${timeHtml}${cardsHtml}</div>`;
+  // Bot messages — markdown + long collapse; user messages — простой esc
+  const bodyHtml = role === 'bot'
+    ? maybeCollapseLong(renderMarkdown(text), text)
+    : esc(text).replace(/\n/g,'<br>');
+  div.innerHTML = `${avatar}<div class="msg__bubble">${bodyHtml}${timeHtml}${cardsHtml}</div>`;
   window.linkifyPhones?.(div);
   wrap.appendChild(div);
   wrap.scrollTop = wrap.scrollHeight;
+  // Follow-up suggestions для bot ответов
+  if (role === 'bot') renderFollowupSuggestions(products, text);
   return div;
 }
 

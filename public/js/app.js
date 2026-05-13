@@ -156,11 +156,13 @@ function openAiChat() {
   const m = document.getElementById('ai-chat-modal');
   if (!m) return;
   m.style.display = 'flex';
+  document.body.classList.add('chat-open'); // dim background
   window.scrollLock?.();
   window.tgBack?.show(() => closeAiChat());
   refreshChatChips();
-  // Дописываем timestamp к стартовому приветствию (один раз)
-  const firstBubble = document.querySelector('#chat-messages .msg--bot:first-child .msg__bubble');
+  // Персонализированное приветствие (один раз) + timestamp
+  customizeChatWelcome();
+  const firstBubble = document.querySelector('#chat-welcome .msg__bubble');
   if (firstBubble && !firstBubble.querySelector('.msg__time') && window.nowHM) {
     firstBubble.insertAdjacentHTML('beforeend', `<span class="msg__time">${window.nowHM()}</span>`);
   }
@@ -170,9 +172,47 @@ function openAiChat() {
     if (wrap) wrap.scrollTop = wrap.scrollHeight;
   }, 50);
 }
+
+// Welcome message — персонализация для verified юзера
+async function customizeChatWelcome() {
+  const txt = document.getElementById('chat-welcome-text');
+  if (!txt || txt.dataset.customized === '1') return;
+  const tg = window.Telegram?.WebApp;
+  const initData = tg?.initData || '';
+  if (!initData) return; // guest mode — оставить дефолт
+  try {
+    const r = await fetch('/api/me', { headers: { Authorization: 'tma ' + initData } });
+    if (!r.ok) return;
+    const me = await r.json();
+    if (!me.phoneVerified) return;
+    const name = me.user?.first_name || 'Анна';
+    // Опционально проверим LK для cтат
+    let stats = '';
+    try {
+      const lkRes = await fetch('/api/lk', { headers: { Authorization: 'tma ' + initData } });
+      if (lkRes.ok) {
+        const d = await lkRes.json();
+        const lk = d?.data || {};
+        if (lk.found) {
+          const parts = [];
+          if (lk.balance > 0) parts.push(`${Number(lk.balance).toLocaleString('ru-RU')} баллов`);
+          if (Array.isArray(lk.orders) && lk.orders.length > 0) parts.push(`${lk.orders.length} ${lk.orders.length === 1 ? 'заказ' : lk.orders.length < 5 ? 'заказа' : 'заказов'}`);
+          if (parts.length) stats = ` У тебя ${parts.join(' · ')}.`;
+        }
+      }
+    } catch {}
+    // Сохраняем timestamp если есть
+    const time = txt.querySelector('.msg__time')?.outerHTML || '';
+    txt.innerHTML = `Привет, ${name}! 👋 Я Маша. ${stats || ''} Помогу подобрать торт, повторить заказ или ответить про клуб.${time}`;
+    txt.dataset.customized = '1';
+  } catch {}
+}
+window.customizeChatWelcome = customizeChatWelcome;
+
 function closeAiChat() {
   const m = document.getElementById('ai-chat-modal');
   if (m) m.style.display = 'none';
+  document.body.classList.remove('chat-open');
   window.scrollUnlock?.();
   window.tgBack?.hide();
 }
@@ -363,12 +403,19 @@ function showSubTab(name) {
 
 /* ── Chat chips ──────────────────────────────────────────────────────────── */
 function usechip(btn) {
+  usechipText(btn.textContent);
+}
+function usechipText(text) {
   const inp = document.getElementById('chat-input');
   if (!inp) return;
-  inp.value = btn.textContent;
-  document.getElementById('chat-chips').style.display = 'none';
+  inp.value = text;
+  const chips = document.getElementById('chat-chips');
+  if (chips) chips.style.display = 'none';
+  const emptyCats = document.getElementById('chat-empty-cats');
+  if (emptyCats) emptyCats.style.display = 'none';
   sendMessage();
 }
+window.usechipText = usechipText;
 
 /* ── Partners ────────────────────────────────────────────────────────────── */
 // Сохраняем полный список для модала
