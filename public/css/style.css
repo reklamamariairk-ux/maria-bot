@@ -252,6 +252,157 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 .btn-hero:hover{background:rgba(255,255,255,.25);transform:translateY(-2px);box-shadow:0 12px 40px rgba(0,0,0,.2)}
 .btn-hero:active{transform:scale(.96)}
 
+/* Hero photo overlay (Apple-Cinnabon style — фото торта в фоне) */
+.hero__bg{
+  position:absolute;inset:0;
+  background-position:center;background-size:cover;
+  opacity:0;transition:opacity .4s ease-out;
+}
+.hero__bg.loaded{opacity:.35}
+.hero__overlay{
+  position:absolute;inset:0;
+  background:linear-gradient(180deg, rgba(120,5,30,.55) 0%, rgba(214,31,55,.4) 100%);
+  pointer-events:none;
+}
+.hero__content{position:relative;z-index:1}
+
+/* Home page: padding-bottom для bottom-nav */
+#tab-home{padding-bottom:90px}
+
+/* Sticky search bar */
+.home-search{
+  margin:-18px 16px 14px;padding:13px 16px;
+  background:#fff;border-radius:14px;
+  box-shadow:0 6px 20px rgba(0,0,0,.08), 0 1px 3px rgba(0,0,0,.04);
+  display:flex;align-items:center;gap:10px;
+  cursor:pointer;position:relative;z-index:2;
+  transition:transform var(--t-fast);
+}
+.home-search:active{transform:scale(.98)}
+.home-search__ic{color:var(--muted);display:flex;align-items:center}
+.home-search__ph{font-size:14px;color:var(--muted);font-weight:500;letter-spacing:-.1px}
+
+/* Категории chips — horizontal scroll */
+.home-cats{
+  display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;
+  padding:0 16px 14px;scrollbar-width:none;
+}
+.home-cats::-webkit-scrollbar{display:none}
+.home-cat{
+  flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:6px;
+  background:#fff;border:none;border-radius:14px;
+  padding:12px 14px;min-width:74px;
+  box-shadow:0 1px 3px rgba(0,0,0,.05);
+  cursor:pointer;transition:all var(--t-fast);
+}
+.home-cat:hover{box-shadow:0 4px 14px rgba(0,0,0,.07);transform:translateY(-2px)}
+.home-cat:active{transform:scale(.95)}
+.home-cat__ic{font-size:24px;line-height:1}
+.home-cat__t{font-size:11.5px;font-weight:600;color:var(--text);letter-spacing:-.1px}
+
+/* Persona block (для verified юзера) */
+.home-persona{
+  margin:0 16px 14px;padding:16px;
+  background:#fff;border-radius:14px;
+  box-shadow:0 1px 3px rgba(0,0,0,.05);
+}
+.home-persona__row{
+  display:flex;justify-content:space-between;align-items:center;gap:12px;
+}
+.home-persona__hi{
+  font-family:var(--ff-display);
+  font-size:18px;font-weight:700;color:var(--text);
+  letter-spacing:-.3px;line-height:1.2;
+}
+.home-persona__stat{
+  margin-top:3px;font-size:12px;color:var(--muted);
+}
+.home-persona__chip{
+  flex-shrink:0;display:inline-flex;align-items:center;gap:6px;
+  background:#fff8ec;color:#9c6a06;border:1px solid #f0d990;
+  padding:6px 11px;border-radius:24px;font-size:12px;font-weight:600;
+  cursor:pointer;
+}
+.home-persona__reorder{
+  margin-top:14px;padding-top:12px;border-top:1px solid rgba(0,0,0,.05);
+  display:flex;align-items:center;gap:12px;
+}
+.home-persona__reorder-text{flex:1;min-width:0}
+.home-persona__reorder-lbl{
+  font-size:11px;color:var(--muted);font-weight:600;
+  text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;
+}
+.home-persona__reorder-items{
+  font-size:13px;color:var(--text);font-weight:500;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.home-persona__reorder-btn{
+  flex-shrink:0;background:var(--red);color:#fff;border:none;
+  padding:9px 14px;border-radius:10px;font-size:12px;font-weight:700;
+  cursor:pointer;
+}
+.home-persona__reorder-btn:active{transform:scale(.96)}
+
+/* Compact club chip (вместо большого banner'а) */
+.home-club-chip{
+  width:calc(100% - 32px);margin:0 16px 14px;
+  display:flex;align-items:center;gap:12px;
+  background:#fff;border:none;border-radius:14px;
+  padding:14px 16px;cursor:pointer;
+  box-shadow:0 1px 3px rgba(0,0,0,.05);
+  text-align:left;
+  transition:all var(--t-fast);
+}
+.home-club-chip:hover{box-shadow:0 4px 14px rgba(0,0,0,.07);transform:translateY(-1px)}
+.home-club-chip__ic{
+  width:38px;height:38px;border-radius:10px;flex-shrink:0;
+  background:rgba(214,31,55,.08);color:var(--red);
+  display:flex;align-items:center;justify-content:center;
+}
+.home-club-chip__body{flex:1;min-width:0}
+.home-club-chip__t{font-size:14px;font-weight:700;color:var(--text);letter-spacing:-.2px}
+.home-club-chip__s{font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.3}
+.home-club-chip__chev{color:var(--muted);display:flex;align-items:center}
+
+/* Торт месяца — крупная карточка с фото */
+.promo--feature{
+  margin:0 16px 14px;padding:0;
+  background:#fff;border-radius:14px;
+  overflow:hidden;cursor:pointer;
+  box-shadow:0 1px 3px rgba(0,0,0,.05);
+  display:flex;flex-direction:column;
+}
+.promo--feature:hover{box-shadow:0 6px 20px rgba(0,0,0,.08)}
+.promo__feature-img{
+  aspect-ratio:16/9;background-size:cover;background-position:center;
+  background-color:#f2f2f7;
+  position:relative;
+}
+.promo__feature-body{padding:14px 16px 16px;position:relative}
+.promo--feature .promo__badge{
+  position:absolute;top:-14px;right:14px;
+  background:var(--red);color:#fff;
+  font-weight:800;font-size:14px;
+  padding:6px 14px;border-radius:18px;
+  box-shadow:0 4px 14px rgba(214,31,55,.35);
+}
+.promo--feature .promo__name{
+  font-family:var(--ff-display);
+  font-size:18px;font-weight:700;color:var(--text);
+  letter-spacing:-.3px;margin-bottom:4px;line-height:1.2;
+}
+.promo--feature .promo__desc{
+  font-size:13px;color:var(--muted);line-height:1.4;margin-bottom:10px;
+}
+.promo__countdown{
+  font-size:11px;color:var(--red);font-weight:600;
+  margin-bottom:10px;letter-spacing:-.1px;
+}
+.promo__cta{
+  font-size:14px;color:var(--red);font-weight:700;
+  display:inline-flex;align-items:center;gap:4px;
+}
+
 /* ── BENTO ───────────────────────────────────────────────────────────────── */
 .bento{
   display:grid;

@@ -187,10 +187,8 @@ async function loadCakeOfMonth() {
     const r = await fetch('/api/catalog/products?category=Торты&limit=80', {cache:'no-store'});
     const d = await r.json();
     const all = Array.isArray(d?.products) ? d.products : [];
-    // Берём первый HIT-торт (Bitrix property HIT='Y' = «Наши предложения»)
     const candidates = all.filter(p => p.hit && p.image);
     if (candidates.length === 0) return;
-    // Берём с самым свежим обновлением (или первого если SORT)
     const c = candidates[0];
     _cakeOfMonth = c;
 
@@ -198,18 +196,46 @@ async function loadCakeOfMonth() {
     if (!card) return;
     const nm = document.getElementById('promo-cake-name');
     const ds = document.getElementById('promo-cake-desc');
+    const imgEl = document.getElementById('promo-feature-img');
+    const countdownEl = document.getElementById('promo-countdown');
     if (nm) nm.textContent = c.name;
     if (ds) {
       const cleaned = (c.preview || '').replace(/\s+/g, ' ').trim();
       ds.textContent = cleaned
-        ? (cleaned.length > 90 ? cleaned.substring(0, 88) + '…' : cleaned)
+        ? (cleaned.length > 100 ? cleaned.substring(0, 98) + '…' : cleaned)
         : `Хит каталога — ${Number(c.priceNumber || c.price || 0).toLocaleString('ru-RU')} ₽`;
     }
-    if (c.image) {
+    if (imgEl && c.image) {
       const proxied = `/img?u=${encodeURIComponent(c.image)}`;
-      card.style.backgroundImage = `linear-gradient(180deg,rgba(214,31,55,.62) 0%,rgba(160,0,30,.95) 100%),url('${proxied}')`;
-      card.style.backgroundSize = 'cover';
-      card.style.backgroundPosition = 'center';
+      imgEl.style.backgroundImage = `url('${proxied}')`;
+    }
+
+    // Hero photo background — тоже используем this image
+    const heroBg = document.getElementById('hero-bg');
+    if (heroBg && c.image) {
+      const proxied = `/img?u=${encodeURIComponent(c.image)}`;
+      const img = new Image();
+      img.onload = () => {
+        heroBg.style.backgroundImage = `url('${proxied}')`;
+        heroBg.classList.add('loaded');
+      };
+      img.src = proxied;
+    }
+
+    // Countdown до конца месяца
+    if (countdownEl) {
+      const now = new Date();
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      const daysLeft = Math.ceil((endOfMonth - now) / 86400000);
+      if (daysLeft > 0) {
+        const dayPlural = (n) => {
+          const mod10 = n % 10, mod100 = n % 100;
+          if (mod10 === 1 && mod100 !== 11) return 'день';
+          if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'дня';
+          return 'дней';
+        };
+        countdownEl.textContent = `⏱ Акция действует ещё ${daysLeft} ${dayPlural(daysLeft)}`;
+      }
     }
   } catch (e) { console.error('[cake-of-month]', e); }
 }
@@ -440,4 +466,67 @@ document.addEventListener('DOMContentLoaded', () => {
   loadPartners();
   loadCakeOfMonth();
   loadHomeHits();
+  loadHomePersona();
 });
+
+// Persona block для verified юзера — приветствие + статистика + последний заказ
+async function loadHomePersona() {
+  const personaEl = document.getElementById('home-persona');
+  if (!personaEl) return;
+  const tg = window.Telegram?.WebApp;
+  const initData = tg?.initData || '';
+  if (!initData) { personaEl.style.display = 'none'; return; }
+  try {
+    // /api/me для базовой инфы
+    const meRes = await fetch('/api/me', { headers: { Authorization: 'tma ' + initData } });
+    if (!meRes.ok) { personaEl.style.display = 'none'; return; }
+    const me = await meRes.json();
+    if (!me.phoneVerified) { personaEl.style.display = 'none'; return; }
+
+    // /api/lk для баланса и заказов
+    const lkRes = await fetch('/api/lk', { headers: { Authorization: 'tma ' + initData } });
+    const lkData = lkRes.ok ? await lkRes.json() : { data: {} };
+    const lk = lkData?.data || {};
+
+    // Greeting
+    const name = me.user?.first_name || 'Друг';
+    const hiEl = document.getElementById('home-persona-hi');
+    if (hiEl) hiEl.textContent = `Привет, ${name}!`;
+
+    // Stat row под именем
+    const statEl = document.getElementById('home-persona-stat');
+    if (statEl) {
+      const parts = [];
+      if (lk.balance > 0) parts.push(`${Number(lk.balance).toLocaleString('ru-RU')} баллов`);
+      if (lk.tickets_count > 0) parts.push(`${lk.tickets_count} билет${lk.tickets_count === 1 ? '' : (lk.tickets_count < 5 ? 'а' : 'ов')}`);
+      statEl.textContent = parts.join(' · ') || 'Участник клуба';
+    }
+
+    // Level chip
+    const chipEl = document.getElementById('home-persona-chip');
+    if (chipEl && window.getCurrentLevel) {
+      const cur = window.getCurrentLevel(Number(lk.year_spent || 0), lk.level || null);
+      chipEl.textContent = `${cur.name} · ${cur.pct}%`;
+    }
+
+    // Last order для re-order
+    const orders = Array.isArray(lk.orders) ? lk.orders : [];
+    const lastValid = orders.find((o) => !o.canceled && Array.isArray(o.items) && o.items.length > 0);
+    const reorderEl = document.getElementById('home-persona-reorder');
+    const itemsEl = document.getElementById('home-persona-reorder-items');
+    if (lastValid && reorderEl && itemsEl) {
+      const itemsTxt = lastValid.items.slice(0, 2).map((i) => `${i.qty}× ${i.name}`).join(', ');
+      const more = lastValid.items.length > 2 ? ` +${lastValid.items.length - 2}` : '';
+      itemsEl.textContent = itemsTxt + more;
+      reorderEl.style.display = '';
+      // Сохраняем last order глобально для profReorderLast (из profile.js)
+      window._profileLastOrder = lastValid;
+    }
+
+    personaEl.style.display = '';
+  } catch (e) {
+    console.error('[home-persona]', e);
+    personaEl.style.display = 'none';
+  }
+}
+window.loadHomePersona = loadHomePersona;

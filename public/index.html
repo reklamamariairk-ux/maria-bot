@@ -56,11 +56,64 @@
 <!-- ═══ ГЛАВНАЯ ═══ -->
 <section class="tab active" id="tab-home">
 
+  <!-- Hero с фото бэкграунда -->
   <div class="hero">
-    <div class="hero__tag">Иркутск · 33 года на рынке</div>
-    <h1 class="hero__h1">Свежая выпечка<br>каждый день</h1>
-    <p class="hero__p">Торты, пироги, пирожные<br>и подарочные наборы</p>
-    <button class="btn-hero" data-haptic="light" onclick="switchTab('menu')">Смотреть меню →</button>
+    <div class="hero__bg" id="hero-bg"></div>
+    <div class="hero__overlay"></div>
+    <div class="hero__content">
+      <div class="hero__tag">Иркутск · 33 года на рынке</div>
+      <h1 class="hero__h1">Свежая выпечка<br>каждый день</h1>
+      <p class="hero__p">Кэшбэк до 10% · доставка от 1000 ₽ бесплатно</p>
+      <button class="btn-hero" data-haptic="light" onclick="switchTab('menu')">Смотреть меню →</button>
+    </div>
+  </div>
+
+  <!-- Sticky search bar — быстрый entry в catalog -->
+  <div class="home-search" data-haptic="light" onclick="haptic('light');switchTab('menu');setTimeout(()=>document.getElementById('menu-search')?.focus(),200)">
+    <span class="home-search__ic"><span data-icon="search" data-size="18"></span></span>
+    <span class="home-search__ph">Что хотите? Торт, пирог, набор…</span>
+  </div>
+
+  <!-- Категории chips — быстрый entry -->
+  <div class="home-cats" id="home-cats">
+    <button class="home-cat" data-haptic="light" onclick="haptic('light');switchTab('menu');setTimeout(()=>window.catShowProducts?.('Торты'),200)">
+      <span class="home-cat__ic">🎂</span>
+      <span class="home-cat__t">Торты</span>
+    </button>
+    <button class="home-cat" data-haptic="light" onclick="haptic('light');switchTab('menu');setTimeout(()=>window.catShowProducts?.('Пироги'),200)">
+      <span class="home-cat__ic">🥧</span>
+      <span class="home-cat__t">Пироги</span>
+    </button>
+    <button class="home-cat" data-haptic="light" onclick="haptic('light');switchTab('menu');setTimeout(()=>window.catShowProducts?.('Пирожные и десерты'),200)">
+      <span class="home-cat__ic">🥐</span>
+      <span class="home-cat__t">Десерты</span>
+    </button>
+    <button class="home-cat" data-haptic="light" onclick="haptic('light');switchTab('menu');setTimeout(()=>window.catShowProducts?.('Наборы'),200)">
+      <span class="home-cat__ic">🎁</span>
+      <span class="home-cat__t">Наборы</span>
+    </button>
+    <button class="home-cat" data-haptic="light" onclick="haptic('light');switchTab('order')">
+      <span class="home-cat__ic">🎨</span>
+      <span class="home-cat__t">На заказ</span>
+    </button>
+  </div>
+
+  <!-- Persona block (для verified юзера) — приветствие + последний заказ -->
+  <div class="home-persona" id="home-persona" style="display:none">
+    <div class="home-persona__row">
+      <div class="home-persona__greet">
+        <div class="home-persona__hi" id="home-persona-hi">Привет!</div>
+        <div class="home-persona__stat" id="home-persona-stat"></div>
+      </div>
+      <div class="home-persona__chip" id="home-persona-chip" onclick="switchTab('club')"></div>
+    </div>
+    <div class="home-persona__reorder" id="home-persona-reorder" style="display:none">
+      <div class="home-persona__reorder-text">
+        <div class="home-persona__reorder-lbl">В прошлый раз ты заказывал</div>
+        <div class="home-persona__reorder-items" id="home-persona-reorder-items"></div>
+      </div>
+      <button class="home-persona__reorder-btn" onclick="profReorderLast?.()">↻ Повторить</button>
+    </div>
   </div>
 
   <!-- Хит недели — карусель (заполнится из app.js) -->
@@ -69,47 +122,28 @@
     <div class="cat-loading">Подбираем самое вкусное…</div>
   </div>
 
-  <!-- Клуб + Лотерея — единый блок -->
-  <div class="sh"><span class="sh__line"></span><span class="sh__text">Клуб «Мария для своих»</span><span class="sh__line"></span></div>
-  <div class="sc-banner" data-haptic="light" onclick="switchTab('club')">
-    <div class="sc-banner__bg"></div>
-    <div class="sc-banner__content">
-      <div class="sc-banner__eye"><span data-icon="ticket" data-size="14"></span> Программа лояльности «Мария для своих»</div>
-      <div class="sc-banner__h">Кэшбэк до 10%<br>+ розыгрыш на iPhone 17</div>
-      <div class="sc-banner__sub">Каждый чек — билет в Сладкий чек: MacBook, PS5, Apple Watch, JBL · разыгрываем каждый квартал</div>
-      <div class="sc-banner__cta">Открыть клуб <span data-icon="arrowRight" data-size="14"></span></div>
-    </div>
-  </div>
-
-  <!-- Контакты — 17 кафе + телефон -->
-  <div class="bento bento--row">
-    <div class="bento__sm bento__sm--light" data-haptic="light" onclick="openShopsModal()">
-      <div class="bento__sm-ic" style="color:var(--red)"><span data-icon="pin" data-size="26"></span></div>
-      <div class="bento__sm-t">17 кафе</div>
-      <div class="bento__sm-s">Иркутск</div>
-    </div>
-    <a class="bento__sm bento__sm--light" href="tel:+73952504080" data-haptic="light" style="text-decoration:none">
-      <div class="bento__sm-ic" style="color:var(--gold-d)"><span data-icon="phone" data-size="26"></span></div>
-      <div class="bento__sm-t">Позвонить</div>
-      <div class="bento__sm-s">50-40-80</div>
-    </a>
-  </div>
-
-  <!-- Торт месяца — компактный promo -->
+  <!-- Торт месяца — крупная карточка + countdown -->
   <div class="sh"><span class="sh__line"></span><span class="sh__text">Торт месяца</span><span class="sh__line"></span></div>
-  <div class="promos">
-    <div class="promo promo--red" id="promo-cake-of-month" data-haptic="light" onclick="catOpenProductFromPromo()">
+  <div class="promo promo--feature" id="promo-cake-of-month" data-haptic="light" onclick="catOpenProductFromPromo()">
+    <div class="promo__feature-img" id="promo-feature-img"></div>
+    <div class="promo__feature-body">
       <div class="promo__badge">−20%</div>
       <div class="promo__name" id="promo-cake-name">Торт месяца</div>
       <div class="promo__desc" id="promo-cake-desc">Загружается…</div>
-      <div class="promo__note">🚚 Бесплатная доставка от 1 000 ₽</div>
-    </div>
-    <div class="promo promo--gold">
-      <div class="promo__badge">🎁</div>
-      <div class="promo__name">Упаковка в подарок</div>
-      <div class="promo__desc">Фирменная коробка с лентой — бесплатно к любому заказу</div>
+      <div class="promo__countdown" id="promo-countdown"></div>
+      <div class="promo__cta">Заказать со скидкой →</div>
     </div>
   </div>
+
+  <!-- Клуб — компактный chip (вместо большого banner'а) -->
+  <button class="home-club-chip" data-haptic="light" onclick="haptic('light');switchTab('club')">
+    <span class="home-club-chip__ic"><span data-icon="diamond" data-size="20"></span></span>
+    <div class="home-club-chip__body">
+      <div class="home-club-chip__t">Клуб «Мария для своих»</div>
+      <div class="home-club-chip__s">Кэшбэк до 10% · билет в розыгрыш iPhone 17</div>
+    </div>
+    <span class="home-club-chip__chev"><span data-icon="chevronRight" data-size="14"></span></span>
+  </button>
 
 </section>
 
