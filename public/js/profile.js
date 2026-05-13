@@ -334,11 +334,14 @@ function renderProductThumbs(containerId, ids, maxCount = 4) {
 // QR-карточка клуба — modal с QR (через api.qrserver.com)
 function profOpenQrCard() {
   const tg = window.Telegram?.WebApp;
-  if (!_profileData?.phoneVerified) {
-    tg?.showAlert?.('Подтверди номер в Клубе чтобы получить карточку') || alert('Подтверди номер в Клубе');
+  const tgUser = tg?.initDataUnsafe?.user;
+  const userId = _profileData?.user?.id || tgUser?.id || 0;
+  // Verified-check: либо есть данные с сервера, либо есть TG user — даём показать карту
+  const verified = _profileData?.phoneVerified ?? !!tgUser?.id;
+  if (!verified) {
+    try { tg?.showAlert?.('Подтверди номер в Клубе чтобы получить карточку'); } catch { alert('Подтверди номер в Клубе'); }
     return;
   }
-  const userId = _profileData?.user?.id || tg?.initDataUnsafe?.user?.id || 0;
   if (!userId) return;
   let modal = document.getElementById('prof-qr-modal');
   if (!modal) {
