@@ -452,9 +452,18 @@
 
 <!-- ═══ ЗАКАЗ ТОРТА ═══ -->
 <section class="tab" id="tab-order">
-  <div class="hero hero--sm">
-    <h2 class="hero__h1" style="font-size:24px">🎂 Заказать торт</h2>
-    <p class="hero__p">Оставьте заявку — менеджер свяжется с вами</p>
+  <!-- Compact header (как Меню v2) -->
+  <div class="menu-header">
+    <div class="menu-header__title">Индивидуальный торт</div>
+    <div class="menu-header__sub">Менеджер свяжется в течение 1 часа</div>
+  </div>
+
+  <!-- Min sum note -->
+  <div class="of-info-banner">
+    <span class="of-info-banner__ic">💡</span>
+    <div class="of-info-banner__text">
+      Индивидуальные торты <b>от 2 500 ₽</b> · минимум за <b>48 часов</b> до даты
+    </div>
   </div>
 
   <form class="order-form" id="order-form" onsubmit="submitOrder(event)">
@@ -466,47 +475,123 @@
       <label class="of-label">Телефон <span class="lbl-req">*</span></label>
       <input class="of-input" id="of-phone" type="tel" placeholder="+7 (___) ___-__-__" required autocomplete="tel" inputmode="tel" oninput="phoneMask(this)"/>
     </div>
+
+    <!-- Повод chips -->
     <div class="of-group">
-      <label class="of-label">Какой торт хотите?</label>
-      <input class="of-input" id="of-desc" type="text" placeholder="Торт на день рождения, индивидуальный дизайн…"/>
+      <label class="of-label">Повод</label>
+      <div class="of-chips" id="of-occasion-chips">
+        <button type="button" class="of-chip" data-val="День рождения" onclick="ofPickChip(this,'of-occasion')">🎂 ДР</button>
+        <button type="button" class="of-chip" data-val="Свадьба" onclick="ofPickChip(this,'of-occasion')">💍 Свадьба</button>
+        <button type="button" class="of-chip" data-val="Юбилей" onclick="ofPickChip(this,'of-occasion')">🎉 Юбилей</button>
+        <button type="button" class="of-chip" data-val="Корпоратив" onclick="ofPickChip(this,'of-occasion')">🏢 Корпоратив</button>
+        <button type="button" class="of-chip" data-val="Детский" onclick="ofPickChip(this,'of-occasion')">👶 Детский</button>
+        <button type="button" class="of-chip" data-val="Другое" onclick="ofPickChip(this,'of-occasion')">✨ Другое</button>
+      </div>
+      <input type="hidden" id="of-occasion" />
     </div>
 
-    <!-- Фото референса -->
+    <!-- Стиль chips -->
     <div class="of-group">
-      <label class="of-label">Фото референса <span class="lbl-hint">(опционально)</span></label>
-      <label class="of-photo-input">
-        <input type="file" id="of-photo" accept="image/*" onchange="orderPhotoChange(this)" style="display:none"/>
-        <span class="of-photo-input__btn" data-haptic="light">
-          <span data-icon="sparkles" data-size="18"></span>
-          <span>Прикрепить картинку дизайна</span>
-        </span>
-      </label>
-      <input type="hidden" id="of-photo-data" />
-      <div id="of-photo-preview" class="of-photo-preview" style="display:none">
-        <img alt="референс"/>
-        <button type="button" class="of-photo-preview__rm" onclick="document.getElementById('of-photo').value='';document.getElementById('of-photo-data').value='';this.parentElement.style.display='none'" aria-label="Убрать">×</button>
+      <label class="of-label">Стиль</label>
+      <div class="of-chips" id="of-style-chips">
+        <button type="button" class="of-chip" data-val="Классический" onclick="ofPickChip(this,'of-style')">Классический</button>
+        <button type="button" class="of-chip" data-val="Минимализм" onclick="ofPickChip(this,'of-style')">Минимализм</button>
+        <button type="button" class="of-chip" data-val="Тематический" onclick="ofPickChip(this,'of-style')">Тематический</button>
+        <button type="button" class="of-chip" data-val="Цветочный" onclick="ofPickChip(this,'of-style')">Цветочный</button>
+        <button type="button" class="of-chip" data-val="Детский" onclick="ofPickChip(this,'of-style')">Детский</button>
       </div>
+      <input type="hidden" id="of-style" />
+    </div>
+
+    <!-- Начинка chips -->
+    <div class="of-group">
+      <label class="of-label">Начинка <span class="lbl-hint">(несколько вариантов)</span></label>
+      <div class="of-chips" id="of-filling-chips">
+        <button type="button" class="of-chip" data-val="Шоколадный" onclick="ofToggleChip(this,'of-filling')">🍫 Шоколад</button>
+        <button type="button" class="of-chip" data-val="Сметанный" onclick="ofToggleChip(this,'of-filling')">🥛 Сметана</button>
+        <button type="button" class="of-chip" data-val="Фруктовый" onclick="ofToggleChip(this,'of-filling')">🍓 Фрукты</button>
+        <button type="button" class="of-chip" data-val="Орехи" onclick="ofToggleChip(this,'of-filling')">🥜 Орехи</button>
+        <button type="button" class="of-chip" data-val="Без орехов" onclick="ofToggleChip(this,'of-filling')">🚫 Без орехов</button>
+        <button type="button" class="of-chip" data-val="Без лактозы" onclick="ofToggleChip(this,'of-filling')">🚫 Без лактозы</button>
+      </div>
+      <input type="hidden" id="of-filling" />
+    </div>
+
+    <!-- Бюджет chips -->
+    <div class="of-group">
+      <label class="of-label">Бюджет</label>
+      <div class="of-chips" id="of-budget-chips">
+        <button type="button" class="of-chip" data-val="до 3000" onclick="ofPickChip(this,'of-budget')">до 3 000 ₽</button>
+        <button type="button" class="of-chip" data-val="3000-5000" onclick="ofPickChip(this,'of-budget')">3-5 000 ₽</button>
+        <button type="button" class="of-chip" data-val="5000-10000" onclick="ofPickChip(this,'of-budget')">5-10 000 ₽</button>
+        <button type="button" class="of-chip" data-val="10000+" onclick="ofPickChip(this,'of-budget')">10 000 ₽+</button>
+      </div>
+      <input type="hidden" id="of-budget" />
+    </div>
+
+    <!-- Фото — multi-upload up to 3 -->
+    <div class="of-group">
+      <label class="of-label">Фото референса <span class="lbl-hint">(до 3 шт, опционально)</span></label>
+      <div class="of-photos" id="of-photos-grid">
+        <label class="of-photo-cell of-photo-add">
+          <input type="file" id="of-photo-input" accept="image/*" onchange="orderPhotoAdd(this)" style="display:none" multiple/>
+          <span class="of-photo-add__plus">+</span>
+          <span class="of-photo-add__t">Добавить</span>
+        </label>
+      </div>
+      <!-- Hidden: serialised JSON array of dataURLs -->
+      <input type="hidden" id="of-photo-data" />
     </div>
 
     <div class="of-row">
       <div class="of-group" style="flex:1">
-        <label class="of-label">Дата нужна</label>
+        <label class="of-label">Дата</label>
         <input class="of-input" id="of-date" type="date"/>
       </div>
       <div class="of-group" style="flex:1">
         <label class="of-label">Порций</label>
-        <input class="of-input" id="of-portions" type="number" min="1" max="500" placeholder="8"/>
+        <div class="of-portions">
+          <button type="button" class="of-portions__btn" onclick="ofPortionsDec()">−</button>
+          <input class="of-input of-portions__inp" id="of-portions" type="number" min="1" max="500" value="8" inputmode="numeric"/>
+          <button type="button" class="of-portions__btn" onclick="ofPortionsInc()">+</button>
+        </div>
+        <div class="of-portions-presets">
+          <button type="button" class="of-chip of-chip--sm" onclick="ofSetPortions(8)">8</button>
+          <button type="button" class="of-chip of-chip--sm" onclick="ofSetPortions(12)">12</button>
+          <button type="button" class="of-chip of-chip--sm" onclick="ofSetPortions(20)">20</button>
+          <button type="button" class="of-chip of-chip--sm" onclick="ofSetPortions(30)">30</button>
+          <button type="button" class="of-chip of-chip--sm" onclick="ofSetPortions(50)">50</button>
+        </div>
       </div>
     </div>
+
+    <!-- Доставка / Самовывоз -->
     <div class="of-group">
-      <label class="of-label">Комментарий</label>
-      <textarea class="of-input of-textarea" id="of-comment" rows="3" placeholder="Пожелания по дизайну, надписи, особые требования…"></textarea>
+      <label class="of-label">Получение</label>
+      <div class="of-chips" id="of-delivery-chips">
+        <button type="button" class="of-chip of-chip--on" data-val="delivery" onclick="ofPickChip(this,'of-delivery')">🚚 Доставка</button>
+        <button type="button" class="of-chip" data-val="pickup" onclick="ofPickChip(this,'of-delivery')">🏬 Самовывоз</button>
+      </div>
+      <input type="hidden" id="of-delivery" value="delivery" />
     </div>
+
+    <div class="of-group">
+      <label class="of-label">Описание / комментарий</label>
+      <textarea class="of-input of-textarea" id="of-comment" rows="3" placeholder="Цвета, надписи, тематика, особые пожелания…"></textarea>
+    </div>
+
+    <!-- Terms agreement -->
+    <label class="co-checkbox of-terms">
+      <input id="of-terms" type="checkbox" checked />
+      <span class="co-checkbox__t">📋 Согласен с условиями</span>
+      <span class="co-checkbox__s">Предоплата 30% после согласования. Срок — от 48 часов.</span>
+    </label>
+
     <button class="btn-full" type="submit" id="of-submit">Отправить заявку →</button>
     <div id="of-msg" class="of-msg" style="display:none"></div>
   </form>
 
-  <div class="infobox" style="margin-top:16px">📞 Или позвоните: <a href="tel:+73952504080">+7 (3952) 50-40-80</a></div>
+  <div class="infobox" style="margin:0 16px 24px">📞 Или позвоните: <a href="tel:+73952504080">+7 (3952) 50-40-80</a></div>
 </section>
 
 <!-- ═══ ПРОФИЛЬ ═══ -->
