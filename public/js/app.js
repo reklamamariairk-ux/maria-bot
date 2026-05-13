@@ -350,21 +350,9 @@ function switchTab(name) {
   // FAB AI-чата теперь виден на ВСЕХ вкладках (модал поверх)
   const fab = document.getElementById('fab-ai');
   if (fab) fab.style.display = '';
-  if (name === 'fun' && !window._gamesInited) {
-    window._gamesInited = true;
-    initMemory();
-    flappyInit();
-    // Пекарня — по умолчанию открыта первой
-    if (typeof hkBoot === 'function') {
-      try { hkBoot(); } catch (e) { console.error('[hkBoot]', e); }
-    }
-  }
+  // Игры удалены — fun handler не нужен
   if (name === 'profile') {
     try { profileLoad?.(); } catch (e) { console.error('[profile]', e); }
-  }
-  // Останавливаем flappy при переходе на любую вкладку кроме fun (экономим CPU)
-  if (name !== 'fun' && typeof flappyStop === 'function') {
-    try { flappyStop(); } catch {}
   }
   // Haptic уже срабатывает через data-haptic="selection" на nav-кнопках —
   // дублировать selectionChanged здесь не нужно

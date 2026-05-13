@@ -4057,6 +4057,119 @@ body.chat-open{overflow:hidden}
 
 /* Старые sc-top-card стили оставлены для backward-compat (не используются) */
 .sc-top-card{display:none}
+
+/* ═══ SWEET CHECK PROMO CARD (large hero) ═══════════════════════════════ */
+.scp{
+  margin:0 16px 16px;background:#fff;
+  border-radius:18px;overflow:hidden;
+  box-shadow:0 4px 16px rgba(0,0,0,.08), 0 1px 3px rgba(0,0,0,.05);
+}
+
+/* Hero block with iPhone photo bg */
+.scp__hero{
+  position:relative;height:160px;overflow:hidden;
+  background:linear-gradient(135deg,#1a0a14 0%, #3a1428 50%, #1a0a14 100%);
+}
+.scp__hero-bg{
+  position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 50%, rgba(255,209,102,.15) 0%, transparent 60%),
+    radial-gradient(circle at 80% 30%, rgba(214,31,55,.3) 0%, transparent 50%);
+}
+/* iPhone illustration (SVG-style через большой emoji + glow) */
+.scp__hero::after{
+  content:'📱';
+  position:absolute;right:-10px;top:-20px;
+  font-size:180px;line-height:1;opacity:.85;
+  filter:drop-shadow(0 12px 24px rgba(0,0,0,.5));
+  transform:rotate(-12deg);
+  pointer-events:none;
+}
+.scp__hero-content{
+  position:relative;z-index:1;padding:20px 18px;
+  color:#fff;
+}
+.scp__hero-tag{
+  font-size:11px;color:rgba(255,255,255,.7);font-weight:600;
+  letter-spacing:.6px;text-transform:uppercase;margin-bottom:6px;
+}
+.scp__hero-prize{
+  font-family:'Playfair Display',serif;
+  font-size:22px;font-weight:700;color:#fff;
+  letter-spacing:-.4px;margin-bottom:10px;line-height:1.15;
+  max-width:60%;
+}
+.scp__hero-date{
+  font-size:12px;color:rgba(255,255,255,.85);
+  display:inline-block;background:rgba(255,255,255,.12);
+  backdrop-filter:blur(8px);
+  padding:6px 12px;border-radius:18px;
+  border:1px solid rgba(255,255,255,.18);
+}
+.scp__hero-date b{color:#ffd166;font-weight:800;font-feature-settings:"tnum" 1}
+
+/* Tickets block — большая цифра + подпись */
+.scp-tickets{
+  display:flex;align-items:center;gap:14px;
+  padding:18px;border-bottom:1px solid rgba(0,0,0,.06);
+}
+.scp-tickets__num{
+  font-family:'Playfair Display',serif;font-size:42px;font-weight:800;
+  color:var(--red);line-height:1;letter-spacing:-1px;
+  font-feature-settings:"tnum" 1;flex-shrink:0;min-width:56px;
+}
+.scp-tickets__lb{font-size:13px;color:var(--text);line-height:1.4}
+.scp-tickets--cta .scp-tickets__num{font-family:inherit;font-size:36px}
+.scp-tickets--cta .scp-tickets__lb{color:var(--muted)}
+
+/* Other prizes row */
+.scp-prizes{
+  display:grid;grid-template-columns:1fr 1fr 1fr 1fr;
+  gap:8px;padding:14px 18px;border-bottom:1px solid rgba(0,0,0,.06);
+}
+.scp-prize{
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  font-size:11px;color:var(--muted);font-weight:600;text-align:center;
+  letter-spacing:-.1px;
+}
+.scp-prize::before{content:'';display:block;font-size:0}
+.scp-prize{font-size:11px}
+.scp-prize > span{display:block;margin-top:2px}
+.scp-prize:first-letter,
+.scp-prize > :not(span){font-size:24px;line-height:1}
+
+/* Active task block */
+.scp-task{padding:14px 18px;border-bottom:1px solid rgba(0,0,0,.06);background:#fffbf3}
+.scp-task__tag{
+  font-size:11px;color:#9c6a06;font-weight:700;
+  letter-spacing:.4px;text-transform:uppercase;margin-bottom:4px;
+}
+.scp-task__h{font-size:14px;font-weight:600;color:var(--text);margin-bottom:3px}
+.scp-task__d{font-size:12.5px;color:var(--muted);line-height:1.4;margin-bottom:8px}
+.scp-task__r{
+  display:inline-block;font-size:12px;font-weight:700;color:#9c6a06;
+  background:#fff8ec;padding:4px 10px;border-radius:8px;
+  border:1px solid #f0d990;
+}
+
+/* CTA + more buttons */
+.scp__cta{
+  display:block;width:calc(100% - 32px);margin:14px 16px 8px;
+  padding:13px;background:var(--red);color:#fff;
+  border:none;border-radius:12px;
+  font-size:14px;font-weight:700;cursor:pointer;
+  letter-spacing:-.2px;
+  box-shadow:0 6px 18px rgba(214,31,55,.25);
+  transition:all var(--t-fast);
+}
+.scp__cta:hover{background:var(--red-d);transform:translateY(-1px)}
+.scp__cta:active{transform:scale(.98)}
+.scp__more{
+  display:block;width:calc(100% - 32px);margin:0 16px 14px;
+  padding:10px;background:none;color:var(--muted);
+  border:none;font-size:12.5px;cursor:pointer;
+}
+.scp__more:hover{color:var(--red)}
 .sc-top-card::before{
   content:'';position:absolute;inset:0;border-radius:18px;
   padding:1px;background:linear-gradient(135deg,rgba(212,160,64,.55),transparent 50%,rgba(214,31,55,.4));

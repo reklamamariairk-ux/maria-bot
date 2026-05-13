@@ -713,12 +713,8 @@
         <span class="prof-row__thumbs" id="prof-recent-thumbs"></span>
         <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
       </button>
-      <button class="prof-row" data-haptic="light" onclick="haptic('light');switchTab('fun')">
-        <span class="prof-row__ic"><span data-icon="gamepad" data-size="18"></span></span>
-        <span class="prof-row__t">Игры</span>
-        <span class="prof-row__sub">Пекарня · Мемори · Флаппи</span>
-        <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
-      </button>
+      <!-- Игры удалены: после отключения наград они стали dead weight -->
+
     </div>
   </div>
 
@@ -808,115 +804,6 @@
   </div>
 </section>
 
-<!-- ═══ ИГРЫ ═══ -->
-<section class="tab" id="tab-fun">
-
-  <!-- GAMES -->
-  <div id="subtab-content-games">
-    <div class="game-selector">
-      <button class="gbtn active" id="btn-bakery" data-haptic="selection" onclick="showGame('bakery')">🏪 Пекарня</button>
-      <button class="gbtn"        id="btn-memory" data-haptic="selection" onclick="showGame('memory')">🃏 Мемори</button>
-      <button class="gbtn"        id="btn-flappy" data-haptic="selection" onclick="showGame('flappy')">🎂 Флаппи</button>
-    </div>
-
-    <!-- Memory -->
-    <div id="game-memory" style="display:none">
-      <div class="score-bar">
-        <span>Ходов: <b id="memory-moves">0</b></span>
-        <span>Пар: <b id="memory-pairs">0</b>/8</span>
-        <button class="btn-sm" onclick="initMemory()">↺</button>
-      </div>
-      <div class="memory-grid" id="memory-grid"></div>
-    </div>
-
-    <!-- Flappy Cake -->
-    <div id="game-flappy" style="display:none">
-      <div class="score-bar">
-        <span>Счёт: <b id="flappy-score">0</b></span>
-        <span>Рекорд: <b id="flappy-best">0</b></span>
-        <button class="btn-sm" onclick="flappyStart()">▶</button>
-      </div>
-      <canvas id="flappy-canvas" class="flappy-canvas"></canvas>
-      <p class="game-tip">Нажмите / тапните чтобы лететь 🎂</p>
-    </div>
-
-
-    <!-- Пекарня HK — ОСНОВНАЯ игра, по умолчанию открыта -->
-    <div id="game-bakery">
-
-      <!-- Top HUD -->
-      <div class="hk-top">
-        <div class="hk-top__rank" id="hk-rank-name">Стажёр</div>
-        <div class="hk-top__coins"><span id="hk-coins">0</span> 🎂</div>
-        <div class="hk-top__pph">+<span id="hk-pph-val">0</span>/час</div>
-        <div class="hk-rank-bar">
-          <div class="hk-rank-bar__fill" id="hk-rank-prog"></div>
-        </div>
-        <div class="hk-rank-bar__next" id="hk-rank-next"></div>
-      </div>
-
-      <!-- Inner nav -->
-      <div class="hk-nav">
-        <button class="hk-nb hk-nb--active" id="hk-btn-tap"   onclick="hkTab('tap')">🏪 Пекарня</button>
-        <button class="hk-nb"               id="hk-btn-mine"  onclick="hkTab('mine')">⛏ Прокачка</button>
-        <button class="hk-nb"               id="hk-btn-boost" onclick="hkTab('boost')">🚀 Бусты</button>
-        <button class="hk-nb"               id="hk-btn-earn"  onclick="hkTab('earn')">📋 Задания</button>
-      </div>
-
-      <!-- TAP tab -->
-      <div id="hk-tap">
-        <div class="hk-cake-area" id="hk-cake-area">
-          <div class="hk-steam hk-steam--1"></div>
-          <div class="hk-steam hk-steam--2"></div>
-          <div class="hk-steam hk-steam--3"></div>
-          <div class="hk-cake-wrap" id="hk-cake-wrap" data-tier="0">
-            <div class="hk-ring hk-ring--c"></div>
-            <div class="hk-ring hk-ring--b"></div>
-            <div class="hk-ring hk-ring--a"></div>
-            <div class="hk-cake-glow" id="hk-cake-glow"></div>
-            <button class="hk-cake" id="hk-cake" onclick="hkTap(event)">🎂</button>
-            <div class="hk-cake-crown" id="hk-cake-crown"></div>
-          </div>
-        </div>
-        <div class="hk-energy-wrap">
-          <span class="hk-energy-ic">⚡</span>
-          <div class="hk-energy-bar">
-            <div class="hk-energy-fill" id="hk-energy-fill"></div>
-          </div>
-          <span class="hk-energy-txt" id="hk-energy-txt">500 / 500</span>
-        </div>
-      </div>
-
-      <!-- MINE tab -->
-      <div id="hk-mine" style="display:none">
-        <div class="hk-combo-banner" id="hk-combo-banner">🎁 <b>Дневное комбо</b> — купи 3 карты дня и получи <b>500К</b>!</div>
-        <div class="hk-cats">
-          <button class="hk-cat hk-cat--active" data-cat="recipes"   onclick="hkCat('recipes')">🥘 Рецепты</button>
-          <button class="hk-cat"                data-cat="team"       onclick="hkCat('team')">👥 Команда</button>
-          <button class="hk-cat"                data-cat="shop"       onclick="hkCat('shop')">🏪 Магазин</button>
-          <button class="hk-cat"                data-cat="marketing"  onclick="hkCat('marketing')">📣 Маркетинг</button>
-        </div>
-        <div class="hk-cards" id="hk-cards"></div>
-      </div>
-
-      <!-- BOOST tab -->
-      <div id="hk-boost" style="display:none">
-        <div class="hk-section-title">Ежедневные бонусы</div>
-        <div id="hk-boosts-daily"></div>
-        <div class="hk-section-title" style="margin-top:16px">Постоянные улучшения</div>
-        <div id="hk-boosts-perm"></div>
-      </div>
-
-      <!-- EARN tab -->
-      <div id="hk-earn" style="display:none">
-        <div class="hk-section-title">Задания</div>
-        <div id="hk-tasks"></div>
-      </div>
-
-    </div>
-  </div>
-
-</section>
 
 <!-- MODAL: AI-чат (открывается с любой вкладки через FAB) -->
 <div class="cat-modal" id="ai-chat-modal" style="display:none" onclick="if(event.target===this)closeAiChat()">
@@ -1065,8 +952,7 @@
 
 <script src="/js/app.js" defer></script>
 <script src="/js/order.js" defer></script>
-<script src="/js/game.js" defer></script>
-<script src="/js/bakery.js" defer></script>
+<!-- /js/game.js, /js/bakery.js удалены — Игры убраны из UI после отключения наград -->
 <script src="/js/chat.js" defer></script>
 <script src="/js/catalog.js" defer></script>
 <script src="/js/profile.js" defer></script>

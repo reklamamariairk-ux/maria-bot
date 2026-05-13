@@ -147,7 +147,7 @@ function scJoin() {
 }
 window.scJoin = scJoin;
 
-// Единая smart-карточка Sweet Check: task этой недели + статус билетов
+// Sweet Check large promo card — фото iPhone + статус билетов + дата розыгрыша
 function renderSweetCheckMy(data) {
   const oldWrap = document.getElementById('sc-my');
   if (oldWrap) oldWrap.style.display = 'none';
@@ -156,56 +156,78 @@ function renderSweetCheckMy(data) {
   if (!top) return;
   top.style.display = '';
 
-  // Сохраняем последние LK данные для повторного рендера (race-free)
   if (data && typeof data === 'object') window._lastLkData = data;
 
   const verified = !!CLUB_STATE?.phoneVerified;
   const tickets = Number(data?.tickets_count || 0);
   const task = CLUB_STATE?.scActiveTask;
-  const openAcc = `document.querySelector('#tab-club details.acc:nth-of-type(1)')?.setAttribute('open','')`;
 
-  // Footer-блок: статус билетов (SVG-иконки вместо emoji)
-  let statusHtml = '';
-  if (!verified) {
-    statusHtml = `<div class="sc-card__status sc-card__status--cta">Подтверди номер чтобы участвовать</div>`;
-  } else if (tickets === 0) {
-    statusHtml = `<div class="sc-card__status sc-card__status--cta">Получи первый билет в кафе</div>`;
-  } else {
-    const chance = tickets >= 10 ? 'высокий шанс' : tickets >= 3 ? 'хорошие шансы' : 'шансы есть';
-    statusHtml = `<div class="sc-card__status sc-card__status--active">
-      <span class="sc-card__status-num">${tickets}</span>
-      <span class="sc-card__status-txt">${tickets === 1 ? 'билет' : 'билета'} · <b>${chance}</b> на iPhone 17</span>
-    </div>`;
-  }
+  // Дата розыгрыша — последний день текущего квартала
+  const now = new Date();
+  const quarter = Math.floor(now.getMonth() / 3);
+  const endOfQuarter = new Date(now.getFullYear(), (quarter + 1) * 3, 0, 23, 59, 59);
+  const daysLeft = Math.ceil((endOfQuarter - now) / 86400000);
+  const months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+  const drawDateStr = `${endOfQuarter.getDate()} ${months[endOfQuarter.getMonth()]}`;
 
-  // Body: либо текущее задание (если есть), либо общий teaser
-  let bodyHtml;
-  if (task) {
-    bodyHtml = `
-      <div class="sc-card__task">
-        <div class="sc-card__task-head">
-          <span class="sc-card__task-tag">Задание этой недели · ${escapeHtml(task.dates || '')}</span>
-        </div>
-        <div class="sc-card__task-h">${escapeHtml(task.name || 'Текущая неделя')}</div>
-        ${task.task ? `<div class="sc-card__task-d">${escapeHtml(task.task)}</div>` : ''}
-        ${task.reward ? `<div class="sc-card__task-reward"><span data-icon="ticket" data-size="14"></span> ${escapeHtml(String(task.reward))}</div>` : ''}
-      </div>`;
-  } else {
-    bodyHtml = `
-      <div class="sc-card__teaser">
-        <div class="sc-card__teaser-h">Розыгрыш на iPhone 17 каждый квартал</div>
-        <div class="sc-card__teaser-d">Купи нужный набор в кафе → +5 билетов в розыгрыш</div>
-      </div>`;
-  }
+  // Большая cifra билетов или промо-цифра 0
+  const ticketsBlock = verified
+    ? `<div class="scp-tickets">
+         <div class="scp-tickets__num">${tickets}</div>
+         <div class="scp-tickets__lb">${tickets === 0 ? 'билетов · получи первый' : tickets === 1 ? 'твой билет' : tickets < 5 ? 'твоих билета' : 'твоих билетов'}</div>
+       </div>`
+    : `<div class="scp-tickets scp-tickets--cta">
+         <div class="scp-tickets__num">🎟</div>
+         <div class="scp-tickets__lb">Подтверди номер чтобы участвовать</div>
+       </div>`;
+
+  // Active task если есть
+  const taskBlock = task ? `
+    <div class="scp-task">
+      <div class="scp-task__tag">📅 Задание этой недели · ${escapeHtml(task.dates || '')}</div>
+      <div class="scp-task__h">${escapeHtml(task.name || '')}</div>
+      ${task.task ? `<div class="scp-task__d">${escapeHtml(task.task)}</div>` : ''}
+      ${task.reward ? `<div class="scp-task__r">🎟 ${escapeHtml(String(task.reward))}</div>` : ''}
+    </div>` : '';
+
+  // CTA — куда тапает юзер
+  const ctaText = !verified
+    ? 'Открыть Telegram-бот'
+    : tickets === 0
+      ? 'Купить набор в кафе →'
+      : 'Узнать больше';
+  const ctaAction = !verified
+    ? `window.open('https://t.me/mariatortik_bot','_blank')`
+    : `switchTab('menu')`;
 
   top.innerHTML = `
-    <div class="sc-card" onclick="${openAcc}">
-      <div class="sc-card__head">
-        <span class="sc-card__title">Сладкий чек</span>
-        <span class="sc-card__chev">›</span>
+    <div class="scp">
+      <!-- Hero: фото iPhone + badge -->
+      <div class="scp__hero">
+        <div class="scp__hero-bg"></div>
+        <div class="scp__hero-content">
+          <div class="scp__hero-tag">Главный приз</div>
+          <div class="scp__hero-prize">📱 iPhone 17 Pro Max</div>
+          <div class="scp__hero-date">⏱ Розыгрыш ${drawDateStr} · через <b>${daysLeft}</b> ${daysLeft === 1 ? 'день' : daysLeft < 5 ? 'дня' : 'дней'}</div>
+        </div>
       </div>
-      ${bodyHtml}
-      ${statusHtml}
+
+      <!-- Tickets status -->
+      ${ticketsBlock}
+
+      <!-- Other prizes preview row -->
+      <div class="scp-prizes">
+        <div class="scp-prize">💻<span>MacBook</span></div>
+        <div class="scp-prize">🎮<span>PS 5 Slim</span></div>
+        <div class="scp-prize">⌚<span>Apple Watch</span></div>
+        <div class="scp-prize">🔊<span>JBL</span></div>
+      </div>
+
+      ${taskBlock}
+
+      <!-- CTA + детали accordion -->
+      <button class="scp__cta" onclick="haptic('medium');${ctaAction}">${ctaText}</button>
+      <button class="scp__more" onclick="document.querySelector('#tab-club details.acc:first-of-type')?.setAttribute('open','')">Призы и правила →</button>
     </div>`;
   if (window.IconInflate) window.IconInflate(top);
 }
