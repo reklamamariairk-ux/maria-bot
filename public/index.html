@@ -488,8 +488,9 @@
     </div>
   </div>
 
-  <!-- Profile completion meter (LinkedIn / Yandex Plus style) -->
+  <!-- Profile completion meter — dismissible, скрывается после 100% или явного закрытия -->
   <div class="prof-completion" id="prof-completion" style="display:none">
+    <button class="prof-completion__close" onclick="profDismissCompletion()" aria-label="Скрыть">×</button>
     <div class="prof-completion__row">
       <div class="prof-completion__t">Профиль заполнен на <b id="prof-completion-pct">0%</b></div>
       <div class="prof-completion__hint" id="prof-completion-hint"></div>
@@ -497,13 +498,6 @@
     <div class="prof-completion__bar">
       <span class="prof-completion__fill" id="prof-completion-fill" style="width:0%"></span>
     </div>
-  </div>
-
-  <!-- Quick re-order card (последний заказ → повторить) -->
-  <div class="prof-reorder" id="prof-reorder" style="display:none">
-    <div class="prof-reorder__head">Заказать как в прошлый раз?</div>
-    <div class="prof-reorder__body" id="prof-reorder-body"></div>
-    <button class="prof-reorder__btn" id="prof-reorder-btn" data-haptic="medium">↻ Повторить заказ</button>
   </div>
 
   <!-- Stat-row: баллы Bitrix / билеты Sweet Check / заказы -->
@@ -522,25 +516,11 @@
     </button>
   </div>
 
-  <!-- Achievements / Badges -->
-  <div class="prof-ach" id="prof-ach" style="display:none">
-    <div class="prof-ach__list" id="prof-ach-list"></div>
-  </div>
-
-  <!-- Photo gallery — последние заказанные товары -->
-  <div class="prof-gallery" id="prof-gallery" style="display:none">
-    <div class="prof-gallery__h">
-      <span>Твои недавние</span>
-      <button class="prof-gallery__all" onclick="haptic('light');profOpenOrders()">Все заказы →</button>
-    </div>
-    <div class="prof-gallery__row" id="prof-gallery-row"></div>
-  </div>
-
-  <!-- Categories breakdown -->
-  <div class="prof-cats" id="prof-cats" style="display:none">
-    <div class="prof-cats__h">Твои предпочтения</div>
-    <div class="prof-cats__list" id="prof-cats-list"></div>
-  </div>
+  <!-- Декоративные блоки удалены (Achievements/Gallery/Categories) — заменены на actionable rows -->
+  <!-- Скрытые placeholder узлы для backward-compat с JS render-функциями -->
+  <div id="prof-ach" style="display:none"><div id="prof-ach-list"></div></div>
+  <div id="prof-gallery" style="display:none"><div id="prof-gallery-row"></div></div>
+  <div id="prof-cats" style="display:none"><div id="prof-cats-list"></div></div>
 
   <!-- ЛИЧНЫЕ ДАННЫЕ -->
   <div class="prof-group">
@@ -569,19 +549,21 @@
         <span class="prof-row__val" id="prof-info-address">указать</span>
         <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
       </button>
+    </div>
+  </div>
+
+  <!-- АКТИВНОСТЬ — actionable rows (бывшие декоративные блоки теперь здесь) -->
+  <div class="prof-group">
+    <div class="prof-group__h">Активность</div>
+    <div class="prof-actions">
+      <!-- Quick re-order: динамически вставляется JS как первый row если есть orders -->
+      <div id="prof-reorder-row-container"></div>
       <button class="prof-row" id="prof-card-row" data-haptic="medium" onclick="profOpenQrCard()" style="display:none">
         <span class="prof-row__ic"><span data-icon="creditCard" data-size="18"></span></span>
         <span class="prof-row__t">Моя клубная карточка</span>
         <span class="prof-row__sub">QR-код для кафе</span>
         <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
       </button>
-    </div>
-  </div>
-
-  <!-- АКТИВНОСТЬ -->
-  <div class="prof-group">
-    <div class="prof-group__h">Активность</div>
-    <div class="prof-actions">
       <button class="prof-row" data-haptic="light" onclick="haptic('light');profOpenOrders()">
         <span class="prof-row__ic"><span data-icon="history" data-size="18"></span></span>
         <span class="prof-row__t">Мои заказы</span>
@@ -609,33 +591,7 @@
     </div>
   </div>
 
-  <!-- УВЕДОМЛЕНИЯ -->
-  <div class="prof-group">
-    <div class="prof-group__h">Уведомления</div>
-    <div class="prof-actions">
-      <div class="prof-row prof-row--toggle">
-        <span class="prof-row__ic"><span data-icon="history" data-size="18"></span></span>
-        <span class="prof-row__t">Статусы заказов</span>
-        <label class="prof-toggle"><input type="checkbox" data-pref="notif_orders" checked/><span class="prof-toggle__sw"></span></label>
-      </div>
-      <div class="prof-row prof-row--toggle">
-        <span class="prof-row__ic"><span data-icon="sparkles" data-size="18"></span></span>
-        <span class="prof-row__t">Акции и скидки</span>
-        <label class="prof-toggle"><input type="checkbox" data-pref="notif_promo" checked/><span class="prof-toggle__sw"></span></label>
-      </div>
-      <div class="prof-row prof-row--toggle">
-        <span class="prof-row__ic"><span data-icon="cake" data-size="18"></span></span>
-        <span class="prof-row__t">Скидка в День рождения</span>
-        <label class="prof-toggle"><input type="checkbox" data-pref="notif_bday" checked/><span class="prof-toggle__sw"></span></label>
-      </div>
-      <div class="prof-row prof-row--toggle">
-        <span class="prof-row__ic"><span data-icon="ticket" data-size="18"></span></span>
-        <span class="prof-row__t">Сладкий чек</span>
-        <label class="prof-toggle"><input type="checkbox" data-pref="notif_sweet" checked/><span class="prof-toggle__sw"></span></label>
-      </div>
-    </div>
-    <div class="prof-group__note">Настройки сохраняются на устройстве. Пуши в Telegram приходят от @mariatortik_bot.</div>
-  </div>
+  <!-- УВЕДОМЛЕНИЯ убраны до реализации backend-side push management -->
 
   <!-- КЛУБ И ПОДДЕРЖКА -->
   <div class="prof-group">
@@ -673,29 +629,25 @@
     </div>
   </div>
 
-  <!-- О ПРИЛОЖЕНИИ -->
+  <!-- О ПРИЛОЖЕНИИ — сжато: FAQ и Что нового отдельно (часто открываются), правовая инфа одним rowом -->
   <div class="prof-group">
     <div class="prof-group__h">О приложении</div>
     <div class="prof-actions">
       <button class="prof-row" data-haptic="light" onclick="haptic('light');profOpenAbout('faq')">
+        <span class="prof-row__ic"><span data-icon="sparkles" data-size="18"></span></span>
         <span class="prof-row__t">Частые вопросы</span>
         <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
       </button>
       <button class="prof-row" data-haptic="light" onclick="haptic('light');profOpenAbout('whatsnew')">
+        <span class="prof-row__ic"><span data-icon="badgeCheck" data-size="18"></span></span>
         <span class="prof-row__t">Что нового</span>
         <span class="prof-row__val" id="prof-version-badge">v1.0.1</span>
         <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
       </button>
-      <button class="prof-row" data-haptic="light" onclick="haptic('light');profOpenAbout('about')">
-        <span class="prof-row__t">О кондитерской «Мария»</span>
-        <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
-      </button>
-      <button class="prof-row" data-haptic="light" onclick="haptic('light');profOpenAbout('privacy')">
-        <span class="prof-row__t">Политика конфиденциальности</span>
-        <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
-      </button>
-      <button class="prof-row" data-haptic="light" onclick="haptic('light');profOpenAbout('terms')">
-        <span class="prof-row__t">Условия использования</span>
+      <button class="prof-row" data-haptic="light" onclick="haptic('light');profOpenLegal()">
+        <span class="prof-row__ic"><span data-icon="user" data-size="18"></span></span>
+        <span class="prof-row__t">Юридическая информация</span>
+        <span class="prof-row__sub">О компании · Политика · Условия</span>
         <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
       </button>
     </div>

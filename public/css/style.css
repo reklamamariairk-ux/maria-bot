@@ -1793,12 +1793,21 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 .prof-addr__btns .btn-outline{flex:1;height:48px;border-radius:12px;font-size:14px;font-weight:600}
 .prof-addr__save{flex:1;height:48px;border-radius:12px;font-size:14px;font-weight:600}
 
-/* Profile completion meter (LinkedIn style) */
+/* Profile completion meter (LinkedIn style) с close-кнопкой */
 #tab-profile .prof-completion{
-  margin:0 16px 16px;padding:14px 18px;
+  position:relative;
+  margin:0 16px 16px;padding:14px 36px 14px 18px;
   background:#fff;border-radius:var(--ap-radius);
   box-shadow:0 1px 3px rgba(0,0,0,.04);
 }
+#tab-profile .prof-completion__close{
+  position:absolute;top:8px;right:8px;
+  width:24px;height:24px;border-radius:50%;
+  background:transparent;border:none;cursor:pointer;
+  color:var(--ap-grey-2);font-size:18px;line-height:1;
+  display:flex;align-items:center;justify-content:center;
+}
+#tab-profile .prof-completion__close:hover{background:#f2f2f7;color:var(--ap-grey)}
 #tab-profile .prof-completion__row{
   display:flex;justify-content:space-between;align-items:center;
   gap:10px;margin-bottom:10px;
@@ -1819,12 +1828,12 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
   border-radius:2px;transition:width .6s ease-out;
 }
 
-/* Quick re-order card */
-#tab-profile .prof-reorder{
-  margin:0 16px 16px;padding:14px 16px;
-  background:#fff;border-radius:var(--ap-radius);
-  box-shadow:0 1px 3px rgba(0,0,0,.04);
-}
+/* Quick re-order — теперь как первый row в АКТИВНОСТЬ */
+#tab-profile .prof-row--accent .prof-row__t{color:var(--ap-red);font-weight:600}
+#tab-profile .prof-row__ic--accent{background:rgba(214,31,55,.08);color:var(--ap-red)}
+
+/* Старый prof-reorder block убран — стили оставлены для backward-compat */
+#tab-profile .prof-reorder{display:none}
 #tab-profile .prof-reorder__head{
   font-size:11px;color:var(--ap-grey);font-weight:600;
   letter-spacing:.4px;text-transform:uppercase;margin-bottom:10px;
@@ -1919,6 +1928,26 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
   display:block;height:100%;background:var(--ap-red);
   border-radius:2px;transition:width .6s ease-out;
 }
+
+/* Legal modal — tabs paradigm */
+.legal-modal__tabs{
+  display:flex;gap:4px;padding:14px 16px 8px;
+  border-bottom:1px solid rgba(60,60,67,.12);
+}
+.legal-tab{
+  flex:1;padding:8px 10px;
+  background:transparent;border:none;cursor:pointer;
+  font-size:13px;font-weight:600;color:#6e6e73;
+  border-radius:8px;
+  transition:all var(--t-fast);
+  letter-spacing:-.1px;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Inter",system-ui,sans-serif;
+}
+.legal-tab:hover{background:#f2f2f7;color:#0a0a0a}
+.legal-tab--active{background:#f2f2f7;color:#0a0a0a}
+
+/* Profile content — padding-bottom чтобы Destructive/Footer не прятались за bottom-nav */
+#tab-profile{padding-bottom:90px}
 
 /* TG-style typing indicator (3 пульсирующие точки) */
 .msg__bubble--typing{padding:10px 14px}

@@ -255,13 +255,9 @@ async function profileLoadOrdersCount() {
       chipEl.style.display = 'none';
     }
 
-    // Achievements badges
-    try { renderAchievements(_profileData, orders); } catch (e) { console.error('[ach]', e); }
-
-    // Quick re-order card + Photo gallery + Categories breakdown
+    // Decorative blocks (achievements/gallery/categories) удалены из UI v6
+    // Quick re-order — теперь первый row в АКТИВНОСТЬ
     try { renderReorderCard(orders); } catch (e) { console.error('[reorder]', e); }
-    try { renderPhotoGallery(orders); } catch (e) { console.error('[gallery]', e); }
-    try { renderCategoriesBreakdown(orders); } catch (e) { console.error('[cats]', e); }
     try { renderProfileCompletion(_profileData); } catch (e) { console.error('[completion]', e); }
 
     // QR-card row visibility (только для verified)
@@ -388,12 +384,16 @@ function profCloseQr() {
 }
 window.profCloseQr = profCloseQr;
 
-// Profile completion meter — 5 чекпойнтов
+// Profile completion meter — 4 чекпойнта (photo убран — юзер не может изменить из app)
 function renderProfileCompletion(data) {
   const wrap = document.getElementById('prof-completion');
   if (!wrap) return;
+  // Если пользователь dismissed — больше не показываем
+  if (localStorage.getItem('maria_completion_dismissed') === '1') {
+    wrap.style.display = 'none';
+    return;
+  }
   const checks = [
-    { key: 'photo', label: 'фото', done: !!(window.Telegram?.WebApp?.initDataUnsafe?.user?.photo_url) },
     { key: 'phone', label: 'телефон', done: !!data?.phoneVerified },
     { key: 'bday',  label: 'день рождения', done: !!data?.birthday },
     { key: 'address', label: 'адрес доставки', done: !!localStorage.getItem('maria_default_address') },
@@ -411,7 +411,6 @@ function renderProfileCompletion(data) {
   if (hintEl) {
     if (missing) {
       const cta = {
-        photo: 'добавь фото в TG',
         phone: 'подтверди телефон → +5% кэшбэк',
         bday: 'укажи ДР → −5% скидка',
         address: 'укажи адрес → быстрый чекаут',
@@ -427,51 +426,58 @@ function renderProfileCompletion(data) {
 }
 window.renderProfileCompletion = renderProfileCompletion;
 
-// Quick re-order card — последний заказ
+// Dismiss completion meter (close button) — больше не показываем
+function profDismissCompletion() {
+  try { localStorage.setItem('maria_completion_dismissed', '1'); } catch {}
+  const wrap = document.getElementById('prof-completion');
+  if (wrap) wrap.style.display = 'none';
+}
+window.profDismissCompletion = profDismissCompletion;
+
+// Quick re-order — теперь как первый row в АКТИВНОСТЬ
 function renderReorderCard(orders) {
-  const wrap = document.getElementById('prof-reorder');
-  const body = document.getElementById('prof-reorder-body');
-  const btn = document.getElementById('prof-reorder-btn');
-  if (!wrap || !body || !btn) return;
+  const container = document.getElementById('prof-reorder-row-container');
+  if (!container) return;
   if (!Array.isArray(orders) || orders.length === 0) {
-    wrap.style.display = 'none';
+    container.innerHTML = '';
     return;
   }
-  // Берём последний non-cancelled заказ с items
   const last = orders.find((o) => !o.canceled && Array.isArray(o.items) && o.items.length > 0);
   if (!last) {
-    wrap.style.display = 'none';
+    container.innerHTML = '';
     return;
   }
-  const items = last.items.slice(0, 3);
-  const itemsTxt = items.map((i) => `${i.qty}× ${i.name}`).join(', ');
-  const more = last.items.length > 3 ? ` +${last.items.length - 3}` : '';
-  const sum = last.sum ? Number(last.sum).toLocaleString('ru-RU') + ' ₽' : '';
+  const itemsCount = last.items.length;
+  const itemsTxt = last.items.slice(0, 2).map((i) => `${i.qty}× ${i.name}`).join(', ');
+  const more = itemsCount > 2 ? ` +${itemsCount - 2}` : '';
+  const sumTxt = last.sum ? Number(last.sum).toLocaleString('ru-RU') + ' ₽' : '';
+  const dateRel = formatRelativeDate?.(last.date) || '';
 
-  // Подбираем фото первого продукта из catalog cache
-  const cache = window._catalogCache || {};
-  const firstItem = items[0];
-  const matched = firstItem && (firstItem.id || firstItem.product_id) ? cache[firstItem.id || firstItem.product_id] : null;
-  const img = matched?.image || (matched?.images && matched.images[0]) || '';
-
-  body.innerHTML = `
-    <div class="prof-reorder__thumb">${img ? `<img src="/img?u=${encodeURIComponent(img)}" alt=""/>` : '🍰'}</div>
-    <div class="prof-reorder__info">
-      <div class="prof-reorder__items">${escAttr(itemsTxt)}${more}</div>
-      <div class="prof-reorder__meta">${escAttr(formatRelativeDate?.(last.date) || '')}${sum ? ' · ' + escAttr(sum) : ''}</div>
-    </div>`;
-
-  // Привязка к reorderItems
-  const itemsWithId = last.items.filter((i) => i.id || i.product_id);
-  btn.onclick = () => {
-    haptic?.('medium');
-    if (typeof window.reorderItems === 'function') {
-      window.reorderItems(itemsWithId.map((i) => ({ id: i.id || i.product_id, qty: i.qty || 1, name: i.name, price: i.price })));
-    }
-  };
-  wrap.style.display = '';
+  // Inline action row в стиле iOS Settings (matches остальные prof-row)
+  container.innerHTML = `
+    <button class="prof-row prof-row--accent" data-haptic="medium" onclick="profReorderLast()">
+      <span class="prof-row__ic prof-row__ic--accent"><span data-icon="history" data-size="18"></span></span>
+      <span class="prof-row__t">Повторить заказ</span>
+      <span class="prof-row__sub">${escAttr(itemsTxt + more)}${dateRel ? ' · ' + escAttr(dateRel) : ''}${sumTxt ? ' · ' + escAttr(sumTxt) : ''}</span>
+      <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
+    </button>`;
+  // Кэшируем заказ для последующего повтора
+  window._profileLastOrder = last;
+  // Инфлейтим SVG-иконки в новой row
+  if (window.IconInflate) window.IconInflate(container);
 }
 window.renderReorderCard = renderReorderCard;
+
+// Действие "Повторить заказ" из кэшированного last-order
+function profReorderLast() {
+  const last = window._profileLastOrder;
+  if (!last || !Array.isArray(last.items)) return;
+  const items = last.items.filter((i) => i.id || i.product_id);
+  if (typeof window.reorderItems === 'function') {
+    window.reorderItems(items.map((i) => ({ id: i.id || i.product_id, qty: i.qty || 1, name: i.name, price: i.price })));
+  }
+}
+window.profReorderLast = profReorderLast;
 
 // Photo gallery — thumbnails недавних заказанных товаров
 function renderPhotoGallery(orders) {
@@ -769,6 +775,54 @@ function profCloseAbout() {
   window.scrollUnlock?.();
 }
 window.profCloseAbout = profCloseAbout;
+
+// Legal modal — объединённая страница с табами (About / Privacy / Terms)
+function profOpenLegal() {
+  let modal = document.getElementById('legal-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'legal-modal';
+    modal.className = 'cat-modal';
+    modal.style.display = 'none';
+    modal.onclick = (e) => { if (e.target === modal) profCloseLegal(); };
+    modal.innerHTML = `
+      <div class="cat-modal__sheet">
+        <button class="cat-modal__close" onclick="profCloseLegal()">×</button>
+        <div class="legal-modal">
+          <div class="legal-modal__tabs">
+            <button class="legal-tab legal-tab--active" data-tab="about">О компании</button>
+            <button class="legal-tab" data-tab="privacy">Политика</button>
+            <button class="legal-tab" data-tab="terms">Условия</button>
+          </div>
+          <div class="about-modal__body" id="legal-modal-body"></div>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    // Обработчики tabs
+    modal.querySelectorAll('.legal-tab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        modal.querySelectorAll('.legal-tab').forEach((t) => t.classList.remove('legal-tab--active'));
+        tab.classList.add('legal-tab--active');
+        renderLegalTabContent(tab.dataset.tab);
+      });
+    });
+  }
+  renderLegalTabContent('about');
+  modal.style.display = 'flex';
+  window.scrollLock?.();
+}
+window.profOpenLegal = profOpenLegal;
+function profCloseLegal() {
+  const m = document.getElementById('legal-modal');
+  if (m) m.style.display = 'none';
+  window.scrollUnlock?.();
+}
+window.profCloseLegal = profCloseLegal;
+function renderLegalTabContent(tab) {
+  const body = document.getElementById('legal-modal-body');
+  const data = ABOUT_CONTENT[tab];
+  if (body && data) body.innerHTML = `<h2>${data.title}</h2>${data.html}`;
+}
 
 // Отвязать телефон
 function profUnverifyConfirm() {
