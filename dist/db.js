@@ -48,12 +48,12 @@ async function initDb() {
     );
     CREATE INDEX IF NOT EXISTS wishlist_subs_product_idx ON wishlist_subs (product_id);
 
-    CREATE TABLE IF NOT EXISTS referrals (
+    CREATE TABLE IF NOT EXISTS referral_codes (
       code         TEXT PRIMARY KEY,
       owner_chat   BIGINT NOT NULL,
       created_at   TIMESTAMPTZ DEFAULT NOW()
     );
-    CREATE INDEX IF NOT EXISTS referrals_owner_idx ON referrals (owner_chat);
+    CREATE INDEX IF NOT EXISTS referral_codes_owner_idx ON referral_codes (owner_chat);
 
     CREATE TABLE IF NOT EXISTS referral_uses (
       used_by_chat BIGINT PRIMARY KEY,
@@ -66,7 +66,7 @@ async function initDb() {
 }
 // Referral codes
 async function getOrCreateReferralCode(chatId, firstName) {
-    const { rows } = await exports.pool.query(`SELECT code FROM referrals WHERE owner_chat = $1 LIMIT 1`, [chatId]);
+    const { rows } = await exports.pool.query(`SELECT code FROM referral_codes WHERE owner_chat = $1 LIMIT 1`, [chatId]);
     if (rows[0]?.code)
         return rows[0].code;
     // Генерация кода: MARIA-{first_name uppercase ASCII или короткий hash}
@@ -78,17 +78,17 @@ async function getOrCreateReferralCode(chatId, firstName) {
     let code = `MARIA-${tail}`;
     // Проверка уникальности — если занято, добавим суффикс
     for (let i = 0; i < 5; i++) {
-        const taken = await exports.pool.query(`SELECT 1 FROM referrals WHERE code = $1`, [code]);
+        const taken = await exports.pool.query(`SELECT 1 FROM referral_codes WHERE code = $1`, [code]);
         if (taken.rows.length === 0)
             break;
         code = `MARIA-${tail}${i + 2}`;
     }
-    await exports.pool.query(`INSERT INTO referrals (code, owner_chat) VALUES ($1, $2)
+    await exports.pool.query(`INSERT INTO referral_codes (code, owner_chat) VALUES ($1, $2)
      ON CONFLICT (code) DO NOTHING`, [code, chatId]);
     return code;
 }
 async function getReferralOwner(code) {
-    const { rows } = await exports.pool.query(`SELECT owner_chat FROM referrals WHERE code = $1`, [code.toUpperCase()]);
+    const { rows } = await exports.pool.query(`SELECT owner_chat FROM referral_codes WHERE code = $1`, [code.toUpperCase()]);
     return rows[0]?.owner_chat ?? null;
 }
 async function recordReferralUse(usedByChat, code) {
