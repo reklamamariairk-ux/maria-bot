@@ -60,6 +60,22 @@ export async function initDb() {
       sent_at   TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS notification_log_chat_idx ON notification_log (chat_id, sent_at DESC);
+
+    CREATE TABLE IF NOT EXISTS notification_prefs (
+      chat_id           BIGINT PRIMARY KEY,
+      marketing_promo   BOOLEAN DEFAULT TRUE,
+      marketing_rewards BOOLEAN DEFAULT TRUE,
+      updated_at        TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS cart_snapshots (
+      chat_id        BIGINT PRIMARY KEY,
+      items_json     TEXT,
+      total_sum      INT,
+      item_count     INT,
+      snapshot_at    TIMESTAMPTZ DEFAULT NOW(),
+      abandoned_pushed BOOLEAN DEFAULT FALSE
+    );
   `);
   console.log("[DB] Tables ready");
 }
@@ -114,8 +130,76 @@ export async function setOrderStatus(chatId: number, orderId: string, status: st
   );
 }
 
+// Notification preferences (user-controlled opt-in/out для marketing)
+export interface NotificationPrefs {
+  marketing_promo: boolean;
+  marketing_rewards: boolean;
+}
+export async function getNotificationPrefs(chatId: number): Promise<NotificationPrefs> {
+  const { rows } = await pool.query(
+    `SELECT marketing_promo, marketing_rewards FROM notification_prefs WHERE chat_id = $1`,
+    [chatId]
+  );
+  if (rows[0]) return { marketing_promo: rows[0].marketing_promo, marketing_rewards: rows[0].marketing_rewards };
+  return { marketing_promo: true, marketing_rewards: true };
+}
+export async function setNotificationPrefs(chatId: number, prefs: Partial<NotificationPrefs>) {
+  await pool.query(
+    `INSERT INTO notification_prefs (chat_id, marketing_promo, marketing_rewards, updated_at)
+     VALUES ($1, COALESCE($2, TRUE), COALESCE($3, TRUE), NOW())
+     ON CONFLICT (chat_id) DO UPDATE
+       SET marketing_promo   = COALESCE($2, notification_prefs.marketing_promo),
+           marketing_rewards = COALESCE($3, notification_prefs.marketing_rewards),
+           updated_at        = NOW()`,
+    [chatId, prefs.marketing_promo ?? null, prefs.marketing_rewards ?? null]
+  );
+}
+
+// Cart snapshot — для abandonment push
+export interface CartSnapshot {
+  chat_id: number;
+  items_json: string;
+  total_sum: number;
+  item_count: number;
+  snapshot_at: Date;
+  abandoned_pushed: boolean;
+}
+export async function saveCartSnapshot(chatId: number, items: unknown[], totalSum: number) {
+  const itemCount: number = Array.isArray(items)
+    ? items.reduce((s: number, it: unknown) => s + (Number((it as { qty?: number })?.qty) || 0), 0)
+    : 0;
+  await pool.query(
+    `INSERT INTO cart_snapshots (chat_id, items_json, total_sum, item_count, snapshot_at, abandoned_pushed)
+     VALUES ($1, $2, $3, $4, NOW(), FALSE)
+     ON CONFLICT (chat_id) DO UPDATE
+       SET items_json = $2, total_sum = $3, item_count = $4, snapshot_at = NOW(), abandoned_pushed = FALSE`,
+    [chatId, JSON.stringify(items || []), totalSum | 0, itemCount | 0]
+  );
+}
+export async function clearCartSnapshot(chatId: number) {
+  await pool.query(`DELETE FROM cart_snapshots WHERE chat_id = $1`, [chatId]);
+}
+export async function getAbandonedCarts(): Promise<CartSnapshot[]> {
+  // Активные корзины старше 24h, ещё не было abandonment push, есть items
+  const { rows } = await pool.query(
+    `SELECT chat_id, items_json, total_sum, item_count, snapshot_at, abandoned_pushed
+     FROM cart_snapshots
+     WHERE abandoned_pushed = FALSE
+       AND item_count > 0
+       AND snapshot_at < NOW() - INTERVAL '24 hours'
+       AND snapshot_at > NOW() - INTERVAL '7 days'`
+  );
+  return rows;
+}
+export async function markCartAbandonedPushed(chatId: number) {
+  await pool.query(
+    `UPDATE cart_snapshots SET abandoned_pushed = TRUE WHERE chat_id = $1`,
+    [chatId]
+  );
+}
+
 // Smart-notification policy
-export type NotificationKind = "transactional" | "marketing";
+export type NotificationKind = "transactional" | "marketing" | "marketing_promo" | "marketing_rewards";
 const RATE_RULES = {
   transactional: { maxPerDay: 999, minIntervalMin: 0 },
   marketing:     { maxPerWeek: 1,  minIntervalMin: 60 },
@@ -129,13 +213,20 @@ function isQuietHours(): boolean {
 }
 
 export async function canSendNotification(chatId: number, kind: NotificationKind): Promise<{ ok: boolean; reason?: string }> {
-  if (kind === "marketing" && isQuietHours()) {
+  const isMarketing = kind === "marketing" || kind === "marketing_promo" || kind === "marketing_rewards";
+  if (isMarketing && isQuietHours()) {
     return { ok: false, reason: "quiet_hours" };
   }
-  if (kind === "marketing") {
+  // User-prefs check
+  if (kind === "marketing_promo" || kind === "marketing_rewards") {
+    const prefs = await getNotificationPrefs(chatId);
+    if (kind === "marketing_promo"   && !prefs.marketing_promo)   return { ok: false, reason: "promo_disabled" };
+    if (kind === "marketing_rewards" && !prefs.marketing_rewards) return { ok: false, reason: "rewards_disabled" };
+  }
+  if (isMarketing) {
     const { rows } = await pool.query(
       `SELECT COUNT(*)::int AS cnt FROM notification_log
-       WHERE chat_id = $1 AND kind = 'marketing' AND sent_at > NOW() - INTERVAL '7 days'`,
+       WHERE chat_id = $1 AND kind LIKE 'marketing%' AND sent_at > NOW() - INTERVAL '7 days'`,
       [chatId]
     );
     if ((rows[0]?.cnt ?? 0) >= RATE_RULES.marketing.maxPerWeek) {

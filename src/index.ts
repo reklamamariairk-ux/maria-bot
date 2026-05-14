@@ -7,7 +7,7 @@ import https from "https";
 import cron from "node-cron";
 import { Bot, webhookCallback, InlineKeyboard } from "grammy";
 import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, fetchProductById, Product } from "./scraper";
-import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind } from "./db";
+import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind, getNotificationPrefs, setNotificationPrefs, saveCartSnapshot, clearCartSnapshot, getAbandonedCarts, markCartAbandonedPushed } from "./db";
 import {
   initClubSchema,
   getBalance,
@@ -80,10 +80,28 @@ async function notifyWishlistBackInStock(productIds: number[]) {
     if (products.length === 0) continue;
     const list = products.map((p) => `• ${p.name} — ${Number(p.price).toLocaleString("ru-RU")} ₽`).join("\n");
     const msg = `🎂 *Снова в наличии*\n\n${list}\n\nЗабери, пока есть — открой Mini App.`;
-    const ok = await sendPushSafely(chatId, "marketing", msg);
+    const ok = await sendPushSafely(chatId, "marketing_rewards", msg);
     if (ok) sent++;
   }
   if (sent > 0) console.log(`[WISHLIST] notified ${sent} subscribers about ${productIds.length} new product(s)`);
+}
+
+// Cart abandonment — push юзерам, чья корзина живёт >24h без чекаута
+async function pushCartAbandonments() {
+  const abandoned = await getAbandonedCarts().catch(() => []);
+  if (abandoned.length === 0) return;
+  let sent = 0;
+  for (const snap of abandoned) {
+    const sum = Number(snap.total_sum) || 0;
+    const cnt = Number(snap.item_count) || 0;
+    const pluralItem = cnt === 1 ? "товар" : cnt < 5 ? "товара" : "товаров";
+    const msg = `🛒 *Не забыл?*\n\nУ тебя в корзине ${cnt} ${pluralItem} на ${sum.toLocaleString("ru-RU")} ₽.\n\nЗабери до конца дня — открой Mini App.`;
+    const ok = await sendPushSafely(snap.chat_id, "marketing_promo", msg);
+    if (ok) sent++;
+    // Помечаем как pushed чтобы не дёргать повторно
+    await markCartAbandonedPushed(snap.chat_id).catch(() => {});
+  }
+  if (sent > 0) console.log(`[CART ABANDON] notified ${sent} subscribers`);
 }
 
 // Order status diff — обходит подписчиков с verified phone, тянет /api/lk, diff'ит статусы
@@ -1677,6 +1695,50 @@ app.post("/api/referral/use", requireTgUser, async (req, res) => {
   }
 });
 
+// ─── Notification preferences ───────────────────────────────────────────────
+app.get("/api/notify-prefs", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  try {
+    const prefs = await getNotificationPrefs(u.id);
+    res.json(prefs);
+  } catch {
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+app.post("/api/notify-prefs", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  const body = req.body as { marketing_promo?: boolean; marketing_rewards?: boolean };
+  const prefs: { marketing_promo?: boolean; marketing_rewards?: boolean } = {};
+  if (typeof body.marketing_promo === "boolean") prefs.marketing_promo = body.marketing_promo;
+  if (typeof body.marketing_rewards === "boolean") prefs.marketing_rewards = body.marketing_rewards;
+  try {
+    await setNotificationPrefs(u.id, prefs);
+    const fresh = await getNotificationPrefs(u.id);
+    res.json(fresh);
+  } catch {
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+// ─── Cart sync (для abandonment push) ────────────────────────────────────────
+app.post("/api/cart/sync", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  const body = req.body as { items?: Array<{ id: number; qty: number; price?: number; name?: string }> };
+  const items = Array.isArray(body.items) ? body.items.filter((i) => i && Number(i.id) > 0 && Number(i.qty) > 0) : [];
+  try {
+    if (items.length === 0) {
+      await clearCartSnapshot(u.id);
+    } else {
+      const totalSum = items.reduce((s, it) => s + (Number(it.price) || 0) * (Number(it.qty) || 0), 0);
+      await saveCartSnapshot(u.id, items, totalSum);
+    }
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "internal" });
+  }
+});
+
 // ─── Wishlist subscriptions (для уведомления «снова в наличии») ─────────────
 app.post("/api/wishlist/sync", requireTgUser, async (req, res) => {
   const u = getTgUser(req)!;
@@ -1909,6 +1971,11 @@ app.post("/api/order", rateLimit(15), async (req, res) => {
   }
   console.log(`[ORDER] created #${result.orderId} for ${phone}`);
   logOrderAttempt({ ...baseAttempt, outcome: "success", status: 200, orderId: result.orderId });
+
+  // Корзина превратилась в заказ — снимаем snapshot чтобы не пушить abandonment
+  if (tg?.id) {
+    clearCartSnapshot(tg.id).catch(() => {});
+  }
 
   // Push confirmation в TG-чат (если есть chat_id юзера)
   // `tg` уже объявлен выше через tryGetTgUser(req)
@@ -2146,6 +2213,12 @@ async function main() {
     checkOrderStatusChanges().catch((e) => console.error("[ORDER STATUS CRON]", e));
   });
   console.log("[STARTUP] Order-status cron scheduled (every 30 min)");
+
+  // Cart abandonment cron — каждый час шлёт пуш юзерам с забытой корзиной >24h
+  cron.schedule("23 * * * *", () => {
+    pushCartAbandonments().catch((e) => console.error("[CART ABANDON CRON]", e));
+  });
+  console.log("[STARTUP] Cart-abandonment cron scheduled (hourly)");
 
   // Партнёры — синк с Bitrix раз в час (если PARTNERS_API задан)
   if (process.env.PARTNERS_API) {

@@ -6,6 +6,12 @@ exports.getOrCreateReferralCode = getOrCreateReferralCode;
 exports.getReferralOwner = getReferralOwner;
 exports.getOrderStatusMap = getOrderStatusMap;
 exports.setOrderStatus = setOrderStatus;
+exports.getNotificationPrefs = getNotificationPrefs;
+exports.setNotificationPrefs = setNotificationPrefs;
+exports.saveCartSnapshot = saveCartSnapshot;
+exports.clearCartSnapshot = clearCartSnapshot;
+exports.getAbandonedCarts = getAbandonedCarts;
+exports.markCartAbandonedPushed = markCartAbandonedPushed;
 exports.canSendNotification = canSendNotification;
 exports.logNotification = logNotification;
 exports.recordReferralUse = recordReferralUse;
@@ -80,6 +86,22 @@ async function initDb() {
       sent_at   TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS notification_log_chat_idx ON notification_log (chat_id, sent_at DESC);
+
+    CREATE TABLE IF NOT EXISTS notification_prefs (
+      chat_id           BIGINT PRIMARY KEY,
+      marketing_promo   BOOLEAN DEFAULT TRUE,
+      marketing_rewards BOOLEAN DEFAULT TRUE,
+      updated_at        TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS cart_snapshots (
+      chat_id        BIGINT PRIMARY KEY,
+      items_json     TEXT,
+      total_sum      INT,
+      item_count     INT,
+      snapshot_at    TIMESTAMPTZ DEFAULT NOW(),
+      abandoned_pushed BOOLEAN DEFAULT FALSE
+    );
   `);
     console.log("[DB] Tables ready");
 }
@@ -123,6 +145,45 @@ async function setOrderStatus(chatId, orderId, status) {
      VALUES ($1, $2, $3, NOW())
      ON CONFLICT (chat_id, order_id) DO UPDATE SET status = $3, seen_at = NOW()`, [chatId, orderId, status]);
 }
+async function getNotificationPrefs(chatId) {
+    const { rows } = await exports.pool.query(`SELECT marketing_promo, marketing_rewards FROM notification_prefs WHERE chat_id = $1`, [chatId]);
+    if (rows[0])
+        return { marketing_promo: rows[0].marketing_promo, marketing_rewards: rows[0].marketing_rewards };
+    return { marketing_promo: true, marketing_rewards: true };
+}
+async function setNotificationPrefs(chatId, prefs) {
+    await exports.pool.query(`INSERT INTO notification_prefs (chat_id, marketing_promo, marketing_rewards, updated_at)
+     VALUES ($1, COALESCE($2, TRUE), COALESCE($3, TRUE), NOW())
+     ON CONFLICT (chat_id) DO UPDATE
+       SET marketing_promo   = COALESCE($2, notification_prefs.marketing_promo),
+           marketing_rewards = COALESCE($3, notification_prefs.marketing_rewards),
+           updated_at        = NOW()`, [chatId, prefs.marketing_promo ?? null, prefs.marketing_rewards ?? null]);
+}
+async function saveCartSnapshot(chatId, items, totalSum) {
+    const itemCount = Array.isArray(items)
+        ? items.reduce((s, it) => s + (Number(it?.qty) || 0), 0)
+        : 0;
+    await exports.pool.query(`INSERT INTO cart_snapshots (chat_id, items_json, total_sum, item_count, snapshot_at, abandoned_pushed)
+     VALUES ($1, $2, $3, $4, NOW(), FALSE)
+     ON CONFLICT (chat_id) DO UPDATE
+       SET items_json = $2, total_sum = $3, item_count = $4, snapshot_at = NOW(), abandoned_pushed = FALSE`, [chatId, JSON.stringify(items || []), totalSum | 0, itemCount | 0]);
+}
+async function clearCartSnapshot(chatId) {
+    await exports.pool.query(`DELETE FROM cart_snapshots WHERE chat_id = $1`, [chatId]);
+}
+async function getAbandonedCarts() {
+    // Активные корзины старше 24h, ещё не было abandonment push, есть items
+    const { rows } = await exports.pool.query(`SELECT chat_id, items_json, total_sum, item_count, snapshot_at, abandoned_pushed
+     FROM cart_snapshots
+     WHERE abandoned_pushed = FALSE
+       AND item_count > 0
+       AND snapshot_at < NOW() - INTERVAL '24 hours'
+       AND snapshot_at > NOW() - INTERVAL '7 days'`);
+    return rows;
+}
+async function markCartAbandonedPushed(chatId) {
+    await exports.pool.query(`UPDATE cart_snapshots SET abandoned_pushed = TRUE WHERE chat_id = $1`, [chatId]);
+}
 const RATE_RULES = {
     transactional: { maxPerDay: 999, minIntervalMin: 0 },
     marketing: { maxPerWeek: 1, minIntervalMin: 60 },
@@ -134,12 +195,21 @@ function isQuietHours() {
     return irkHour >= 22 || irkHour < 9;
 }
 async function canSendNotification(chatId, kind) {
-    if (kind === "marketing" && isQuietHours()) {
+    const isMarketing = kind === "marketing" || kind === "marketing_promo" || kind === "marketing_rewards";
+    if (isMarketing && isQuietHours()) {
         return { ok: false, reason: "quiet_hours" };
     }
-    if (kind === "marketing") {
+    // User-prefs check
+    if (kind === "marketing_promo" || kind === "marketing_rewards") {
+        const prefs = await getNotificationPrefs(chatId);
+        if (kind === "marketing_promo" && !prefs.marketing_promo)
+            return { ok: false, reason: "promo_disabled" };
+        if (kind === "marketing_rewards" && !prefs.marketing_rewards)
+            return { ok: false, reason: "rewards_disabled" };
+    }
+    if (isMarketing) {
         const { rows } = await exports.pool.query(`SELECT COUNT(*)::int AS cnt FROM notification_log
-       WHERE chat_id = $1 AND kind = 'marketing' AND sent_at > NOW() - INTERVAL '7 days'`, [chatId]);
+       WHERE chat_id = $1 AND kind LIKE 'marketing%' AND sent_at > NOW() - INTERVAL '7 days'`, [chatId]);
         if ((rows[0]?.cnt ?? 0) >= RATE_RULES.marketing.maxPerWeek) {
             return { ok: false, reason: "marketing_quota_exceeded" };
         }

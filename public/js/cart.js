@@ -17,6 +17,21 @@ function cartSave(items) {
     localStorage.setItem(CART_KEY, JSON.stringify(items));
   } catch {}
   cartUpdateBadge();
+  cartSyncDebounced(items);
+}
+let _cartSyncT = null;
+function cartSyncDebounced(items) {
+  if (_cartSyncT) clearTimeout(_cartSyncT);
+  _cartSyncT = setTimeout(() => {
+    const tg = window.Telegram?.WebApp;
+    const initData = tg?.initData || '';
+    if (!initData) return;
+    fetch('/api/cart/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'tma ' + initData },
+      body: JSON.stringify({ items: Array.isArray(items) ? items.map((x) => ({ id: Number(x.id), qty: Number(x.qty)||0, price: Number(x.price)||0, name: x.name })) : [] }),
+    }).catch(() => {});
+  }, 1500);
 }
 
 function cartCount() {

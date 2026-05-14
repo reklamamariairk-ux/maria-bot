@@ -53,6 +53,13 @@
 
 <main class="main">
 
+<!-- Sticky promo banner — Торт месяца с countdown -->
+<div class="promo-strip" id="promo-strip" style="display:none">
+  <span class="promo-strip__t" id="promo-strip-t">🎂 Торт месяца −20%</span>
+  <span class="promo-strip__c" id="promo-strip-c"></span>
+  <button class="promo-strip__x" onclick="promoStripDismiss(event)" aria-label="Скрыть">×</button>
+</div>
+
 <!-- ═══ ГЛАВНАЯ ═══ -->
 <section class="tab active" id="tab-home">
 
@@ -167,6 +174,16 @@
         <div class="home-persona__stat" id="home-persona-stat"></div>
       </div>
       <div class="home-persona__chip" id="home-persona-chip" onclick="switchTab('club')"></div>
+    </div>
+    <!-- Loyalty progress bar (Apple Wallet стиль) -->
+    <div class="loyalty-bar loyalty-bar--home" id="home-loyalty" style="display:none" onclick="switchTab('club')">
+      <div class="loyalty-bar__row">
+        <span class="loyalty-bar__name" id="home-loyalty-name">Друзья</span>
+        <span class="loyalty-bar__prog" id="home-loyalty-prog"></span>
+      </div>
+      <div class="loyalty-bar__track">
+        <div class="loyalty-bar__fill" id="home-loyalty-fill" style="width:0%"></div>
+      </div>
     </div>
     <div class="home-persona__reorder" id="home-persona-reorder" style="display:none">
       <div class="home-persona__reorder-text">
@@ -675,10 +692,15 @@
       <div class="prof-hero__phone" id="prof-phone">Подтвердите телефон в клубе</div>
       <div class="prof-hero__joined" id="prof-joined" style="display:none"></div>
       <div class="prof-hero__activity" id="prof-activity" style="display:none"></div>
-      <!-- Мини прогресс уровня (как в клубе) -->
-      <div class="prof-hero__levelchip" id="prof-level-chip" style="display:none">
-        <span class="prof-hero__levelchip-name" id="prof-level-name">Друзья</span>
-        <span class="prof-hero__levelchip-prog" id="prof-level-prog"></span>
+      <!-- Loyalty progress bar (Apple Wallet стиль) -->
+      <div class="loyalty-bar" id="prof-level-chip" style="display:none">
+        <div class="loyalty-bar__row">
+          <span class="loyalty-bar__name" id="prof-level-name">Друзья</span>
+          <span class="loyalty-bar__prog" id="prof-level-prog">до След: 12 500 ₽</span>
+        </div>
+        <div class="loyalty-bar__track">
+          <div class="loyalty-bar__fill" id="prof-level-fill" style="width:0%"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -782,7 +804,42 @@
     </div>
   </div>
 
-  <!-- УВЕДОМЛЕНИЯ убраны до реализации backend-side push management -->
+  <!-- УВЕДОМЛЕНИЯ — пользовательские настройки push-каналов -->
+  <div class="prof-group">
+    <div class="prof-group__h">Уведомления</div>
+    <div class="prof-actions">
+      <div class="prof-row prof-row--toggle">
+        <span class="prof-row__ic"><span data-icon="checkCircle" data-size="18"></span></span>
+        <span class="prof-row__body">
+          <span class="prof-row__t">Заказы и доставка</span>
+          <span class="prof-row__sub">Подтверждение, статусы, напоминания</span>
+        </span>
+        <span class="prof-toggle prof-toggle--locked" title="Транзакционные пуши нельзя отключить">
+          <span class="prof-toggle__dot"></span>
+        </span>
+      </div>
+      <div class="prof-row prof-row--toggle" onclick="profToggleNotify('marketing_promo')">
+        <span class="prof-row__ic"><span data-icon="star" data-size="18"></span></span>
+        <span class="prof-row__body">
+          <span class="prof-row__t">Новинки и акции</span>
+          <span class="prof-row__sub">Торт месяца, скидки, забытая корзина</span>
+        </span>
+        <span class="prof-toggle" id="prof-toggle-promo" data-on="true">
+          <span class="prof-toggle__dot"></span>
+        </span>
+      </div>
+      <div class="prof-row prof-row--toggle" onclick="profToggleNotify('marketing_rewards')">
+        <span class="prof-row__ic"><span data-icon="diamond" data-size="18"></span></span>
+        <span class="prof-row__body">
+          <span class="prof-row__t">Бонусы и рефералы</span>
+          <span class="prof-row__sub">«Снова в наличии», переходы по коду</span>
+        </span>
+        <span class="prof-toggle" id="prof-toggle-rewards" data-on="true">
+          <span class="prof-toggle__dot"></span>
+        </span>
+      </div>
+    </div>
+  </div>
 
   <!-- КЛУБ И ПОДДЕРЖКА -->
   <div class="prof-group">

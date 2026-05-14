@@ -26,6 +26,8 @@ async function profileLoad(force) {
     profileLoadOrdersCount();
     // Подгружаем реферальный код в фоне (для отображения в sub-tekst)
     profLoadReferral?.();
+    // Подгружаем настройки уведомлений
+    profLoadNotifyPrefs?.();
     return data;
   } catch (e) {
     console.error('[profile] load:', e);
@@ -241,19 +243,23 @@ async function profileLoadOrdersCount() {
     const chipEl = document.getElementById('prof-level-chip');
     const nameChipEl = document.getElementById('prof-level-name');
     const progEl = document.getElementById('prof-level-prog');
+    const fillEl = document.getElementById('prof-level-fill');
     if (chipEl && lk.found && window.getCurrentLevel) {
-      const cur = window.getCurrentLevel(Number(lk.year_spent || 0), lk.level || null);
+      const yearSpent = Number(lk.year_spent || 0);
+      const cur = window.getCurrentLevel(yearSpent, lk.level || null);
       const CLUB_LEVELS = window.CLUB_LEVELS || [];
       const idx = CLUB_LEVELS.findIndex((l) => l && l.name === cur?.name);
       const next = idx >= 0 ? CLUB_LEVELS[idx + 1] : null;
-      if (nameChipEl) nameChipEl.textContent = `${cur.name} · ${cur.pct}%`;
-      if (progEl) {
-        if (next) {
-          const toGo = Math.max(0, next.threshold - Number(lk.year_spent || 0));
-          progEl.textContent = `до ${next.name}: ${toGo.toLocaleString('ru-RU')} ₽`;
-        } else {
-          progEl.textContent = 'максимум';
-        }
+      if (nameChipEl) nameChipEl.textContent = `${cur.name} · кэшбэк ${cur.pct}%`;
+      if (next) {
+        const range = next.threshold - cur.threshold;
+        const got   = Math.max(0, yearSpent - cur.threshold);
+        const pct   = range > 0 ? Math.min(100, Math.max(2, Math.round(got / range * 100))) : 100;
+        if (progEl) progEl.textContent = `до ${next.name}: ${Math.max(0, next.threshold - yearSpent).toLocaleString('ru-RU')} ₽`;
+        if (fillEl) fillEl.style.width = pct + '%';
+      } else {
+        if (progEl) progEl.textContent = 'максимальный уровень';
+        if (fillEl) fillEl.style.width = '100%';
       }
       chipEl.style.display = '';
     } else if (chipEl) {
@@ -847,6 +853,48 @@ function profCopyReferralCode() {
   }
 }
 window.profCopyReferralCode = profCopyReferralCode;
+
+/* ── Notification preferences ─────────────────────────────────────────────── */
+let _notifyPrefs = { marketing_promo: true, marketing_rewards: true };
+async function profLoadNotifyPrefs() {
+  const tg = window.Telegram?.WebApp;
+  const initData = tg?.initData || '';
+  if (!initData) return;
+  try {
+    const r = await fetch('/api/notify-prefs', { headers: { Authorization: 'tma ' + initData } });
+    if (!r.ok) return;
+    _notifyPrefs = await r.json();
+    renderNotifyToggles();
+  } catch {}
+}
+window.profLoadNotifyPrefs = profLoadNotifyPrefs;
+
+function renderNotifyToggles() {
+  const promo   = document.getElementById('prof-toggle-promo');
+  const rewards = document.getElementById('prof-toggle-rewards');
+  if (promo)   promo.setAttribute('data-on',   _notifyPrefs.marketing_promo   ? 'true' : 'false');
+  if (rewards) rewards.setAttribute('data-on', _notifyPrefs.marketing_rewards ? 'true' : 'false');
+}
+
+async function profToggleNotify(key) {
+  const next = !_notifyPrefs[key];
+  _notifyPrefs[key] = next;
+  renderNotifyToggles();
+  window.haptic?.('selection');
+  const tg = window.Telegram?.WebApp;
+  const initData = tg?.initData || '';
+  if (!initData) return;
+  try {
+    const r = await fetch('/api/notify-prefs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'tma ' + initData },
+      body: JSON.stringify({ [key]: next }),
+    });
+    if (r.ok) _notifyPrefs = await r.json();
+    renderNotifyToggles();
+  } catch {}
+}
+window.profToggleNotify = profToggleNotify;
 
 // Modal «О приложении» / Privacy / Terms / FAQ / Whatsnew
 const ABOUT_CONTENT = {

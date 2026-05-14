@@ -290,6 +290,46 @@ function catOpenProductFromPromo() {
 window.catOpenProductFromPromo = catOpenProductFromPromo;
 window.loadCakeOfMonth = loadCakeOfMonth;
 
+/* ── Sticky promo banner ─────────────────────────────────────────────────── */
+function showPromoStrip() {
+  const dismissedAt = Number(localStorage.getItem('maria_promo_strip_hide') || 0);
+  if (dismissedAt && (Date.now() - dismissedAt) < 24 * 60 * 60 * 1000) return;
+  const strip = document.getElementById('promo-strip');
+  if (!strip) return;
+  // Countdown до конца месяца
+  const now = new Date();
+  const eom = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  const daysLeft = Math.ceil((eom - now) / 86400000);
+  const dayPlural = (n) => {
+    const m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return 'день';
+    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'дня';
+    return 'дней';
+  };
+  const c = document.getElementById('promo-strip-c');
+  if (c) c.textContent = `⏱ ещё ${daysLeft} ${dayPlural(daysLeft)}`;
+  strip.style.display = '';
+  strip.onclick = (e) => {
+    if (e.target.classList?.contains('promo-strip__x')) return;
+    switchTab('home');
+    setTimeout(() => {
+      document.getElementById('promo-cake-of-month')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+  };
+}
+function promoStripDismiss(e) {
+  e?.stopPropagation();
+  localStorage.setItem('maria_promo_strip_hide', String(Date.now()));
+  const strip = document.getElementById('promo-strip');
+  if (strip) strip.style.display = 'none';
+  window.haptic?.('selection');
+}
+window.promoStripDismiss = promoStripDismiss;
+window.showPromoStrip = showPromoStrip;
+
+// Показываем после загрузки cake-of-month (с задержкой)
+setTimeout(showPromoStrip, 2000);
+
 /* ── Готовые наборы (preset bundles) ───────────────────────────────────── */
 // Каждый bundle ищет товары в реальном каталоге по category + ключевым словам
 const BUNDLE_CONFIG = {
@@ -813,11 +853,33 @@ async function loadHomePersona() {
       statEl.textContent = parts.join(' · ') || 'Участник клуба';
     }
 
-    // Level chip
+    // Level chip + loyalty progress bar
     const chipEl = document.getElementById('home-persona-chip');
     if (chipEl && window.getCurrentLevel) {
-      const cur = window.getCurrentLevel(Number(lk.year_spent || 0), lk.level || null);
+      const yearSpent = Number(lk.year_spent || 0);
+      const cur = window.getCurrentLevel(yearSpent, lk.level || null);
       chipEl.textContent = `${cur.name} · ${cur.pct}%`;
+      const CLUB_LEVELS = window.CLUB_LEVELS || [];
+      const idx = CLUB_LEVELS.findIndex((l) => l && l.name === cur?.name);
+      const next = idx >= 0 ? CLUB_LEVELS[idx + 1] : null;
+      const wrap   = document.getElementById('home-loyalty');
+      const nameEl = document.getElementById('home-loyalty-name');
+      const progEl = document.getElementById('home-loyalty-prog');
+      const fillEl = document.getElementById('home-loyalty-fill');
+      if (wrap) {
+        wrap.style.display = '';
+        if (nameEl) nameEl.textContent = `${cur.name} · кэшбэк ${cur.pct}%`;
+        if (next) {
+          const range = next.threshold - cur.threshold;
+          const got   = Math.max(0, yearSpent - cur.threshold);
+          const pct   = range > 0 ? Math.min(100, Math.max(2, Math.round(got / range * 100))) : 100;
+          if (progEl) progEl.textContent = `до ${next.name}: ${Math.max(0, next.threshold - yearSpent).toLocaleString('ru-RU')} ₽`;
+          if (fillEl) fillEl.style.width = pct + '%';
+        } else {
+          if (progEl) progEl.textContent = 'максимальный уровень';
+          if (fillEl) fillEl.style.width = '100%';
+        }
+      }
     }
 
     // Last order для re-order
