@@ -129,6 +129,22 @@
     </button>
   </div>
 
+  <!-- Секрет дня — sticky-карточка с товаром-секрет -->
+  <div class="secret-card" id="secret-card" style="display:none">
+    <div class="secret-card__top">
+      <span class="secret-card__badge">🤫 Секрет дня</span>
+      <span class="secret-card__count" id="secret-card-count">до 23:59</span>
+    </div>
+    <div class="secret-card__body" id="secret-card-body" onclick="secretOpen()"></div>
+  </div>
+
+  <!-- Daily streak — 7 дней подряд → free дессерт -->
+  <div class="streak-card" id="streak-card" style="display:none">
+    <div class="streak-card__lbl"><span id="streak-day-cnt">0</span> из 7 дней</div>
+    <div class="streak-card__dots" id="streak-dots"></div>
+    <div class="streak-card__hint" id="streak-hint">Заходи 7 дней подряд — бесплатный десерт</div>
+  </div>
+
   <!-- Готовые наборы — preset карточки для быстрого заказа -->
   <div class="sh"><span class="sh__line"></span><span class="sh__text">Готовые наборы</span><span class="sh__line"></span></div>
   <div class="home-bundles" id="home-bundles">
@@ -370,6 +386,17 @@
           <div class="hiw__ic"><span data-icon="gift" data-size="24"></span></div>
           <div class="hiw__t">Каждый чек</div>
           <div class="hiw__s">Билет в розыгрыш</div>
+        </div>
+      </div>
+
+      <!-- Колесо удачи — daily spin -->
+      <div class="wheel-card" id="wheel-card">
+        <div class="wheel-card__row">
+          <div class="wheel-card__body">
+            <div class="wheel-card__h">🎡 Колесо удачи</div>
+            <div class="wheel-card__sub" id="wheel-card-sub">Крути один раз в день — купоны, баллы, билеты</div>
+          </div>
+          <button class="wheel-card__btn" id="wheel-card-btn" onclick="wheelOpen()">Крутить</button>
         </div>
       </div>
 
@@ -1079,7 +1106,8 @@
 
 <script src="/js/app.js" defer></script>
 <script src="/js/order.js" defer></script>
-<!-- /js/game.js, /js/bakery.js удалены — Игры убраны из UI после отключения наград -->
+<script src="/js/game.js" defer></script>
+<!-- /js/bakery.js удалён — Игры убраны до новой геймификации (см. game.js — wheel/streak/secret) -->
 <script src="/js/chat.js" defer></script>
 <script src="/js/catalog.js" defer></script>
 <script src="/js/profile.js" defer></script>

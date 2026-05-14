@@ -7,7 +7,7 @@ import https from "https";
 import cron from "node-cron";
 import { Bot, webhookCallback, InlineKeyboard } from "grammy";
 import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, fetchProductById, Product } from "./scraper";
-import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind, getNotificationPrefs, setNotificationPrefs, saveCartSnapshot, clearCartSnapshot, getAbandonedCarts, markCartAbandonedPushed } from "./db";
+import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind, getNotificationPrefs, setNotificationPrefs, saveCartSnapshot, clearCartSnapshot, getAbandonedCarts, markCartAbandonedPushed, getSpinStatus, recordSpin, WHEEL_PRIZES, touchVisitStreak, getStreak, setSecretOfDay, getSecretOfDay, getUnusedRewards } from "./db";
 import {
   initClubSchema,
   getBalance,
@@ -1695,6 +1695,101 @@ app.post("/api/referral/use", requireTgUser, async (req, res) => {
   }
 });
 
+// ─── Game zone: Wheel + Streak + Secret-of-day ───────────────────────────────
+app.get("/api/wheel/status", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  try {
+    const status = await getSpinStatus(u.id);
+    res.json({ canSpin: status.canSpin, lastPrize: status.lastPrize, nextSpinAt: status.nextSpinAt, prizes: WHEEL_PRIZES });
+  } catch (e) {
+    console.error("[wheel/status]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
+});
+app.post("/api/wheel/spin", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  try {
+    const r = await recordSpin(u.id);
+    const idx = WHEEL_PRIZES.findIndex((p) => p.kind === r.prize.kind);
+    res.json({ prize: r.prize, prizeIndex: idx, alreadySpunToday: r.alreadySpunToday });
+  } catch (e) {
+    console.error("[wheel/spin]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+app.post("/api/streak/touch", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  try {
+    const r = await touchVisitStreak(u.id);
+    if (r.reachedReward) {
+      // Награда — пуш юзеру
+      sendPushSafely(
+        u.id, "transactional",
+        `🎉 *Streak 7 дней!*\n\nТы заходишь в Mini App неделю подряд — получаешь *бесплатный десерт* при следующем заказе. Промокод применится автоматически.`,
+      ).catch(() => {});
+    }
+    res.json(r);
+  } catch (e) {
+    console.error("[streak/touch]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
+});
+app.get("/api/streak", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  try {
+    const r = await getStreak(u.id);
+    res.json(r);
+  } catch (e) {
+    console.error("[streak]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+app.get("/api/secret-of-day", async (_req, res) => {
+  try {
+    const s = await getSecretOfDay();
+    if (!s) { res.json({ secret: null }); return; }
+    const product = catalog.find((p) => p.id === s.productId);
+    res.json({
+      secret: {
+        productId: s.productId,
+        discountPct: s.discountPct,
+        expiresAt: s.expiresAt,
+        product: product || null,
+      },
+    });
+  } catch (e) {
+    console.error("[secret-of-day]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+app.get("/api/rewards/mine", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  try {
+    const rewards = await getUnusedRewards(u.id);
+    res.json({ rewards });
+  } catch {
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+// Cron-функция: каждое утро 09:00 Иркутск выбирает «секрет дня»
+async function rotateSecretOfDay() {
+  // Берём случайный товар (предпочитаем категории Торты/Десерты)
+  if (catalog.length === 0) return;
+  const eligibles = catalog.filter((p) =>
+    ["Торты", "Пирожные и десерты", "Пироги"].includes(p.category) && p.id && (p.priceNumber ?? 0) >= 300
+  );
+  const pool = eligibles.length > 0 ? eligibles : catalog;
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  if (pick?.id) {
+    await setSecretOfDay(Number(pick.id), 15).catch((e) => console.error("[SECRET-OF-DAY]", (e as Error).message));
+    console.log(`[SECRET-OF-DAY] picked id=${pick.id} "${pick.name}"`);
+  }
+}
+
 // ─── Notification preferences ───────────────────────────────────────────────
 app.get("/api/notify-prefs", requireTgUser, async (req, res) => {
   const u = getTgUser(req)!;
@@ -2219,6 +2314,18 @@ async function main() {
     pushCartAbandonments().catch((e) => console.error("[CART ABANDON CRON]", e));
   });
   console.log("[STARTUP] Cart-abandonment cron scheduled (hourly)");
+
+  // Secret-of-day cron — каждое утро 09:00 Иркутск (UTC 01:00) выбирает товар
+  cron.schedule("0 1 * * *", () => {
+    rotateSecretOfDay().catch((e) => console.error("[SECRET-OF-DAY CRON]", e));
+  });
+  // Запустить при старте если ещё не задано на сегодня
+  setTimeout(() => {
+    getSecretOfDay().then((s) => {
+      if (!s) return rotateSecretOfDay();
+    }).catch(() => {});
+  }, 8000);
+  console.log("[STARTUP] Secret-of-day cron scheduled (09:00 Иркутск)");
 
   // Партнёры — синк с Bitrix раз в час (если PARTNERS_API задан)
   if (process.env.PARTNERS_API) {

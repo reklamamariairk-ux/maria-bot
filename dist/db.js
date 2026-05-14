@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.pool = void 0;
+exports.WHEEL_PRIZES = exports.pool = void 0;
 exports.initDb = initDb;
 exports.getOrCreateReferralCode = getOrCreateReferralCode;
 exports.getReferralOwner = getReferralOwner;
@@ -12,6 +12,13 @@ exports.saveCartSnapshot = saveCartSnapshot;
 exports.clearCartSnapshot = clearCartSnapshot;
 exports.getAbandonedCarts = getAbandonedCarts;
 exports.markCartAbandonedPushed = markCartAbandonedPushed;
+exports.getSpinStatus = getSpinStatus;
+exports.recordSpin = recordSpin;
+exports.touchVisitStreak = touchVisitStreak;
+exports.getStreak = getStreak;
+exports.setSecretOfDay = setSecretOfDay;
+exports.getSecretOfDay = getSecretOfDay;
+exports.getUnusedRewards = getUnusedRewards;
 exports.canSendNotification = canSendNotification;
 exports.logNotification = logNotification;
 exports.recordReferralUse = recordReferralUse;
@@ -102,6 +109,42 @@ async function initDb() {
       snapshot_at    TIMESTAMPTZ DEFAULT NOW(),
       abandoned_pushed BOOLEAN DEFAULT FALSE
     );
+
+    -- Daily-spin wheel ──────────────────────────────────
+    CREATE TABLE IF NOT EXISTS daily_spins (
+      chat_id      BIGINT PRIMARY KEY,
+      last_spin_at TIMESTAMPTZ,
+      prize_kind   TEXT,
+      prize_value  TEXT
+    );
+
+    -- Visit streaks (7-day rewards) ─────────────────────
+    CREATE TABLE IF NOT EXISTS visit_streaks (
+      chat_id        BIGINT PRIMARY KEY,
+      current_streak INT DEFAULT 0,
+      longest_streak INT DEFAULT 0,
+      last_visit_date DATE
+    );
+
+    -- Secret-of-day (один товар со скидкой 24h) ─────────
+    CREATE TABLE IF NOT EXISTS secret_of_day (
+      date         DATE PRIMARY KEY,
+      product_id   INT NOT NULL,
+      discount_pct INT DEFAULT 15,
+      set_at       TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    -- Earned rewards (выигрыши с колеса + streak) ───────
+    CREATE TABLE IF NOT EXISTS earned_rewards (
+      id          BIGSERIAL PRIMARY KEY,
+      chat_id     BIGINT NOT NULL,
+      kind        TEXT NOT NULL,
+      value       TEXT,
+      source      TEXT,
+      earned_at   TIMESTAMPTZ DEFAULT NOW(),
+      used_at     TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS earned_rewards_chat_idx ON earned_rewards (chat_id, earned_at DESC);
   `);
     console.log("[DB] Tables ready");
 }
@@ -183,6 +226,151 @@ async function getAbandonedCarts() {
 }
 async function markCartAbandonedPushed(chatId) {
     await exports.pool.query(`UPDATE cart_snapshots SET abandoned_pushed = TRUE WHERE chat_id = $1`, [chatId]);
+}
+exports.WHEEL_PRIZES = [
+    { kind: "discount_coupon", value: "5", label: "Купон −5%", emoji: "🎫", weight: 22 },
+    { kind: "points", value: "50", label: "+50 баллов", emoji: "💎", weight: 25 },
+    { kind: "free_eclair", value: "1", label: "Бесплатный эклер от 800 ₽", emoji: "🍫", weight: 15 },
+    { kind: "double_points", value: "1", label: "×2 баллов сегодня", emoji: "✨", weight: 12 },
+    { kind: "sweet_ticket", value: "1", label: "Билет в Sweet Check", emoji: "🎟", weight: 10 },
+    { kind: "cake_month_10", value: "10", label: "Торт месяца −10%", emoji: "🎂", weight: 8 },
+    { kind: "nothing", value: "0", label: "Удача рядом — крутни завтра", emoji: "🙈", weight: 8 },
+];
+function pickWeightedPrize() {
+    const total = exports.WHEEL_PRIZES.reduce((s, p) => s + p.weight, 0);
+    let r = Math.random() * total;
+    for (const p of exports.WHEEL_PRIZES) {
+        if (r < p.weight)
+            return p;
+        r -= p.weight;
+    }
+    return exports.WHEEL_PRIZES[0];
+}
+function isSameDayIrkutsk(d1, d2) {
+    if (!d1)
+        return false;
+    // Иркутск UTC+8
+    const toIrk = (d) => new Date(d.getTime() + 8 * 3600000);
+    const a = toIrk(d1).toISOString().slice(0, 10);
+    const b = toIrk(d2).toISOString().slice(0, 10);
+    return a === b;
+}
+async function getSpinStatus(chatId) {
+    const { rows } = await exports.pool.query(`SELECT last_spin_at, prize_kind, prize_value FROM daily_spins WHERE chat_id = $1`, [chatId]);
+    if (!rows[0] || !rows[0].last_spin_at)
+        return { canSpin: true, lastPrize: null };
+    const last = new Date(rows[0].last_spin_at);
+    const now = new Date();
+    if (isSameDayIrkutsk(last, now)) {
+        // Уже крутил сегодня
+        const prizeIdx = exports.WHEEL_PRIZES.findIndex((p) => p.kind === rows[0].prize_kind);
+        const lastPrize = prizeIdx >= 0 ? exports.WHEEL_PRIZES[prizeIdx] : null;
+        // Время до завтра 00:00 Иркутск
+        const toIrk = (d) => new Date(d.getTime() + 8 * 3600000);
+        const irkNow = toIrk(now);
+        const nextMidnightIrk = new Date(Date.UTC(irkNow.getUTCFullYear(), irkNow.getUTCMonth(), irkNow.getUTCDate() + 1));
+        const nextUTC = new Date(nextMidnightIrk.getTime() - 8 * 3600000);
+        return { canSpin: false, lastPrize, nextSpinAt: nextUTC.toISOString() };
+    }
+    return { canSpin: true, lastPrize: null };
+}
+async function recordSpin(chatId) {
+    const status = await getSpinStatus(chatId);
+    if (!status.canSpin && status.lastPrize) {
+        return { prize: status.lastPrize, alreadySpunToday: true };
+    }
+    const prize = pickWeightedPrize();
+    await exports.pool.query(`INSERT INTO daily_spins (chat_id, last_spin_at, prize_kind, prize_value)
+     VALUES ($1, NOW(), $2, $3)
+     ON CONFLICT (chat_id) DO UPDATE SET last_spin_at = NOW(), prize_kind = $2, prize_value = $3`, [chatId, prize.kind, prize.value]);
+    // Логируем earned_reward кроме nothing
+    if (prize.kind !== "nothing") {
+        await exports.pool.query(`INSERT INTO earned_rewards (chat_id, kind, value, source) VALUES ($1, $2, $3, 'wheel')`, [chatId, prize.kind, prize.value]);
+    }
+    return { prize, alreadySpunToday: false };
+}
+// ─── Visit Streaks ───────────────────────────────────────────────────────────
+async function touchVisitStreak(chatId) {
+    const { rows } = await exports.pool.query(`SELECT current_streak, longest_streak, last_visit_date FROM visit_streaks WHERE chat_id = $1`, [chatId]);
+    const now = new Date();
+    const toIrk = (d) => new Date(d.getTime() + 8 * 3600000);
+    const todayIrk = toIrk(now).toISOString().slice(0, 10);
+    if (!rows[0]) {
+        await exports.pool.query(`INSERT INTO visit_streaks (chat_id, current_streak, longest_streak, last_visit_date)
+       VALUES ($1, 1, 1, $2::date)`, [chatId, todayIrk]);
+        return { currentStreak: 1, longestStreak: 1, reachedReward: false };
+    }
+    const lastDate = rows[0].last_visit_date;
+    let cur = Number(rows[0].current_streak) || 0;
+    let longest = Number(rows[0].longest_streak) || 0;
+    const lastIrk = lastDate ? toIrk(new Date(lastDate)).toISOString().slice(0, 10) : null;
+    if (lastIrk === todayIrk) {
+        // Уже отмечен сегодня
+        return { currentStreak: cur, longestStreak: longest, reachedReward: false };
+    }
+    // Проверяем — было ли вчера
+    const yesterday = new Date(now.getTime() - 24 * 3600000);
+    const yesterdayIrk = toIrk(yesterday).toISOString().slice(0, 10);
+    if (lastIrk === yesterdayIrk) {
+        cur += 1;
+    }
+    else {
+        cur = 1; // streak обнулён
+    }
+    let reachedReward = false;
+    if (cur >= 7) {
+        // Награда! Сбрасываем streak.
+        await exports.pool.query(`INSERT INTO earned_rewards (chat_id, kind, value, source)
+       VALUES ($1, 'free_dessert', '1', 'streak_7')`, [chatId]);
+        reachedReward = true;
+        cur = 0; // или оставить, но новый цикл — пусть сбросится
+    }
+    longest = Math.max(longest, cur);
+    await exports.pool.query(`UPDATE visit_streaks SET current_streak = $2, longest_streak = $3, last_visit_date = $4::date WHERE chat_id = $1`, [chatId, cur, longest, todayIrk]);
+    return { currentStreak: cur, longestStreak: longest, reachedReward };
+}
+async function getStreak(chatId) {
+    const { rows } = await exports.pool.query(`SELECT current_streak, longest_streak, last_visit_date FROM visit_streaks WHERE chat_id = $1`, [chatId]);
+    if (!rows[0])
+        return { currentStreak: 0, longestStreak: 0 };
+    // Если последний визит не вчера и не сегодня — streak уже сломан, но фактически в DB не обновлён
+    // Возвращаем как есть; touchVisitStreak обновит при следующем визите.
+    const now = new Date();
+    const toIrk = (d) => new Date(d.getTime() + 8 * 3600000);
+    const todayIrk = toIrk(now).toISOString().slice(0, 10);
+    const yesterdayIrk = toIrk(new Date(now.getTime() - 24 * 3600000)).toISOString().slice(0, 10);
+    const lastIrk = rows[0].last_visit_date ? toIrk(new Date(rows[0].last_visit_date)).toISOString().slice(0, 10) : null;
+    const cur = (lastIrk === todayIrk || lastIrk === yesterdayIrk) ? (Number(rows[0].current_streak) || 0) : 0;
+    return { currentStreak: cur, longestStreak: Number(rows[0].longest_streak) || 0 };
+}
+// ─── Secret of the Day ───────────────────────────────────────────────────────
+async function setSecretOfDay(productId, discountPct = 15) {
+    const today = new Date();
+    const toIrk = (d) => new Date(d.getTime() + 8 * 3600000);
+    const dateIrk = toIrk(today).toISOString().slice(0, 10);
+    await exports.pool.query(`INSERT INTO secret_of_day (date, product_id, discount_pct)
+     VALUES ($1::date, $2, $3)
+     ON CONFLICT (date) DO UPDATE SET product_id = $2, discount_pct = $3`, [dateIrk, productId, discountPct]);
+}
+async function getSecretOfDay() {
+    const today = new Date();
+    const toIrk = (d) => new Date(d.getTime() + 8 * 3600000);
+    const dateIrk = toIrk(today).toISOString().slice(0, 10);
+    const { rows } = await exports.pool.query(`SELECT product_id, discount_pct FROM secret_of_day WHERE date = $1::date`, [dateIrk]);
+    if (!rows[0])
+        return null;
+    // Истекает в 23:59 Иркутска
+    const irkNow = toIrk(today);
+    const eod = new Date(Date.UTC(irkNow.getUTCFullYear(), irkNow.getUTCMonth(), irkNow.getUTCDate(), 23, 59, 59));
+    const expiresAt = new Date(eod.getTime() - 8 * 3600000).toISOString();
+    return { productId: Number(rows[0].product_id), discountPct: Number(rows[0].discount_pct), expiresAt };
+}
+// ─── Earned rewards (выигрыши) ────────────────────────────────────────────────
+async function getUnusedRewards(chatId) {
+    const { rows } = await exports.pool.query(`SELECT id, kind, value, earned_at FROM earned_rewards
+     WHERE chat_id = $1 AND used_at IS NULL
+     ORDER BY earned_at DESC LIMIT 20`, [chatId]);
+    return rows;
 }
 const RATE_RULES = {
     transactional: { maxPerDay: 999, minIntervalMin: 0 },

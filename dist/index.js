@@ -1685,6 +1685,101 @@ app.post("/api/referral/use", auth_1.requireTgUser, async (req, res) => {
         res.status(500).json({ error: "internal" });
     }
 });
+// ─── Game zone: Wheel + Streak + Secret-of-day ───────────────────────────────
+app.get("/api/wheel/status", auth_1.requireTgUser, async (req, res) => {
+    const u = (0, auth_1.getTgUser)(req);
+    try {
+        const status = await (0, db_1.getSpinStatus)(u.id);
+        res.json({ canSpin: status.canSpin, lastPrize: status.lastPrize, nextSpinAt: status.nextSpinAt, prizes: db_1.WHEEL_PRIZES });
+    }
+    catch (e) {
+        console.error("[wheel/status]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
+});
+app.post("/api/wheel/spin", auth_1.requireTgUser, async (req, res) => {
+    const u = (0, auth_1.getTgUser)(req);
+    try {
+        const r = await (0, db_1.recordSpin)(u.id);
+        const idx = db_1.WHEEL_PRIZES.findIndex((p) => p.kind === r.prize.kind);
+        res.json({ prize: r.prize, prizeIndex: idx, alreadySpunToday: r.alreadySpunToday });
+    }
+    catch (e) {
+        console.error("[wheel/spin]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
+});
+app.post("/api/streak/touch", auth_1.requireTgUser, async (req, res) => {
+    const u = (0, auth_1.getTgUser)(req);
+    try {
+        const r = await (0, db_1.touchVisitStreak)(u.id);
+        if (r.reachedReward) {
+            // Награда — пуш юзеру
+            sendPushSafely(u.id, "transactional", `🎉 *Streak 7 дней!*\n\nТы заходишь в Mini App неделю подряд — получаешь *бесплатный десерт* при следующем заказе. Промокод применится автоматически.`).catch(() => { });
+        }
+        res.json(r);
+    }
+    catch (e) {
+        console.error("[streak/touch]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
+});
+app.get("/api/streak", auth_1.requireTgUser, async (req, res) => {
+    const u = (0, auth_1.getTgUser)(req);
+    try {
+        const r = await (0, db_1.getStreak)(u.id);
+        res.json(r);
+    }
+    catch (e) {
+        console.error("[streak]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
+});
+app.get("/api/secret-of-day", async (_req, res) => {
+    try {
+        const s = await (0, db_1.getSecretOfDay)();
+        if (!s) {
+            res.json({ secret: null });
+            return;
+        }
+        const product = catalog.find((p) => p.id === s.productId);
+        res.json({
+            secret: {
+                productId: s.productId,
+                discountPct: s.discountPct,
+                expiresAt: s.expiresAt,
+                product: product || null,
+            },
+        });
+    }
+    catch (e) {
+        console.error("[secret-of-day]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
+});
+app.get("/api/rewards/mine", auth_1.requireTgUser, async (req, res) => {
+    const u = (0, auth_1.getTgUser)(req);
+    try {
+        const rewards = await (0, db_1.getUnusedRewards)(u.id);
+        res.json({ rewards });
+    }
+    catch {
+        res.status(500).json({ error: "internal" });
+    }
+});
+// Cron-функция: каждое утро 09:00 Иркутск выбирает «секрет дня»
+async function rotateSecretOfDay() {
+    // Берём случайный товар (предпочитаем категории Торты/Десерты)
+    if (catalog.length === 0)
+        return;
+    const eligibles = catalog.filter((p) => ["Торты", "Пирожные и десерты", "Пироги"].includes(p.category) && p.id && (p.priceNumber ?? 0) >= 300);
+    const pool = eligibles.length > 0 ? eligibles : catalog;
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    if (pick?.id) {
+        await (0, db_1.setSecretOfDay)(Number(pick.id), 15).catch((e) => console.error("[SECRET-OF-DAY]", e.message));
+        console.log(`[SECRET-OF-DAY] picked id=${pick.id} "${pick.name}"`);
+    }
+}
 // ─── Notification preferences ───────────────────────────────────────────────
 app.get("/api/notify-prefs", auth_1.requireTgUser, async (req, res) => {
     const u = (0, auth_1.getTgUser)(req);
@@ -2184,6 +2279,18 @@ async function main() {
         pushCartAbandonments().catch((e) => console.error("[CART ABANDON CRON]", e));
     });
     console.log("[STARTUP] Cart-abandonment cron scheduled (hourly)");
+    // Secret-of-day cron — каждое утро 09:00 Иркутск (UTC 01:00) выбирает товар
+    node_cron_1.default.schedule("0 1 * * *", () => {
+        rotateSecretOfDay().catch((e) => console.error("[SECRET-OF-DAY CRON]", e));
+    });
+    // Запустить при старте если ещё не задано на сегодня
+    setTimeout(() => {
+        (0, db_1.getSecretOfDay)().then((s) => {
+            if (!s)
+                return rotateSecretOfDay();
+        }).catch(() => { });
+    }, 8000);
+    console.log("[STARTUP] Secret-of-day cron scheduled (09:00 Иркутск)");
     // Партнёры — синк с Bitrix раз в час (если PARTNERS_API задан)
     if (process.env.PARTNERS_API) {
         (0, partners_1.syncPartners)().catch((e) => console.error("[PARTNERS] startup sync:", e));
