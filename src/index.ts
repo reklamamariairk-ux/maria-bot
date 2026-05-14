@@ -1965,6 +1965,61 @@ app.post("/api/partners/sync", async (req, res) => {
 const SHOPS_API   = process.env.SHOPS_API   ?? "";
 const SHOPS_TOKEN = process.env.SHOPS_TOKEN ?? process.env.LK_TOKEN ?? "";
 let _shopsCache: { data: unknown; ts: number } | null = null;
+// Hardcoded coords для известных адресов кафе Мария.
+// Если адрес содержит ключевое слово — подставляем уточнённые координаты.
+// Fallback: центр города (Иркутск/Ангарск).
+const CAFE_COORDS_LOOKUP: { match: RegExp; lat: number; lon: number }[] = [
+  // Иркутск — Центр
+  { match: /ленина[, ]*1\b/i,                lat: 52.2766, lon: 104.2806 },
+  { match: /карла маркса[, ]*24/i,           lat: 52.2802, lon: 104.2843 },
+  { match: /партизанск/i,                    lat: 52.2858, lon: 104.2762 },
+  { match: /верхн.+набереж/i,                lat: 52.2826, lon: 104.2752 },
+  { match: /рабочая[, ]*2/i,                 lat: 52.2826, lon: 104.2796 },
+  { match: /баррикад/i,                      lat: 52.3022, lon: 104.2611 },
+  { match: /карла либкнехта/i,               lat: 52.2849, lon: 104.2785 },
+  { match: /советская/i,                     lat: 52.2870, lon: 104.2920 },
+  { match: /декабрист/i,                     lat: 52.2724, lon: 104.3013 },
+  // Иркутск — Свердловский / Юбилейный / Студгородок
+  { match: /юбилейн.+5[06]|юбилейный[, ]*56/i, lat: 52.2400, lon: 104.2540 },
+  { match: /дьяконов/i,                      lat: 52.2381, lon: 104.2553 },
+  { match: /жукова[, ]*11/i,                 lat: 52.2683, lon: 104.2444 },
+  { match: /терешковой/i,                    lat: 52.2530, lon: 104.2620 },
+  // Иркутск — Октябрьский / Байкальская
+  { match: /байкальская[, ]*141/i,           lat: 52.2900, lon: 104.3322 },
+  { match: /байкальская[, ]*105/i,           lat: 52.2728, lon: 104.3128 },
+  { match: /байкальская[, ]*295/i,           lat: 52.3122, lon: 104.3658 },
+  { match: /байкальская/i,                   lat: 52.2900, lon: 104.3322 }, // fallback
+  // Иркутск — Куйбышевский (Ржанова, Зелёный)
+  { match: /ржанова/i,                       lat: 52.3083, lon: 104.2950 },
+  // Ангарск
+  { match: /ангарск/i,                       lat: 52.5333, lon: 103.9000 },
+  { match: /18 микрорайон|микрорайон.+19/i,  lat: 52.5358, lon: 103.8987 },
+];
+const IRKUTSK_CENTER  = { lat: 52.286, lon: 104.305 };
+const ANGARSK_CENTER  = { lat: 52.535, lon: 103.900 };
+
+function enrichShopCoords(s: Record<string, unknown>): Record<string, unknown> {
+  // Уже есть валидные координаты — не трогаем
+  const existingLat = Number(s.lat ?? s.latitude);
+  const existingLon = Number(s.lon ?? s.longitude);
+  if (Number.isFinite(existingLat) && Number.isFinite(existingLon) && Math.abs(existingLat) > 0.1) {
+    return s;
+  }
+  const addr = String(s.address ?? s.name ?? "");
+  const city = String(s.city ?? "");
+  // Сначала ищем точный match
+  for (const rule of CAFE_COORDS_LOOKUP) {
+    if (rule.match.test(addr) || rule.match.test(city)) {
+      return { ...s, lat: rule.lat, lon: rule.lon, _coords_source: "lookup" };
+    }
+  }
+  // Fallback — центр города
+  if (/ангарск/i.test(addr) || /ангарск/i.test(city)) {
+    return { ...s, lat: ANGARSK_CENTER.lat, lon: ANGARSK_CENTER.lon, _coords_source: "city_center" };
+  }
+  return { ...s, lat: IRKUTSK_CENTER.lat, lon: IRKUTSK_CENTER.lon, _coords_source: "city_center" };
+}
+
 app.get("/api/shops", async (_req, res) => {
   if (!SHOPS_API || !SHOPS_TOKEN) {
     res.status(503).json({ count: 0, shops: [], error: "shops_api_not_configured" });
@@ -1978,7 +2033,7 @@ app.get("/api/shops", async (_req, res) => {
   try {
     const sep = SHOPS_API.includes("?") ? "&" : "?";
     const url = `${SHOPS_API}${sep}token=${encodeURIComponent(SHOPS_TOKEN)}`;
-    const data = await new Promise<unknown>((resolve, reject) => {
+    const raw = await new Promise<unknown>((resolve, reject) => {
       const req = https.get(url, { rejectUnauthorized: false }, (r) => {
         let body = ""; r.on("data", (c: Buffer) => body += c);
         r.on("end", () => { try { resolve(JSON.parse(body)); } catch (e) { reject(e); } });
@@ -1986,6 +2041,11 @@ app.get("/api/shops", async (_req, res) => {
       req.on("error", reject);
       req.setTimeout(10_000, () => { req.destroy(); reject(new Error("Timeout")); });
     });
+    // Обогащаем shops координатами
+    const data = raw as { shops?: unknown[]; count?: number };
+    if (Array.isArray(data?.shops)) {
+      data.shops = data.shops.map((s) => enrichShopCoords(s as Record<string, unknown>));
+    }
     _shopsCache = { data, ts: Date.now() };
     res.json(data);
   } catch (e) {
