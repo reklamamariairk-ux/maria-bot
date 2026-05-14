@@ -1683,6 +1683,45 @@ app.post("/api/order", rateLimit(15), async (req, res) => {
   }
   console.log(`[ORDER] created #${result.orderId} for ${phone}`);
   logOrderAttempt({ ...baseAttempt, outcome: "success", status: 200, orderId: result.orderId });
+
+  // Push confirmation в TG-чат (если есть chat_id юзера)
+  // `tg` уже объявлен выше через tryGetTgUser(req)
+  if (tg?.id) {
+    const itemsLine = items.slice(0, 3).map((it) => `${it.qty}× #${it.id}`).join(", ");
+    const moreLine = items.length > 3 ? ` +${items.length - 3}` : "";
+    const dateLine = body.delivery_date && body.delivery_time
+      ? `\n📅 ${body.delivery_date} · ${body.delivery_time}`
+      : "";
+    const addrLine = body.address ? `\n📍 ${String(body.address).slice(0, 80)}` : "";
+    const msg = `✅ *Заявка №${result.orderId} принята!*
+
+🛒 ${itemsLine}${moreLine}${dateLine}${addrLine}
+
+Менеджер позвонит для подтверждения в течение 1 часа.
+_Узнать статус: напишите боту_`;
+    bot.api.sendMessage(tg.id, msg, { parse_mode: "Markdown" }).catch((e) => {
+      console.warn(`[ORDER push] failed for chat ${tg.id}:`, (e as Error).message);
+    });
+
+    // Если есть delivery_date — schedule напоминание за 2 часа до
+    if (body.delivery_date && body.delivery_time) {
+      try {
+        const [dd, mm, yyyy] = String(body.delivery_date).split(".");
+        const [hh] = String(body.delivery_time).split(":");
+        if (dd && mm && yyyy && hh) {
+          const target = new Date(`${yyyy}-${mm.padStart(2,"0")}-${dd.padStart(2,"0")}T${hh.padStart(2,"0")}:00:00+08:00`);
+          const reminderTime = target.getTime() - 2 * 60 * 60 * 1000;
+          const delay = reminderTime - Date.now();
+          if (delay > 0 && delay < 30 * 24 * 60 * 60 * 1000) { // только если в пределах 30 дней
+            setTimeout(() => {
+              bot.api.sendMessage(tg.id, `🔔 Через 2 часа ваш заказ №${result.orderId} будет готов!\n\n${body.delivery_time} · ${body.delivery_date}`).catch(() => {});
+            }, delay);
+          }
+        }
+      } catch {}
+    }
+  }
+
   res.json(result);
 });
 

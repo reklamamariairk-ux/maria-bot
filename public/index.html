@@ -74,6 +74,30 @@
     <span class="home-search__ph">Что хотите? Торт, пирог, набор…</span>
   </div>
 
+  <!-- Stories format (Wildberries/Я.Plus стиль) — horizontal circle avatars -->
+  <div class="home-stories" id="home-stories">
+    <button class="home-story" onclick="openStory('promo')">
+      <span class="home-story__ring"><span class="home-story__ic">🎂</span></span>
+      <span class="home-story__t">Торт месяца</span>
+    </button>
+    <button class="home-story" onclick="openStory('sweet')">
+      <span class="home-story__ring"><span class="home-story__ic">🎁</span></span>
+      <span class="home-story__t">iPhone 17</span>
+    </button>
+    <button class="home-story" onclick="openStory('club')">
+      <span class="home-story__ring"><span class="home-story__ic">💎</span></span>
+      <span class="home-story__t">Клуб 10%</span>
+    </button>
+    <button class="home-story" onclick="openStory('partners')">
+      <span class="home-story__ring"><span class="home-story__ic">🤝</span></span>
+      <span class="home-story__t">Партнёры</span>
+    </button>
+    <button class="home-story" onclick="openStory('cafes')">
+      <span class="home-story__ring"><span class="home-story__ic">🏬</span></span>
+      <span class="home-story__t">17 кафе</span>
+    </button>
+  </div>
+
   <!-- Категории chips — быстрый entry -->
   <div class="home-cats" id="home-cats">
     <button class="home-cat" data-haptic="light" onclick="haptic('light');switchTab('menu');setTimeout(()=>window.catShowProducts?.('Торты'),200)">

@@ -390,6 +390,124 @@ function showSubTab(name) {
 }
 
 /* ── Chat chips ──────────────────────────────────────────────────────────── */
+/* ── Stories viewer ──────────────────────────────────────────────────────── */
+const STORIES_DATA = {
+  promo: {
+    emoji: '🎂',
+    title: 'Торт месяца со скидкой −20%',
+    sub: 'Банан-солёная карамель · воздушный бисквит, нежный крем · 1 856 ₽',
+    ctaText: 'Заказать →',
+    ctaAction: 'switchTab("menu");setTimeout(()=>catShowProducts?.("Торты"),200)',
+  },
+  sweet: {
+    emoji: '📱',
+    title: 'iPhone 17 Pro Max',
+    sub: 'Каждый чек — билет в розыгрыш. Призы: MacBook, PS5, Apple Watch, JBL. Розыгрыш каждый квартал.',
+    ctaText: 'Узнать про Сладкий чек',
+    ctaAction: 'switchTab("club")',
+  },
+  club: {
+    emoji: '💎',
+    title: 'Кэшбэк до 10%',
+    sub: 'Друзья 5% · Лучшие друзья 7% · Семья 10%. Оплачивай до 30% заказа баллами. День рождения −5% / −10% детям.',
+    ctaText: 'Открыть клуб',
+    ctaAction: 'switchTab("club")',
+  },
+  partners: {
+    emoji: '🤝',
+    title: '14 партнёров со скидками',
+    sub: 'ЛукаЛаб −35% · Окулария −10% · Деница · Пряников и другие. Скидки для участников клуба.',
+    ctaText: 'Посмотреть',
+    ctaAction: 'switchTab("club");setTimeout(()=>document.querySelector(".club-partners")?.scrollIntoView({behavior:"smooth"}),300)',
+  },
+  cafes: {
+    emoji: '🏬',
+    title: '17 кафе по Иркутску',
+    sub: 'Свежая выпечка каждый день. Заказ на самовывоз без доставки. Откуда удобно вам.',
+    ctaText: 'Карта кафе',
+    ctaAction: 'openShopsModal()',
+  },
+};
+const STORIES_ORDER = ['promo','sweet','club','partners','cafes'];
+let _storyIdx = 0;
+let _storyTimer = null;
+
+function openStory(key) {
+  const idx = STORIES_ORDER.indexOf(key);
+  if (idx < 0) return;
+  _storyIdx = idx;
+  let v = document.getElementById('story-viewer');
+  if (!v) {
+    v = document.createElement('div');
+    v.id = 'story-viewer';
+    v.className = 'story-viewer';
+    v.innerHTML = `
+      <div class="story-viewer__inner">
+        <div class="story-viewer__bars" id="story-bars"></div>
+        <button class="story-viewer__close" onclick="closeStory()">×</button>
+        <div class="story-viewer__nav story-viewer__nav--prev" onclick="storyPrev()"></div>
+        <div class="story-viewer__nav story-viewer__nav--next" onclick="storyNext()"></div>
+        <div class="story-viewer__content" id="story-content"></div>
+        <button class="story-viewer__cta" id="story-cta"></button>
+      </div>`;
+    document.body.appendChild(v);
+  }
+  v.style.display = 'flex';
+  window.scrollLock?.();
+  renderStory();
+}
+window.openStory = openStory;
+
+function renderStory() {
+  const data = STORIES_DATA[STORIES_ORDER[_storyIdx]];
+  if (!data) return;
+  const bars = document.getElementById('story-bars');
+  if (bars) {
+    bars.innerHTML = STORIES_ORDER.map((_, i) => {
+      let cls = '';
+      if (i < _storyIdx) cls = 'story-viewer__bar--done';
+      else if (i === _storyIdx) cls = 'story-viewer__bar--active';
+      return `<div class="story-viewer__bar ${cls}"><span class="story-viewer__bar-fill"></span></div>`;
+    }).join('');
+  }
+  document.getElementById('story-content').innerHTML = `
+    <div class="story-viewer__emoji">${data.emoji}</div>
+    <div class="story-viewer__title">${data.title}</div>
+    <div class="story-viewer__sub">${data.sub}</div>`;
+  const cta = document.getElementById('story-cta');
+  cta.textContent = data.ctaText;
+  cta.onclick = () => { closeStory(); setTimeout(() => { try { eval(data.ctaAction); } catch (e) { console.error(e); } }, 200); };
+  // Auto-advance через 5 сек
+  clearTimeout(_storyTimer);
+  _storyTimer = setTimeout(() => storyNext(), 5000);
+  // Force reflow для CSS animation
+  requestAnimationFrame(() => bars?.querySelector('.story-viewer__bar--active .story-viewer__bar-fill')?.getBoundingClientRect());
+}
+
+function storyNext() {
+  if (_storyIdx < STORIES_ORDER.length - 1) {
+    _storyIdx++;
+    renderStory();
+  } else {
+    closeStory();
+  }
+}
+function storyPrev() {
+  if (_storyIdx > 0) {
+    _storyIdx--;
+    renderStory();
+  }
+}
+function closeStory() {
+  const v = document.getElementById('story-viewer');
+  if (v) v.style.display = 'none';
+  clearTimeout(_storyTimer);
+  window.scrollUnlock?.();
+}
+window.storyNext = storyNext;
+window.storyPrev = storyPrev;
+window.closeStory = closeStory;
+
 function usechip(btn) {
   usechipText(btn.textContent);
 }

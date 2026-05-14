@@ -242,8 +242,10 @@ function cartRenderCheckout() {
   const u = tg?.initDataUnsafe?.user;
   const tgName = u ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : '';
   const saved = checkoutLoad();
-  // Auto-fill адреса: 1) saved checkout 2) Profile address 3) пусто
-  const profileAddress = (() => { try { return localStorage.getItem('maria_default_address') || ''; } catch { return ''; } })();
+  // Auto-fill адреса: 1) saved checkout 2) Profile default address 3) пусто
+  const profileAddresses = (() => { try { return (typeof addrLoad === 'function') ? addrLoad() : []; } catch { return []; } })();
+  const profileDefaultAddr = profileAddresses.find((a) => a.isDefault) || profileAddresses[0];
+  const profileAddress = profileDefaultAddr?.address || (() => { try { return localStorage.getItem('maria_default_address') || ''; } catch { return ''; } })();
   const defName    = saved.name    || tgName || '';
   const defPhone   = saved.phone   || '';
   const defAddress = saved.address || profileAddress || '';
@@ -322,6 +324,14 @@ function cartRenderCheckout() {
 
       <!-- Адрес или Кафе (зависит от deltype) -->
       <div id="co-address-block" style="${defType === 'delivery' ? '' : 'display:none'}">
+        ${profileAddresses.length >= 1 ? `
+          <div class="co-addr-chips" role="tablist" aria-label="Сохранённые адреса">
+            ${profileAddresses.map((a) => `
+              <button type="button" class="co-addr-chip${defAddress === a.address ? ' co-addr-chip--on' : ''}" onclick="coPickSavedAddress('${escAttr(a.id)}')">
+                ${escHtml(a.label || 'Адрес')}
+              </button>`).join('')}
+            <button type="button" class="co-addr-chip co-addr-chip--new" onclick="coAddNewAddress()">+ Новый</button>
+          </div>` : ''}
         <label>Адрес доставки <span class="lbl-req">*</span>
           <input id="co-address" type="text" placeholder="г Иркутск, ул ..." value="${escAttr(defAddress)}" autocomplete="street-address" />
         </label>
@@ -392,6 +402,55 @@ function coSetDelType(type) {
   window.haptic?.('selection');
 }
 window.coSetDelType = coSetDelType;
+
+// Saved address chips → подставить в input
+function coPickSavedAddress(id) {
+  const list = (typeof addrLoad === 'function') ? addrLoad() : [];
+  const a = list.find((x) => x.id === id);
+  if (!a) return;
+  const input = document.getElementById('co-address');
+  if (input) {
+    input.value = a.address || '';
+    const saved = checkoutLoad();
+    saved.address = a.address;
+    checkoutSave(saved);
+  }
+  document.querySelectorAll('.co-addr-chip').forEach((c) => c.classList.remove('co-addr-chip--on'));
+  const btn = document.querySelector(`.co-addr-chip[onclick*="${id}"]`);
+  if (btn) btn.classList.add('co-addr-chip--on');
+  window.haptic?.('selection');
+}
+window.coPickSavedAddress = coPickSavedAddress;
+
+function coAddNewAddress() {
+  const label = prompt('Название (например, Дом / Работа / Бабушка):');
+  if (!label) return;
+  const address = prompt('Адрес (Иркутск, ул. X, кв Y):');
+  if (!address) return;
+  const list = (typeof addrLoad === 'function') ? addrLoad() : [];
+  const isFirst = list.length === 0;
+  list.push({
+    id: 'a_' + Date.now(),
+    label: label.trim(),
+    address: address.trim(),
+    isDefault: isFirst,
+  });
+  try {
+    localStorage.setItem('maria_addresses_v1', JSON.stringify(list));
+    const def = list.find((a) => a.isDefault) || list[0];
+    if (def) localStorage.setItem('maria_default_address', def.address);
+  } catch {}
+  const input = document.getElementById('co-address');
+  if (input) {
+    input.value = address.trim();
+    const saved = checkoutLoad();
+    saved.address = address.trim();
+    checkoutSave(saved);
+  }
+  cartRenderCheckout();
+  window.haptic?.('success');
+}
+window.coAddNewAddress = coAddNewAddress;
 
 // Custom date picker (beyond chips)
 function coPickCustomDate(v) {

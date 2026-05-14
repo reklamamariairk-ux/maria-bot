@@ -161,12 +161,15 @@ function profileRender(data) {
     } catch { wishEl.textContent = 0; }
   }
 
-  // Адрес доставки из localStorage
+  // Адрес доставки — берём из multi-address списка (с миграцией)
   const addrEl = document.getElementById('prof-info-address');
   if (addrEl) {
-    const addr = localStorage.getItem('maria_default_address') || '';
-    if (addr) {
-      addrEl.textContent = addr.length > 28 ? addr.slice(0, 26) + '…' : addr;
+    const list = (typeof addrLoad === 'function') ? addrLoad() : [];
+    const def = list.find((a) => a.isDefault) || list[0];
+    if (def) {
+      const more = list.length > 1 ? ` · +${list.length - 1}` : '';
+      const text = (def.label || def.address || '') + more;
+      addrEl.textContent = text.length > 28 ? text.slice(0, 26) + '…' : text;
       addrEl.style.color = 'var(--ap-ink)';
     } else {
       addrEl.textContent = 'указать';
@@ -396,7 +399,7 @@ function renderProfileCompletion(data) {
   const checks = [
     { key: 'phone', label: 'телефон', done: !!data?.phoneVerified },
     { key: 'bday',  label: 'день рождения', done: !!data?.birthday },
-    { key: 'address', label: 'адрес доставки', done: !!localStorage.getItem('maria_default_address') },
+    { key: 'address', label: 'адрес доставки', done: (typeof addrLoad === 'function') ? addrLoad().length > 0 : !!localStorage.getItem('maria_default_address') },
     { key: 'wishlist', label: 'избранное', done: (() => { try { return JSON.parse(localStorage.getItem('maria_wishlist') || '[]').length > 0; } catch { return false; } })() },
   ];
   const doneCount = checks.filter((c) => c.done).length;
@@ -610,70 +613,145 @@ function renderAchievements(data, orders) {
 }
 window.renderAchievements = renderAchievements;
 
-// Address modal — полноценный с input и Save
+/* ── Multiple addresses ─────────────────────────────────────────────────── */
+const ADDR_KEY = 'maria_addresses_v1';
+function addrLoad() {
+  try {
+    const v = JSON.parse(localStorage.getItem(ADDR_KEY) || '[]');
+    if (Array.isArray(v) && v.length > 0) return v;
+    // Migration: подтянуть из старого single-address ключа
+    const legacy = localStorage.getItem('maria_default_address');
+    if (legacy) return [{ id: 'home', label: '🏠 Дом', address: legacy, isDefault: true }];
+    return [];
+  } catch { return []; }
+}
+function addrSave(list) {
+  try {
+    localStorage.setItem(ADDR_KEY, JSON.stringify(list));
+    // Поддерживаем легаси-ключ синхронизированным для backward-compat
+    const def = list.find((a) => a.isDefault) || list[0];
+    if (def) localStorage.setItem('maria_default_address', def.address);
+    else localStorage.removeItem('maria_default_address');
+  } catch {}
+}
+function addrGetDefault() {
+  const list = addrLoad();
+  return list.find((a) => a.isDefault) || list[0] || null;
+}
+window.addrLoad = addrLoad;
+window.addrGetDefault = addrGetDefault;
+
+// Адрес доставки — modal со списком saved addresses
 function profEditAddress() {
-  let modal = document.getElementById('prof-address-modal');
-  const current = localStorage.getItem('maria_default_address') || '';
+  profOpenAddressList();
+}
+function profOpenAddressList() {
+  let modal = document.getElementById('addr-list-modal');
   if (!modal) {
     modal = document.createElement('div');
-    modal.id = 'prof-address-modal';
+    modal.id = 'addr-list-modal';
     modal.className = 'cat-modal';
     modal.style.display = 'none';
-    modal.onclick = (e) => { if (e.target === modal) profCloseAddressModal(); };
+    modal.onclick = (e) => { if (e.target === modal) profCloseAddressList(); };
     modal.innerHTML = `
-      <div class="cat-modal__sheet prof-addr">
-        <button class="cat-modal__close" onclick="profCloseAddressModal()">×</button>
-        <div class="prof-addr__h">Адрес доставки</div>
-        <div class="prof-addr__sub">Сохраним по умолчанию для следующих заказов</div>
-        <textarea class="prof-addr__input" id="prof-addr-input" rows="3" placeholder="Иркутск, ул. Ленина 1, кв. 38"></textarea>
-        <div class="prof-addr__hint">Хранится только на вашем устройстве</div>
-        <div class="prof-addr__btns">
-          <button class="btn-outline" onclick="profCloseAddressModal()">Отмена</button>
-          <button class="btn-full prof-addr__save" onclick="profSaveAddress()">Сохранить</button>
-        </div>
+      <div class="cat-modal__sheet">
+        <button class="cat-modal__close" onclick="profCloseAddressList()">×</button>
+        <div class="addr-list__h">Адреса доставки</div>
+        <div class="addr-list" id="addr-list-items"></div>
+        <button class="btn-full addr-list__add" onclick="profAddAddress()">+ Новый адрес</button>
       </div>`;
     document.body.appendChild(modal);
   }
-  document.getElementById('prof-addr-input').value = current;
+  renderAddressList();
   modal.style.display = 'flex';
   window.scrollLock?.();
-  setTimeout(() => { document.getElementById('prof-addr-input')?.focus(); }, 200);
 }
-window.profEditAddress = profEditAddress;
-function profCloseAddressModal() {
-  const m = document.getElementById('prof-address-modal');
+window.profOpenAddressList = profOpenAddressList;
+window.profCloseAddressList = () => {
+  const m = document.getElementById('addr-list-modal');
   if (m) m.style.display = 'none';
   window.scrollUnlock?.();
-}
-window.profCloseAddressModal = profCloseAddressModal;
-function profSaveAddress() {
-  const inp = document.getElementById('prof-addr-input');
-  if (!inp) return;
-  const v = inp.value.trim();
-  if (v) localStorage.setItem('maria_default_address', v);
-  else localStorage.removeItem('maria_default_address');
-  profCloseAddressModal();
-  const tg = window.Telegram?.WebApp;
-  tg?.HapticFeedback?.notificationOccurred?.('success');
-  profileLoad(true);
-}
-window.profSaveAddress = profSaveAddress;
+  profileLoad(true); // обновим address в Профиле
+};
 
-// Адрес доставки — простой prompt с сохранением в localStorage
-function profEditAddress() {
-  const tg = window.Telegram?.WebApp;
-  const current = localStorage.getItem('maria_default_address') || '';
-  const v = prompt('Адрес доставки по умолчанию:', current);
-  if (v === null) return;
-  const trimmed = String(v).trim();
-  if (trimmed.length > 0) {
-    localStorage.setItem('maria_default_address', trimmed);
-  } else {
-    localStorage.removeItem('maria_default_address');
+function renderAddressList() {
+  const wrap = document.getElementById('addr-list-items');
+  if (!wrap) return;
+  const list = addrLoad();
+  if (list.length === 0) {
+    wrap.innerHTML = '<div class="addr-empty">Пока нет адресов. Добавь первый →</div>';
+    return;
   }
-  tg?.HapticFeedback?.notificationOccurred?.('success');
-  profileLoad(true);
+  wrap.innerHTML = list.map((a, i) => `
+    <div class="addr-item ${a.isDefault ? 'addr-item--default' : ''}">
+      <div class="addr-item__body" onclick="profSetDefaultAddress('${a.id}')">
+        <div class="addr-item__label">${escAttr(a.label || 'Адрес')}${a.isDefault ? ' <span class="addr-item__badge">по умолч.</span>' : ''}</div>
+        <div class="addr-item__address">${escAttr(a.address || '')}</div>
+      </div>
+      <button class="addr-item__edit" onclick="profEditOneAddress('${a.id}')" aria-label="Редактировать">✎</button>
+      <button class="addr-item__del" onclick="profDeleteAddress('${a.id}')" aria-label="Удалить">×</button>
+    </div>`).join('');
 }
+
+function profAddAddress() {
+  const label = prompt('Название (например, Дом / Работа / Бабушка):');
+  if (!label) return;
+  const address = prompt('Адрес (Иркутск, ул. X, кв Y):');
+  if (!address) return;
+  const list = addrLoad();
+  const isFirst = list.length === 0;
+  list.push({
+    id: 'a_' + Date.now(),
+    label: label.trim(),
+    address: address.trim(),
+    isDefault: isFirst,
+  });
+  addrSave(list);
+  renderAddressList();
+  window.haptic?.('success');
+}
+window.profAddAddress = profAddAddress;
+
+function profEditOneAddress(id) {
+  const list = addrLoad();
+  const a = list.find((x) => x.id === id);
+  if (!a) return;
+  const newLabel = prompt('Название:', a.label);
+  if (newLabel === null) return;
+  const newAddress = prompt('Адрес:', a.address);
+  if (newAddress === null) return;
+  a.label = newLabel.trim();
+  a.address = newAddress.trim();
+  addrSave(list);
+  renderAddressList();
+}
+window.profEditOneAddress = profEditOneAddress;
+
+function profDeleteAddress(id) {
+  const tg = window.Telegram?.WebApp;
+  const ask = (cb) => tg?.showConfirm ? tg.showConfirm('Удалить адрес?', cb) : cb(confirm('Удалить адрес?'));
+  ask((ok) => {
+    if (!ok) return;
+    let list = addrLoad();
+    const wasDef = list.find((a) => a.id === id)?.isDefault;
+    list = list.filter((a) => a.id !== id);
+    if (wasDef && list.length > 0) list[0].isDefault = true;
+    addrSave(list);
+    renderAddressList();
+    window.haptic?.('selection');
+  });
+}
+window.profDeleteAddress = profDeleteAddress;
+
+function profSetDefaultAddress(id) {
+  const list = addrLoad();
+  list.forEach((a) => { a.isDefault = a.id === id; });
+  addrSave(list);
+  renderAddressList();
+  window.haptic?.('selection');
+}
+window.profSetDefaultAddress = profSetDefaultAddress;
+
 window.profEditAddress = profEditAddress;
 
 // Поделиться приложением через TG share-link
