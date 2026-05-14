@@ -7,7 +7,7 @@ import https from "https";
 import cron from "node-cron";
 import { Bot, webhookCallback, InlineKeyboard } from "grammy";
 import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, fetchProductById, Product } from "./scraper";
-import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo } from "./db";
+import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse } from "./db";
 import {
   initClubSchema,
   getBalance,
@@ -45,10 +45,53 @@ let catalog: Product[] = loadCatalog();
 
 async function refreshCatalog() {
   try {
+    const prevIds = new Set(catalog.map((p) => p.id));
     catalog = await scrapeCatalog();
+    // Diff: появились ли товары, которых раньше не было?
+    if (prevIds.size > 0) {
+      const newIds = catalog
+        .map((p) => Number(p.id))
+        .filter((id) => Number.isFinite(id) && !prevIds.has(id));
+      if (newIds.length > 0) {
+        notifyWishlistBackInStock(newIds).catch((e) => console.error("[WISHLIST notify]", (e as Error).message));
+      }
+    }
   } catch (e) {
     console.error("Ошибка обновления каталога:", (e as Error).message);
   }
+}
+
+async function notifyWishlistBackInStock(productIds: number[]) {
+  const subs = await getWishlistSubsForProducts(productIds);
+  if (subs.length === 0) return;
+  // Группируем по chat_id чтобы отправить один push на юзера
+  const byChat = new Map<number, number[]>();
+  for (const s of subs) {
+    const arr = byChat.get(s.chat_id) ?? [];
+    arr.push(s.product_id);
+    byChat.set(s.chat_id, arr);
+  }
+  let sent = 0;
+  for (const [chatId, pids] of byChat.entries()) {
+    const products = pids
+      .map((id) => catalog.find((p) => p.id === id))
+      .filter((p): p is Product => Boolean(p))
+      .slice(0, 5);
+    if (products.length === 0) continue;
+    const list = products.map((p) => `• ${p.name} — ${Number(p.price).toLocaleString("ru-RU")} ₽`).join("\n");
+    const msg = `🎂 *Снова в наличии*\n\n${list}\n\nЗабери, пока есть — открой Mini App.`;
+    try {
+      await bot.api.sendMessage(chatId, msg, { parse_mode: "Markdown" });
+      sent++;
+    } catch (e) {
+      // юзер мог заблокировать бота — игнорим
+      const msg = (e as Error).message || "";
+      if (!/blocked|forbidden|chat not found/i.test(msg)) {
+        console.warn(`[WISHLIST push] chat ${chatId}:`, msg);
+      }
+    }
+  }
+  if (sent > 0) console.log(`[WISHLIST] notified ${sent} subscribers about ${productIds.length} new product(s)`);
 }
 
 // Запускаем парсинг при старте (не блокируем сервер)
@@ -143,12 +186,26 @@ bot.command("start", async (ctx) => {
   if (ctx.from) {
     await addSubscriber(ctx.from.id, ctx.from.username, ctx.from.first_name).catch(() => {});
 
-    // Referral payload: /start ref_12345
+    // Referral payload: /start ref_12345 (старая схема) или /start ref_MARIA-XXX (новая)
     const payload = ctx.match?.trim();
     if (payload && payload.startsWith("ref_")) {
-      const referrerId = Number(payload.slice(4));
-      if (referrerId && referrerId !== ctx.from.id) {
-        await recordReferral(referrerId, ctx.from.id).catch(() => {});
+      const rest = payload.slice(4);
+      if (/^MARIA-/i.test(rest)) {
+        // Code-based реферал
+        const r = await recordReferralUse(ctx.from.id, rest).catch(() => null);
+        if (r?.ok && r.ownerChat) {
+          const userName = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" ") || "Новый друг";
+          await bot.api.sendMessage(
+            r.ownerChat,
+            `🎉 *${userName}* пришёл по твоему коду \`${rest.toUpperCase()}\`!\n\nКогда он сделает первый заказ, вы оба получите *200 ₽*.`,
+            { parse_mode: "Markdown" }
+          ).catch(() => {});
+        }
+      } else {
+        const referrerId = Number(rest);
+        if (referrerId && referrerId !== ctx.from.id) {
+          await recordReferral(referrerId, ctx.from.id).catch(() => {});
+        }
       }
     }
   }
@@ -1464,6 +1521,66 @@ app.get("/api/catalog/product/:id", async (req, res) => {
 // ─── Partners ────────────────────────────────────────────────────────────────
 app.get("/api/partners", (_req, res) => {
   res.json({ partners: getPartners(), meta: getPartnersMeta() });
+});
+
+// ─── Referrals ──────────────────────────────────────────────────────────────
+app.get("/api/referral/me", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  try {
+    const code = await getOrCreateReferralCode(u.id, u.first_name);
+    const used = await _dbPool.query(
+      `SELECT COUNT(*)::int AS used FROM referral_uses WHERE code = $1`,
+      [code]
+    );
+    res.json({ code, used: used.rows[0]?.used ?? 0, share_url: `https://t.me/mariatortik_bot?start=ref_${code}` });
+  } catch (e) {
+    console.error("[referral/me]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+app.post("/api/referral/use", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  const code = String(req.body?.code ?? "").trim().toUpperCase();
+  if (!code) {
+    res.status(400).json({ error: "code_required" });
+    return;
+  }
+  try {
+    const r = await recordReferralUse(u.id, code);
+    if (!r.ok) {
+      res.status(400).json({ error: r.reason });
+      return;
+    }
+    // Уведомляем владельца кода
+    if (r.ownerChat) {
+      const userName = [u.first_name, u.last_name].filter(Boolean).join(" ") || "Новый друг";
+      bot.api.sendMessage(
+        r.ownerChat,
+        `🎉 *${userName}* пришёл по твоему коду \`${code}\`!\n\nКогда он сделает первый заказ, вы оба получите *200 ₽* на бонусный счёт.`,
+        { parse_mode: "Markdown" }
+      ).catch(() => {});
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[referral/use]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+// ─── Wishlist subscriptions (для уведомления «снова в наличии») ─────────────
+app.post("/api/wishlist/sync", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  const ids = Array.isArray(req.body?.ids)
+    ? (req.body.ids as unknown[]).map((x) => Number(x)).filter((n) => Number.isFinite(n) && n > 0)
+    : [];
+  try {
+    await wishlistSync(u.id, ids);
+    res.json({ ok: true, count: ids.length });
+  } catch (e) {
+    console.error("[wishlist/sync]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
 });
 
 // ─── LK (Личный кабинет на сайте) ────────────────────────────────────────────

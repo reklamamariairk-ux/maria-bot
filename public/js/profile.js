@@ -24,6 +24,8 @@ async function profileLoad(force) {
     profileRender(data);
     // Подгружаем заказы (LK) — отдельно, не блокируем рендер
     profileLoadOrdersCount();
+    // Подгружаем реферальный код в фоне (для отображения в sub-tekst)
+    profLoadReferral?.();
     return data;
   } catch (e) {
     console.error('[profile] load:', e);
@@ -766,6 +768,85 @@ function profShareApp() {
   else window.open(shareUrl, '_blank');
 }
 window.profShareApp = profShareApp;
+
+/* ── Referral code ─────────────────────────────────────────────────────────── */
+let _referralCache = null;
+async function profLoadReferral() {
+  const tg = window.Telegram?.WebApp;
+  const initData = tg?.initData || '';
+  if (!initData) return null;
+  if (_referralCache) return _referralCache;
+  try {
+    const r = await fetch('/api/referral/me', { headers: { Authorization: 'tma ' + initData } });
+    if (!r.ok) return null;
+    _referralCache = await r.json();
+    const subEl = document.getElementById('prof-ref-sub');
+    if (subEl && _referralCache?.code) {
+      const usedTxt = _referralCache.used > 0 ? ` · ${_referralCache.used} перешли` : '';
+      subEl.textContent = `Твой код: ${_referralCache.code}${usedTxt}`;
+    }
+    return _referralCache;
+  } catch { return null; }
+}
+window.profLoadReferral = profLoadReferral;
+
+async function profOpenReferral() {
+  const data = await profLoadReferral();
+  if (!data?.code) {
+    alert('Не удалось загрузить реферальный код. Попробуй позже.');
+    return;
+  }
+  let modal = document.getElementById('ref-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'ref-modal';
+    modal.className = 'cat-modal';
+    modal.style.display = 'none';
+    modal.onclick = (e) => { if (e.target === modal) profCloseReferral(); };
+    document.body.appendChild(modal);
+  }
+  const shareText = `Заходи в кондитерскую «Мария» по моему коду ${data.code} — оба получим 200 ₽ на следующий заказ.`;
+  const tgShare = `https://t.me/share/url?url=${encodeURIComponent(data.share_url)}&text=${encodeURIComponent(shareText)}`;
+  modal.innerHTML = `
+    <div class="cat-modal__sheet">
+      <button class="cat-modal__close" onclick="profCloseReferral()">×</button>
+      <div class="ref-h">Приведи друга — <span class="ref-h__sum">200 ₽</span></div>
+      <div class="ref-sub">Когда друг сделает первый заказ — вы оба получите 200 ₽ на бонусный счёт.</div>
+      <div class="ref-code-box">
+        <div class="ref-code-box__lbl">Твой код</div>
+        <div class="ref-code-box__code" id="ref-code-val">${escAttr(data.code)}</div>
+        <button class="ref-code-box__copy" onclick="profCopyReferralCode()">Скопировать</button>
+      </div>
+      <div class="ref-stat">${data.used > 0 ? `Уже перешли по твоему коду: <b>${data.used}</b>` : 'Ещё никто не перешёл — будь первым, кто поделится'}</div>
+      <a class="btn-full ref-share-btn" href="${escAttr(tgShare)}" target="_blank" rel="noopener">📤 Поделиться через Telegram</a>
+    </div>`;
+  modal.style.display = 'flex';
+  window.scrollLock?.();
+}
+window.profOpenReferral = profOpenReferral;
+
+function profCloseReferral() {
+  const m = document.getElementById('ref-modal');
+  if (m) m.style.display = 'none';
+  window.scrollUnlock?.();
+}
+window.profCloseReferral = profCloseReferral;
+
+function profCopyReferralCode() {
+  const v = document.getElementById('ref-code-val')?.textContent || '';
+  if (!v) return;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(v).then(() => {
+      window.haptic?.('success');
+      const btn = document.querySelector('.ref-code-box__copy');
+      if (btn) { const t = btn.textContent; btn.textContent = '✓ Скопирован'; setTimeout(() => { btn.textContent = t; }, 1500); }
+    }).catch(() => {});
+  } else {
+    const r = document.createRange(); r.selectNodeContents(document.getElementById('ref-code-val'));
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+  }
+}
+window.profCopyReferralCode = profCopyReferralCode;
 
 // Modal «О приложении» / Privacy / Terms / FAQ / Whatsnew
 const ABOUT_CONTENT = {

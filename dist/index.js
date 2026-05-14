@@ -66,11 +66,57 @@ if (!GROQ_KEY)
 let catalog = (0, scraper_1.loadCatalog)();
 async function refreshCatalog() {
     try {
+        const prevIds = new Set(catalog.map((p) => p.id));
         catalog = await (0, scraper_1.scrapeCatalog)();
+        // Diff: появились ли товары, которых раньше не было?
+        if (prevIds.size > 0) {
+            const newIds = catalog
+                .map((p) => Number(p.id))
+                .filter((id) => Number.isFinite(id) && !prevIds.has(id));
+            if (newIds.length > 0) {
+                notifyWishlistBackInStock(newIds).catch((e) => console.error("[WISHLIST notify]", e.message));
+            }
+        }
     }
     catch (e) {
         console.error("Ошибка обновления каталога:", e.message);
     }
+}
+async function notifyWishlistBackInStock(productIds) {
+    const subs = await (0, db_1.getWishlistSubsForProducts)(productIds);
+    if (subs.length === 0)
+        return;
+    // Группируем по chat_id чтобы отправить один push на юзера
+    const byChat = new Map();
+    for (const s of subs) {
+        const arr = byChat.get(s.chat_id) ?? [];
+        arr.push(s.product_id);
+        byChat.set(s.chat_id, arr);
+    }
+    let sent = 0;
+    for (const [chatId, pids] of byChat.entries()) {
+        const products = pids
+            .map((id) => catalog.find((p) => p.id === id))
+            .filter((p) => Boolean(p))
+            .slice(0, 5);
+        if (products.length === 0)
+            continue;
+        const list = products.map((p) => `• ${p.name} — ${Number(p.price).toLocaleString("ru-RU")} ₽`).join("\n");
+        const msg = `🎂 *Снова в наличии*\n\n${list}\n\nЗабери, пока есть — открой Mini App.`;
+        try {
+            await bot.api.sendMessage(chatId, msg, { parse_mode: "Markdown" });
+            sent++;
+        }
+        catch (e) {
+            // юзер мог заблокировать бота — игнорим
+            const msg = e.message || "";
+            if (!/blocked|forbidden|chat not found/i.test(msg)) {
+                console.warn(`[WISHLIST push] chat ${chatId}:`, msg);
+            }
+        }
+    }
+    if (sent > 0)
+        console.log(`[WISHLIST] notified ${sent} subscribers about ${productIds.length} new product(s)`);
 }
 // Запускаем парсинг при старте (не блокируем сервер)
 const needsScrape = catalog.length === 0;
@@ -158,12 +204,23 @@ const HELP_TEXT = `
 bot.command("start", async (ctx) => {
     if (ctx.from) {
         await (0, db_1.addSubscriber)(ctx.from.id, ctx.from.username, ctx.from.first_name).catch(() => { });
-        // Referral payload: /start ref_12345
+        // Referral payload: /start ref_12345 (старая схема) или /start ref_MARIA-XXX (новая)
         const payload = ctx.match?.trim();
         if (payload && payload.startsWith("ref_")) {
-            const referrerId = Number(payload.slice(4));
-            if (referrerId && referrerId !== ctx.from.id) {
-                await (0, club_1.recordReferral)(referrerId, ctx.from.id).catch(() => { });
+            const rest = payload.slice(4);
+            if (/^MARIA-/i.test(rest)) {
+                // Code-based реферал
+                const r = await (0, db_1.recordReferralUse)(ctx.from.id, rest).catch(() => null);
+                if (r?.ok && r.ownerChat) {
+                    const userName = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" ") || "Новый друг";
+                    await bot.api.sendMessage(r.ownerChat, `🎉 *${userName}* пришёл по твоему коду \`${rest.toUpperCase()}\`!\n\nКогда он сделает первый заказ, вы оба получите *200 ₽*.`, { parse_mode: "Markdown" }).catch(() => { });
+                }
+            }
+            else {
+                const referrerId = Number(rest);
+                if (referrerId && referrerId !== ctx.from.id) {
+                    await (0, club_1.recordReferral)(referrerId, ctx.from.id).catch(() => { });
+                }
             }
         }
     }
@@ -1460,6 +1517,59 @@ app.get("/api/catalog/product/:id", async (req, res) => {
 // ─── Partners ────────────────────────────────────────────────────────────────
 app.get("/api/partners", (_req, res) => {
     res.json({ partners: (0, partners_1.getPartners)(), meta: (0, partners_1.getPartnersMeta)() });
+});
+// ─── Referrals ──────────────────────────────────────────────────────────────
+app.get("/api/referral/me", auth_1.requireTgUser, async (req, res) => {
+    const u = (0, auth_1.getTgUser)(req);
+    try {
+        const code = await (0, db_1.getOrCreateReferralCode)(u.id, u.first_name);
+        const used = await db_2.pool.query(`SELECT COUNT(*)::int AS used FROM referral_uses WHERE code = $1`, [code]);
+        res.json({ code, used: used.rows[0]?.used ?? 0, share_url: `https://t.me/mariatortik_bot?start=ref_${code}` });
+    }
+    catch (e) {
+        console.error("[referral/me]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
+});
+app.post("/api/referral/use", auth_1.requireTgUser, async (req, res) => {
+    const u = (0, auth_1.getTgUser)(req);
+    const code = String(req.body?.code ?? "").trim().toUpperCase();
+    if (!code) {
+        res.status(400).json({ error: "code_required" });
+        return;
+    }
+    try {
+        const r = await (0, db_1.recordReferralUse)(u.id, code);
+        if (!r.ok) {
+            res.status(400).json({ error: r.reason });
+            return;
+        }
+        // Уведомляем владельца кода
+        if (r.ownerChat) {
+            const userName = [u.first_name, u.last_name].filter(Boolean).join(" ") || "Новый друг";
+            bot.api.sendMessage(r.ownerChat, `🎉 *${userName}* пришёл по твоему коду \`${code}\`!\n\nКогда он сделает первый заказ, вы оба получите *200 ₽* на бонусный счёт.`, { parse_mode: "Markdown" }).catch(() => { });
+        }
+        res.json({ ok: true });
+    }
+    catch (e) {
+        console.error("[referral/use]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
+});
+// ─── Wishlist subscriptions (для уведомления «снова в наличии») ─────────────
+app.post("/api/wishlist/sync", auth_1.requireTgUser, async (req, res) => {
+    const u = (0, auth_1.getTgUser)(req);
+    const ids = Array.isArray(req.body?.ids)
+        ? req.body.ids.map((x) => Number(x)).filter((n) => Number.isFinite(n) && n > 0)
+        : [];
+    try {
+        await (0, db_1.wishlistSync)(u.id, ids);
+        res.json({ ok: true, count: ids.length });
+    }
+    catch (e) {
+        console.error("[wishlist/sync]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
 });
 // ─── LK (Личный кабинет на сайте) ────────────────────────────────────────────
 app.get("/api/lk", auth_1.requireTgUser, async (req, res) => {

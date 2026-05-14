@@ -470,10 +470,21 @@ function renderStory() {
       return `<div class="story-viewer__bar ${cls}"><span class="story-viewer__bar-fill"></span></div>`;
     }).join('');
   }
+  // Для promo story используем реальное фото торта месяца если есть
+  const heroBlock = (STORIES_ORDER[_storyIdx] === 'promo' && _cakeOfMonth?.image)
+    ? `<div class="story-viewer__photo" style="background-image:url('/img?u=${encodeURIComponent(_cakeOfMonth.image)}')"></div>`
+    : `<div class="story-viewer__emoji">${data.emoji}</div>`;
+  // Динамически подставим имя/цену если есть _cakeOfMonth
+  const title = (STORIES_ORDER[_storyIdx] === 'promo' && _cakeOfMonth?.name)
+    ? `«${_cakeOfMonth.name}» со скидкой −20%`
+    : data.title;
+  const sub = (STORIES_ORDER[_storyIdx] === 'promo' && _cakeOfMonth)
+    ? `${(_cakeOfMonth.preview || '').slice(0, 80) || 'Хит каталога'} · ${Number(_cakeOfMonth.priceNumber || _cakeOfMonth.price || 0).toLocaleString('ru-RU')} ₽`
+    : data.sub;
   document.getElementById('story-content').innerHTML = `
-    <div class="story-viewer__emoji">${data.emoji}</div>
-    <div class="story-viewer__title">${data.title}</div>
-    <div class="story-viewer__sub">${data.sub}</div>`;
+    ${heroBlock}
+    <div class="story-viewer__title">${title}</div>
+    <div class="story-viewer__sub">${sub}</div>`;
   const cta = document.getElementById('story-cta');
   cta.textContent = data.ctaText;
   cta.onclick = () => { closeStory(); setTimeout(() => { try { eval(data.ctaAction); } catch (e) { console.error(e); } }, 200); };

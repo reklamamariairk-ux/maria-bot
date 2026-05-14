@@ -48,6 +48,22 @@ function wishLoad() {
 }
 function wishSave(arr) {
   try { localStorage.setItem(WISH_KEY, JSON.stringify(arr)); } catch {}
+  // Дебаунс-синк на бэкенд для push «снова в наличии»
+  wishSyncDebounced(arr);
+}
+let _wishSyncT = null;
+function wishSyncDebounced(ids) {
+  if (_wishSyncT) clearTimeout(_wishSyncT);
+  _wishSyncT = setTimeout(() => {
+    const tg = window.Telegram?.WebApp;
+    const initData = tg?.initData || '';
+    if (!initData) return;
+    fetch('/api/wishlist/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'tma ' + initData },
+      body: JSON.stringify({ ids: (ids || []).map(Number).filter((x) => x > 0) }),
+    }).catch(() => {});
+  }, 800);
 }
 function wishHas(id) {
   return wishLoad().includes(Number(id));
@@ -698,6 +714,14 @@ function escapeAttr(s) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Стартовая синхронизация wishlist'a с бэком — на случай если юзер уже накидал избранное
+  // до появления push-канала. Идемпотентно: бэк просто перепишет свою таблицу.
+  setTimeout(() => {
+    try {
+      const ids = wishLoad();
+      if (ids.length > 0) wishSyncDebounced(ids);
+    } catch {}
+  }, 2000);
   const inp = document.getElementById('menu-search');
   const clear = document.getElementById('menu-search-clear');
   if (inp) {
