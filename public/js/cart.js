@@ -543,9 +543,17 @@ function renderShopPicker() {
   }
   list.innerHTML = shops.map((s) => {
     const label = s.address || s.name || '';
-    const distTxt = (s._dist != null)
-      ? `<span class="shop-picker__dist">${s._dist < 1 ? Math.round(s._dist * 1000) + ' м' : s._dist.toFixed(1) + ' км'}</span>`
-      : '';
+    let distTxt = '';
+    if (s._dist != null) {
+      if (s._dist < 0.1) {
+        // < 100m скорее всего fallback на центр города, не показываем
+        distTxt = '';
+      } else if (s._dist < 1) {
+        distTxt = `<span class="shop-picker__dist">${Math.round(s._dist * 1000)} м</span>`;
+      } else {
+        distTxt = `<span class="shop-picker__dist">${s._dist.toFixed(1)} км</span>`;
+      }
+    }
     return `
       <button class="shop-picker__item" onclick="coPickShop('${escAttr(label)}')">
         <div class="shop-picker__pin">📍</div>
