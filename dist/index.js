@@ -103,20 +103,109 @@ async function notifyWishlistBackInStock(productIds) {
             continue;
         const list = products.map((p) => `• ${p.name} — ${Number(p.price).toLocaleString("ru-RU")} ₽`).join("\n");
         const msg = `🎂 *Снова в наличии*\n\n${list}\n\nЗабери, пока есть — открой Mini App.`;
-        try {
-            await bot.api.sendMessage(chatId, msg, { parse_mode: "Markdown" });
+        const ok = await sendPushSafely(chatId, "marketing", msg);
+        if (ok)
             sent++;
-        }
-        catch (e) {
-            // юзер мог заблокировать бота — игнорим
-            const msg = e.message || "";
-            if (!/blocked|forbidden|chat not found/i.test(msg)) {
-                console.warn(`[WISHLIST push] chat ${chatId}:`, msg);
-            }
-        }
     }
     if (sent > 0)
         console.log(`[WISHLIST] notified ${sent} subscribers about ${productIds.length} new product(s)`);
+}
+// Order status diff — обходит подписчиков с verified phone, тянет /api/lk, diff'ит статусы
+const STATUS_EMOJI = {
+    "новый": "📋",
+    "новая": "📋",
+    "обработка": "📞",
+    "обрабатывается": "📞",
+    "принят": "✅",
+    "принято": "✅",
+    "оплачен": "💳",
+    "оплачен на сайте": "💳",
+    "готовится": "🍳",
+    "в работе": "🍳",
+    "готов": "🎁",
+    "готов к выдаче": "🎁",
+    "ожидает выдачи": "🎁",
+    "в доставке": "🚚",
+    "в пути": "🚚",
+    "доставлен": "✅",
+    "доставлено": "✅",
+    "выдан": "✅",
+    "выдано": "✅",
+    "завершён": "✅",
+    "завершен": "✅",
+    "выполнен": "✅",
+    "отменён": "❌",
+    "отменен": "❌",
+    "отмена": "❌",
+};
+function statusEmoji(status) {
+    const key = status.toLowerCase().trim();
+    return STATUS_EMOJI[key] || "📦";
+}
+function isTerminalStatus(status) {
+    const key = status.toLowerCase().trim();
+    return /выдан|доставлен|доставлено|выполнен|завершён|завершен|отменён|отменен|отмена/.test(key);
+}
+async function checkOrderStatusChanges() {
+    const subs = await (0, db_1.getAllSubscribers)();
+    let pushed = 0;
+    let checked = 0;
+    for (const s of subs) {
+        // Только верифицированные юзеры с реальным телефоном
+        const phone = await (0, lk_1.getVerifiedPhone)(s.chat_id).catch(() => null);
+        if (!phone)
+            continue;
+        const lk = await (0, lk_1.fetchLk)(s.chat_id).catch(() => null);
+        if (!lk?.ok || !lk.data?.configured)
+            continue;
+        const orders = Array.isArray(lk.data.orders) ? lk.data.orders : [];
+        if (orders.length === 0)
+            continue;
+        checked++;
+        // Рассматриваем только активные заказы (не старше 14 дней)
+        const FOURTEEN_DAYS = 14 * 24 * 60 * 60 * 1000;
+        const recent = orders.filter((o) => {
+            try {
+                const d = new Date(String(o.date).replace(" ", "T"));
+                return !isNaN(d.getTime()) && Date.now() - d.getTime() < FOURTEEN_DAYS;
+            }
+            catch {
+                return true;
+            }
+        });
+        if (recent.length === 0)
+            continue;
+        const seen = await (0, db_1.getOrderStatusMap)(s.chat_id);
+        for (const o of recent) {
+            const orderId = String(o.id);
+            const status = String(o.status ?? "").trim();
+            if (!status)
+                continue;
+            const prev = seen.get(orderId);
+            if (prev === undefined) {
+                // Первый раз видим этот заказ — просто запомним, без push
+                // (push о создании отправляет /api/order при создании)
+                await (0, db_1.setOrderStatus)(s.chat_id, orderId, status).catch(() => { });
+                continue;
+            }
+            if (prev === status)
+                continue;
+            // Статус изменился — пушим
+            const emoji = statusEmoji(status);
+            const msg = `${emoji} *Заказ №${orderId}* — ${status}`;
+            const ok = await sendPushSafely(s.chat_id, "transactional", msg);
+            if (ok)
+                pushed++;
+            await (0, db_1.setOrderStatus)(s.chat_id, orderId, status).catch(() => { });
+            // Если терминальный статус — больше не отслеживаем (но запись остаётся в DB)
+            if (isTerminalStatus(status)) {
+                // optional: можно удалять старые записи cleanup-кроном, но не критично
+            }
+        }
+    }
+    if (pushed > 0 || checked > 0) {
+        console.log(`[ORDER STATUS] checked=${checked} subs, pushed=${pushed} updates`);
+    }
 }
 // Запускаем парсинг при старте (не блокируем сервер)
 const needsScrape = catalog.length === 0;
@@ -161,6 +250,26 @@ setInterval(runCleanup, 6 * 60 * 60 * 1000); // каждые 6 часов
 setTimeout(runCleanup, 5 * 60 * 1000); // первая через 5 минут после старта
 // ─── Telegram Bot ───────────────────────────────────────────────────────────
 const bot = new grammy_1.Bot(BOT_TOKEN);
+// Smart-notification wrapper — учитывает quiet hours, weekly quota, daily quota
+async function sendPushSafely(chatId, kind, text, opts) {
+    const gate = await (0, db_1.canSendNotification)(chatId, kind).catch(() => ({ ok: false, reason: "db_error" }));
+    if (!gate.ok) {
+        console.log(`[push skipped] ${chatId} · ${kind} · ${gate.reason}`);
+        return false;
+    }
+    try {
+        await bot.api.sendMessage(chatId, text, { parse_mode: opts?.parse_mode ?? "Markdown" });
+        await (0, db_1.logNotification)(chatId, kind).catch(() => { });
+        return true;
+    }
+    catch (e) {
+        const msg = e.message || "";
+        if (!/blocked|forbidden|chat not found/i.test(msg)) {
+            console.warn(`[push] ${chatId} ${kind}:`, msg);
+        }
+        return false;
+    }
+}
 function webAppButton(_text, label = "🍰 Открыть Mini App") {
     return new grammy_1.InlineKeyboard().webApp(label, MINI_APP_URL || "https://t.me");
 }
@@ -1936,6 +2045,11 @@ async function main() {
         sendBirthdayGreetings().catch((e) => console.error("[BIRTHDAY CRON]", e));
     });
     console.log("[STARTUP] Birthday cron scheduled (daily 10:00 Irkutsk)");
+    // Order status cron — каждые 30 минут проверяет смены статусов у verified юзеров
+    node_cron_1.default.schedule("*/30 * * * *", () => {
+        checkOrderStatusChanges().catch((e) => console.error("[ORDER STATUS CRON]", e));
+    });
+    console.log("[STARTUP] Order-status cron scheduled (every 30 min)");
     // Партнёры — синк с Bitrix раз в час (если PARTNERS_API задан)
     if (process.env.PARTNERS_API) {
         (0, partners_1.syncPartners)().catch((e) => console.error("[PARTNERS] startup sync:", e));

@@ -45,6 +45,21 @@ export async function initDb() {
       used_at      TIMESTAMPTZ DEFAULT NOW(),
       rewarded     BOOLEAN DEFAULT FALSE
     );
+
+    CREATE TABLE IF NOT EXISTS order_status_seen (
+      chat_id    BIGINT NOT NULL,
+      order_id   TEXT   NOT NULL,
+      status     TEXT,
+      seen_at    TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (chat_id, order_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS notification_log (
+      chat_id   BIGINT NOT NULL,
+      kind      TEXT   NOT NULL,
+      sent_at   TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS notification_log_chat_idx ON notification_log (chat_id, sent_at DESC);
   `);
   console.log("[DB] Tables ready");
 }
@@ -77,6 +92,73 @@ export async function getOrCreateReferralCode(chatId: number, firstName?: string
 export async function getReferralOwner(code: string): Promise<number | null> {
   const { rows } = await pool.query(`SELECT owner_chat FROM referral_codes WHERE code = $1`, [code.toUpperCase()]);
   return rows[0]?.owner_chat ?? null;
+}
+
+// Order status tracking — diff между прошлым snapshot'ом и текущим
+export async function getOrderStatusMap(chatId: number): Promise<Map<string, string>> {
+  const { rows } = await pool.query(
+    `SELECT order_id, status FROM order_status_seen WHERE chat_id = $1`,
+    [chatId]
+  );
+  const m = new Map<string, string>();
+  for (const r of rows) m.set(String(r.order_id), String(r.status ?? ""));
+  return m;
+}
+
+export async function setOrderStatus(chatId: number, orderId: string, status: string) {
+  await pool.query(
+    `INSERT INTO order_status_seen (chat_id, order_id, status, seen_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (chat_id, order_id) DO UPDATE SET status = $3, seen_at = NOW()`,
+    [chatId, orderId, status]
+  );
+}
+
+// Smart-notification policy
+export type NotificationKind = "transactional" | "marketing";
+const RATE_RULES = {
+  transactional: { maxPerDay: 999, minIntervalMin: 0 },
+  marketing:     { maxPerWeek: 1,  minIntervalMin: 60 },
+};
+
+function isQuietHours(): boolean {
+  // 22:00 – 09:00 по Иркутску (UTC+8)
+  const utc = new Date();
+  const irkHour = (utc.getUTCHours() + 8) % 24;
+  return irkHour >= 22 || irkHour < 9;
+}
+
+export async function canSendNotification(chatId: number, kind: NotificationKind): Promise<{ ok: boolean; reason?: string }> {
+  if (kind === "marketing" && isQuietHours()) {
+    return { ok: false, reason: "quiet_hours" };
+  }
+  if (kind === "marketing") {
+    const { rows } = await pool.query(
+      `SELECT COUNT(*)::int AS cnt FROM notification_log
+       WHERE chat_id = $1 AND kind = 'marketing' AND sent_at > NOW() - INTERVAL '7 days'`,
+      [chatId]
+    );
+    if ((rows[0]?.cnt ?? 0) >= RATE_RULES.marketing.maxPerWeek) {
+      return { ok: false, reason: "marketing_quota_exceeded" };
+    }
+  }
+  // Глобальный лимит — max 5 push за сутки на юзера
+  const { rows: total } = await pool.query(
+    `SELECT COUNT(*)::int AS cnt FROM notification_log
+     WHERE chat_id = $1 AND sent_at > NOW() - INTERVAL '24 hours'`,
+    [chatId]
+  );
+  if ((total[0]?.cnt ?? 0) >= 5) {
+    return { ok: false, reason: "daily_quota_exceeded" };
+  }
+  return { ok: true };
+}
+
+export async function logNotification(chatId: number, kind: NotificationKind) {
+  await pool.query(
+    `INSERT INTO notification_log (chat_id, kind) VALUES ($1, $2)`,
+    [chatId, kind]
+  );
 }
 
 export async function recordReferralUse(usedByChat: number, code: string): Promise<{ ok: boolean; ownerChat?: number; reason?: string }> {

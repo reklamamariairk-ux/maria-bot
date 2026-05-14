@@ -122,6 +122,43 @@
     </button>
   </div>
 
+  <!-- Готовые наборы — preset карточки для быстрого заказа -->
+  <div class="sh"><span class="sh__line"></span><span class="sh__text">Готовые наборы</span><span class="sh__line"></span></div>
+  <div class="home-bundles" id="home-bundles">
+    <button class="home-bundle" onclick="bundleAdd('birthday')">
+      <span class="home-bundle__ic">🎉</span>
+      <span class="home-bundle__body">
+        <span class="home-bundle__t">На день рождения</span>
+        <span class="home-bundle__sub">Торт + 10 эклеров</span>
+      </span>
+      <span class="home-bundle__price">~1 500 ₽</span>
+    </button>
+    <button class="home-bundle" onclick="bundleAdd('coffee')">
+      <span class="home-bundle__ic">☕</span>
+      <span class="home-bundle__body">
+        <span class="home-bundle__t">Кофе-брейк</span>
+        <span class="home-bundle__sub">5 круассанов + 3 печенья</span>
+      </span>
+      <span class="home-bundle__price">~800 ₽</span>
+    </button>
+    <button class="home-bundle" onclick="bundleAdd('gift')">
+      <span class="home-bundle__ic">🎁</span>
+      <span class="home-bundle__body">
+        <span class="home-bundle__t">Подарочный набор</span>
+        <span class="home-bundle__sub">Макаронс + чизкейк</span>
+      </span>
+      <span class="home-bundle__price">~2 500 ₽</span>
+    </button>
+    <button class="home-bundle" onclick="bundleAdd('mini')">
+      <span class="home-bundle__ic">🍰</span>
+      <span class="home-bundle__body">
+        <span class="home-bundle__t">На троих</span>
+        <span class="home-bundle__sub">Мини-тортик</span>
+      </span>
+      <span class="home-bundle__price">~1 200 ₽</span>
+    </button>
+  </div>
+
   <!-- Persona block (для verified юзера) — приветствие + последний заказ -->
   <div class="home-persona" id="home-persona" style="display:none">
     <div class="home-persona__row">
@@ -207,6 +244,9 @@
 
   <!-- Suggested searches container — при пустом поле и фокусе -->
   <div class="cat-suggested" id="menu-suggested" style="display:none"></div>
+
+  <!-- Автокомплит dropdown — при вводе 2+ символов -->
+  <div class="menu-ac" id="menu-autocomplete" style="display:none"></div>
 
   <!-- Список категорий -->
   <div class="cat-cats" id="menu-categories"></div>

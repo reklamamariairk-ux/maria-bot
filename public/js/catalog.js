@@ -699,6 +699,43 @@ function catRunSuggestedSearch(q) {
   inp.dispatchEvent(new Event('input', { bubbles: true }));
   catHideSuggested();
 }
+
+// Автокомплит по именам товаров — топ-5 через /api/catalog/search
+let _acAbort = null;
+async function catAutocomplete(query) {
+  const dropEl = document.getElementById('menu-autocomplete');
+  if (!dropEl) return;
+  const q = (query || '').trim();
+  if (q.length < 2) { dropEl.style.display = 'none'; return; }
+  if (_acAbort) _acAbort.abort();
+  _acAbort = new AbortController();
+  let matches = [];
+  try {
+    const r = await fetch(`/api/catalog/search?q=${encodeURIComponent(q)}`, { signal: _acAbort.signal });
+    const d = await r.json();
+    matches = (Array.isArray(d?.products) ? d.products : []).slice(0, 5);
+  } catch (e) { if (e.name === 'AbortError') return; }
+  if (matches.length === 0) { dropEl.style.display = 'none'; return; }
+  dropEl.innerHTML = matches.map((p) => {
+    const img = p.image ? `<img src="/img?u=${encodeURIComponent(p.image)}" alt="" loading="lazy"/>` : '<span class="menu-ac__ph">🍰</span>';
+    const price = Number(p.priceNumber || p.price) || 0;
+    return `
+      <button class="menu-ac__item" onclick="catOpenProduct?.(${p.id});catHideAutocomplete()">
+        <div class="menu-ac__img">${img}</div>
+        <div class="menu-ac__body">
+          <div class="menu-ac__name">${escapeHtml(p.name || '')}</div>
+          <div class="menu-ac__cat">${escapeHtml(p.category || '')}</div>
+        </div>
+        ${price ? `<div class="menu-ac__price">${price.toLocaleString('ru-RU')} ₽</div>` : ''}
+      </button>`;
+  }).join('');
+  dropEl.style.display = '';
+}
+function catHideAutocomplete() {
+  const dropEl = document.getElementById('menu-autocomplete');
+  if (dropEl) dropEl.style.display = 'none';
+}
+window.catHideAutocomplete = catHideAutocomplete;
 function catClearSearch() {
   const inp = document.getElementById('menu-search');
   if (inp) { inp.value = ''; inp.dispatchEvent(new Event('input', { bubbles: true })); }
@@ -729,10 +766,14 @@ document.addEventListener('DOMContentLoaded', () => {
       clearTimeout(CATALOG_STATE.searchTimer);
       const v = inp.value;
       clear.style.display = v ? '' : 'none';
-      if (!v) catShowSuggested();
+      if (!v) { catShowSuggested(); catHideAutocomplete(); }
       else catHideSuggested();
+      // Автокомплит сразу — без debounce, локальный (по уже загруженному кэшу)
+      catAutocomplete(v);
+      // Полный поиск через 250ms
       CATALOG_STATE.searchTimer = setTimeout(() => catSearch(v), 250);
     });
+    inp.addEventListener('blur', () => { setTimeout(catHideAutocomplete, 200); });
     inp.addEventListener('focus', () => {
       if (!inp.value) catShowSuggested();
     });

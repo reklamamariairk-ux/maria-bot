@@ -4,6 +4,10 @@ exports.pool = void 0;
 exports.initDb = initDb;
 exports.getOrCreateReferralCode = getOrCreateReferralCode;
 exports.getReferralOwner = getReferralOwner;
+exports.getOrderStatusMap = getOrderStatusMap;
+exports.setOrderStatus = setOrderStatus;
+exports.canSendNotification = canSendNotification;
+exports.logNotification = logNotification;
 exports.recordReferralUse = recordReferralUse;
 exports.wishlistSubscribe = wishlistSubscribe;
 exports.wishlistUnsubscribe = wishlistUnsubscribe;
@@ -61,6 +65,21 @@ async function initDb() {
       used_at      TIMESTAMPTZ DEFAULT NOW(),
       rewarded     BOOLEAN DEFAULT FALSE
     );
+
+    CREATE TABLE IF NOT EXISTS order_status_seen (
+      chat_id    BIGINT NOT NULL,
+      order_id   TEXT   NOT NULL,
+      status     TEXT,
+      seen_at    TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (chat_id, order_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS notification_log (
+      chat_id   BIGINT NOT NULL,
+      kind      TEXT   NOT NULL,
+      sent_at   TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS notification_log_chat_idx ON notification_log (chat_id, sent_at DESC);
   `);
     console.log("[DB] Tables ready");
 }
@@ -90,6 +109,51 @@ async function getOrCreateReferralCode(chatId, firstName) {
 async function getReferralOwner(code) {
     const { rows } = await exports.pool.query(`SELECT owner_chat FROM referral_codes WHERE code = $1`, [code.toUpperCase()]);
     return rows[0]?.owner_chat ?? null;
+}
+// Order status tracking — diff между прошлым snapshot'ом и текущим
+async function getOrderStatusMap(chatId) {
+    const { rows } = await exports.pool.query(`SELECT order_id, status FROM order_status_seen WHERE chat_id = $1`, [chatId]);
+    const m = new Map();
+    for (const r of rows)
+        m.set(String(r.order_id), String(r.status ?? ""));
+    return m;
+}
+async function setOrderStatus(chatId, orderId, status) {
+    await exports.pool.query(`INSERT INTO order_status_seen (chat_id, order_id, status, seen_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (chat_id, order_id) DO UPDATE SET status = $3, seen_at = NOW()`, [chatId, orderId, status]);
+}
+const RATE_RULES = {
+    transactional: { maxPerDay: 999, minIntervalMin: 0 },
+    marketing: { maxPerWeek: 1, minIntervalMin: 60 },
+};
+function isQuietHours() {
+    // 22:00 – 09:00 по Иркутску (UTC+8)
+    const utc = new Date();
+    const irkHour = (utc.getUTCHours() + 8) % 24;
+    return irkHour >= 22 || irkHour < 9;
+}
+async function canSendNotification(chatId, kind) {
+    if (kind === "marketing" && isQuietHours()) {
+        return { ok: false, reason: "quiet_hours" };
+    }
+    if (kind === "marketing") {
+        const { rows } = await exports.pool.query(`SELECT COUNT(*)::int AS cnt FROM notification_log
+       WHERE chat_id = $1 AND kind = 'marketing' AND sent_at > NOW() - INTERVAL '7 days'`, [chatId]);
+        if ((rows[0]?.cnt ?? 0) >= RATE_RULES.marketing.maxPerWeek) {
+            return { ok: false, reason: "marketing_quota_exceeded" };
+        }
+    }
+    // Глобальный лимит — max 5 push за сутки на юзера
+    const { rows: total } = await exports.pool.query(`SELECT COUNT(*)::int AS cnt FROM notification_log
+     WHERE chat_id = $1 AND sent_at > NOW() - INTERVAL '24 hours'`, [chatId]);
+    if ((total[0]?.cnt ?? 0) >= 5) {
+        return { ok: false, reason: "daily_quota_exceeded" };
+    }
+    return { ok: true };
+}
+async function logNotification(chatId, kind) {
+    await exports.pool.query(`INSERT INTO notification_log (chat_id, kind) VALUES ($1, $2)`, [chatId, kind]);
 }
 async function recordReferralUse(usedByChat, code) {
     // Один юзер может ввести реф-код только один раз. Не может ввести свой код.

@@ -463,7 +463,20 @@ function coPickCustomDate(v) {
 window.coPickCustomDate = coPickCustomDate;
 
 // Выбор кафе для самовывоза
-function coOpenShopPicker() {
+// Haversine distance в км между двумя точками
+function _haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const toRad = (d) => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+let _shopPickerData = null;
+let _userLoc = null;
+
+async function coOpenShopPicker() {
   let modal = document.getElementById('shop-picker-modal');
   if (!modal) {
     modal = document.createElement('div');
@@ -475,31 +488,95 @@ function coOpenShopPicker() {
       <div class="cat-modal__sheet">
         <button class="cat-modal__close" onclick="coCloseShopPicker()">×</button>
         <div class="shop-picker__h">Выберите кафе</div>
-        <div class="shop-picker__list" id="shop-picker-list"></div>
+        <button class="shop-picker__geo" id="shop-picker-geo" onclick="coRequestLocation()">📍 Найти ближайшее</button>
+        <div class="shop-picker__list" id="shop-picker-list"><div class="cat-loading">Загружаем адреса…</div></div>
       </div>`;
     document.body.appendChild(modal);
   }
-  // Fetch shops через существующий API/openShopsModal data
-  const SHOPS = window.MARIA_SHOPS || [
-    { id: 'lenina-1', name: 'ул. Ленина, 1', area: 'Центр' },
-    { id: 'karla-marksa-24', name: 'ул. Карла Маркса, 24', area: 'Центр' },
-    { id: 'sovetskaya-58', name: 'ул. Советская, 58', area: 'Свердловский' },
-    { id: 'baikalskaya-105', name: 'ул. Байкальская, 105', area: 'Октябрьский' },
-    { id: 'dekabristov-37', name: 'ул. Декабристов, 37', area: 'Свердловский' },
-    { id: 'partizanskaya-21', name: 'ул. Партизанская, 21', area: 'Центр' },
-  ];
-  const list = modal.querySelector('#shop-picker-list');
-  list.innerHTML = SHOPS.map((s) => `
-    <button class="shop-picker__item" onclick="coPickShop('${escAttr(s.name)}')">
-      <div class="shop-picker__pin">📍</div>
-      <div class="shop-picker__body">
-        <div class="shop-picker__name">${escHtml(s.name)}</div>
-        <div class="shop-picker__area">${escHtml(s.area || '')}</div>
-      </div>
-    </button>`).join('');
   modal.style.display = 'flex';
+  // Грузим реальные кафе из /api/shops с кешем
+  if (!_shopPickerData) {
+    try {
+      const r = await fetch('/api/shops', { cache: 'force-cache' });
+      const d = await r.json();
+      _shopPickerData = Array.isArray(d?.shops) ? d.shops : [];
+    } catch { _shopPickerData = []; }
+  }
+  if (_shopPickerData.length === 0) {
+    // Fallback на хардкод
+    _shopPickerData = [
+      { id: 'lenina-1', address: 'ул. Ленина, 1', name: 'ул. Ленина, 1' },
+      { id: 'karla-marksa-24', address: 'ул. Карла Маркса, 24', name: 'ул. Карла Маркса, 24' },
+      { id: 'sovetskaya-58', address: 'ул. Советская, 58', name: 'ул. Советская, 58' },
+    ];
+  }
+  renderShopPicker();
 }
 window.coOpenShopPicker = coOpenShopPicker;
+
+function renderShopPicker() {
+  const list = document.querySelector('#shop-picker-list');
+  if (!list) return;
+  let shops = (_shopPickerData || []).slice();
+  // Сортируем по дистанции если есть user location
+  if (_userLoc) {
+    shops = shops
+      .map((s) => {
+        const lat = Number(s.lat ?? s.latitude ?? null);
+        const lon = Number(s.lon ?? s.longitude ?? null);
+        const dist = (Number.isFinite(lat) && Number.isFinite(lon))
+          ? _haversineKm(_userLoc.lat, _userLoc.lon, lat, lon)
+          : null;
+        return { ...s, _dist: dist };
+      })
+      .sort((a, b) => {
+        if (a._dist == null && b._dist == null) return 0;
+        if (a._dist == null) return 1;
+        if (b._dist == null) return -1;
+        return a._dist - b._dist;
+      });
+  }
+  list.innerHTML = shops.map((s) => {
+    const label = s.address || s.name || '';
+    const distTxt = (s._dist != null)
+      ? `<span class="shop-picker__dist">${s._dist < 1 ? Math.round(s._dist * 1000) + ' м' : s._dist.toFixed(1) + ' км'}</span>`
+      : '';
+    return `
+      <button class="shop-picker__item" onclick="coPickShop('${escAttr(label)}')">
+        <div class="shop-picker__pin">📍</div>
+        <div class="shop-picker__body">
+          <div class="shop-picker__name">${escHtml(label)}</div>
+          <div class="shop-picker__area">${escHtml(s.area || s.city || s.hours || '')}</div>
+        </div>
+        ${distTxt}
+      </button>`;
+  }).join('');
+}
+
+function coRequestLocation() {
+  const btn = document.getElementById('shop-picker-geo');
+  if (!navigator.geolocation) {
+    if (btn) btn.textContent = 'Геолокация не поддерживается';
+    return;
+  }
+  if (btn) btn.textContent = '⏳ Получаем геолокацию…';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      _userLoc = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+      if (btn) {
+        btn.textContent = '✓ Отсортировано по близости';
+        btn.classList.add('shop-picker__geo--ok');
+      }
+      window.haptic?.('success');
+      renderShopPicker();
+    },
+    () => {
+      if (btn) btn.textContent = '📍 Доступ к геолокации запрещён';
+    },
+    { enableHighAccuracy: false, timeout: 8000, maximumAge: 600000 }
+  );
+}
+window.coRequestLocation = coRequestLocation;
 function coCloseShopPicker() {
   const m = document.getElementById('shop-picker-modal');
   if (m) m.style.display = 'none';

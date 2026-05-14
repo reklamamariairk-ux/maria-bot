@@ -290,6 +290,153 @@ function catOpenProductFromPromo() {
 window.catOpenProductFromPromo = catOpenProductFromPromo;
 window.loadCakeOfMonth = loadCakeOfMonth;
 
+/* ── Готовые наборы (preset bundles) ───────────────────────────────────── */
+// Каждый bundle ищет товары в реальном каталоге по category + ключевым словам
+const BUNDLE_CONFIG = {
+  birthday: {
+    title: 'На день рождения',
+    items: [
+      { category: 'Торты',                  matchAny: ['банан','шоколад','клубник','чизкейк'], qty: 1 },
+      { category: 'Пирожные и десерты',     matchAny: ['эклер'],                                qty: 10 },
+    ],
+  },
+  coffee: {
+    title: 'Кофе-брейк',
+    items: [
+      { category: 'Пирожные и десерты',     matchAny: ['круассан','круасан'],                   qty: 5 },
+      { category: 'Пирожные и десерты',     matchAny: ['печень','курабье','миндаль'],           qty: 3 },
+    ],
+  },
+  gift: {
+    title: 'Подарочный набор',
+    items: [
+      { category: 'Пирожные и десерты',     matchAny: ['макарон'],                              qty: 6 },
+      { category: 'Пирожные и десерты',     matchAny: ['чизкейк','тарт'],                       qty: 1 },
+    ],
+  },
+  mini: {
+    title: 'На троих',
+    items: [
+      { category: 'Торты',                  matchAny: ['мини','небольш','компакт','маленьк'],   qty: 1 },
+    ],
+    fallback: { category: 'Торты',          matchAny: ['банан','шоколад'],                      qty: 1 },
+  },
+};
+
+async function bundleAdd(key) {
+  const cfg = BUNDLE_CONFIG[key];
+  if (!cfg) return;
+  // Подгружаем нужные категории
+  const cats = [...new Set(cfg.items.map((x) => x.category))];
+  const productPool = {};
+  try {
+    await Promise.all(cats.map(async (cat) => {
+      const r = await fetch(`/api/catalog/products?category=${encodeURIComponent(cat)}&limit=80`, { cache: 'force-cache' });
+      const d = await r.json();
+      productPool[cat] = Array.isArray(d?.products) ? d.products : [];
+    }));
+  } catch (e) { console.error('[bundle]', e); }
+
+  // Подбираем продукты для каждого слота
+  const picked = [];
+  for (const slot of cfg.items) {
+    const pool = productPool[slot.category] || [];
+    if (pool.length === 0) continue;
+    let match = pool.find((p) => {
+      const nm = (p.name || '').toLowerCase();
+      return slot.matchAny.some((kw) => nm.includes(kw.toLowerCase()));
+    });
+    if (!match) match = pool[0]; // fallback: первый из категории
+    if (match) picked.push({ ...match, _qty: slot.qty });
+  }
+  if (picked.length === 0) {
+    if (cfg.fallback) {
+      const pool = productPool[cfg.fallback.category] || [];
+      const m = pool[0];
+      if (m) picked.push({ ...m, _qty: cfg.fallback.qty });
+    }
+  }
+  if (picked.length === 0) {
+    window.haptic?.('error');
+    alert('Не удалось собрать набор. Попробуй чуть позже.');
+    return;
+  }
+
+  // Показываем preview-modal с возможностью «В корзину»
+  showBundlePreview(cfg.title, picked);
+}
+window.bundleAdd = bundleAdd;
+
+function showBundlePreview(title, items) {
+  let modal = document.getElementById('bundle-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'bundle-modal';
+    modal.className = 'cat-modal';
+    modal.style.display = 'none';
+    modal.onclick = (e) => { if (e.target === modal) bundleClose(); };
+    document.body.appendChild(modal);
+  }
+  const total = items.reduce((s, it) => s + (Number(it.priceNumber || it.price) || 0) * it._qty, 0);
+  const rows = items.map((it) => {
+    const price = Number(it.priceNumber || it.price) || 0;
+    const sum = price * it._qty;
+    const img = it.image
+      ? `<img src="/img?u=${encodeURIComponent(it.image)}" alt="" loading="lazy"/>`
+      : `<span class="bundle-row__ph">🍰</span>`;
+    return `
+      <div class="bundle-row">
+        <div class="bundle-row__img">${img}</div>
+        <div class="bundle-row__body">
+          <div class="bundle-row__name">${escAttrApp(it.name || '')}</div>
+          <div class="bundle-row__meta">${it._qty} × ${price.toLocaleString('ru-RU')} ₽</div>
+        </div>
+        <div class="bundle-row__sum">${sum.toLocaleString('ru-RU')} ₽</div>
+      </div>`;
+  }).join('');
+  modal.innerHTML = `
+    <div class="cat-modal__sheet">
+      <button class="cat-modal__close" onclick="bundleClose()">×</button>
+      <div class="bundle-h">${escAttrApp(title)}</div>
+      <div class="bundle-sub">Подобрано из текущего каталога</div>
+      <div class="bundle-list">${rows}</div>
+      <div class="bundle-total"><span>Итого:</span><b>${total.toLocaleString('ru-RU')} ₽</b></div>
+      <button class="btn-full bundle-cta" onclick="bundleConfirm()">В корзину →</button>
+    </div>`;
+  modal.style.display = 'flex';
+  window.scrollLock?.();
+  window._currentBundle = items;
+}
+
+function bundleConfirm() {
+  const items = window._currentBundle || [];
+  if (items.length === 0) return;
+  let added = 0;
+  for (const it of items) {
+    for (let i = 0; i < it._qty; i++) {
+      window.cartAdd?.({ id: Number(it.id), name: it.name, price: Number(it.priceNumber || it.price) || 0, image: it.image });
+      added++;
+    }
+  }
+  bundleClose();
+  if (added > 0) {
+    window.haptic?.('success');
+    setTimeout(() => window.cartOpen?.(), 200);
+  }
+}
+window.bundleConfirm = bundleConfirm;
+
+function bundleClose() {
+  const m = document.getElementById('bundle-modal');
+  if (m) m.style.display = 'none';
+  window.scrollUnlock?.();
+}
+window.bundleClose = bundleClose;
+
+function escAttrApp(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 /* ── Хит недели — карусель на главной ───────────────────────────────────── */
 async function loadHomeHits() {
   const wrap = document.getElementById('home-hits');
