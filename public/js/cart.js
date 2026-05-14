@@ -522,11 +522,16 @@ function renderShopPicker() {
   if (_userLoc) {
     shops = shops
       .map((s) => {
-        const lat = Number(s.lat ?? s.latitude ?? null);
-        const lon = Number(s.lon ?? s.longitude ?? null);
-        const dist = (Number.isFinite(lat) && Number.isFinite(lon))
-          ? _haversineKm(_userLoc.lat, _userLoc.lon, lat, lon)
-          : null;
+        const rawLat = s.lat ?? s.latitude ?? null;
+        const rawLon = s.lon ?? s.longitude ?? null;
+        const lat = Number(rawLat);
+        const lon = Number(rawLon);
+        // Считаем дистанцию только если координаты реальные (не null, не 0,0)
+        const valid = Number.isFinite(lat) && Number.isFinite(lon)
+          && Math.abs(lat) > 0.1 && Math.abs(lon) > 0.1;
+        let dist = valid ? _haversineKm(_userLoc.lat, _userLoc.lon, lat, lon) : null;
+        // Если кафе оказалось > 500 км — координаты явно мусорные
+        if (dist != null && dist > 500) dist = null;
         return { ...s, _dist: dist };
       })
       .sort((a, b) => {
@@ -563,12 +568,23 @@ function coRequestLocation() {
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       _userLoc = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-      if (btn) {
-        btn.textContent = '✓ Отсортировано по близости';
-        btn.classList.add('shop-picker__geo--ok');
-      }
       window.haptic?.('success');
       renderShopPicker();
+      if (btn) {
+        // Проверяем, есть ли вообще кафе с валидными координатами
+        const hasAnyDist = (_shopPickerData || []).some((s) => {
+          const lat = Number(s.lat ?? s.latitude);
+          const lon = Number(s.lon ?? s.longitude);
+          return Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) > 0.1 && Math.abs(lon) > 0.1;
+        });
+        if (hasAnyDist) {
+          btn.textContent = '✓ Отсортировано по близости';
+          btn.classList.add('shop-picker__geo--ok');
+        } else {
+          btn.textContent = 'У кафе пока нет координат — сортировка скоро';
+          btn.style.color = '#86868b';
+        }
+      }
     },
     () => {
       if (btn) btn.textContent = '📍 Доступ к геолокации запрещён';
