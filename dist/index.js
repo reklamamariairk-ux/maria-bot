@@ -1715,6 +1715,27 @@ app.post("/api/partners/sync", async (req, res) => {
     const result = await (0, partners_1.syncPartners)();
     res.json(result);
 });
+// Test push для отладки order push-канала. Защищён ADMIN_TOKEN.
+app.post("/api/admin/test-push", async (req, res) => {
+    const { token, chatId, orderId } = req.body;
+    if (!token || token !== process.env.ADMIN_TOKEN) {
+        res.status(403).json({ error: "forbidden" });
+        return;
+    }
+    if (!chatId || !Number.isFinite(Number(chatId))) {
+        res.status(400).json({ error: "chatId_required" });
+        return;
+    }
+    const fakeOrderId = orderId ?? 99999;
+    const msg = `✅ *Заявка №${fakeOrderId} принята!*\n\n🛒 1× Эклер · 250 ₽\n📅 ${new Date().toLocaleDateString("ru-RU")} · 18:00–20:00\n📍 Иркутск, ул. Ленина 1, кв. 38\n\nМенеджер позвонит для подтверждения в течение 1 часа.\n_Это тестовое сообщение._`;
+    try {
+        const r = await bot.api.sendMessage(Number(chatId), msg, { parse_mode: "Markdown" });
+        res.json({ ok: true, message_id: r.message_id });
+    }
+    catch (e) {
+        res.status(502).json({ ok: false, error: e.message });
+    }
+});
 // Прокси к /api/shops.php на сайте — миниапп получает реальные адреса
 const SHOPS_API = process.env.SHOPS_API ?? "";
 const SHOPS_TOKEN = process.env.SHOPS_TOKEN ?? process.env.LK_TOKEN ?? "";
