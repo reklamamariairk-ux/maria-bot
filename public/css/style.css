@@ -23,6 +23,13 @@
   --ink-4:      #8b7d83;     /* hint / muted */
   --ink-5:      #c9bdc1;     /* divider */
 
+  /* Тёплая третичная гамма — cream для нейтральных секций.
+     Раньше всё было либо красное либо холодное-белое; cream добавляет
+     уюта между ними и работает как премиум-фон у Aesop/Le Labo. */
+  --cream:      #f9f0e3;     /* основной */
+  --cream-xl:   #fdfaf3;     /* очень светлый, для bg-soft */
+  --cream-d:    #f0e0c5;     /* акцентный — sweet-check, reward items */
+
   /* Тема */
   --tg-bg-color:           #ffffff;
   --tg-text-color:         #0d0608;
@@ -35,9 +42,9 @@
 
   /* Алиасы — семантические для компонентов */
   --bg:           #ffffff;
-  --bg-soft:      #fafafa;     /* для секций, чуть отличается от чисто белого */
+  --bg-soft:      var(--cream-xl);  /* warm cream, не холодное #fafafa */
   --surface:      #ffffff;
-  --surface-2:    #fafafa;
+  --surface-2:    var(--cream-xl);
   --dark:         var(--ink-1);
   --text:         var(--ink-1);
   --text-2:       var(--ink-2);
@@ -101,14 +108,77 @@
   font-optical-sizing: auto;
 }
 
-/* Dark mode — пересчитываем алиасы (бренд остаётся, только фон/поверхности темнеют) */
+/* ─── Тёплая dark mode — wine bordeaux + warm cream акценты ─────────────────
+   Тренд 2026: вместо «инверсии в чёрно-белое» — глубокая брендовая темнота.
+   Поверхности — deep wine, текст — warm cream, акценты остаются красно-золотыми.
+   ВАЖНО: dark-режим сейчас намеренно отключён в tg-bridge.js (бренд-решение).
+   Стили готовы — для активации достаточно убрать tg-light forсing. */
 html.tg-dark {
-  --border:    rgba(255,255,255,.08);
-  --shadow:        0 12px 36px -8px rgba(0,0,0,.55);
-  --shadow-sm:     0 2px 12px rgba(0,0,0,.35);
-  --shadow-card:   0 4px 24px rgba(0,0,0,.35);
-  --glass:      rgba(20,15,15,.55);
-  --glass-b:    rgba(20,15,15,.35);
+  /* Surfaces (warm bordeaux вместо холодного серого) */
+  --bg:           #160409;
+  --bg-soft:      #1f0710;
+  --surface:      #1c050c;
+  --surface-2:    #240a14;
+
+  /* Text — warm cream, не чисто-белое */
+  --ink-1:        #f4e8db;
+  --ink-2:        #e2d3c4;
+  --ink-3:        #b9a99c;
+  --ink-4:        #a89b94;
+  --ink-5:        #7a6c64;
+  --text:         var(--ink-1);
+  --text-2:       var(--ink-2);
+  --muted:        var(--ink-4);
+
+  /* TG-vars — для нативной шапки Telegram */
+  --tg-bg-color:           #160409;
+  --tg-secondary-bg-color: #1f0710;
+  --tg-section-bg-color:   #1c050c;
+  --tg-text-color:         #f4e8db;
+  --tg-hint-color:         #a89b94;
+
+  /* Borders / shadows — мягкие, на тёплых тонах */
+  --border:        rgba(255,235,220,.07);
+  --border-strong: rgba(255,235,220,.11);
+  --shadow-xs:     0 1px 2px rgba(0,0,0,.4);
+  --shadow-sm:     0 2px 12px rgba(0,0,0,.4);
+  --shadow-md:     0 4px 8px rgba(0,0,0,.45), 0 12px 24px rgba(0,0,0,.4);
+  --shadow:        0 12px 36px -8px rgba(0,0,0,.6);
+  --shadow-card:   0 4px 24px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,235,220,.04);
+  --shadow-glow:   0 4px 12px rgba(214,31,55,.22), 0 12px 32px -8px rgba(214,31,55,.30);
+
+  /* Glass — на тёплом тёмном */
+  --glass:      rgba(28,5,12,.72);
+  --glass-b:    rgba(28,5,12,.48);
+
+  /* Cream-токены тоже темнеют — для случаев где они применяются */
+  --cream:      #2a141a;
+  --cream-xl:   #1f0a12;
+  --cream-d:    #3a1f28;
+}
+
+/* Body + ключевые surfaces в dark — переопределяем хардкод #fff */
+html.tg-dark body{background:var(--bg);color:var(--text)}
+html.tg-dark .header{background:rgba(28,5,12,.86);border-bottom-color:var(--border)}
+html.tg-dark .bnav{background:rgba(28,5,12,.86)}
+html.tg-dark .cat-modal__sheet{background:linear-gradient(180deg,rgba(36,10,20,.98) 0%,var(--surface) 18%);color:var(--text)}
+html.tg-dark .pcard-pr,
+html.tg-dark .ccat,
+html.tg-dark .bento-card{background:var(--surface);border-color:var(--border);color:var(--text)}
+html.tg-dark .cat-chip{background:var(--surface);color:var(--text);border-color:var(--border-strong)}
+html.tg-dark .reward-item{
+  background:linear-gradient(180deg,var(--surface-2) 0%,var(--surface) 100%);
+  border-color:var(--cream-d);color:var(--text);
+}
+html.tg-dark .msg--bot .msg__bubble{background:var(--surface-2);color:var(--text)}
+html.tg-dark .msg--bot .msg__bubble.is-streaming{
+  background:linear-gradient(135deg,var(--surface-2) 0%,#2a0d18 100%);
+}
+html.tg-dark .pcard-pr-skel{background:var(--surface);border-color:var(--border)}
+html.tg-dark .pcard-pr-skel__img,
+html.tg-dark .pcard-pr-skel__line{
+  background:linear-gradient(110deg,var(--surface-2) 8%,var(--cream-d) 18%,var(--surface-2) 33%);
+  background-size:200% 100%;
 }
 
 /* ── RESET ───────────────────────────────────────────────────────────────── */
@@ -729,9 +799,11 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 }
 .reward-item{
   display:flex;align-items:flex-start;gap:12px;
-  padding:12px 14px;background:#fff;
-  border:1.5px solid var(--border,#e5e5ea);
+  padding:12px 14px;
+  background:linear-gradient(180deg,var(--cream-xl) 0%,#fff 100%);
+  border:1.5px solid var(--cream-d);
   border-radius:12px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.6);
 }
 .reward-item__emoji{font-size:30px;flex-shrink:0;line-height:1}
 .reward-item__body{flex:1;min-width:0}
