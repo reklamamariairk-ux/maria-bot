@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WHEEL_PRIZES = exports.pool = void 0;
 exports.initDb = initDb;
+exports.hasHolidayPushSent = hasHolidayPushSent;
+exports.markHolidayPushSent = markHolidayPushSent;
 exports.getOrCreateReferralCode = getOrCreateReferralCode;
 exports.getReferralOwner = getReferralOwner;
 exports.getOrderStatusMap = getOrderStatusMap;
@@ -19,6 +21,7 @@ exports.getStreak = getStreak;
 exports.setSecretOfDay = setSecretOfDay;
 exports.getSecretOfDay = getSecretOfDay;
 exports.getUnusedRewards = getUnusedRewards;
+exports.consumeRewards = consumeRewards;
 exports.canSendNotification = canSendNotification;
 exports.logNotification = logNotification;
 exports.recordReferralUse = recordReferralUse;
@@ -145,8 +148,26 @@ async function initDb() {
       used_at     TIMESTAMPTZ
     );
     CREATE INDEX IF NOT EXISTS earned_rewards_chat_idx ON earned_rewards (chat_id, earned_at DESC);
+
+    -- Holiday push dedup (один pre-order push на юзера на праздник в году)
+    CREATE TABLE IF NOT EXISTS holiday_push_log (
+      chat_id    BIGINT NOT NULL,
+      holiday_id TEXT   NOT NULL,
+      year       INT    NOT NULL,
+      sent_at    TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (chat_id, holiday_id, year)
+    );
   `);
     console.log("[DB] Tables ready");
+}
+// Holiday push dedup ─────────────────────────────────────
+async function hasHolidayPushSent(chatId, holidayId, year) {
+    const { rows } = await exports.pool.query(`SELECT 1 FROM holiday_push_log WHERE chat_id = $1 AND holiday_id = $2 AND year = $3`, [chatId, holidayId, year]);
+    return rows.length > 0;
+}
+async function markHolidayPushSent(chatId, holidayId, year) {
+    await exports.pool.query(`INSERT INTO holiday_push_log (chat_id, holiday_id, year)
+     VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, [chatId, holidayId, year]);
 }
 // Referral codes
 async function getOrCreateReferralCode(chatId, firstName) {
@@ -367,9 +388,16 @@ async function getSecretOfDay() {
 }
 // ─── Earned rewards (выигрыши) ────────────────────────────────────────────────
 async function getUnusedRewards(chatId) {
-    const { rows } = await exports.pool.query(`SELECT id, kind, value, earned_at FROM earned_rewards
+    const { rows } = await exports.pool.query(`SELECT id, kind, value, source, earned_at FROM earned_rewards
      WHERE chat_id = $1 AND used_at IS NULL
      ORDER BY earned_at DESC LIMIT 20`, [chatId]);
+    return rows;
+}
+async function consumeRewards(chatId) {
+    // Атомарно помечаем все unused награды юзера как используемые и возвращаем их
+    const { rows } = await exports.pool.query(`UPDATE earned_rewards SET used_at = NOW()
+     WHERE chat_id = $1 AND used_at IS NULL
+     RETURNING id, kind, value, source`, [chatId]);
     return rows;
 }
 const RATE_RULES = {

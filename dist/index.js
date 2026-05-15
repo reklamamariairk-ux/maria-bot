@@ -51,6 +51,7 @@ const auth_1 = require("./auth");
 const partners_1 = require("./partners");
 const lk_1 = require("./lk");
 const order_1 = require("./order");
+const holidays_1 = require("./holidays");
 // ─── Env ────────────────────────────────────────────────────────────────────
 const BOT_TOKEN = process.env.BOT_TOKEN ?? "";
 const GROQ_KEY = process.env.GROQ_KEY ?? "";
@@ -109,6 +110,36 @@ async function notifyWishlistBackInStock(productIds) {
     }
     if (sent > 0)
         console.log(`[WISHLIST] notified ${sent} subscribers about ${productIds.length} new product(s)`);
+}
+// Pre-order push к ближайшим праздникам (cron — раз в день).
+// За preorderDays до даты праздника рассылаем всем подписчикам, у которых
+// включён marketing_promo. Дедуп — таблица holiday_push_log (chat_id+holiday+year).
+async function pushHolidayPreorder() {
+    const due = (0, holidays_1.getHolidaysToPushToday)();
+    if (due.length === 0)
+        return;
+    const subs = await (0, db_1.getAllSubscribers)();
+    for (const occ of due) {
+        let sent = 0, skipped = 0;
+        const body = occ.holiday.pushBody(occ.daysUntil);
+        const text = `${occ.holiday.emoji} *${occ.holiday.name}*\n\n${body}`;
+        for (const { chat_id } of subs) {
+            // Идемпотентность: не пушить, если уже отправили этому юзеру в этом году
+            if (await (0, db_1.hasHolidayPushSent)(chat_id, occ.holiday.id, occ.year).catch(() => false)) {
+                skipped++;
+                continue;
+            }
+            // marketing_promo проверяет prefs+quiet hours+глобальный 5/сутки.
+            // Weekly-quota=1 проигнорировать нельзя — это поведение sendPushSafely;
+            // но праздничные пуши разнесены минимум на 10 дней, так что в норме проходят.
+            const ok = await sendPushSafely(chat_id, "marketing_promo", text);
+            if (ok) {
+                sent++;
+                await (0, db_1.markHolidayPushSent)(chat_id, occ.holiday.id, occ.year).catch(() => { });
+            }
+        }
+        console.log(`[HOLIDAY] ${occ.holiday.id} (${occ.daysUntil}d before): sent=${sent} skipped=${skipped}`);
+    }
 }
 // Cart abandonment — push юзерам, чья корзина живёт >24h без чекаута
 async function pushCartAbandonments() {
@@ -1597,6 +1628,53 @@ app.get("/api/history", auth_1.requireTgUser, async (req, res) => {
         res.status(500).json({ error: "internal" });
     }
 });
+// ─── Holidays API ────────────────────────────────────────────────────────────
+// Ближайший праздник (для карточки на главной)
+app.get("/api/holidays/upcoming", (_req, res) => {
+    const next = (0, holidays_1.getNextHoliday)();
+    if (!next) {
+        res.json({ holiday: null });
+        return;
+    }
+    res.json({
+        holiday: {
+            id: next.holiday.id,
+            name: next.holiday.name,
+            emoji: next.holiday.emoji,
+            hint: next.holiday.hint,
+            accent: next.holiday.accent,
+            searchQuery: next.holiday.searchQuery,
+            date: next.date.toISOString().slice(0, 10),
+            daysUntil: next.daysUntil,
+            preorderDays: next.holiday.preorderDays,
+        },
+    });
+});
+// Список всех праздников года (для возможной расширенной view)
+app.get("/api/holidays/all", (_req, res) => {
+    const list = (0, holidays_1.getUpcomingHolidays)();
+    res.json({
+        holidays: list.map((o) => ({
+            id: o.holiday.id,
+            name: o.holiday.name,
+            emoji: o.holiday.emoji,
+            hint: o.holiday.hint,
+            accent: o.holiday.accent,
+            date: o.date.toISOString().slice(0, 10),
+            daysUntil: o.daysUntil,
+        })),
+    });
+});
+// Админ: руками триггернуть pushHolidayPreorder (для тестов)
+app.post("/api/admin/holidays/push", async (req, res) => {
+    const token = req.header("x-user-token") || req.body?.token;
+    if (!token || token !== process.env.ADMIN_TOKEN) {
+        res.status(403).json({ error: "forbidden" });
+        return;
+    }
+    pushHolidayPreorder().catch((e) => console.error("[HOLIDAY MANUAL]", e));
+    res.json({ ok: true, status: "scheduled" });
+});
 // Админ: перезагрузить data/dietary-overrides.json и переразметить in-memory каталог
 // без рестарта (для оперативной коррекции false-positive)
 app.post("/api/admin/dietary/reload", (req, res) => {
@@ -2330,6 +2408,12 @@ async function main() {
         sendBirthdayGreetings().catch((e) => console.error("[BIRTHDAY CRON]", e));
     });
     console.log("[STARTUP] Birthday cron scheduled (daily 10:00 Irkutsk)");
+    // Pre-order push к ближайшим праздникам — каждое утро 10:30 Иркутск (02:30 UTC).
+    // Запуск после birthday cron, чтоб день рождения не конкурировал с праздничным пушем.
+    node_cron_1.default.schedule("30 2 * * *", () => {
+        pushHolidayPreorder().catch((e) => console.error("[HOLIDAY CRON]", e));
+    });
+    console.log(`[STARTUP] Holiday pre-order cron scheduled (daily 10:30 Irkutsk; ${holidays_1.HOLIDAYS.length} holidays tracked)`);
     // Order status cron — каждые 30 минут проверяет смены статусов у verified юзеров
     node_cron_1.default.schedule("*/30 * * * *", () => {
         checkOrderStatusChanges().catch((e) => console.error("[ORDER STATUS CRON]", e));

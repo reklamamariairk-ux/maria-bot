@@ -818,7 +818,60 @@ document.addEventListener('DOMContentLoaded', () => {
   loadCakeOfMonth();
   loadHomeHits();
   loadHomePersona();
+  loadUpcomingHoliday();
 });
+
+// ── Ближайший праздник — карточка на главной с countdown ────────────────────
+let _upcomingHoliday = null;
+async function loadUpcomingHoliday() {
+  const card = document.getElementById('promo-holiday');
+  if (!card) return;
+  try {
+    const r = await fetch('/api/holidays/upcoming', { cache: 'no-store' });
+    const d = await r.json();
+    const h = d?.holiday;
+    if (!h) { card.style.display = 'none'; return; }
+    _upcomingHoliday = h;
+
+    const nm = document.getElementById('promo-holiday-name');
+    const cd = document.getElementById('promo-holiday-countdown');
+    const ht = document.getElementById('promo-holiday-hint');
+    const em = document.getElementById('promo-holiday-emoji');
+
+    const dayPlural = (n) => {
+      const m10 = n % 10, m100 = n % 100;
+      if (m10 === 1 && m100 !== 11) return 'день';
+      if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'дня';
+      return 'дней';
+    };
+    if (nm) nm.textContent = `Скоро ${h.name}`;
+    if (cd) cd.textContent = h.daysUntil === 0 ? 'сегодня' : `через ${h.daysUntil} ${dayPlural(h.daysUntil)}`;
+    if (ht) ht.textContent = h.hint || 'Закажи заранее';
+    if (em) em.textContent = h.emoji || '🎉';
+    if (h.accent) card.style.setProperty('--holiday-accent', h.accent);
+    card.style.display = '';
+  } catch (e) {
+    console.error('[holiday]', e);
+    card.style.display = 'none';
+  }
+}
+window.loadUpcomingHoliday = loadUpcomingHoliday;
+
+function holidayOpenSelection() {
+  haptic('light');
+  if (!_upcomingHoliday) { switchTab('menu'); return; }
+  switchTab('menu');
+  // Через короткую паузу подставляем поисковый запрос в menu-search
+  const q = _upcomingHoliday.searchQuery || _upcomingHoliday.name;
+  setTimeout(() => {
+    const inp = document.getElementById('menu-search');
+    if (inp) {
+      inp.value = q;
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }, 220);
+}
+window.holidayOpenSelection = holidayOpenSelection;
 
 // Persona block для verified юзера — приветствие + статистика + последний заказ
 async function loadHomePersona() {

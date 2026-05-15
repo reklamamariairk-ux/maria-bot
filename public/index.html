@@ -210,6 +210,19 @@
     </div>
   </div>
 
+  <!-- Скоро праздник — карточка с countdown (заполняется из app.js) -->
+  <button class="promo-holiday" id="promo-holiday" data-haptic="light" onclick="holidayOpenSelection()" style="display:none">
+    <span class="promo-holiday__emoji" id="promo-holiday-emoji">🎉</span>
+    <span class="promo-holiday__body">
+      <span class="promo-holiday__row">
+        <span class="promo-holiday__t" id="promo-holiday-name">Скоро праздник</span>
+        <span class="promo-holiday__countdown" id="promo-holiday-countdown"></span>
+      </span>
+      <span class="promo-holiday__hint" id="promo-holiday-hint">Закажи заранее</span>
+    </span>
+    <span class="promo-holiday__cta">→</span>
+  </button>
+
   <!-- Хит недели — карусель (заполнится из app.js) -->
   <div class="sh"><span class="sh__line"></span><span class="sh__text">Хит недели</span><span class="sh__line"></span></div>
   <div class="hits-row" id="home-hits">

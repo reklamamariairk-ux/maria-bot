@@ -28,6 +28,8 @@ async function profileLoad(force) {
     profLoadReferral?.();
     // Подгружаем настройки уведомлений
     profLoadNotifyPrefs?.();
+    // Подгружаем накопленные награды (выигрыши с колеса/streak)
+    profLoadRewards?.();
     return data;
   } catch (e) {
     console.error('[profile] load:', e);
@@ -895,6 +897,105 @@ async function profToggleNotify(key) {
   } catch {}
 }
 window.profToggleNotify = profToggleNotify;
+
+/* ── Мои награды (выигрыши с колеса + streak) ─────────────────────────────── */
+const REWARD_META = {
+  discount_coupon: { emoji: '🎫', label: (v) => `Купон −${v}%`,                           hint: 'Применится автоматически в чекауте' },
+  points:          { emoji: '💎', label: (v) => `+${v} баллов`,                            hint: 'Уже на твоём счёте' },
+  free_eclair:     { emoji: '🍫', label: ()  => 'Бесплатный эклер',                        hint: 'При заказе от 800 ₽ — добавим в комментарий' },
+  double_points:   { emoji: '✨', label: ()  => '×2 баллов сегодня',                       hint: 'Применится к следующему заказу за сегодня' },
+  sweet_ticket:    { emoji: '🎟', label: ()  => 'Билет в Sweet Check',                     hint: 'Добавится после ближайшего заказа' },
+  cake_month_10:   { emoji: '🎂', label: ()  => 'Торт месяца −10%',                        hint: 'Скидка на торт месяца в следующем заказе' },
+  free_dessert:    { emoji: '🍰', label: ()  => 'Бесплатный десерт',                       hint: 'Streak 7 дней — менеджер добавит при подтверждении' },
+};
+
+let _rewardsCache = null;
+async function profLoadRewards() {
+  const tg = window.Telegram?.WebApp;
+  const initData = tg?.initData || '';
+  if (!initData) return;
+  try {
+    const r = await fetch('/api/rewards/mine', { headers: { Authorization: 'tma ' + initData } });
+    if (!r.ok) return;
+    const data = await r.json();
+    _rewardsCache = Array.isArray(data?.rewards) ? data.rewards : [];
+    renderRewardsBadge();
+  } catch {}
+}
+window.profLoadRewards = profLoadRewards;
+
+function renderRewardsBadge() {
+  const row = document.getElementById('prof-rewards-row');
+  const cnt = document.getElementById('prof-rewards-count');
+  const sub = document.getElementById('prof-rewards-sub');
+  if (!row) return;
+  const n = _rewardsCache?.length || 0;
+  if (n === 0) {
+    row.style.display = 'none';
+    return;
+  }
+  row.style.display = '';
+  if (cnt) cnt.textContent = String(n);
+  if (sub) {
+    const labels = _rewardsCache.slice(0, 2).map((r) => {
+      const meta = REWARD_META[r.kind];
+      return meta ? meta.emoji : '🎁';
+    }).join(' ');
+    const more = n > 2 ? ` +${n - 2}` : '';
+    sub.textContent = `${labels}${more} · применится в следующем заказе`;
+  }
+}
+
+function profOpenRewards() {
+  if (!_rewardsCache || _rewardsCache.length === 0) {
+    alert('У тебя пока нет наград. Крути колесо удачи в Клубе или собирай streak 7 дней!');
+    return;
+  }
+  let modal = document.getElementById('rewards-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'rewards-modal';
+    modal.className = 'cat-modal';
+    modal.style.display = 'none';
+    modal.onclick = (e) => { if (e.target === modal) profCloseRewards(); };
+    document.body.appendChild(modal);
+  }
+  const list = _rewardsCache.map((r) => {
+    const meta = REWARD_META[r.kind] || { emoji: '🎁', label: () => r.kind, hint: '' };
+    const date = (() => {
+      try { return new Date(r.earned_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }); }
+      catch { return ''; }
+    })();
+    const src = r.source === 'wheel' ? '🎡 Колесо' : r.source === 'streak_7' ? '⭐ Streak 7 дней' : '';
+    return `
+      <div class="reward-item">
+        <div class="reward-item__emoji">${meta.emoji}</div>
+        <div class="reward-item__body">
+          <div class="reward-item__lbl">${meta.label(r.value)}</div>
+          <div class="reward-item__hint">${meta.hint}</div>
+          <div class="reward-item__meta">${src}${date ? ' · ' + date : ''}</div>
+        </div>
+      </div>`;
+  }).join('');
+  modal.innerHTML = `
+    <div class="cat-modal__sheet">
+      <button class="cat-modal__close" onclick="profCloseRewards()">×</button>
+      <div class="rewards-h">🎁 Мои награды</div>
+      <div class="rewards-sub">Применятся автоматически при следующем заказе</div>
+      <div class="rewards-list">${list}</div>
+      <div class="rewards-foot">Менеджер увидит твои бонусы в комментарии к заказу и применит их при подтверждении.</div>
+    </div>`;
+  modal.style.display = 'flex';
+  window.scrollLock?.();
+}
+window.profOpenRewards = profOpenRewards;
+
+function profCloseRewards() {
+  const m = document.getElementById('rewards-modal');
+  if (m) m.style.display = 'none';
+  window.scrollUnlock?.();
+}
+window.profCloseRewards = profCloseRewards;
 
 // Modal «О приложении» / Privacy / Terms / FAQ / Whatsnew
 const ABOUT_CONTENT = {

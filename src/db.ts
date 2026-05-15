@@ -112,8 +112,34 @@ export async function initDb() {
       used_at     TIMESTAMPTZ
     );
     CREATE INDEX IF NOT EXISTS earned_rewards_chat_idx ON earned_rewards (chat_id, earned_at DESC);
+
+    -- Holiday push dedup (один pre-order push на юзера на праздник в году)
+    CREATE TABLE IF NOT EXISTS holiday_push_log (
+      chat_id    BIGINT NOT NULL,
+      holiday_id TEXT   NOT NULL,
+      year       INT    NOT NULL,
+      sent_at    TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (chat_id, holiday_id, year)
+    );
   `);
   console.log("[DB] Tables ready");
+}
+
+// Holiday push dedup ─────────────────────────────────────
+export async function hasHolidayPushSent(chatId: number, holidayId: string, year: number): Promise<boolean> {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM holiday_push_log WHERE chat_id = $1 AND holiday_id = $2 AND year = $3`,
+    [chatId, holidayId, year]
+  );
+  return rows.length > 0;
+}
+
+export async function markHolidayPushSent(chatId: number, holidayId: string, year: number): Promise<void> {
+  await pool.query(
+    `INSERT INTO holiday_push_log (chat_id, holiday_id, year)
+     VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+    [chatId, holidayId, year]
+  );
 }
 
 // Referral codes
@@ -408,11 +434,22 @@ export async function getSecretOfDay(): Promise<{ productId: number; discountPct
 }
 
 // ─── Earned rewards (выигрыши) ────────────────────────────────────────────────
-export async function getUnusedRewards(chatId: number): Promise<{ id: number; kind: string; value: string; earned_at: Date }[]> {
+export async function getUnusedRewards(chatId: number): Promise<{ id: number; kind: string; value: string; source: string; earned_at: Date }[]> {
   const { rows } = await pool.query(
-    `SELECT id, kind, value, earned_at FROM earned_rewards
+    `SELECT id, kind, value, source, earned_at FROM earned_rewards
      WHERE chat_id = $1 AND used_at IS NULL
      ORDER BY earned_at DESC LIMIT 20`,
+    [chatId]
+  );
+  return rows;
+}
+
+export async function consumeRewards(chatId: number): Promise<{ id: number; kind: string; value: string; source: string }[]> {
+  // Атомарно помечаем все unused награды юзера как используемые и возвращаем их
+  const { rows } = await pool.query(
+    `UPDATE earned_rewards SET used_at = NOW()
+     WHERE chat_id = $1 AND used_at IS NULL
+     RETURNING id, kind, value, source`,
     [chatId]
   );
   return rows;
