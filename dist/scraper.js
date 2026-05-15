@@ -36,6 +36,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.reloadDietaryOverrides = reloadDietaryOverrides;
+exports.detectDietary = detectDietary;
 exports.scrapeCatalog = scrapeCatalog;
 exports.fetchProductById = fetchProductById;
 exports.loadCatalog = loadCatalog;
@@ -49,8 +51,107 @@ const path_1 = __importDefault(require("path"));
 const BASE = "https://www.maria-irk.ru";
 const DATA_DIR = path_1.default.join(__dirname, "..", "data");
 const DATA_FILE = path_1.default.join(DATA_DIR, "catalog.json");
+const DIETARY_OVERRIDES_FILE = path_1.default.join(DATA_DIR, "dietary-overrides.json");
 const CATALOG_API = process.env.CATALOG_API ?? "";
 const CATALOG_TOKEN = process.env.CATALOG_TOKEN ?? "";
+// ─── Dietary detection ──────────────────────────────────────────────────────
+// Ключевые слова для авто-разметки. Стараемся не давать false-positive:
+// только явные «без X» формулировки и устоявшиеся термины.
+// ВАЖНО: \b в JS regex работает только с латиницей. Для кириллических
+// границ слова используем (?<![а-яёa-z])…(?![а-яёa-z]) — это поддерживается
+// с Node 10+ (es2018 lookbehind). Без lookaround были бы false-positive
+// типа «непостный» → vegan.
+const DIETARY_KEYWORDS = {
+    "sugar-free": [
+        /без\s*сахар/i,
+        /no\s*sugar/i,
+        /(?<![а-яёa-z])стеви/i,
+        /без\s*подсласт/i,
+    ],
+    "gluten-free": [
+        /без\s*глютен/i,
+        /безглютен/i,
+        /gluten[\s-]*free/i,
+        /из\s*миндальной\s*муки/i,
+    ],
+    "vegan": [
+        /(?<![а-яёa-z])веган/i,
+        /\bvegan\b/i,
+        /(?<![а-яёa-z])постн(ый|ая|ое|ые|ого|ому|ыми)/i,
+    ],
+    "lactose-free": [
+        /без\s*лактоз/i,
+        /lactose[\s-]*free/i,
+        /без\s*молочк/i,
+    ],
+    "low-cal": [
+        /(?<![а-яёa-z])пп(?![а-яёa-z])/i,
+        /пп[\s-]*десерт/i,
+        /пп[\s-]*торт/i,
+        /низкокалорий/i,
+        /(?<![а-яёa-z])лёгк(ий|ая|ое|ие)(?![а-яёa-z])/i,
+        /\bfit(ness)?\b/i,
+        /(?<![а-яёa-z])диет/i,
+    ],
+    "nut-free": [
+        /без\s*орех/i,
+        /nut[\s-]*free/i,
+    ],
+};
+let _dietaryOverridesCache = null;
+function loadDietaryOverrides() {
+    if (_dietaryOverridesCache)
+        return _dietaryOverridesCache;
+    try {
+        if (fs_1.default.existsSync(DIETARY_OVERRIDES_FILE)) {
+            const raw = fs_1.default.readFileSync(DIETARY_OVERRIDES_FILE, "utf-8");
+            _dietaryOverridesCache = JSON.parse(raw);
+            return _dietaryOverridesCache;
+        }
+    }
+    catch (e) {
+        console.error("[dietary-overrides] load failed:", e.message);
+    }
+    _dietaryOverridesCache = {};
+    return _dietaryOverridesCache;
+}
+// Сбросить кэш — для админ-эндпоинта перезагрузки overrides без рестарта
+function reloadDietaryOverrides() {
+    _dietaryOverridesCache = null;
+}
+function detectDietary(p) {
+    const text = [
+        p.name || "",
+        p.preview || "",
+        ...(p.filling || []),
+        ...(p.cake_type || []),
+        ...(p.pie_type || []),
+        ...(p.dessert_type || []),
+    ].join(" ");
+    const tags = new Set();
+    for (const tag of Object.keys(DIETARY_KEYWORDS)) {
+        if (DIETARY_KEYWORDS[tag].some((re) => re.test(text)))
+            tags.add(tag);
+    }
+    // Apply overrides
+    const ov = loadDietaryOverrides();
+    const idKey = String(p.id ?? "");
+    if (idKey && ov.byId?.[idKey])
+        return [...ov.byId[idKey]];
+    if (idKey && ov.add?.[idKey])
+        for (const t of ov.add[idKey])
+            tags.add(t);
+    if (idKey && ov.remove?.[idKey])
+        for (const t of ov.remove[idKey])
+            tags.delete(t);
+    return [...tags];
+}
+function applyDietaryTags(products) {
+    return products.map((p) => {
+        const dietary = detectDietary(p);
+        return dietary.length > 0 ? { ...p, dietary } : p;
+    });
+}
 const PAGES = [
     { path: "/cakes/", cat: "Торты" },
     { path: "/pies/", cat: "Пироги" },
@@ -228,6 +329,11 @@ async function scrapeCatalog() {
     if (all.length === 0) {
         all = await scrapeFromSite();
     }
+    // Авто-разметка диета-тегов (sugar-free / gluten-free / vegan / lactose-free / low-cal / nut-free)
+    all = applyDietaryTags(all);
+    const dietCount = all.filter((p) => p.dietary && p.dietary.length > 0).length;
+    if (dietCount > 0)
+        console.log(`✅ Диета-теги проставлены: ${dietCount} позиций`);
     if (!fs_1.default.existsSync(DATA_DIR))
         fs_1.default.mkdirSync(DATA_DIR, { recursive: true });
     const data = { updated: new Date().toISOString(), products: all, source };
@@ -256,7 +362,10 @@ function loadCatalog() {
         if (fs_1.default.existsSync(DATA_FILE)) {
             const raw = fs_1.default.readFileSync(DATA_FILE, "utf-8");
             const data = JSON.parse(raw);
-            return data.products ?? [];
+            const products = data.products ?? [];
+            // Если catalog.json создан до dietary-фичи — проставим теги на лету
+            const hasDietary = products.some((p) => Array.isArray(p.dietary));
+            return hasDietary ? products : applyDietaryTags(products);
         }
     }
     catch (e) {

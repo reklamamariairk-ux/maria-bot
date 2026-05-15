@@ -6,8 +6,8 @@ import path from "path";
 import https from "https";
 import cron from "node-cron";
 import { Bot, webhookCallback, InlineKeyboard } from "grammy";
-import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, fetchProductById, Product } from "./scraper";
-import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind, getNotificationPrefs, setNotificationPrefs, saveCartSnapshot, clearCartSnapshot, getAbandonedCarts, markCartAbandonedPushed, getSpinStatus, recordSpin, WHEEL_PRIZES, touchVisitStreak, getStreak, setSecretOfDay, getSecretOfDay, getUnusedRewards } from "./db";
+import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, fetchProductById, reloadDietaryOverrides, detectDietary, Product } from "./scraper";
+import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind, getNotificationPrefs, setNotificationPrefs, saveCartSnapshot, clearCartSnapshot, getAbandonedCarts, markCartAbandonedPushed, getSpinStatus, recordSpin, WHEEL_PRIZES, touchVisitStreak, getStreak, setSecretOfDay, getSecretOfDay, getUnusedRewards, consumeRewards } from "./db";
 import {
   initClubSchema,
   getBalance,
@@ -1601,6 +1601,24 @@ app.get("/api/history", requireTgUser, async (req, res) => {
   }
 });
 
+// Админ: перезагрузить data/dietary-overrides.json и переразметить in-memory каталог
+// без рестарта (для оперативной коррекции false-positive)
+app.post("/api/admin/dietary/reload", (req, res) => {
+  const token = req.header("x-user-token") || (req.body as { token?: string })?.token;
+  if (!token || token !== process.env.ADMIN_TOKEN) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  reloadDietaryOverrides();
+  let tagged = 0;
+  for (const p of catalog) {
+    const tags = detectDietary(p);
+    if (tags.length > 0) { p.dietary = tags; tagged++; }
+    else { delete p.dietary; }
+  }
+  res.json({ ok: true, total: catalog.length, tagged });
+});
+
 // ─── Catalog API ─────────────────────────────────────────────────────────────
 app.get("/api/catalog/categories", (_req, res) => {
   const counts = new Map<string, number>();
@@ -1619,9 +1637,20 @@ app.get("/api/catalog/products", (req, res) => {
   const category = String(req.query.category ?? "").trim();
   const limit = Math.min(Number(req.query.limit ?? 30), 100);
   const offset = Number(req.query.offset ?? 0);
+  // diet=vegan,sugar-free — товар должен содержать ВСЕ переданные теги
+  const diet = String(req.query.diet ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 
   let filtered = catalog.slice();
   if (category) filtered = filtered.filter((p) => p.category === category);
+  if (diet.length > 0) {
+    filtered = filtered.filter((p) => {
+      const tags = p.dietary || [];
+      return diet.every((d) => tags.includes(d as never));
+    });
+  }
 
   const products = filtered.slice(offset, offset + limit);
   res.json({ products, total: filtered.length, limit, offset });
@@ -1642,6 +1671,11 @@ app.get("/api/catalog/product/:id", async (req, res) => {
   if (!id) { res.status(400).json({ error: "bad_id" }); return; }
   const product = await fetchProductById(id);
   if (!product) { res.status(404).json({ error: "not_found" }); return; }
+  // Подмешиваем dietary из in-memory каталога (где разметка уже сделана)
+  const fromCache = catalog.find((p) => p.id === id);
+  if (fromCache?.dietary && fromCache.dietary.length > 0) {
+    (product as Record<string, unknown>).dietary = fromCache.dietary;
+  }
   res.json({ product });
 });
 
@@ -2043,6 +2077,26 @@ app.post("/api/order", rateLimit(15), async (req, res) => {
         if (line) ctx.push(line);
       }
     } catch {}
+    // Накопленные награды с колеса/streak — добавляем в комментарий и помечаем used
+    try {
+      const rewards = await getUnusedRewards(tg.id);
+      if (rewards.length > 0) {
+        const REWARD_LABEL: Record<string, (v: string) => string> = {
+          discount_coupon: (v) => `🎫 Купон -${v}%`,
+          points:          (v) => `💎 +${v} баллов`,
+          free_eclair:     () => "🍫 Бесплатный эклер (при заказе от 800 ₽)",
+          double_points:   () => "✨ ×2 баллов на этот заказ",
+          sweet_ticket:    () => "🎟 +1 билет в Sweet Check",
+          cake_month_10:   () => "🎂 Торт месяца -10%",
+          free_dessert:    () => "🍰 Бесплатный десерт (streak 7 дней)",
+        };
+        const lines = rewards.map((r) => {
+          const fn = REWARD_LABEL[r.kind];
+          return fn ? fn(r.value) : `🎁 ${r.kind}`;
+        });
+        ctx.push(`Накопленные награды (применить):\n• ${lines.join("\n• ")}`);
+      }
+    } catch {}
   }
   const richComment = ctx.join("\n");
 
@@ -2070,6 +2124,8 @@ app.post("/api/order", rateLimit(15), async (req, res) => {
   // Корзина превратилась в заказ — снимаем snapshot чтобы не пушить abandonment
   if (tg?.id) {
     clearCartSnapshot(tg.id).catch(() => {});
+    // Атомарно консьюмим все награды (они уже в richComment, теперь mark used_at=NOW())
+    consumeRewards(tg.id).catch(() => {});
   }
 
   // Push confirmation в TG-чат (если есть chat_id юзера)

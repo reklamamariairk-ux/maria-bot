@@ -263,6 +263,7 @@
     <button class="cat-chip" data-haptic="selection" onclick="catChip('Наборы')">🎁 Наборы</button>
     <button class="cat-chip" data-haptic="selection" onclick="catChip('Торты на заказ')">🎨 На заказ</button>
     <button class="cat-chip cat-chip--mood" data-haptic="selection" onclick="catMoodMenu()">✨ Настроение</button>
+    <button class="cat-chip cat-chip--diet" data-haptic="selection" onclick="catDietMenu()">🌱 Для меня</button>
     <button class="cat-chip cat-chip--wish" data-haptic="selection" onclick="catShowWishlist()">♡ Избранное</button>
   </div>
 
@@ -274,6 +275,9 @@
 
   <!-- Sticky category switcher — отображается в products view -->
   <div class="cat-stickycats" id="menu-stickycats" style="display:none"></div>
+
+  <!-- Diet-фильтр chips — мульти-выбор, видим в products view -->
+  <div class="cat-dietchips" id="menu-dietchips" style="display:none"></div>
 
   <!-- Suggested searches container — при пустом поле и фокусе -->
   <div class="cat-suggested" id="menu-suggested" style="display:none"></div>
@@ -806,6 +810,13 @@
         <span class="prof-row__ic"><span data-icon="creditCard" data-size="18"></span></span>
         <span class="prof-row__t">Моя клубная карточка</span>
         <span class="prof-row__sub">QR-код для кафе</span>
+        <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
+      </button>
+      <button class="prof-row prof-row--accent" id="prof-rewards-row" data-haptic="medium" onclick="profOpenRewards()" style="display:none">
+        <span class="prof-row__ic prof-row__ic--accent"><span data-icon="gift" data-size="18"></span></span>
+        <span class="prof-row__t">Мои награды</span>
+        <span class="prof-row__sub" id="prof-rewards-sub">Купоны, баллы, билеты — применятся в заказе</span>
+        <span class="prof-row__val" id="prof-rewards-count" style="background:var(--ap-red,#d61f37);color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">0</span>
         <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
       </button>
       <button class="prof-row" data-haptic="light" onclick="haptic('light');profOpenOrders()">

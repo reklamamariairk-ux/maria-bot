@@ -1,0 +1,11 @@
+{
+  "_comment": "Ручная коррекция авто-разметки диета-тегов. Применяется в src/scraper.ts → detectDietary(). Допустимые теги: sugar-free, gluten-free, vegan, lactose-free, low-cal, nut-free.",
+  "_examples": {
+    "byId": "Полная замена авто-определённых тегов: { '123': ['vegan','sugar-free'] }",
+    "add": "Дописать к авто-тегам: { '456': ['low-cal'] }",
+    "remove": "Убрать ложно-сработавший тег: { '789': ['gluten-free'] }"
+  },
+  "byId": {},
+  "add": {},
+  "remove": {}
+}

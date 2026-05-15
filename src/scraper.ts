@@ -4,6 +4,18 @@ import fs from "fs";
 import path from "path";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
+// Диета-теги: что в товаре ОТСУТСТВУЕТ (фильтры «Для меня»).
+// Логика только по явным маркерам в названии/описании — фолс-позитив
+// «Наполеон содержит муку → значит с глютеном» не считается тегом
+// gluten-free; теги ставятся только при явном «без глютена» и т.п.
+export type DietaryTag =
+  | "sugar-free"   // без сахара / стевия
+  | "gluten-free"  // без глютена
+  | "vegan"        // веганский / постный
+  | "lactose-free" // без лактозы / без молочки
+  | "low-cal"      // пп / низкокалорийный / fit
+  | "nut-free";    // без орехов
+
 export interface Product {
   id?: number;
   name: string;
@@ -29,6 +41,7 @@ export interface Product {
   pie_type?: string[];
   dessert_type?: string[];
   whom?: string[];
+  dietary?: DietaryTag[];
 }
 
 interface CatalogData {
@@ -41,8 +54,113 @@ interface CatalogData {
 const BASE = "https://www.maria-irk.ru";
 const DATA_DIR  = path.join(__dirname, "..", "data");
 const DATA_FILE = path.join(DATA_DIR, "catalog.json");
+const DIETARY_OVERRIDES_FILE = path.join(DATA_DIR, "dietary-overrides.json");
 const CATALOG_API   = process.env.CATALOG_API   ?? "";
 const CATALOG_TOKEN = process.env.CATALOG_TOKEN ?? "";
+
+// ─── Dietary detection ──────────────────────────────────────────────────────
+// Ключевые слова для авто-разметки. Стараемся не давать false-positive:
+// только явные «без X» формулировки и устоявшиеся термины.
+// ВАЖНО: \b в JS regex работает только с латиницей. Для кириллических
+// границ слова используем (?<![а-яёa-z])…(?![а-яёa-z]) — это поддерживается
+// с Node 10+ (es2018 lookbehind). Без lookaround были бы false-positive
+// типа «непостный» → vegan.
+const DIETARY_KEYWORDS: Record<DietaryTag, RegExp[]> = {
+  "sugar-free":   [
+    /без\s*сахар/i,
+    /no\s*sugar/i,
+    /(?<![а-яёa-z])стеви/i,
+    /без\s*подсласт/i,
+  ],
+  "gluten-free":  [
+    /без\s*глютен/i,
+    /безглютен/i,
+    /gluten[\s-]*free/i,
+    /из\s*миндальной\s*муки/i,
+  ],
+  "vegan":        [
+    /(?<![а-яёa-z])веган/i,
+    /\bvegan\b/i,
+    /(?<![а-яёa-z])постн(ый|ая|ое|ые|ого|ому|ыми)/i,
+  ],
+  "lactose-free": [
+    /без\s*лактоз/i,
+    /lactose[\s-]*free/i,
+    /без\s*молочк/i,
+  ],
+  "low-cal":      [
+    /(?<![а-яёa-z])пп(?![а-яёa-z])/i,
+    /пп[\s-]*десерт/i,
+    /пп[\s-]*торт/i,
+    /низкокалорий/i,
+    /(?<![а-яёa-z])лёгк(ий|ая|ое|ие)(?![а-яёa-z])/i,
+    /\bfit(ness)?\b/i,
+    /(?<![а-яёa-z])диет/i,
+  ],
+  "nut-free":     [
+    /без\s*орех/i,
+    /nut[\s-]*free/i,
+  ],
+};
+
+interface DietaryOverrides {
+  // id → массив тегов (полная замена авто-определённых)
+  byId?: Record<string, DietaryTag[]>;
+  // id → теги для добавления к авто-определённым
+  add?: Record<string, DietaryTag[]>;
+  // id → теги для исключения из авто-определённых (false-positive фикс)
+  remove?: Record<string, DietaryTag[]>;
+}
+
+let _dietaryOverridesCache: DietaryOverrides | null = null;
+function loadDietaryOverrides(): DietaryOverrides {
+  if (_dietaryOverridesCache) return _dietaryOverridesCache;
+  try {
+    if (fs.existsSync(DIETARY_OVERRIDES_FILE)) {
+      const raw = fs.readFileSync(DIETARY_OVERRIDES_FILE, "utf-8");
+      _dietaryOverridesCache = JSON.parse(raw) as DietaryOverrides;
+      return _dietaryOverridesCache;
+    }
+  } catch (e) {
+    console.error("[dietary-overrides] load failed:", (e as Error).message);
+  }
+  _dietaryOverridesCache = {};
+  return _dietaryOverridesCache;
+}
+
+// Сбросить кэш — для админ-эндпоинта перезагрузки overrides без рестарта
+export function reloadDietaryOverrides(): void {
+  _dietaryOverridesCache = null;
+}
+
+export function detectDietary(p: Product): DietaryTag[] {
+  const text = [
+    p.name || "",
+    p.preview || "",
+    ...(p.filling || []),
+    ...(p.cake_type || []),
+    ...(p.pie_type || []),
+    ...(p.dessert_type || []),
+  ].join(" ");
+  const tags = new Set<DietaryTag>();
+  for (const tag of Object.keys(DIETARY_KEYWORDS) as DietaryTag[]) {
+    if (DIETARY_KEYWORDS[tag].some((re) => re.test(text))) tags.add(tag);
+  }
+  // Apply overrides
+  const ov = loadDietaryOverrides();
+  const idKey = String(p.id ?? "");
+  if (idKey && ov.byId?.[idKey]) return [...ov.byId[idKey]];
+  if (idKey && ov.add?.[idKey])    for (const t of ov.add[idKey]) tags.add(t);
+  if (idKey && ov.remove?.[idKey]) for (const t of ov.remove[idKey]) tags.delete(t);
+  return [...tags];
+}
+
+function applyDietaryTags(products: Product[]): Product[] {
+  return products.map((p) => {
+    const dietary = detectDietary(p);
+    return dietary.length > 0 ? { ...p, dietary } : p;
+  });
+}
 
 const PAGES: { path: string; cat: string }[] = [
   { path: "/cakes/",              cat: "Торты" },
@@ -238,6 +356,11 @@ export async function scrapeCatalog(): Promise<Product[]> {
     all = await scrapeFromSite();
   }
 
+  // Авто-разметка диета-тегов (sugar-free / gluten-free / vegan / lactose-free / low-cal / nut-free)
+  all = applyDietaryTags(all);
+  const dietCount = all.filter((p) => p.dietary && p.dietary.length > 0).length;
+  if (dietCount > 0) console.log(`✅ Диета-теги проставлены: ${dietCount} позиций`);
+
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   const data: CatalogData = { updated: new Date().toISOString(), products: all, source };
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf-8");
@@ -266,7 +389,10 @@ export function loadCatalog(): Product[] {
     if (fs.existsSync(DATA_FILE)) {
       const raw  = fs.readFileSync(DATA_FILE, "utf-8");
       const data = JSON.parse(raw) as CatalogData;
-      return data.products ?? [];
+      const products = data.products ?? [];
+      // Если catalog.json создан до dietary-фичи — проставим теги на лету
+      const hasDietary = products.some((p) => Array.isArray(p.dietary));
+      return hasDietary ? products : applyDietaryTags(products);
     }
   } catch (e) {
     console.error("Ошибка загрузки каталога:", (e as Error).message);

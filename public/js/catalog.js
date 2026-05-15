@@ -23,8 +23,23 @@ let CATALOG_STATE = {
   lastProducts: [],
   visibleCount: 20, // pagination — сколько товаров показано сейчас
   pageSize: 20,
+  diet: [], // активные диета-теги (мульти-выбор): ['vegan','sugar-free',...]
 };
 window.CATALOG_STATE = CATALOG_STATE;
+
+// Диета-теги: server-tag → {icon, label, short}
+// short — короткая версия для бейджа на карточке товара
+const DIET_OPTIONS = [
+  { tag: 'sugar-free',   icon: '🚫🍬', label: 'Без сахара',   short: 'Без сахара' },
+  { tag: 'gluten-free',  icon: '🌾',   label: 'Без глютена',  short: 'Без глютена' },
+  { tag: 'vegan',        icon: '🌱',   label: 'Веган',        short: 'Веган' },
+  { tag: 'lactose-free', icon: '🥛',   label: 'Без лактозы',  short: 'Без лактозы' },
+  { tag: 'low-cal',      icon: '⚡',   label: 'Лёгкий / ПП',  short: 'Лёгкий' },
+  { tag: 'nut-free',     icon: '🥜',   label: 'Без орехов',   short: 'Без орехов' },
+];
+const DIET_BY_TAG = Object.fromEntries(DIET_OPTIONS.map((d) => [d.tag, d]));
+window.DIET_OPTIONS = DIET_OPTIONS;
+window.DIET_BY_TAG = DIET_BY_TAG;
 
 // Форматирование веса: "1.250" → "1.25 кг", "0.800" → "800 г", "1" → "1 кг"
 function fmtWeight(w) {
@@ -136,8 +151,9 @@ async function catShowProducts(category) {
   CATALOG_STATE.currentCategory = category;
   CATALOG_STATE.visibleCount = CATALOG_STATE.pageSize; // сброс pagination
 
-  // Рендерим sticky category switcher
+  // Рендерим sticky category switcher + diet-chips
   catRenderStickyCats(category);
+  catRenderDietChips();
 
   const grid = document.getElementById('menu-products');
   // Skeleton loader — 6 placeholder-карточек
@@ -149,7 +165,10 @@ async function catShowProducts(category) {
     </div>`).join('');
 
   try {
-    const res = await fetch('/api/catalog/products?category=' + encodeURIComponent(category) + '&limit=100');
+    const dietQs = (CATALOG_STATE.diet && CATALOG_STATE.diet.length)
+      ? '&diet=' + encodeURIComponent(CATALOG_STATE.diet.join(','))
+      : '';
+    const res = await fetch('/api/catalog/products?category=' + encodeURIComponent(category) + '&limit=100' + dietQs);
     const data = await res.json();
     CATALOG_STATE.lastProducts = data.products || [];
     catRenderToolbarAndProducts();
@@ -175,6 +194,123 @@ function catRenderStickyCats(active) {
   wrap.innerHTML = allBtn + chips;
   wrap.style.display = '';
 }
+
+// Diet-chip row под sticky-cats — мульти-выбор, отображается в products view
+function catRenderDietChips() {
+  const wrap = document.getElementById('menu-dietchips');
+  if (!wrap) return;
+  const active = new Set(CATALOG_STATE.diet || []);
+  // «Сбросить» появляется только если есть активные фильтры
+  const resetBtn = active.size > 0
+    ? `<button class="diet-chip diet-chip--reset" data-haptic="selection" onclick="catDietReset()">✕ Сбросить</button>`
+    : '';
+  const chips = DIET_OPTIONS.map((d) => {
+    const on = active.has(d.tag);
+    return `<button class="diet-chip ${on ? 'diet-chip--on' : ''}" data-haptic="selection" onclick="catDietToggle('${d.tag}')">${d.icon} ${escapeHtml(d.label)}</button>`;
+  }).join('');
+  wrap.innerHTML = resetBtn + chips;
+  wrap.style.display = '';
+}
+
+function catDietToggle(tag) {
+  const set = new Set(CATALOG_STATE.diet || []);
+  if (set.has(tag)) set.delete(tag); else set.add(tag);
+  CATALOG_STATE.diet = [...set];
+  CATALOG_STATE.visibleCount = CATALOG_STATE.pageSize; // сброс пагинации
+  catRenderDietChips();
+  catReloadCurrentView();
+  window.haptic?.('selection');
+}
+window.catDietToggle = catDietToggle;
+
+function catDietReset() {
+  CATALOG_STATE.diet = [];
+  CATALOG_STATE.visibleCount = CATALOG_STATE.pageSize;
+  catRenderDietChips();
+  catReloadCurrentView();
+  window.haptic?.('light');
+}
+window.catDietReset = catDietReset;
+
+// Перезагрузить текущий view (категория или all-with-diet) с учётом обновлённого diet-фильтра
+function catReloadCurrentView() {
+  if (CATALOG_STATE.currentCategory) {
+    catShowProducts(CATALOG_STATE.currentCategory);
+  } else if (CATALOG_STATE.diet.length > 0) {
+    catShowAllWithDiet();
+  } else {
+    catShowCategories();
+  }
+}
+
+// «Для меня» — открывает popmenu с диета-фильтрами с главной страницы меню (без зайти в категорию)
+function catDietMenu() {
+  const active = new Set(CATALOG_STATE.diet || []);
+  const html = DIET_OPTIONS.map((d) => {
+    const on = active.has(d.tag);
+    return `<button class="popmenu__item${on ? ' on' : ''}" onclick="catDietMenuPick('${d.tag}')">${d.icon} ${escapeHtml(d.label)}</button>`;
+  }).join('') + (active.size > 0
+    ? `<button class="popmenu__item popmenu__item--danger" onclick="catDietMenuClear()">✕ Сбросить</button>`
+    : '');
+  catShowPopmenu('Для меня', html);
+}
+window.catDietMenu = catDietMenu;
+
+function catDietMenuPick(tag) {
+  const set = new Set(CATALOG_STATE.diet || []);
+  if (set.has(tag)) set.delete(tag); else set.add(tag);
+  CATALOG_STATE.diet = [...set];
+  catClosePopmenu();
+  // Если есть фильтры — открываем все товары с применённым фильтром
+  if (CATALOG_STATE.diet.length > 0) {
+    catShowAllWithDiet();
+  } else {
+    catShowCategories();
+  }
+  window.haptic?.('selection');
+}
+window.catDietMenuPick = catDietMenuPick;
+
+function catDietMenuClear() {
+  CATALOG_STATE.diet = [];
+  catClosePopmenu();
+  catShowCategories();
+}
+window.catDietMenuClear = catDietMenuClear;
+
+// Показать все товары из всех категорий с применённым diet-фильтром
+async function catShowAllWithDiet() {
+  document.getElementById('menu-categories').style.display = 'none';
+  document.getElementById('menu-products').style.display = '';
+  document.getElementById('menu-bread').style.display = 'none';
+  document.getElementById('menu-empty').style.display = 'none';
+  const chips = document.getElementById('menu-chips');
+  if (chips) chips.style.display = 'none';
+  CATALOG_STATE.currentCategory = ''; // нет конкретной категории
+  CATALOG_STATE.visibleCount = CATALOG_STATE.pageSize;
+  catRenderStickyCats(''); // sticky без активной
+  catRenderDietChips();
+
+  const grid = document.getElementById('menu-products');
+  grid.innerHTML = Array(6).fill(0).map(() => `
+    <div class="pcard-pr-skel">
+      <div class="pcard-pr-skel__img"></div>
+      <div class="pcard-pr-skel__line pcard-pr-skel__line--w"></div>
+      <div class="pcard-pr-skel__line pcard-pr-skel__line--n"></div>
+    </div>`).join('');
+
+  try {
+    const dietQs = CATALOG_STATE.diet.length ? '&diet=' + encodeURIComponent(CATALOG_STATE.diet.join(',')) : '';
+    const res = await fetch('/api/catalog/products?limit=100' + dietQs);
+    const data = await res.json();
+    CATALOG_STATE.lastProducts = data.products || [];
+    catRenderToolbarAndProducts();
+  } catch {
+    grid.innerHTML = '<div class="cat-empty">Не удалось загрузить</div>';
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+window.catShowAllWithDiet = catShowAllWithDiet;
 
 // Применяем sort + price-фильтр + pagination к lastProducts и рендерим
 function catRenderToolbarAndProducts() {
@@ -423,6 +559,8 @@ function catShowCategories() {
   document.getElementById('menu-empty').style.display = 'none';
   const sticky = document.getElementById('menu-stickycats');
   if (sticky) sticky.style.display = 'none';
+  const dietWrap = document.getElementById('menu-dietchips');
+  if (dietWrap) dietWrap.style.display = 'none';
   const more = document.getElementById('menu-load-more');
   if (more) more.style.display = 'none';
   const chips = document.getElementById('menu-chips');
@@ -431,7 +569,7 @@ function catShowCategories() {
   if (inp) inp.value = '';
   const clear = document.getElementById('menu-search-clear');
   if (clear) clear.style.display = 'none';
-  // Сбрасываем sort/filter
+  // Сбрасываем sort/filter (diet оставляем — он управляется отдельно)
   CATALOG_STATE.sort = 'default';
   CATALOG_STATE.priceMax = 0;
   CATALOG_STATE.currentCategory = '';
@@ -478,6 +616,13 @@ function catRenderProductsHtml(products) {
       ? `<span class="pcard-pr__hit pcard-pr__hit--sale">−${p.discountPercent}%</span>`
       : (p.hit ? '<span class="pcard-pr__hit">★ Хит</span>' : '');
     const weight   = p.weight ? `<span class="pcard-pr__w">${escapeHtml(fmtWeight(p.weight))}</span>` : '';
+    // Diet-бейджи на карточке (показываем до 2, чтобы не загромождать)
+    const dietBadges = Array.isArray(p.dietary) && p.dietary.length > 0
+      ? `<div class="pcard-pr__diet">${p.dietary.slice(0, 2).map((tag) => {
+          const d = DIET_BY_TAG[tag];
+          return d ? `<span class="pcard-pr__diet-chip">${d.icon} ${escapeHtml(d.short)}</span>` : '';
+        }).join('')}</div>`
+      : '';
     const addBtn = hasId && priceNum > 0
       ? `<button class="pcard-pr__add" aria-label="В корзину" onclick="event.stopPropagation();catQuickAdd(${p.id},this)">+</button>`
       : '';
@@ -501,6 +646,7 @@ function catRenderProductsHtml(products) {
         <div class="pcard-pr__body">
           <div class="pcard-pr__name">${escapeHtml(p.name)}</div>
           ${weight}
+          ${dietBadges}
           <div class="pcard-pr__row">
             <div class="pcard-pr__prices">
               <span class="pcard-pr__price">${escapeHtml(priceTxt)}</span>
@@ -571,6 +717,19 @@ async function catOpenProduct(id) {
         </div>
       </div>` : '';
 
+    // Diet chips — «Подходит для:» (server-marked dietary)
+    const dietTags = Array.isArray(p.dietary) ? p.dietary : [];
+    const dietHtml = dietTags.length ? `
+      <div class="cat-modal__allergens cat-modal__allergens--diet">
+        <div class="cat-modal__allergens-h">Подходит для:</div>
+        <div class="cat-modal__allergens-list">
+          ${dietTags.map((tag) => {
+            const d = DIET_BY_TAG[tag];
+            return d ? `<span class="allerg-chip allerg-chip--diet">${d.icon} ${escapeHtml(d.label)}</span>` : '';
+          }).join('')}
+        </div>
+      </div>` : '';
+
     body.innerHTML = `
       <button class="cat-modal__close" onclick="catCloseProduct()">×</button>
       <div class="cat-modal__hero" onclick="catOpenPhotoZoom('${img ? '/img?u=' + encodeURIComponent(img) : ''}')">
@@ -584,6 +743,7 @@ async function catOpenProduct(id) {
         ${hasDiscount && oldPriceTxt ? `<span class="cat-modal__old">${escapeHtml(oldPriceTxt)}</span> <span class="cat-modal__pct">−${p.discountPercent}%</span>` : ''}
       </div>
       ${props.length ? `<div class="cat-modal__props">${props.join('')}</div>` : ''}
+      ${dietHtml}
       ${allergenHtml}
       ${desc ? `<div class="cat-modal__desc">${escapeHtml(desc)}</div>` : ''}
       <div class="cat-modal__similar" id="cat-modal-similar"></div>
