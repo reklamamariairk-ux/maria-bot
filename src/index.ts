@@ -7,7 +7,7 @@ import https from "https";
 import cron from "node-cron";
 import { Bot, webhookCallback, InlineKeyboard } from "grammy";
 import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, fetchProductById, reloadDietaryOverrides, detectDietary, Product } from "./scraper";
-import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind, getNotificationPrefs, setNotificationPrefs, saveCartSnapshot, clearCartSnapshot, getAbandonedCarts, markCartAbandonedPushed, getSpinStatus, recordSpin, WHEEL_PRIZES, touchVisitStreak, getStreak, setSecretOfDay, getSecretOfDay, getUnusedRewards, consumeRewards, hasHolidayPushSent, markHolidayPushSent, getReviewsForProduct, getReviewStats, getReviewStatsBatch, getMyReview, upsertReview, deleteMyReview, setReviewHidden, countReviewsLast24h, createWishlistShare, getWishlistShare, incrementWishlistShareOpens, countWishlistSharesLast24h } from "./db";
+import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind, getNotificationPrefs, setNotificationPrefs, saveCartSnapshot, clearCartSnapshot, getAbandonedCarts, markCartAbandonedPushed, getSpinStatus, recordSpin, WHEEL_PRIZES, touchVisitStreak, getStreak, setSecretOfDay, getSecretOfDay, getUnusedRewards, consumeRewards, hasHolidayPushSent, markHolidayPushSent, getReviewsForProduct, getReviewStats, getReviewStatsBatch, getMyReview, upsertReview, deleteMyReview, setReviewHidden, countReviewsLast24h, createWishlistShare, getWishlistShare, incrementWishlistShareOpens, countWishlistSharesLast24h, getOrderRating, upsertOrderRating, hasRatingPromptSent, markRatingPromptSent, countPromoUses, hasUserUsedPromo, recordPromoUse } from "./db";
 import {
   initClubSchema,
   getBalance,
@@ -29,6 +29,7 @@ import { getPartners, getPartnersMeta, syncPartners } from "./partners";
 import { fetchLk, getVerifiedPhone } from "./lk";
 import { createOrder, OrderRequest } from "./order";
 import { getUpcomingHolidays, getNextHoliday, getHolidaysToPushToday, HOLIDAYS } from "./holidays";
+import { validatePromoSync, reloadPromoCodes, findPromo } from "./promo";
 
 // ─── Env ────────────────────────────────────────────────────────────────────
 const BOT_TOKEN    = process.env.BOT_TOKEN    ?? "";
@@ -115,6 +116,53 @@ async function pushHolidayPreorder() {
     }
     console.log(`[HOLIDAY] ${occ.holiday.id} (${occ.daysUntil}d before): sent=${sent} skipped=${skipped}`);
   }
+}
+
+// Post-order rating prompts — push «Оцени заказ» через 2-72h после терминального статуса.
+// Запускается из cron'а раз в час. Дедуп через таблицу order_rating_prompts.
+async function pushOrderRatingPrompts() {
+  const subs = await getAllSubscribers();
+  let sent = 0, checked = 0;
+  for (const s of subs) {
+    const phone = await getVerifiedPhone(s.chat_id).catch(() => null);
+    if (!phone) continue;
+    const lk = await fetchLk(s.chat_id).catch(() => null);
+    if (!lk?.ok || !lk.data?.configured) continue;
+    const orders = Array.isArray(lk.data.orders) ? lk.data.orders : [];
+    if (orders.length === 0) continue;
+    checked++;
+    // Берём заказы со статусом «доставлен/выдан/завершён» возрастом 2-72 часа
+    for (const o of orders) {
+      const status = String(o.status || "").toLowerCase().trim();
+      if (!/выдан|доставлен|доставлено|завершён|завершен|выполнен/.test(status)) continue;
+      let orderDate: Date | null = null;
+      try {
+        const d = new Date(String(o.date).replace(" ", "T"));
+        if (!isNaN(d.getTime())) orderDate = d;
+      } catch {}
+      if (!orderDate) continue;
+      const ageHours = (Date.now() - orderDate.getTime()) / 3_600_000;
+      if (ageHours < 2 || ageHours > 72) continue;
+      const orderId = String(o.id);
+      // Дедуп: уже отправили?
+      if (await hasRatingPromptSent(s.chat_id, orderId).catch(() => false)) continue;
+      // Уже оценил?
+      if (await getOrderRating(s.chat_id, orderId).catch(() => null)) {
+        await markRatingPromptSent(s.chat_id, orderId).catch(() => {});
+        continue;
+      }
+      // Отправляем push с deep-link на rating-форму
+      const botUsername = "mariatortik_bot";
+      const link = `https://t.me/${botUsername}?startapp=rate_${orderId}`;
+      const msg = `⭐ *Как тебе заказ №${orderId}?*\n\nОцени за 5 секунд — поможешь нам стать лучше. И получишь персональную подсказку, что попробовать в следующий раз 🍰\n\n[Открыть форму](${link})`;
+      const ok = await sendPushSafely(s.chat_id, "marketing_promo", msg);
+      if (ok) {
+        sent++;
+        await markRatingPromptSent(s.chat_id, orderId).catch(() => {});
+      }
+    }
+  }
+  if (sent > 0 || checked > 0) console.log(`[RATING-PROMPT] checked=${checked} sent=${sent}`);
 }
 
 // Cart abandonment — push юзерам, чья корзина живёт >24h без чекаута
@@ -1986,6 +2034,123 @@ app.post("/api/wishlist/share", requireTgUser, async (req, res) => {
   }
 });
 
+// ─── Promo Codes API ────────────────────────────────────────────────────────
+// Validate — проверяет существование, срок, min_order, one_per_user, max_uses_total.
+// Возвращает применимую скидку в ₽. Не списывает использование (это делает /api/order).
+app.post("/api/promo/validate", async (req, res) => {
+  const body = req.body as { code?: unknown; cart_total?: unknown };
+  const code = String(body.code ?? "").trim();
+  const cartTotal = Number(body.cart_total) || 0;
+  if (!code) { res.status(400).json({ ok: false, reason: "code_required" }); return; }
+
+  const sync = validatePromoSync({ code, cart_total: cartTotal });
+  if (!sync.result.ok || !sync.promo) {
+    // Возвращаем расширенный reason для UI
+    const r = sync.result;
+    const promo = sync.promo;
+    const min = promo?.min_order || 0;
+    const ext: Record<string, unknown> = { ...r };
+    if (r.reason === "min_order_not_met" && min > 0) {
+      ext.min_order = min;
+      ext.message = `Минимальная сумма заказа: ${min.toLocaleString("ru-RU")} ₽`;
+    } else if (r.reason === "expired") {
+      ext.message = "Срок действия истёк";
+    } else if (r.reason === "not_found") {
+      ext.message = "Промокод не найден";
+    }
+    res.json(ext);
+    return;
+  }
+  const promo = sync.promo;
+
+  // Async-checks: one_per_user + max_uses_total
+  try {
+    const tgUser = tryGetTgUser(req);
+    if (promo.one_per_user && tgUser) {
+      const used = await hasUserUsedPromo(tgUser.id, promo.code);
+      if (used) {
+        res.json({ ok: false, reason: "already_used", message: "Ты уже применял этот промокод" });
+        return;
+      }
+    }
+    if (promo.max_uses_total != null) {
+      const cnt = await countPromoUses(promo.code);
+      if (cnt >= promo.max_uses_total) {
+        res.json({ ok: false, reason: "max_uses_reached", message: "Лимит активаций исчерпан" });
+        return;
+      }
+    }
+    res.json(sync.result);
+  } catch (e) {
+    console.error("[promo/validate]", (e as Error).message);
+    res.status(500).json({ ok: false, reason: "internal" });
+  }
+});
+
+// Записать использование промокода (вызывает frontend после успешного создания заказа)
+app.post("/api/promo/use", async (req, res) => {
+  const body = req.body as { code?: unknown; order_id?: unknown };
+  const code = String(body.code ?? "").trim().toUpperCase();
+  const orderId = body.order_id != null ? String(body.order_id).slice(0, 64) : null;
+  if (!code) { res.status(400).json({ error: "code_required" }); return; }
+  // Проверим что код существует (защита от мусорных записей)
+  if (!findPromo(code)) { res.status(404).json({ error: "code_not_found" }); return; }
+  const tgUser = tryGetTgUser(req);
+  try {
+    await recordPromoUse(code, tgUser?.id ?? null, orderId);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[promo/use]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+// Hot-reload data/promo-codes.json без рестарта
+app.post("/api/admin/promo/reload", (req, res) => {
+  const token = req.header("x-user-token") || (req.body as { token?: string })?.token;
+  if (!token || token !== process.env.ADMIN_TOKEN) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  const total = reloadPromoCodes();
+  res.json({ ok: true, total });
+});
+
+// ─── Order Ratings API ───────────────────────────────────────────────────────
+// GET текущий rating заказа (показывается ли «уже оценили» или форма пустая)
+app.get("/api/order-rating/:orderId", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  const orderId = String(req.params.orderId || "").trim().slice(0, 64);
+  if (!orderId) { res.status(400).json({ error: "bad_order_id" }); return; }
+  try {
+    const rating = await getOrderRating(u.id, orderId);
+    res.json({ rating });
+  } catch (e) {
+    console.error("[order-rating GET]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+// POST upsert rating
+app.post("/api/order-rating", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  const body = req.body as { order_id?: unknown; rating?: unknown; text?: unknown };
+  const orderId = String(body.order_id ?? "").trim().slice(0, 64);
+  const rating  = Number(body.rating);
+  const text    = String(body.text ?? "").trim().slice(0, 500);
+  if (!orderId) { res.status(400).json({ error: "order_id_required" }); return; }
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    res.status(400).json({ error: "rating_must_be_1_to_5" }); return;
+  }
+  try {
+    const saved = await upsertOrderRating(u.id, orderId, rating, text);
+    res.json({ ok: true, rating: saved });
+  } catch (e) {
+    console.error("[order-rating POST]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
+});
+
 // GET wishlist по share-коду (публично, без auth — но инкрементим opens)
 app.get("/api/wishlist/share/:code", async (req, res) => {
   const code = String(req.params.code || "").toUpperCase().slice(0, 16);
@@ -2748,6 +2913,13 @@ async function main() {
     pushHolidayPreorder().catch((e) => console.error("[HOLIDAY CRON]", e));
   });
   console.log(`[STARTUP] Holiday pre-order cron scheduled (daily 10:30 Irkutsk; ${HOLIDAYS.length} holidays tracked)`);
+
+  // Post-order rating prompts — каждый час дёргает «Оцени заказ» для тех, у кого
+  // заказ завершён 2-72 часа назад и rating ещё не отправлен.
+  cron.schedule("47 * * * *", () => {
+    pushOrderRatingPrompts().catch((e) => console.error("[RATING-PROMPT CRON]", e));
+  });
+  console.log("[STARTUP] Order rating-prompt cron scheduled (hourly)");
 
   // Order status cron — каждые 30 минут проверяет смены статусов у verified юзеров
   cron.schedule("*/30 * * * *", () => {

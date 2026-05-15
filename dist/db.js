@@ -2,6 +2,13 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WHEEL_PRIZES = exports.pool = void 0;
 exports.initDb = initDb;
+exports.countPromoUses = countPromoUses;
+exports.hasUserUsedPromo = hasUserUsedPromo;
+exports.recordPromoUse = recordPromoUse;
+exports.getOrderRating = getOrderRating;
+exports.upsertOrderRating = upsertOrderRating;
+exports.hasRatingPromptSent = hasRatingPromptSent;
+exports.markRatingPromptSent = markRatingPromptSent;
 exports.createWishlistShare = createWishlistShare;
 exports.getWishlistShare = getWishlistShare;
 exports.incrementWishlistShareOpens = incrementWishlistShareOpens;
@@ -197,8 +204,70 @@ async function initDb() {
       opens        INT    DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS wishlist_shares_owner_idx ON wishlist_shares (owner_chat, created_at DESC);
+
+    -- Карта впечатлений: пост-заказная оценка от клиента
+    CREATE TABLE IF NOT EXISTS order_ratings (
+      chat_id    BIGINT NOT NULL,
+      order_id   TEXT   NOT NULL,
+      rating     INT    NOT NULL CHECK (rating BETWEEN 1 AND 5),
+      text       TEXT   DEFAULT '',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (chat_id, order_id)
+    );
+    -- Лог отправленных rating-prompt'ов (чтоб не дёргать юзера дважды по заказу)
+    CREATE TABLE IF NOT EXISTS order_rating_prompts (
+      chat_id    BIGINT NOT NULL,
+      order_id   TEXT   NOT NULL,
+      sent_at    TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (chat_id, order_id)
+    );
+
+    -- Лог использований промокодов (для одного per user + max_uses_total)
+    CREATE TABLE IF NOT EXISTS promo_uses (
+      id         BIGSERIAL PRIMARY KEY,
+      code       TEXT   NOT NULL,
+      chat_id    BIGINT,
+      order_id   TEXT,
+      used_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS promo_uses_code_idx ON promo_uses (code, used_at DESC);
+    CREATE INDEX IF NOT EXISTS promo_uses_chat_idx ON promo_uses (chat_id, code);
   `);
     console.log("[DB] Tables ready");
+}
+// Promo codes ──────────────────────────────────────────────
+async function countPromoUses(code) {
+    const { rows } = await exports.pool.query(`SELECT COUNT(*)::int AS cnt FROM promo_uses WHERE code = $1`, [code]);
+    return Number(rows[0]?.cnt ?? 0);
+}
+async function hasUserUsedPromo(chatId, code) {
+    const { rows } = await exports.pool.query(`SELECT 1 FROM promo_uses WHERE chat_id = $1 AND code = $2 LIMIT 1`, [chatId, code]);
+    return rows.length > 0;
+}
+async function recordPromoUse(code, chatId, orderId) {
+    await exports.pool.query(`INSERT INTO promo_uses (code, chat_id, order_id) VALUES ($1, $2, $3)`, [code, chatId, orderId]);
+}
+async function getOrderRating(chatId, orderId) {
+    const { rows } = await exports.pool.query(`SELECT chat_id, order_id, rating, text, created_at FROM order_ratings
+     WHERE chat_id = $1 AND order_id = $2`, [chatId, orderId]);
+    return rows[0] ?? null;
+}
+async function upsertOrderRating(chatId, orderId, rating, text) {
+    const { rows } = await exports.pool.query(`INSERT INTO order_ratings (chat_id, order_id, rating, text)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (chat_id, order_id) DO UPDATE SET
+       rating = EXCLUDED.rating,
+       text = EXCLUDED.text,
+       created_at = NOW()
+     RETURNING chat_id, order_id, rating, text, created_at`, [chatId, orderId, rating, text]);
+    return rows[0];
+}
+async function hasRatingPromptSent(chatId, orderId) {
+    const { rows } = await exports.pool.query(`SELECT 1 FROM order_rating_prompts WHERE chat_id = $1 AND order_id = $2`, [chatId, orderId]);
+    return rows.length > 0;
+}
+async function markRatingPromptSent(chatId, orderId) {
+    await exports.pool.query(`INSERT INTO order_rating_prompts (chat_id, order_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [chatId, orderId]);
 }
 // Алфавит без неоднозначных символов (0/O, 1/I/l)
 const SHORT_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";

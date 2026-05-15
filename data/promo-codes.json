@@ -1,0 +1,35 @@
+{
+  "_comment": "Промокоды. Редактируется админом, читается на лету через POST /api/admin/promo/reload (x-user-token). Без рестарта.",
+  "_fields": {
+    "code": "уникальный код в верхнем регистре (MARIA10)",
+    "type": "'percent' (скидка %) | 'amount' (рубли)",
+    "value": "число: для percent — % скидки (10 = 10%), для amount — рубли (500 = 500 ₽)",
+    "description": "что увидит юзер при применении",
+    "expires_at": "YYYY-MM-DD; null если без срока",
+    "min_order": "минимальная сумма заказа в рублях (null если без условий)",
+    "max_uses_total": "общий лимит активаций (null если без лимита)",
+    "one_per_user": "true — один раз на юзера (требует tma auth)"
+  },
+  "codes": [
+    {
+      "code": "MARIA10",
+      "type": "percent",
+      "value": 10,
+      "description": "Скидка 10% на первый заказ",
+      "expires_at": "2026-12-31",
+      "min_order": 1500,
+      "max_uses_total": null,
+      "one_per_user": true
+    },
+    {
+      "code": "BIRTHDAY500",
+      "type": "amount",
+      "value": 500,
+      "description": "500 ₽ в подарок к дню рождения",
+      "expires_at": "2026-12-31",
+      "min_order": 2000,
+      "max_uses_total": null,
+      "one_per_user": true
+    }
+  ]
+}

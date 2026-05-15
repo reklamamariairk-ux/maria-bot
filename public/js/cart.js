@@ -380,7 +380,12 @@ function cartRenderCheckout() {
 
       <!-- Promo code field -->
       <label>Промокод <span class="lbl-hint">(если есть)</span>
-        <input id="co-promo" type="text" placeholder="Например, MARIA10" value="${escAttr(defPromo)}" />
+        <div class="co-promo-row">
+          <input id="co-promo" type="text" placeholder="Например, MARIA10" value="${escAttr(defPromo)}"
+                 oninput="this.value=this.value.toUpperCase()" onblur="coValidatePromo()" autocapitalize="characters" autocomplete="off" />
+          <button type="button" class="co-promo-apply" onclick="coValidatePromo()">Применить</button>
+        </div>
+        <div class="co-promo-status" id="co-promo-status" style="display:none"></div>
       </label>
 
       <label>Комментарий
@@ -389,11 +394,15 @@ function cartRenderCheckout() {
       <div class="cart-form__hint">Менеджер позвонит для подтверждения. Оплата при получении.</div>
 
       <!-- Breakdown -->
-      <div class="co-breakdown">
+      <div class="co-breakdown" data-subtotal="${subtotal}" data-delivery="${deliveryFee}">
         <div class="co-breakdown__row"><span>Товары</span><b>${subtotal.toLocaleString('ru-RU')} ₽</b></div>
         <div class="co-breakdown__row"><span>${defType === 'pickup' ? 'Самовывоз' : 'Доставка'}</span><b>${deliveryFee === 0 ? 'бесплатно' : deliveryFee.toLocaleString('ru-RU') + ' ₽'}</b></div>
+        <div class="co-breakdown__row co-breakdown__row--discount" id="co-discount-row" style="display:none">
+          <span>🎟 Промокод <span id="co-discount-code"></span></span>
+          <b id="co-discount-val">−0 ₽</b>
+        </div>
         ${cashback > 0 ? `<div class="co-breakdown__row co-breakdown__row--bonus"><span>💎 Кэшбэк (5%, после заказа)</span><b>+${cashback.toLocaleString('ru-RU')} ₽</b></div>` : ''}
-        <div class="co-breakdown__row co-breakdown__row--total"><span>Итого</span><b>${total.toLocaleString('ru-RU')} ₽</b></div>
+        <div class="co-breakdown__row co-breakdown__row--total"><span>Итого</span><b id="co-total-val">${total.toLocaleString('ru-RU')} ₽</b></div>
       </div>
 
       <button class="btn-outline" onclick="cartRender()">← Назад в корзину</button>
@@ -402,6 +411,109 @@ function cartRenderCheckout() {
     </div>
   `;
   window.tgMain?.show(`Подтвердить · ${total.toLocaleString('ru-RU')} ₽`, () => cartSubmit());
+}
+
+// Применённый промокод — храним в cart-state, передаём в submit
+window._coAppliedPromo = null;
+
+async function coValidatePromo() {
+  const inp = document.getElementById('co-promo');
+  const status = document.getElementById('co-promo-status');
+  const code = (inp?.value || '').trim().toUpperCase();
+  if (!code) {
+    coClearPromo();
+    return;
+  }
+  if (status) {
+    status.style.display = '';
+    status.className = 'co-promo-status co-promo-status--checking';
+    status.textContent = 'Проверяем…';
+  }
+  // Считаем cart_total из breakdown data-attrs
+  const bd = document.querySelector('.co-breakdown');
+  const subtotal = Number(bd?.dataset?.subtotal) || 0;
+  const delivery = Number(bd?.dataset?.delivery) || 0;
+  const cartTotal = subtotal + delivery;
+  const tg = window.Telegram?.WebApp;
+  const initData = tg?.initData || '';
+  try {
+    const r = await fetch('/api/promo/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(initData ? { Authorization: 'tma ' + initData } : {}) },
+      body: JSON.stringify({ code, cart_total: cartTotal }),
+    });
+    const data = await r.json();
+    if (data?.ok) {
+      window._coAppliedPromo = { code: data.code, discount: data.discount, description: data.description, type: data.type, value: data.value };
+      coRenderDiscount(data);
+      if (status) {
+        status.className = 'co-promo-status co-promo-status--ok';
+        status.textContent = `✓ ${data.description || code}: −${Number(data.discount || 0).toLocaleString('ru-RU')} ₽`;
+      }
+      // Сохраняем код в localStorage чтоб не вводить второй раз
+      const saved = checkoutLoad();
+      saved.promo = code;
+      checkoutSave(saved);
+      window.haptic?.('success');
+    } else {
+      window._coAppliedPromo = null;
+      coClearDiscount();
+      if (status) {
+        status.className = 'co-promo-status co-promo-status--err';
+        status.textContent = '✗ ' + (data?.message || 'Промокод не работает');
+      }
+      window.haptic?.('error');
+    }
+  } catch {
+    if (status) {
+      status.className = 'co-promo-status co-promo-status--err';
+      status.textContent = '✗ Ошибка сети';
+    }
+  }
+}
+window.coValidatePromo = coValidatePromo;
+
+function coClearPromo() {
+  window._coAppliedPromo = null;
+  coClearDiscount();
+  const status = document.getElementById('co-promo-status');
+  if (status) { status.style.display = 'none'; status.textContent = ''; }
+}
+window.coClearPromo = coClearPromo;
+
+function coRenderDiscount(data) {
+  const row = document.getElementById('co-discount-row');
+  const valEl = document.getElementById('co-discount-val');
+  const codeEl = document.getElementById('co-discount-code');
+  const totalEl = document.getElementById('co-total-val');
+  if (!row || !valEl || !totalEl) return;
+  const discount = Number(data.discount || 0);
+  if (discount <= 0) { coClearDiscount(); return; }
+  row.style.display = '';
+  valEl.textContent = `−${discount.toLocaleString('ru-RU')} ₽`;
+  if (codeEl) codeEl.textContent = `(${data.code})`;
+  // Пересчёт total
+  const bd = document.querySelector('.co-breakdown');
+  const subtotal = Number(bd?.dataset?.subtotal) || 0;
+  const delivery = Number(bd?.dataset?.delivery) || 0;
+  const newTotal = Math.max(0, subtotal + delivery - discount);
+  totalEl.textContent = `${newTotal.toLocaleString('ru-RU')} ₽`;
+  // Обновляем кнопку Telegram MainButton
+  if (window.tgMain?.show) window.tgMain.show(`Подтвердить · ${newTotal.toLocaleString('ru-RU')} ₽`, () => cartSubmit());
+}
+
+function coClearDiscount() {
+  const row = document.getElementById('co-discount-row');
+  const totalEl = document.getElementById('co-total-val');
+  if (row) row.style.display = 'none';
+  if (totalEl) {
+    const bd = document.querySelector('.co-breakdown');
+    const subtotal = Number(bd?.dataset?.subtotal) || 0;
+    const delivery = Number(bd?.dataset?.delivery) || 0;
+    const total = subtotal + delivery;
+    totalEl.textContent = `${total.toLocaleString('ru-RU')} ₽`;
+    if (window.tgMain?.show) window.tgMain.show(`Подтвердить · ${total.toLocaleString('ru-RU')} ₽`, () => cartSubmit());
+  }
 }
 
 // Переключение Доставка/Самовывоз
@@ -661,11 +773,15 @@ async function cartSubmit() {
     return;
   }
   // Объединяем комментарий с дополнительной инфой
+  const applied = window._coAppliedPromo;
+  const promoNote = applied
+    ? `🎟 Промокод ${applied.code} — СКИДКА ${Number(applied.discount).toLocaleString('ru-RU')} ₽ (${applied.description || ''})`
+    : (promo ? `Промокод (не применён): ${promo}` : '');
   const extraNote = [
     gift ? '🎁 Подарочная упаковка' : '',
-    promo ? `Промокод: ${promo}` : '',
+    promoNote,
     deltype === 'pickup' ? `Самовывоз: ${shop}` : '',
-  ].filter(Boolean).join(' · ');
+  ].filter(Boolean).join('\n');
   const fullComment = [comment, extraNote].filter(Boolean).join('\n');
 
   // Берём только корректные позиции — id > 0, qty > 0
@@ -717,6 +833,19 @@ async function cartSubmit() {
       }).filter(Boolean);
       localStorage.setItem('maria_last_order', JSON.stringify(lastOrder));
     } catch {}
+    // Регистрируем использование промокода (если применён)
+    if (window._coAppliedPromo?.code) {
+      try {
+        const tg = window.Telegram?.WebApp;
+        const initData = tg?.initData || '';
+        fetch('/api/promo/use', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(initData ? { Authorization: 'tma ' + initData } : {}) },
+          body: JSON.stringify({ code: window._coAppliedPromo.code, order_id: String(data.orderId || '') }),
+        }).catch(() => {});
+      } catch {}
+      window._coAppliedPromo = null;
+    }
     cartClear();
     window.tgMain?.hide();
     document.getElementById('cart-body').innerHTML = `

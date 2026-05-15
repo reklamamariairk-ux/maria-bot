@@ -149,8 +149,109 @@ export async function initDb() {
       opens        INT    DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS wishlist_shares_owner_idx ON wishlist_shares (owner_chat, created_at DESC);
+
+    -- Карта впечатлений: пост-заказная оценка от клиента
+    CREATE TABLE IF NOT EXISTS order_ratings (
+      chat_id    BIGINT NOT NULL,
+      order_id   TEXT   NOT NULL,
+      rating     INT    NOT NULL CHECK (rating BETWEEN 1 AND 5),
+      text       TEXT   DEFAULT '',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (chat_id, order_id)
+    );
+    -- Лог отправленных rating-prompt'ов (чтоб не дёргать юзера дважды по заказу)
+    CREATE TABLE IF NOT EXISTS order_rating_prompts (
+      chat_id    BIGINT NOT NULL,
+      order_id   TEXT   NOT NULL,
+      sent_at    TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (chat_id, order_id)
+    );
+
+    -- Лог использований промокодов (для одного per user + max_uses_total)
+    CREATE TABLE IF NOT EXISTS promo_uses (
+      id         BIGSERIAL PRIMARY KEY,
+      code       TEXT   NOT NULL,
+      chat_id    BIGINT,
+      order_id   TEXT,
+      used_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS promo_uses_code_idx ON promo_uses (code, used_at DESC);
+    CREATE INDEX IF NOT EXISTS promo_uses_chat_idx ON promo_uses (chat_id, code);
   `);
   console.log("[DB] Tables ready");
+}
+
+// Promo codes ──────────────────────────────────────────────
+export async function countPromoUses(code: string): Promise<number> {
+  const { rows } = await pool.query(
+    `SELECT COUNT(*)::int AS cnt FROM promo_uses WHERE code = $1`,
+    [code]
+  );
+  return Number(rows[0]?.cnt ?? 0);
+}
+
+export async function hasUserUsedPromo(chatId: number, code: string): Promise<boolean> {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM promo_uses WHERE chat_id = $1 AND code = $2 LIMIT 1`,
+    [chatId, code]
+  );
+  return rows.length > 0;
+}
+
+export async function recordPromoUse(code: string, chatId: number | null, orderId: string | null): Promise<void> {
+  await pool.query(
+    `INSERT INTO promo_uses (code, chat_id, order_id) VALUES ($1, $2, $3)`,
+    [code, chatId, orderId]
+  );
+}
+
+// Order ratings ──────────────────────────────────────────
+export interface OrderRating {
+  chat_id: number;
+  order_id: string;
+  rating: number;
+  text: string;
+  created_at: Date;
+}
+
+export async function getOrderRating(chatId: number, orderId: string): Promise<OrderRating | null> {
+  const { rows } = await pool.query(
+    `SELECT chat_id, order_id, rating, text, created_at FROM order_ratings
+     WHERE chat_id = $1 AND order_id = $2`,
+    [chatId, orderId]
+  );
+  return rows[0] ?? null;
+}
+
+export async function upsertOrderRating(
+  chatId: number, orderId: string, rating: number, text: string
+): Promise<OrderRating> {
+  const { rows } = await pool.query(
+    `INSERT INTO order_ratings (chat_id, order_id, rating, text)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (chat_id, order_id) DO UPDATE SET
+       rating = EXCLUDED.rating,
+       text = EXCLUDED.text,
+       created_at = NOW()
+     RETURNING chat_id, order_id, rating, text, created_at`,
+    [chatId, orderId, rating, text]
+  );
+  return rows[0];
+}
+
+export async function hasRatingPromptSent(chatId: number, orderId: string): Promise<boolean> {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM order_rating_prompts WHERE chat_id = $1 AND order_id = $2`,
+    [chatId, orderId]
+  );
+  return rows.length > 0;
+}
+
+export async function markRatingPromptSent(chatId: number, orderId: string): Promise<void> {
+  await pool.query(
+    `INSERT INTO order_rating_prompts (chat_id, order_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+    [chatId, orderId]
+  );
 }
 
 // Wishlist share ──────────────────────────────────────────

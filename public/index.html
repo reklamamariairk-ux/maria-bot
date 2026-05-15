@@ -260,6 +260,16 @@
     <span class="home-club-chip__chev"><span data-icon="chevronRight" data-size="14"></span></span>
   </button>
 
+  <!-- Гид по подаркам — wizard «помоги выбрать» -->
+  <button class="home-club-chip home-gift-chip" data-haptic="light" onclick="haptic('light');openGiftWizard()">
+    <span class="home-club-chip__ic home-gift-chip__ic">🎁</span>
+    <div class="home-club-chip__body">
+      <div class="home-club-chip__t">Подобрать подарок</div>
+      <div class="home-club-chip__s">4 вопроса — и 3 идеальных варианта</div>
+    </div>
+    <span class="home-club-chip__chev"><span data-icon="chevronRight" data-size="14"></span></span>
+  </button>
+
   <!-- Корпоративные заказы — компактный chip -->
   <button class="home-club-chip home-corp-chip" data-haptic="light" onclick="haptic('light');openCorpForm()">
     <span class="home-club-chip__ic home-corp-chip__ic">🏢</span>
@@ -1211,6 +1221,8 @@
 <script src="/js/reviews.js" defer></script>
 <script src="/js/wishshare.js" defer></script>
 <script src="/js/corporate.js" defer></script>
+<script src="/js/giftwizard.js" defer></script>
+<script src="/js/orderrating.js" defer></script>
 <script src="/js/profile.js" defer></script>
 <script src="/js/club.js" defer></script>
 <script src="/js/cart.js" defer></script>
