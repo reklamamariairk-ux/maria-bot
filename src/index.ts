@@ -2354,25 +2354,41 @@ app.get("/api/shops", async (_req, res) => {
 });
 
 // Sweet Check — активная неделя/квест
-// Расписание зеркально с сайта. Админ Maria сможет править даты в этом месте.
-const SWEET_CHECK_WEEKS = [
+// Источник: data/sweet-check-weeks.json (hot-reload через /api/admin/sweet-check/reload).
+// Если файла нет — fallback на хардкод (на случай первого деплоя).
+interface SweetWeek { from: string; to: string; name: string; task: string; reward: string }
+const SWEET_CHECK_FALLBACK: SweetWeek[] = [
   { from: "2026-04-13", to: "2026-04-19", name: "Неделя 4 · Старт",        task: "Купи набор «Семейный»", reward: "5 билетов" },
   { from: "2026-04-20", to: "2026-04-26", name: "Неделя 5 · Сезон ягод",   task: "Купи 2 пирога с ягодной начинкой", reward: "5 билетов" },
   { from: "2026-04-27", to: "2026-05-03", name: "Неделя 6 · Капкейки",     task: "Купи 4 капкейка любых вкусов", reward: "5 билетов" },
   { from: "2026-05-04", to: "2026-05-10", name: "Неделя 7 · Подарок другу",task: "Купи бенто-торт + капкейк или десерт в стакане", reward: "5 билетов" },
-  { from: "2026-05-11", to: "2026-05-17", name: "Неделя 8",                task: "Уточняется в кафе", reward: "5 билетов" },
-  { from: "2026-05-18", to: "2026-05-24", name: "Неделя 9",                task: "Уточняется в кафе", reward: "5 билетов" },
-  { from: "2026-05-25", to: "2026-05-31", name: "Неделя 10",               task: "Уточняется в кафе", reward: "5 билетов" },
-  { from: "2026-06-01", to: "2026-06-07", name: "Неделя 11",               task: "Уточняется в кафе", reward: "5 билетов" },
-  { from: "2026-06-08", to: "2026-06-14", name: "Неделя 12",               task: "Уточняется в кафе", reward: "5 билетов" },
-  { from: "2026-06-15", to: "2026-06-21", name: "Неделя 13",               task: "Уточняется в кафе", reward: "5 билетов" },
-  { from: "2026-06-22", to: "2026-06-28", name: "Неделя 14",               task: "Уточняется в кафе", reward: "5 билетов" },
-  { from: "2026-06-29", to: "2026-07-05", name: "Неделя 15 · Финал Q2",    task: "Уточняется в кафе", reward: "5 билетов" },
 ];
+const SWEET_CHECK_FILE = path.join(__dirname, "..", "data", "sweet-check-weeks.json");
+let _sweetWeeksCache: SweetWeek[] | null = null;
+function loadSweetCheckWeeks(): SweetWeek[] {
+  if (_sweetWeeksCache) return _sweetWeeksCache;
+  try {
+    const fs = require("fs") as typeof import("fs");
+    if (fs.existsSync(SWEET_CHECK_FILE)) {
+      const raw = fs.readFileSync(SWEET_CHECK_FILE, "utf-8");
+      const data = JSON.parse(raw) as { weeks?: SweetWeek[] };
+      if (Array.isArray(data.weeks) && data.weeks.length > 0) {
+        _sweetWeeksCache = data.weeks;
+        return _sweetWeeksCache;
+      }
+    }
+  } catch (e) {
+    console.error("[sweet-check] load failed:", (e as Error).message);
+  }
+  _sweetWeeksCache = SWEET_CHECK_FALLBACK;
+  return _sweetWeeksCache;
+}
+
 app.get("/api/sweet-check/active", (_req, res) => {
+  const weeks = loadSweetCheckWeeks();
   const now = new Date().toISOString().slice(0, 10);
-  const active = SWEET_CHECK_WEEKS.find((w) => w.from <= now && now <= w.to) ?? null;
-  const next   = SWEET_CHECK_WEEKS.find((w) => w.from > now) ?? null;
+  const active = weeks.find((w) => w.from <= now && now <= w.to) ?? null;
+  const next   = weeks.find((w) => w.from > now) ?? null;
   const fmt = (d: string) => {
     const [y, m, dd] = d.split("-");
     return `${dd}.${m}.${y}`;
@@ -2380,8 +2396,20 @@ app.get("/api/sweet-check/active", (_req, res) => {
   res.json({
     active: active ? { ...active, dates: `${fmt(active.from)} — ${fmt(active.to)}` } : null,
     next:   next   ? { ...next,   dates: `${fmt(next.from)} — ${fmt(next.to)}` }     : null,
-    period: { from: SWEET_CHECK_WEEKS[0]?.from, to: SWEET_CHECK_WEEKS.at(-1)?.to },
+    period: { from: weeks[0]?.from, to: weeks.at(-1)?.to },
   });
+});
+
+// Hot-reload расписания «Сладкого чека» (без рестарта)
+app.post("/api/admin/sweet-check/reload", (req, res) => {
+  const token = req.header("x-user-token") || (req.body as { token?: string })?.token;
+  if (!token || token !== process.env.ADMIN_TOKEN) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  _sweetWeeksCache = null;
+  const weeks = loadSweetCheckWeeks();
+  res.json({ ok: true, total: weeks.length, first: weeks[0]?.from, last: weeks.at(-1)?.to });
 });
 
 app.get("/health", (_req, res) =>
