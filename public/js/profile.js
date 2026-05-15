@@ -813,13 +813,13 @@ async function profOpenReferral() {
     modal.onclick = (e) => { if (e.target === modal) profCloseReferral(); };
     document.body.appendChild(modal);
   }
-  const shareText = `Заходи в кондитерскую «Мария» по моему коду ${data.code} — оба получим 200 ₽ на следующий заказ.`;
+  const shareText = `Заходи в кондитерскую «Мария» по моему коду ${data.code} — попробуй наши торты!`;
   const tgShare = `https://t.me/share/url?url=${encodeURIComponent(data.share_url)}&text=${encodeURIComponent(shareText)}`;
   modal.innerHTML = `
     <div class="cat-modal__sheet">
       <button class="cat-modal__close" onclick="profCloseReferral()">×</button>
-      <div class="ref-h">Приведи друга — <span class="ref-h__sum">200 ₽</span></div>
-      <div class="ref-sub">Когда друг сделает первый заказ — вы оба получите 200 ₽ на бонусный счёт.</div>
+      <div class="ref-h">Поделись «Марией» с друзьями</div>
+      <div class="ref-sub">Расскажи о любимой кондитерской — твой персональный код поможет друзьям найти нас.</div>
       <div class="ref-code-box">
         <div class="ref-code-box__lbl">Твой код</div>
         <div class="ref-code-box__code" id="ref-code-val">${escAttr(data.code)}</div>

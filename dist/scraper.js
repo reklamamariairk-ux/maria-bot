@@ -329,6 +329,12 @@ async function scrapeCatalog() {
     if (all.length === 0) {
         all = await scrapeFromSite();
     }
+    // Защита: если оба источника вернули пусто (сеть лежит) — не затираем
+    // прошлый рабочий каталог на диске и не обнуляем in-memory state.
+    // Бросаем — refreshCatalog поймает и оставит предыдущий catalog.
+    if (all.length === 0) {
+        throw new Error("catalog_sources_empty");
+    }
     // Авто-разметка диета-тегов (sugar-free / gluten-free / vegan / lactose-free / low-cal / nut-free)
     all = applyDietaryTags(all);
     const dietCount = all.filter((p) => p.dietary && p.dietary.length > 0).length;

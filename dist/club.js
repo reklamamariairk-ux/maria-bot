@@ -4,7 +4,6 @@ exports.CONVERSION_TIERS = exports.POINT_TTL_DAYS = exports.STAR_DAILY_CAP = exp
 exports.initClubSchema = initClubSchema;
 exports.getBalance = getBalance;
 exports.earnPoints = earnPoints;
-exports.spendPoints = spendPoints;
 exports.earnStars = earnStars;
 exports.convertStars = convertStars;
 exports.isPhoneVerified = isPhoneVerified;
@@ -16,8 +15,16 @@ exports.redeemReward = redeemReward;
 exports.getMyRewards = getMyRewards;
 exports.getHistory = getHistory;
 exports.getDailyStatus = getDailyStatus;
-exports.recordReferral = recordReferral;
 const db_1 = require("./db");
+// Иркутск = UTC+8. Все «сутки» (daily login, daily star cap) считаем
+// относительно иркутского дня — иначе на границе UTC-полуночи юзер
+// мог бы клейлм-нуть бонус дважды за один иркутский день.
+function todayIrkutsk() {
+    return new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
+}
+function yesterdayIrkutsk() {
+    return new Date(Date.now() + 8 * 3600000 - 86400000).toISOString().slice(0, 10);
+}
 // ─── Schema ──────────────────────────────────────────────────────────────────
 async function initClubSchema() {
     await db_1.pool.query(`
@@ -106,15 +113,6 @@ async function initClubSchema() {
       used_order_id TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_user_rewards_chat ON user_rewards (chat_id, created_at DESC);
-
-    CREATE TABLE IF NOT EXISTS referrals (
-      id              BIGSERIAL PRIMARY KEY,
-      referrer_id     BIGINT NOT NULL,
-      referee_id      BIGINT UNIQUE NOT NULL,
-      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      first_order_at  TIMESTAMPTZ,
-      bonus_paid      BOOLEAN NOT NULL DEFAULT FALSE
-    );
   `);
     // Seed rewards catalog if empty
     const { rows } = await db_1.pool.query(`SELECT COUNT(*)::int AS n FROM rewards_catalog`);
@@ -154,80 +152,69 @@ async function earnPoints(chatId, amount, source, meta = {}) {
     if (amount <= 0)
         return;
     const expires = `NOW() + INTERVAL '${exports.POINT_TTL_DAYS} days'`;
-    await db_1.pool.query("BEGIN");
+    // ВАЖНО: транзакция на dedicated client. pool.query("BEGIN") не работает
+    // в node-postgres — каждый pool.query берёт новый коннект, и BEGIN/COMMIT
+    // не группируют операции в одну транзакцию.
+    const client = await db_1.pool.connect();
     try {
-        await db_1.pool.query(`INSERT INTO user_balances (chat_id, points, total_earned_points)
+        await client.query("BEGIN");
+        await client.query(`INSERT INTO user_balances (chat_id, points, total_earned_points)
        VALUES ($1, $2, $2)
        ON CONFLICT (chat_id) DO UPDATE
          SET points = user_balances.points + $2,
              total_earned_points = user_balances.total_earned_points + $2,
              updated_at = NOW()`, [chatId, amount]);
-        await db_1.pool.query(`INSERT INTO point_transactions (chat_id, amount, kind, source, meta, expires_at)
+        await client.query(`INSERT INTO point_transactions (chat_id, amount, kind, source, meta, expires_at)
        VALUES ($1, $2, 'earn', $3, $4, ${expires})`, [chatId, amount, source, JSON.stringify(meta)]);
-        await db_1.pool.query("COMMIT");
+        await client.query("COMMIT");
     }
     catch (e) {
-        await db_1.pool.query("ROLLBACK");
+        await client.query("ROLLBACK").catch(() => { });
         throw e;
     }
-}
-async function spendPoints(chatId, amount, source, meta = {}) {
-    if (amount <= 0)
-        return { ok: false, reason: "bad_amount" };
-    await db_1.pool.query("BEGIN");
-    try {
-        const { rows } = await db_1.pool.query(`SELECT points FROM user_balances WHERE chat_id = $1 FOR UPDATE`, [chatId]);
-        const have = rows[0]?.points ?? 0;
-        if (have < amount) {
-            await db_1.pool.query("ROLLBACK");
-            return { ok: false, reason: "insufficient" };
-        }
-        await db_1.pool.query(`UPDATE user_balances SET points = points - $2, updated_at = NOW() WHERE chat_id = $1`, [chatId, amount]);
-        await db_1.pool.query(`INSERT INTO point_transactions (chat_id, amount, kind, source, meta)
-       VALUES ($1, $2, 'spend', $3, $4)`, [chatId, -amount, source, JSON.stringify(meta)]);
-        await db_1.pool.query("COMMIT");
-        return { ok: true };
-    }
-    catch (e) {
-        await db_1.pool.query("ROLLBACK");
-        throw e;
+    finally {
+        client.release();
     }
 }
 // ─── Stars: earn ─────────────────────────────────────────────────────────────
 async function earnStars(chatId, amount, source, meta = {}) {
     if (amount <= 0)
         return { awarded: 0, capped: false };
-    const today = new Date().toISOString().slice(0, 10);
-    await db_1.pool.query("BEGIN");
+    const today = todayIrkutsk();
+    const client = await db_1.pool.connect();
     try {
+        await client.query("BEGIN");
         // Daily cap check
-        await db_1.pool.query(`INSERT INTO daily_activity (chat_id, date) VALUES ($1, $2)
+        await client.query(`INSERT INTO daily_activity (chat_id, date) VALUES ($1, $2)
        ON CONFLICT (chat_id, date) DO NOTHING`, [chatId, today]);
-        const { rows } = await db_1.pool.query(`SELECT stars_earned_today FROM daily_activity WHERE chat_id = $1 AND date = $2 FOR UPDATE`, [chatId, today]);
+        const { rows } = await client.query(`SELECT stars_earned_today FROM daily_activity WHERE chat_id = $1 AND date = $2 FOR UPDATE`, [chatId, today]);
         const earnedToday = rows[0].stars_earned_today;
         const remaining = Math.max(0, exports.STAR_DAILY_CAP - earnedToday);
         const toAward = Math.min(amount, remaining);
         const capped = toAward < amount;
         if (toAward === 0) {
-            await db_1.pool.query("COMMIT");
+            await client.query("COMMIT");
             return { awarded: 0, capped: true };
         }
-        await db_1.pool.query(`UPDATE daily_activity SET stars_earned_today = stars_earned_today + $3
+        await client.query(`UPDATE daily_activity SET stars_earned_today = stars_earned_today + $3
        WHERE chat_id = $1 AND date = $2`, [chatId, today, toAward]);
-        await db_1.pool.query(`INSERT INTO user_balances (chat_id, stars, total_earned_stars)
+        await client.query(`INSERT INTO user_balances (chat_id, stars, total_earned_stars)
        VALUES ($1, $2, $2)
        ON CONFLICT (chat_id) DO UPDATE
          SET stars = user_balances.stars + $2,
              total_earned_stars = user_balances.total_earned_stars + $2,
              updated_at = NOW()`, [chatId, toAward]);
-        await db_1.pool.query(`INSERT INTO star_transactions (chat_id, amount, source, meta)
+        await client.query(`INSERT INTO star_transactions (chat_id, amount, source, meta)
        VALUES ($1, $2, $3, $4)`, [chatId, toAward, source, JSON.stringify(meta)]);
-        await db_1.pool.query("COMMIT");
+        await client.query("COMMIT");
         return { awarded: toAward, capped };
     }
     catch (e) {
-        await db_1.pool.query("ROLLBACK");
+        await client.query("ROLLBACK").catch(() => { });
         throw e;
+    }
+    finally {
+        client.release();
     }
 }
 // ─── Conversion ──────────────────────────────────────────────────────────────
@@ -241,30 +228,34 @@ async function convertStars(chatId, starsToConvert) {
     const tier = exports.CONVERSION_TIERS.find((t) => t.stars === starsToConvert);
     if (!tier)
         return { ok: false, reason: "invalid_tier" };
-    await db_1.pool.query("BEGIN");
+    const client = await db_1.pool.connect();
     try {
-        const { rows } = await db_1.pool.query(`SELECT stars FROM user_balances WHERE chat_id = $1 FOR UPDATE`, [chatId]);
+        await client.query("BEGIN");
+        const { rows } = await client.query(`SELECT stars FROM user_balances WHERE chat_id = $1 FOR UPDATE`, [chatId]);
         const have = rows[0]?.stars ?? 0;
         if (have < tier.stars) {
-            await db_1.pool.query("ROLLBACK");
+            await client.query("ROLLBACK");
             return { ok: false, reason: "insufficient_stars" };
         }
-        await db_1.pool.query(`UPDATE user_balances
+        await client.query(`UPDATE user_balances
          SET stars = stars - $2,
              points = points + $3,
              total_earned_points = total_earned_points + $3,
              updated_at = NOW()
        WHERE chat_id = $1`, [chatId, tier.stars, tier.points]);
-        await db_1.pool.query(`INSERT INTO star_transactions (chat_id, amount, source, meta)
+        await client.query(`INSERT INTO star_transactions (chat_id, amount, source, meta)
        VALUES ($1, $2, 'conversion', $3)`, [chatId, -tier.stars, JSON.stringify({ pointsGained: tier.points })]);
-        await db_1.pool.query(`INSERT INTO point_transactions (chat_id, amount, kind, source, meta, expires_at)
+        await client.query(`INSERT INTO point_transactions (chat_id, amount, kind, source, meta, expires_at)
        VALUES ($1, $2, 'convert', 'star_conversion', $3, NOW() + INTERVAL '${exports.POINT_TTL_DAYS} days')`, [chatId, tier.points, JSON.stringify({ starsSpent: tier.stars })]);
-        await db_1.pool.query("COMMIT");
+        await client.query("COMMIT");
         return { ok: true, pointsGained: tier.points };
     }
     catch (e) {
-        await db_1.pool.query("ROLLBACK");
+        await client.query("ROLLBACK").catch(() => { });
         throw e;
+    }
+    finally {
+        client.release();
     }
 }
 // ─── Phone verification ──────────────────────────────────────────────────────
@@ -290,26 +281,28 @@ async function verifyPhone(chatId, phone) {
 }
 // ─── Daily login ─────────────────────────────────────────────────────────────
 async function claimDailyLogin(chatId) {
-    const today = new Date().toISOString().slice(0, 10);
-    await db_1.pool.query("BEGIN");
+    const today = todayIrkutsk();
+    const yesterday = yesterdayIrkutsk();
+    let streak = 1;
+    const client = await db_1.pool.connect();
     try {
+        await client.query("BEGIN");
         // Check if already claimed today
-        await db_1.pool.query(`INSERT INTO daily_activity (chat_id, date) VALUES ($1, $2)
+        await client.query(`INSERT INTO daily_activity (chat_id, date) VALUES ($1, $2)
        ON CONFLICT (chat_id, date) DO NOTHING`, [chatId, today]);
-        const { rows } = await db_1.pool.query(`SELECT daily_login_claimed FROM daily_activity WHERE chat_id = $1 AND date = $2 FOR UPDATE`, [chatId, today]);
+        const { rows } = await client.query(`SELECT daily_login_claimed FROM daily_activity WHERE chat_id = $1 AND date = $2 FOR UPDATE`, [chatId, today]);
         if (rows[0].daily_login_claimed) {
-            await db_1.pool.query("ROLLBACK");
+            await client.query("ROLLBACK");
             return { ok: false, reason: "already_claimed_today" };
         }
         // Update streak
-        const streakRes = await db_1.pool.query(`SELECT current_streak, last_login_date FROM user_streaks WHERE chat_id = $1`, [chatId]);
-        let streak = 1;
+        const streakRes = await client.query(`SELECT current_streak, last_login_date FROM user_streaks WHERE chat_id = $1`, [chatId]);
         if (streakRes.rows.length > 0) {
             const last = streakRes.rows[0].last_login_date;
             const cur = streakRes.rows[0].current_streak;
             if (last) {
+                // last_login_date — DATE-колонка, отдаём как UTC-полночь; сравниваем как иркутскую дату.
                 const lastStr = last.toISOString().slice(0, 10);
-                const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
                 if (lastStr === yesterday)
                     streak = cur + 1;
                 else if (lastStr === today)
@@ -318,35 +311,39 @@ async function claimDailyLogin(chatId) {
                     streak = 1;
             }
         }
-        await db_1.pool.query(`INSERT INTO user_streaks (chat_id, current_streak, longest_streak, last_login_date)
+        await client.query(`INSERT INTO user_streaks (chat_id, current_streak, longest_streak, last_login_date)
        VALUES ($1, $2, $2, $3)
        ON CONFLICT (chat_id) DO UPDATE
          SET current_streak = $2,
              longest_streak = GREATEST(user_streaks.longest_streak, $2),
              last_login_date = $3`, [chatId, streak, today]);
-        await db_1.pool.query(`UPDATE daily_activity SET daily_login_claimed = TRUE WHERE chat_id = $1 AND date = $2`, [chatId, today]);
-        await db_1.pool.query("COMMIT");
-        await earnPoints(chatId, exports.BONUS_DAILY_LOGIN, "daily_login", { streak });
-        let streakBonus = 0;
-        if (streak === 7) {
-            streakBonus = exports.BONUS_STREAK_7;
-            await earnPoints(chatId, exports.BONUS_STREAK_7, "streak_7", { streak });
-        }
-        else if (streak === 30) {
-            streakBonus = exports.BONUS_STREAK_30;
-            await earnPoints(chatId, exports.BONUS_STREAK_30, "streak_30", { streak });
-        }
-        return {
-            ok: true,
-            pointsAwarded: exports.BONUS_DAILY_LOGIN,
-            streakBonus,
-            streakDays: streak,
-        };
+        await client.query(`UPDATE daily_activity SET daily_login_claimed = TRUE WHERE chat_id = $1 AND date = $2`, [chatId, today]);
+        await client.query("COMMIT");
     }
     catch (e) {
-        await db_1.pool.query("ROLLBACK");
+        await client.query("ROLLBACK").catch(() => { });
         throw e;
     }
+    finally {
+        client.release();
+    }
+    // earnPoints открывает свою транзакцию — вызываем после COMMIT основной.
+    await earnPoints(chatId, exports.BONUS_DAILY_LOGIN, "daily_login", { streak });
+    let streakBonus = 0;
+    if (streak === 7) {
+        streakBonus = exports.BONUS_STREAK_7;
+        await earnPoints(chatId, exports.BONUS_STREAK_7, "streak_7", { streak });
+    }
+    else if (streak === 30) {
+        streakBonus = exports.BONUS_STREAK_30;
+        await earnPoints(chatId, exports.BONUS_STREAK_30, "streak_30", { streak });
+    }
+    return {
+        ok: true,
+        pointsAwarded: exports.BONUS_DAILY_LOGIN,
+        streakBonus,
+        streakDays: streak,
+    };
 }
 // ─── Game results ────────────────────────────────────────────────────────────
 // Звёзды за игры временно отключены (по решению команды). Личные рекорды
@@ -402,27 +399,45 @@ async function redeemReward(chatId, rewardId) {
     if (!rows[0] || !rows[0].active)
         return { ok: false, reason: "reward_unavailable" };
     const cost = rows[0].cost_points;
-    // Atomic spend
-    const spend = await spendPoints(chatId, cost, "reward", { reward_id: rewardId });
-    if (!spend.ok)
-        return { ok: false, reason: spend.reason };
-    // Generate unique promo code
-    let promoCode = "";
-    for (let i = 0; i < 5; i++) {
-        promoCode = generatePromoCode();
-        try {
-            const ins = await db_1.pool.query(`INSERT INTO user_rewards (chat_id, reward_id, promo_code, cost_paid, expires_at)
-         VALUES ($1, $2, $3, $4, NOW() + INTERVAL '30 days')
-         RETURNING expires_at`, [chatId, rewardId, promoCode, cost]);
-            return { ok: true, promoCode, expiresAt: ins.rows[0].expires_at.toISOString() };
+    // Списание баллов и создание промокода — в одной транзакции,
+    // чтобы при сбое INSERT в user_rewards баллы не пропали.
+    const client = await db_1.pool.connect();
+    try {
+        await client.query("BEGIN");
+        const bRes = await client.query(`SELECT points FROM user_balances WHERE chat_id = $1 FOR UPDATE`, [chatId]);
+        const have = bRes.rows[0]?.points ?? 0;
+        if (have < cost) {
+            await client.query("ROLLBACK");
+            return { ok: false, reason: "insufficient" };
         }
-        catch (e) {
-            // Unique violation → retry
-            if (e.code !== "23505")
-                throw e;
+        await client.query(`UPDATE user_balances SET points = points - $2, updated_at = NOW() WHERE chat_id = $1`, [chatId, cost]);
+        await client.query(`INSERT INTO point_transactions (chat_id, amount, kind, source, meta)
+       VALUES ($1, $2, 'spend', 'reward', $3)`, [chatId, -cost, JSON.stringify({ reward_id: rewardId })]);
+        for (let i = 0; i < 5; i++) {
+            const promoCode = generatePromoCode();
+            try {
+                const ins = await client.query(`INSERT INTO user_rewards (chat_id, reward_id, promo_code, cost_paid, expires_at)
+           VALUES ($1, $2, $3, $4, NOW() + INTERVAL '30 days')
+           RETURNING expires_at`, [chatId, rewardId, promoCode, cost]);
+                await client.query("COMMIT");
+                return { ok: true, promoCode, expiresAt: ins.rows[0].expires_at.toISOString() };
+            }
+            catch (e) {
+                // Unique violation на promo_code → новый код. Любая другая ошибка — rollback.
+                if (e.code !== "23505")
+                    throw e;
+            }
         }
+        await client.query("ROLLBACK");
+        return { ok: false, reason: "code_generation_failed" };
     }
-    return { ok: false, reason: "code_generation_failed" };
+    catch (e) {
+        await client.query("ROLLBACK").catch(() => { });
+        throw e;
+    }
+    finally {
+        client.release();
+    }
 }
 async function getMyRewards(chatId) {
     const { rows } = await db_1.pool.query(`SELECT ur.id, ur.promo_code, rc.title, rc.reward_type, rc.discount_value, rc.min_order,
@@ -444,7 +459,7 @@ async function getHistory(chatId, limit = 30) {
 }
 // ─── Daily status (for UI) ───────────────────────────────────────────────────
 async function getDailyStatus(chatId) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayIrkutsk();
     const dRes = await db_1.pool.query(`SELECT daily_login_claimed, stars_earned_today FROM daily_activity WHERE chat_id = $1 AND date = $2`, [chatId, today]);
     const sRes = await db_1.pool.query(`SELECT current_streak, longest_streak FROM user_streaks WHERE chat_id = $1`, [chatId]);
     return {
@@ -454,18 +469,4 @@ async function getDailyStatus(chatId) {
         currentStreak: sRes.rows[0]?.current_streak ?? 0,
         longestStreak: sRes.rows[0]?.longest_streak ?? 0,
     };
-}
-// ─── Referrals ───────────────────────────────────────────────────────────────
-async function recordReferral(referrerId, refereeId) {
-    if (referrerId === refereeId)
-        return false;
-    try {
-        await db_1.pool.query(`INSERT INTO referrals (referrer_id, referee_id) VALUES ($1, $2)`, [referrerId, refereeId]);
-        return true;
-    }
-    catch (e) {
-        if (e.code === "23505")
-            return false; // already exists
-        throw e;
-    }
 }

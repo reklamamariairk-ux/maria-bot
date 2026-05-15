@@ -36,7 +36,6 @@ exports.markCartAbandonedPushed = markCartAbandonedPushed;
 exports.getSpinStatus = getSpinStatus;
 exports.recordSpin = recordSpin;
 exports.touchVisitStreak = touchVisitStreak;
-exports.getStreak = getStreak;
 exports.setSecretOfDay = setSecretOfDay;
 exports.getSecretOfDay = getSecretOfDay;
 exports.getUnusedRewards = getUnusedRewards;
@@ -516,19 +515,35 @@ async function getSpinStatus(chatId) {
     return { canSpin: true, lastPrize: null };
 }
 async function recordSpin(chatId) {
-    const status = await getSpinStatus(chatId);
-    if (!status.canSpin && status.lastPrize) {
-        return { prize: status.lastPrize, alreadySpunToday: true };
+    // Атомарная защита от двойного клика: транзакция + FOR UPDATE.
+    // Сначала вставляем заглушку (если строки нет), потом блокируем и решаем.
+    const client = await exports.pool.connect();
+    try {
+        await client.query("BEGIN");
+        await client.query(`INSERT INTO daily_spins (chat_id) VALUES ($1) ON CONFLICT (chat_id) DO NOTHING`, [chatId]);
+        const { rows } = await client.query(`SELECT last_spin_at, prize_kind, prize_value FROM daily_spins WHERE chat_id = $1 FOR UPDATE`, [chatId]);
+        const last = rows[0]?.last_spin_at ? new Date(rows[0].last_spin_at) : null;
+        if (last && isSameDayIrkutsk(last, new Date())) {
+            const prizeIdx = exports.WHEEL_PRIZES.findIndex((p) => p.kind === rows[0].prize_kind);
+            const lastPrize = prizeIdx >= 0 ? exports.WHEEL_PRIZES[prizeIdx] : exports.WHEEL_PRIZES[exports.WHEEL_PRIZES.length - 1];
+            await client.query("COMMIT");
+            return { prize: lastPrize, alreadySpunToday: true };
+        }
+        const prize = pickWeightedPrize();
+        await client.query(`UPDATE daily_spins SET last_spin_at = NOW(), prize_kind = $2, prize_value = $3 WHERE chat_id = $1`, [chatId, prize.kind, prize.value]);
+        if (prize.kind !== "nothing") {
+            await client.query(`INSERT INTO earned_rewards (chat_id, kind, value, source) VALUES ($1, $2, $3, 'wheel')`, [chatId, prize.kind, prize.value]);
+        }
+        await client.query("COMMIT");
+        return { prize, alreadySpunToday: false };
     }
-    const prize = pickWeightedPrize();
-    await exports.pool.query(`INSERT INTO daily_spins (chat_id, last_spin_at, prize_kind, prize_value)
-     VALUES ($1, NOW(), $2, $3)
-     ON CONFLICT (chat_id) DO UPDATE SET last_spin_at = NOW(), prize_kind = $2, prize_value = $3`, [chatId, prize.kind, prize.value]);
-    // Логируем earned_reward кроме nothing
-    if (prize.kind !== "nothing") {
-        await exports.pool.query(`INSERT INTO earned_rewards (chat_id, kind, value, source) VALUES ($1, $2, $3, 'wheel')`, [chatId, prize.kind, prize.value]);
+    catch (e) {
+        await client.query("ROLLBACK").catch(() => { });
+        throw e;
     }
-    return { prize, alreadySpunToday: false };
+    finally {
+        client.release();
+    }
 }
 // ─── Visit Streaks ───────────────────────────────────────────────────────────
 async function touchVisitStreak(chatId) {
@@ -569,20 +584,6 @@ async function touchVisitStreak(chatId) {
     longest = Math.max(longest, cur);
     await exports.pool.query(`UPDATE visit_streaks SET current_streak = $2, longest_streak = $3, last_visit_date = $4::date WHERE chat_id = $1`, [chatId, cur, longest, todayIrk]);
     return { currentStreak: cur, longestStreak: longest, reachedReward };
-}
-async function getStreak(chatId) {
-    const { rows } = await exports.pool.query(`SELECT current_streak, longest_streak, last_visit_date FROM visit_streaks WHERE chat_id = $1`, [chatId]);
-    if (!rows[0])
-        return { currentStreak: 0, longestStreak: 0 };
-    // Если последний визит не вчера и не сегодня — streak уже сломан, но фактически в DB не обновлён
-    // Возвращаем как есть; touchVisitStreak обновит при следующем визите.
-    const now = new Date();
-    const toIrk = (d) => new Date(d.getTime() + 8 * 3600000);
-    const todayIrk = toIrk(now).toISOString().slice(0, 10);
-    const yesterdayIrk = toIrk(new Date(now.getTime() - 24 * 3600000)).toISOString().slice(0, 10);
-    const lastIrk = rows[0].last_visit_date ? toIrk(new Date(rows[0].last_visit_date)).toISOString().slice(0, 10) : null;
-    const cur = (lastIrk === todayIrk || lastIrk === yesterdayIrk) ? (Number(rows[0].current_streak) || 0) : 0;
-    return { currentStreak: cur, longestStreak: Number(rows[0].longest_streak) || 0 };
 }
 // ─── Secret of the Day ───────────────────────────────────────────────────────
 async function setSecretOfDay(productId, discountPct = 15) {

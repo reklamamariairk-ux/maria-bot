@@ -54,10 +54,11 @@ function validatePromoSync(input) {
     const promo = findPromo(input.code);
     if (!promo)
         return { promo: null, result: { ok: false, reason: "not_found" } };
-    // expires_at — формат YYYY-MM-DD, сравниваем строки до полуночи
+    // expires_at — формат YYYY-MM-DD, сравниваем со «сегодня Иркутск»
+    // (бизнес в UTC+8; иначе промокод бы жил лишние 8 часов после полуночи Иркутска).
     if (promo.expires_at) {
-        const today = new Date().toISOString().slice(0, 10);
-        if (promo.expires_at < today) {
+        const todayIrk = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
+        if (promo.expires_at < todayIrk) {
             return { promo, result: { ok: false, reason: "expired" } };
         }
     }

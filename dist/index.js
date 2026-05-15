@@ -79,6 +79,7 @@ async function refreshCatalog() {
                 notifyWishlistBackInStock(newIds).catch((e) => console.error("[WISHLIST notify]", e.message));
             }
         }
+        prewarmImageCache().catch((e) => console.error("[IMG] prewarm failed:", e.message));
     }
     catch (e) {
         console.error("Ошибка обновления каталога:", e.message);
@@ -103,7 +104,10 @@ async function notifyWishlistBackInStock(productIds) {
             .slice(0, 5);
         if (products.length === 0)
             continue;
-        const list = products.map((p) => `• ${p.name} — ${Number(p.price).toLocaleString("ru-RU")} ₽`).join("\n");
+        const list = products.map((p) => {
+            const priceStr = p.priceNumber != null ? `${p.priceNumber.toLocaleString("ru-RU")} ₽` : (p.price || "");
+            return `• ${p.name}${priceStr ? ` — ${priceStr}` : ""}`;
+        }).join("\n");
         const msg = `🎂 *Снова в наличии*\n\n${list}\n\nЗабери, пока есть — открой Mini App.`;
         const ok = await sendPushSafely(chatId, "marketing_rewards", msg);
         if (ok)
@@ -421,22 +425,16 @@ const HELP_TEXT = `
 bot.command("start", async (ctx) => {
     if (ctx.from) {
         await (0, db_1.addSubscriber)(ctx.from.id, ctx.from.username, ctx.from.first_name).catch(() => { });
-        // Referral payload: /start ref_12345 (старая схема) или /start ref_MARIA-XXX (новая)
+        // Referral payload: /start ref_MARIA-XXX (code-based, активная схема)
+        // Старый numeric-формат (/start ref_12345) — deprecated, игнорируется.
         const payload = ctx.match?.trim();
         if (payload && payload.startsWith("ref_")) {
             const rest = payload.slice(4);
             if (/^MARIA-/i.test(rest)) {
-                // Code-based реферал
                 const r = await (0, db_1.recordReferralUse)(ctx.from.id, rest).catch(() => null);
                 if (r?.ok && r.ownerChat) {
                     const userName = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" ") || "Новый друг";
-                    await bot.api.sendMessage(r.ownerChat, `🎉 *${userName}* пришёл по твоему коду \`${rest.toUpperCase()}\`!\n\nКогда он сделает первый заказ, вы оба получите *200 ₽*.`, { parse_mode: "Markdown" }).catch(() => { });
-                }
-            }
-            else {
-                const referrerId = Number(rest);
-                if (referrerId && referrerId !== ctx.from.id) {
-                    await (0, club_1.recordReferral)(referrerId, ctx.from.id).catch(() => { });
+                    await bot.api.sendMessage(r.ownerChat, `🎉 *${userName}* пришёл по твоему коду \`${rest.toUpperCase()}\` — спасибо, что зовёшь друзей в «Марию»!`, { parse_mode: "Markdown" }).catch(() => { });
                 }
             }
         }
@@ -769,11 +767,9 @@ async function prewarmImageCache() {
     }
     console.log(`[IMG] prewarmed ${done}/${urls.length} (mem ${(imgCacheBytes / 1024 / 1024).toFixed(1)} MB)`);
 }
-// Запуск прогрева когда каталог готов (через 5 сек после старта)
+// Прогрев при старте — fallback на случай, если первый refreshCatalog упадёт
+// (повторный прогрев после успешного refresh идёт изнутри refreshCatalog).
 setTimeout(() => { prewarmImageCache().catch((e) => console.error("[IMG] prewarm failed:", e)); }, 5000);
-// И повторно после каждого обновления каталога
-const _origRefresh = refreshCatalog;
-global.__refreshCatalogPatched = false;
 // ─── Groq chat (agent с tool calling) ───────────────────────────────────────
 const ai_tools_1 = require("./ai-tools");
 // Парсит «try again in 2.639s» или «try again in 160ms» из текста ошибки Groq
@@ -1496,7 +1492,8 @@ app.post("/api/lead-corporate", rateLimit(5), express_1.default.json({ limit: "1
             fields.ADDRESS = b.address;
         const body = JSON.stringify({ fields });
         await new Promise((resolve, reject) => {
-            const url = new URL(`${BITRIX_WEBHOOK}crm.lead.add.json`);
+            const base = BITRIX_WEBHOOK.endsWith("/") ? BITRIX_WEBHOOK : BITRIX_WEBHOOK + "/";
+            const url = new URL(`${base}crm.lead.add.json`);
             const opts = {
                 hostname: url.hostname,
                 path: url.pathname + url.search,
@@ -1530,11 +1527,6 @@ app.post("/api/lead-corporate", rateLimit(5), express_1.default.json({ limit: "1
         console.error("[B2B] Bitrix24 error:", e.message);
         res.status(502).json({ error: "Не удалось создать заявку, попробуйте позже" });
     }
-});
-// ─── Магазины ────────────────────────────────────────────────────────────────
-const STORES = [];
-app.get("/api/stores", (_req, res) => {
-    res.json(STORES);
 });
 // ─── Статистика подписчиков ───────────────────────────────────────────────────
 app.get("/api/subscribers/count", async (_req, res) => {
@@ -1649,23 +1641,8 @@ app.get("/api/me", auth_1.requireTgUser, async (req, res) => {
         res.status(500).json({ error: "internal" });
     }
 });
-app.post("/api/verify-phone", auth_1.requireTgUser, async (req, res) => {
-    const u = (0, auth_1.getTgUser)(req);
-    const { phone } = req.body;
-    if (!phone || phone.replace(/\D/g, "").length < 10) {
-        res.status(400).json({ error: "bad_phone" });
-        return;
-    }
-    try {
-        const result = await (0, club_1.verifyPhone)(u.id, phone);
-        const balance = await (0, club_1.getBalance)(u.id);
-        res.json({ ok: true, ...result, balance });
-    }
-    catch (e) {
-        console.error("[API /verify-phone]", e.message);
-        res.status(500).json({ error: "internal" });
-    }
-});
+// Привязка телефона идёт только через bot.on(":contact"), где Telegram гарантирует,
+// что contact.user_id == ctx.from.id. HTTP-endpoint не нужен и был бы дырой.
 // Отвязать телефон — обнуляем phone_verified_at и phone
 app.post("/api/unverify-phone", auth_1.requireTgUser, async (req, res) => {
     const u = (0, auth_1.getTgUser)(req);
@@ -1813,21 +1790,6 @@ app.get("/api/holidays/upcoming", (_req, res) => {
             daysUntil: next.daysUntil,
             preorderDays: next.holiday.preorderDays,
         },
-    });
-});
-// Список всех праздников года (для возможной расширенной view)
-app.get("/api/holidays/all", (_req, res) => {
-    const list = (0, holidays_1.getUpcomingHolidays)();
-    res.json({
-        holidays: list.map((o) => ({
-            id: o.holiday.id,
-            name: o.holiday.name,
-            emoji: o.holiday.emoji,
-            hint: o.holiday.hint,
-            accent: o.holiday.accent,
-            date: o.date.toISOString().slice(0, 10),
-            daysUntil: o.daysUntil,
-        })),
     });
 });
 // Админ: руками триггернуть pushHolidayPreorder (для тестов)
@@ -2279,7 +2241,7 @@ app.post("/api/referral/use", auth_1.requireTgUser, async (req, res) => {
         // Уведомляем владельца кода
         if (r.ownerChat) {
             const userName = [u.first_name, u.last_name].filter(Boolean).join(" ") || "Новый друг";
-            bot.api.sendMessage(r.ownerChat, `🎉 *${userName}* пришёл по твоему коду \`${code}\`!\n\nКогда он сделает первый заказ, вы оба получите *200 ₽* на бонусный счёт.`, { parse_mode: "Markdown" }).catch(() => { });
+            bot.api.sendMessage(r.ownerChat, `🎉 *${userName}* пришёл по твоему коду \`${code}\` — спасибо, что зовёшь друзей в «Марию»!`, { parse_mode: "Markdown" }).catch(() => { });
         }
         res.json({ ok: true });
     }
@@ -2327,17 +2289,6 @@ app.post("/api/streak/touch", auth_1.requireTgUser, async (req, res) => {
         res.status(500).json({ error: "internal" });
     }
 });
-app.get("/api/streak", auth_1.requireTgUser, async (req, res) => {
-    const u = (0, auth_1.getTgUser)(req);
-    try {
-        const r = await (0, db_1.getStreak)(u.id);
-        res.json(r);
-    }
-    catch (e) {
-        console.error("[streak]", e.message);
-        res.status(500).json({ error: "internal" });
-    }
-});
 app.get("/api/secret-of-day", async (_req, res) => {
     try {
         const s = await (0, db_1.getSecretOfDay)();
@@ -2366,7 +2317,8 @@ app.get("/api/rewards/mine", auth_1.requireTgUser, async (req, res) => {
         const rewards = await (0, db_1.getUnusedRewards)(u.id);
         res.json({ rewards });
     }
-    catch {
+    catch (e) {
+        console.error("[rewards/mine]", e.message);
         res.status(500).json({ error: "internal" });
     }
 });
@@ -2390,7 +2342,8 @@ app.get("/api/notify-prefs", auth_1.requireTgUser, async (req, res) => {
         const prefs = await (0, db_1.getNotificationPrefs)(u.id);
         res.json(prefs);
     }
-    catch {
+    catch (e) {
+        console.error("[notify-prefs GET]", e.message);
         res.status(500).json({ error: "internal" });
     }
 });
@@ -2407,7 +2360,8 @@ app.post("/api/notify-prefs", auth_1.requireTgUser, async (req, res) => {
         const fresh = await (0, db_1.getNotificationPrefs)(u.id);
         res.json(fresh);
     }
-    catch {
+    catch (e) {
+        console.error("[notify-prefs POST]", e.message);
         res.status(500).json({ error: "internal" });
     }
 });
@@ -2426,7 +2380,8 @@ app.post("/api/cart/sync", auth_1.requireTgUser, async (req, res) => {
         }
         res.json({ ok: true });
     }
-    catch {
+    catch (e) {
+        console.error("[cart/sync]", e.message);
         res.status(500).json({ error: "internal" });
     }
 });
@@ -2503,12 +2458,16 @@ app.post("/api/order", rateLimit(15), async (req, res) => {
     let phone = String(body.phone ?? "").trim();
     let lkData = null;
     if (tg?.id) {
+        // Если юзер просил использовать привязанный телефон или не ввёл вручную —
+        // подставляем подтверждённый номер из subscribers (источник правды).
+        if (body.useVerifiedPhone || !phone) {
+            const verified = await (0, lk_1.getVerifiedPhone)(tg.id).catch(() => null);
+            if (verified)
+                phone = verified;
+        }
         try {
             const lk = await (0, lk_1.fetchLk)(tg.id);
             lkData = lk.ok ? lk.data : null;
-            if ((body.useVerifiedPhone || !phone) && lkData?.configured && lkData.phone) {
-                phone = String(lkData.phone);
-            }
         }
         catch { }
     }
@@ -2853,7 +2812,8 @@ function loadSweetCheckWeeks() {
 }
 app.get("/api/sweet-check/active", (_req, res) => {
     const weeks = loadSweetCheckWeeks();
-    const now = new Date().toISOString().slice(0, 10);
+    // Иркутск = UTC+8; недели заданы по местному календарю.
+    const now = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
     const active = weeks.find((w) => w.from <= now && now <= w.to) ?? null;
     const next = weeks.find((w) => w.from > now) ?? null;
     const fmt = (d) => {
