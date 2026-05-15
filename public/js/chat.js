@@ -137,12 +137,13 @@ async function streamChat(headers, typing) {
     const prev = wrap.lastElementChild;
     const grouped = prev && prev.classList.contains('msg--bot');
     div.className = `msg msg--bot fade-in${grouped ? ' msg--grouped' : ''}`;
-    div.innerHTML = '<div class="msg__avatar">🍰</div><div class="msg__bubble"></div>';
+    div.innerHTML = '<div class="msg__avatar">🍰</div><div class="msg__bubble is-streaming"></div>';
     bubble = div.querySelector('.msg__bubble');
     wrap.appendChild(div);
     wrap.scrollTop = wrap.scrollHeight;
     createdBubble = true;
   };
+  const stopStreaming = () => bubble?.classList.remove('is-streaming');
 
   let res;
   try {
@@ -191,6 +192,7 @@ async function streamChat(headers, typing) {
             // Лёгкий статус-индикатор — пока без UI, но можно расширить
           } else if (parsed.type === 'final') {
             ensureBubble();
+            stopStreaming();
             // Итоговый текст: markdown rendering + long-message collapse
             if (parsed.text) {
               bubbleText = parsed.text;
@@ -212,6 +214,7 @@ async function streamChat(headers, typing) {
           } else if (parsed.type === 'error') {
             typing.remove();
             if (createdBubble) {
+              stopStreaming();
               bubbleText = parsed.message || 'Ошибка.';
               bubble.innerHTML = esc(bubbleText);
             } else {
@@ -222,10 +225,12 @@ async function streamChat(headers, typing) {
       }
     }
   } catch {
+    stopStreaming();
     if (!createdBubble) typing.remove();
     appendMessage('bot', '⚠️ Соединение прервано.');
     return true;
   }
+  stopStreaming();
 
   if (createdBubble && bubbleText) {
     chatHistory.push({ role: 'assistant', content: bubbleText });

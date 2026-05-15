@@ -269,36 +269,94 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 /* Home page: padding-bottom для bottom-nav */
 #tab-home{padding-bottom:90px}
 
-/* ═══ STORIES (Wildberries/Я.Plus стиль) ═══════════════════════════════ */
-.home-stories{
-  display:flex;gap:14px;overflow-x:auto;-webkit-overflow-scrolling:touch;
-  padding:14px 16px 6px;scrollbar-width:none;
+/* ═══ BENTO GRID — асимметричная сетка на главной (тренд 2026) ════════ */
+.home-bento{
+  display:grid;
+  grid-template-columns:1.45fr 1fr 1fr;
+  grid-template-rows:84px 84px;
+  gap:8px;
+  padding:14px 14px 6px;
 }
-.home-stories::-webkit-scrollbar{display:none}
-.home-story{
-  flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:6px;
-  background:none;border:none;cursor:pointer;
-  width:72px;
+.bento-card{
+  position:relative;overflow:hidden;
+  background:#fff;
+  border:1px solid var(--border-strong);
+  border-radius:18px;
+  padding:12px 14px;
+  display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;
+  gap:6px;cursor:pointer;
+  box-shadow:var(--shadow-xs);
+  transition:transform var(--t),box-shadow var(--t),border-color var(--t);
+  text-align:left;
+  font-family:var(--ff-body);
 }
-.home-story__ring{
-  width:64px;height:64px;border-radius:50%;
-  background:linear-gradient(135deg, var(--red), #ff6b85, var(--gold));
-  padding:3px;
-  display:flex;align-items:center;justify-content:center;
-  transition:transform var(--t-fast);
+.bento-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-sm);border-color:var(--red-l)}
+.bento-card:active{transform:scale(.97)}
+.bento-card__ic{
+  width:38px;height:38px;border-radius:12px;
+  background:var(--bg-soft);
+  display:inline-flex;align-items:center;justify-content:center;
+  color:var(--red);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 1px 2px rgba(13,6,8,.04);
 }
-.home-story:hover .home-story__ring{transform:scale(1.05)}
-.home-story:active .home-story__ring{transform:scale(.92)}
-.home-story__ic{
-  width:100%;height:100%;border-radius:50%;
-  background:#fff;font-size:28px;
-  display:flex;align-items:center;justify-content:center;
+.bento-card__t{
+  font-size:13px;font-weight:700;color:var(--text);
+  letter-spacing:-.2px;line-height:1.15;
 }
-.home-story__t{
-  font-size:11px;font-weight:600;color:var(--text);
-  letter-spacing:-.1px;text-align:center;line-height:1.2;
-  max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+.bento-card__sub{
+  font-size:11px;font-weight:600;color:var(--muted);
+  letter-spacing:-.05px;line-height:1.2;
 }
+/* Hero — спан 1×2 (полная высота слева) с фирменным mesh */
+.bento-card--hero{
+  grid-row:1/3;
+  background:var(--mesh-red);
+  border-color:transparent;
+  color:#fff;
+  box-shadow:var(--shadow-glow);
+}
+.bento-card--hero .bento-card__ic{
+  width:48px;height:48px;border-radius:14px;
+  background:rgba(255,255,255,.15);
+  backdrop-filter:blur(8px);
+  border:1px solid rgba(255,255,255,.22);
+  color:#fff;
+}
+.bento-card--hero .bento-card__t{
+  font-family:var(--ff-display);font-weight:700;font-size:18px;
+  color:#fff;letter-spacing:-.3px;
+}
+.bento-card--hero .bento-card__sub{color:rgba(255,255,255,.85);font-weight:600}
+.bento-card--hero::after{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse 70% 50% at 110% 0%,rgba(255,255,255,.18) 0%,transparent 60%);
+  pointer-events:none;
+}
+/* Gold accent — для iPhone-розыгрыша */
+.bento-card--gold{
+  background:linear-gradient(135deg,var(--gold-xl) 0%,#fff 100%);
+  border-color:var(--gold-l);
+}
+.bento-card--gold .bento-card__ic{background:var(--gold-xl);color:var(--gold-d)}
+/* Club accent — для VIP-карты */
+.bento-card--club{
+  background:linear-gradient(135deg,#fff 0%,var(--red-xl) 100%);
+  border-color:var(--red-l);
+}
+.bento-card--club .bento-card__ic{background:var(--red-l);color:var(--red)}
+
+/* Узкие экраны: hero на полную ширину сверху, остальные 2×2 ниже */
+@media (max-width: 380px) {
+  .home-bento{
+    grid-template-columns:1fr 1fr;
+    grid-template-rows:96px 76px 76px;
+    gap:6px;
+  }
+  .bento-card--hero{grid-column:1/3;grid-row:1/2}
+}
+
+/* Backward-compat — старые home-story классы могут остаться в кэше */
+.home-stories{display:none}
 
 /* Fullscreen story viewer */
 .story-viewer{
@@ -1855,10 +1913,11 @@ body.chat-open{overflow:hidden}
 .cat-chips::-webkit-scrollbar{display:none}
 .cat-chip{
   flex-shrink:0;scroll-snap-align:start;
+  display:inline-flex;align-items:center;gap:6px;
   background:#fff;
   border:1px solid var(--border-strong);
   border-radius:999px;
-  padding:10px 18px;
+  padding:9px 16px 9px 14px;
   font-family:var(--ff-body);font-size:13px;font-weight:600;
   color:var(--text);letter-spacing:-.1px;
   cursor:pointer;
@@ -1867,8 +1926,14 @@ body.chat-open{overflow:hidden}
   box-shadow:var(--shadow-xs);
   font-variation-settings:'wght' 600;
 }
+.cat-chip [data-icon]{color:var(--ink-3);transition:color var(--t-fast)}
 .cat-chip:hover{border-color:var(--red);color:var(--red);box-shadow:var(--shadow-sm)}
+.cat-chip:hover [data-icon]{color:var(--red)}
 .cat-chip:active{transform:scale(.94);background:var(--red-xl);border-color:var(--red)}
+.cat-chip--diet [data-icon]{color:#0a6b34}
+.cat-chip--diet:hover [data-icon]{color:#0a6b34}
+.cat-chip--wish [data-icon]{color:var(--red)}
+.cat-chip--mood [data-icon]{color:var(--gold-d)}
 
 .cat-products{padding:4px 14px 10px}
 .cat-products-grid{
@@ -2797,6 +2862,29 @@ body.chat-open{overflow:hidden}
 .msg--user .msg__time{color:rgba(255,255,255,.85);opacity:1}
 /* Карточки товаров — на новой строке, не перекрываются с time */
 .msg__bubble .ai-pgrid{clear:both}
+
+/* AI streaming: тонкая «волна» бегает по бабблу пока модель отвечает */
+.msg--bot .msg__bubble.is-streaming{
+  overflow:hidden;
+  background:linear-gradient(135deg,#f1f3f5 0%,#f5eff0 100%);
+}
+.msg--bot .msg__bubble.is-streaming::after{
+  content:'';position:absolute;top:0;left:-50%;
+  width:45%;height:100%;
+  background:linear-gradient(90deg,
+    transparent 0%,
+    rgba(214,31,55,.06) 35%,
+    rgba(200,146,50,.10) 50%,
+    rgba(214,31,55,.06) 65%,
+    transparent 100%);
+  animation:bubbleShimmer 1.6s ease-in-out infinite;
+  pointer-events:none;
+  border-radius:inherit;
+}
+@keyframes bubbleShimmer{
+  from{transform:translateX(0)}
+  to{transform:translateX(335%)}
+}
 
 /* ── PROFILE TAB — Apple Wallet / iOS Settings style ─────────────────────── */
 #tab-profile{
