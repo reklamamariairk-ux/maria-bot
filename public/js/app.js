@@ -1196,3 +1196,24 @@ async function loadHomePersona() {
   }
 }
 window.loadHomePersona = loadHomePersona;
+
+/* ── Hero parallax: фон сдвигается в 0.35× скорости скролла ──────────────── */
+(function setupHeroParallax(){
+  const heroBg = document.getElementById('hero-bg');
+  if (!heroBg) return;
+  // Уважаем prefers-reduced-motion — не дёргаем layout на скроле
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
+  heroBg.style.willChange = 'transform';
+  let ticking = false;
+  const update = () => {
+    const y = window.scrollY || 0;
+    // hero ~ 280px высоты; за пределами не тратим CPU
+    if (y < 400) {
+      heroBg.style.transform = `translate3d(0, ${y * 0.35}px, 0)`;
+    }
+    ticking = false;
+  };
+  window.addEventListener('scroll', () => {
+    if (!ticking) { requestAnimationFrame(update); ticking = true; }
+  }, { passive: true });
+})();

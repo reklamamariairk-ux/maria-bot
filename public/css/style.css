@@ -291,7 +291,7 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
   font-family:var(--ff-body);
 }
 .bento-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-sm);border-color:var(--red-l)}
-.bento-card:active{transform:scale(.97)}
+.bento-card:active{transform:scale(.97);box-shadow:0 1px 3px rgba(13,6,8,.06)}
 .bento-card__ic{
   width:38px;height:38px;border-radius:12px;
   background:var(--bg-soft);
@@ -1892,7 +1892,7 @@ body.chat-open{overflow:hidden}
   transition:transform var(--t),box-shadow var(--t);
   font-family:inherit;
 }
-.ccat:active{transform:scale(.96)}
+.ccat:active{transform:scale(.96);box-shadow:0 1px 3px rgba(13,6,8,.06)}
 .ccat:hover{transform:translateY(-2px);box-shadow:0 10px 28px var(--red-glow)}
 .ccat__ic{font-size:36px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.12))}
 .ccat__name{font-size:14px;font-weight:700;color:var(--text);text-align:center}
@@ -1950,7 +1950,7 @@ body.chat-open{overflow:hidden}
   position:relative;
   isolation:isolate;
 }
-.pcard-pr:active{transform:scale(.96)}
+.pcard-pr:active{transform:scale(.96);box-shadow:0 1px 3px rgba(13,6,8,.06)}
 .pcard-pr:hover{transform:translateY(-3px);box-shadow:var(--shadow);border-color:rgba(214,31,55,.15)}
 .pcard-pr__body{padding:10px 8px 4px}
 .pcard-pr__img{
@@ -2008,6 +2008,22 @@ body.chat-open{overflow:hidden}
   text-align:center;color:var(--muted);font-size:13px;
   padding:40px 14px;grid-column:1/-1;
 }
+/* Под текстом loading'а — лёгкий sweep-shimmer для perceived speed */
+.cat-loading{position:relative;overflow:hidden}
+.cat-loading::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(90deg,
+    transparent 0%,
+    rgba(214,31,55,.05) 45%,
+    rgba(200,146,50,.06) 55%,
+    transparent 100%);
+  animation:catLoadingSweep 1.6s ease-in-out infinite;
+  pointer-events:none;
+}
+@keyframes catLoadingSweep{
+  from{transform:translateX(-100%)}
+  to  {transform:translateX(100%)}
+}
 
 /* Хит-бейдж и вес на карточке товара */
 .pcard-pr__img{position:relative}
@@ -2026,13 +2042,23 @@ body.chat-open{overflow:hidden}
 
 /* Модалка детальной карточки товара */
 .cat-modal{
-  position:fixed;inset:0;background:rgba(0,0,0,.5);
+  position:fixed;inset:0;
+  background:rgba(13,6,8,.42);
+  backdrop-filter:blur(6px) saturate(1.1);
+  -webkit-backdrop-filter:blur(6px) saturate(1.1);
   display:flex;align-items:flex-end;justify-content:center;z-index:1000;
 }
+/* Liquid Glass sheet — мягкий top edge + inner highlight (тренд 2026, iOS 26) */
 .cat-modal__sheet{
   width:100%;max-width:560px;max-height:92vh;overflow-y:auto;
-  background:#fff;border-radius:24px 24px 0 0;
-  position:relative;animation:slideUp .25s ease-out;
+  background:linear-gradient(180deg, rgba(255,255,255,.985) 0%, #fff 18%);
+  border-radius:28px 28px 0 0;
+  position:relative;animation:slideUp .32s cubic-bezier(.22,1,.36,1);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.95),
+    inset 1px 0 0 rgba(13,6,8,.03),
+    inset -1px 0 0 rgba(13,6,8,.03),
+    0 -20px 60px -8px rgba(13,6,8,.18);
 }
 @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
 .cat-modal__close{

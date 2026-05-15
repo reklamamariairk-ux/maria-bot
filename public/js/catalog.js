@@ -840,7 +840,12 @@ async function catSearch(query) {
   if (sticky) sticky.style.display = 'none';
 
   const wrap = document.getElementById('menu-products');
-  wrap.innerHTML = '<div class="cat-loading">Ищем…</div>';
+  wrap.innerHTML = Array(4).fill(0).map(() => `
+    <div class="pcard-pr-skel">
+      <div class="pcard-pr-skel__img"></div>
+      <div class="pcard-pr-skel__line pcard-pr-skel__line--w"></div>
+      <div class="pcard-pr-skel__line pcard-pr-skel__line--n"></div>
+    </div>`).join('');
 
   try {
     const res = await fetch('/api/catalog/search?q=' + encodeURIComponent(q));
@@ -1116,7 +1121,14 @@ async function catShowWishlist() {
       </div>`;
     return;
   }
-  grid.innerHTML = '<div class="cat-loading">Загружаем избранное…</div>';
+  // Skeleton-cards вместо текстового loading — мгновенная визуальная обратная связь
+  const skelCount = Math.min(6, Math.max(2, ids.length));
+  grid.innerHTML = Array(skelCount).fill(0).map(() => `
+    <div class="pcard-pr-skel">
+      <div class="pcard-pr-skel__img"></div>
+      <div class="pcard-pr-skel__line pcard-pr-skel__line--w"></div>
+      <div class="pcard-pr-skel__line pcard-pr-skel__line--n"></div>
+    </div>`).join('');
   // Тянем все товары и фильтруем по id (быстрее чем отдельные запросы)
   try {
     const r = await fetch('/api/catalog/products?limit=300');
