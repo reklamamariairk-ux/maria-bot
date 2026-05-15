@@ -853,7 +853,7 @@ async function* chatAgentStream(
 КОНТАКТЫ: maria-irk.ru, +7 (3952) 50-40-80, 17 кафе. Клуб «Мария для своих»: кэшбэк 5–10%, бонусы до 30%, ДР-скидка −5/−10%. Сладкий чек: лотерея на iPhone 17, MacBook, PS5.
 
 ИНСТРУМЕНТЫ:
-- search_products(query, contains?, exclude?) — поиск. Ищет по name, filling, cake_type, preview. Используй contains для точного матча.
+- search_products(query, contains?, exclude?) — поиск. Ищет по name, filling, cake_type, preview, dietary. Используй contains для точного матча.
 - get_product(id) — детали
 - get_today_special() — торт месяца со скидкой
 - get_cake_types() — список типов
@@ -867,11 +867,14 @@ async function* chatAgentStream(
 1. ВСЕГДА используй search_products перед ответом про товары. Не отвечай по памяти.
 2. Цены, имена, веса — ТОЛЬКО из tool результатов.
 3. Если нет — честно «нет», не подменяй.
-4. У нас НЕТ: торты с мармеладом, без яиц, веганские, без глютена. Безе содержит белок (это тоже яйца).
-5. Цена = price (итог со скидкой). Если discountPercent>0, упомяни: «1 856 ₽ (–20%, было 2 320 ₽)».
-6. Если первый search не нашёл — попробуй другие слова/contains. До 3 попыток.
+4. ПРОАКТИВНОСТЬ: если юзер описывает событие/ситуацию (ДР, фуршет, корпоратив, гостям, "что-нибудь шоколадное") — СРАЗУ делай search_products и предложи 2-4 варианта, не задавай уточняющих вопросов.
+5. ДИЕТА: товары имеют теги dietary (sugar-free, gluten-free, vegan, lactose-free, low-cal, nut-free). На вопросы типа «без сахара / веганский / без глютена» — search с contains=["веган"], ["без сахара"] и т.п. Если нашёл — предложи; если нет — честно «такого пока нет, могу подсказать ближайшее».
+6. КОРПОРАТИВЫ: если юзер пишет про B2B/большой заказ/в офис/30+ человек — направь его на форму «Корпоративные заказы» (кнопка на главной экране).
+7. СКОЛЬКО БРАТЬ: если спрашивают «на N человек» / «сколько кг» — упомяни что в карточке торта есть калькулятор «🧮 Сколько брать?». Сам тоже можешь подсказать: ~130 г/взрослого, ~80 г/ребёнка.
+8. Цена = price (итог со скидкой). Если discountPercent>0, упомяни: «1 856 ₽ (–20%, было 2 320 ₽)».
+9. Если первый search не нашёл — попробуй другие слова/contains. До 3 попыток.
 
-СТИЛЬ: дружелюбный, на «ты», как помощник в любимом кафе. 1-2 эмодзи, 2-5 предложений, русский. Не корпоративно («мы нашли») — обращайся лично («посмотри, нашла два»). UI рендерит карточки товаров — НЕ вставляй ссылки/картинки текстом, описывай выбор словами. Можно **жирным** выделять важное (название/цену).`,
+СТИЛЬ: дружелюбный, на «ты», как помощник в любимом кафе. 1-2 эмодзи, 2-5 предложений, русский. Не корпоративно («мы нашли») — обращайся лично («посмотри, нашла два»). UI рендерит карточки товаров с кнопкой «+ В корзину» — НЕ вставляй ссылки/картинки текстом, описывай выбор словами. Можно **жирным** выделять важное (название/цену).`,
   };
 
   // Жёсткое ограничение истории — Groq free-tier 6000 TPM, длинная история убивает запрос.
@@ -1023,7 +1026,7 @@ async function chatAgent(
 КОНТАКТЫ: maria-irk.ru, +7 (3952) 50-40-80, 17 кафе. Клуб «Мария для своих»: кэшбэк 5–10%, бонусы до 30%, ДР-скидка −5/−10%. Сладкий чек: лотерея на iPhone 17, MacBook, PS5.
 
 ИНСТРУМЕНТЫ:
-- search_products(query, contains?, exclude?) — поиск. Ищет по name, filling, cake_type, preview. Используй contains для точного матча.
+- search_products(query, contains?, exclude?) — поиск. Ищет по name, filling, cake_type, preview, dietary. Используй contains для точного матча.
 - get_product(id) — детали
 - get_today_special() — торт месяца со скидкой
 - get_cake_types() — список типов
@@ -1037,11 +1040,14 @@ async function chatAgent(
 1. ВСЕГДА используй search_products перед ответом про товары. Не отвечай по памяти.
 2. Цены, имена, веса — ТОЛЬКО из tool результатов.
 3. Если нет — честно «нет», не подменяй.
-4. У нас НЕТ: торты с мармеладом, без яиц, веганские, без глютена. Безе содержит белок (это тоже яйца).
-5. Цена = price (итог со скидкой). Если discountPercent>0, упомяни: «1 856 ₽ (–20%, было 2 320 ₽)».
-6. Если первый search не нашёл — попробуй другие слова/contains. До 3 попыток.
+4. ПРОАКТИВНОСТЬ: если юзер описывает событие/ситуацию (ДР, фуршет, корпоратив, гостям, "что-нибудь шоколадное") — СРАЗУ делай search_products и предложи 2-4 варианта, не задавай уточняющих вопросов.
+5. ДИЕТА: товары имеют теги dietary (sugar-free, gluten-free, vegan, lactose-free, low-cal, nut-free). На вопросы типа «без сахара / веганский / без глютена» — search с contains=["веган"], ["без сахара"] и т.п. Если нашёл — предложи; если нет — честно «такого пока нет, могу подсказать ближайшее».
+6. КОРПОРАТИВЫ: если юзер пишет про B2B/большой заказ/в офис/30+ человек — направь его на форму «Корпоративные заказы» (кнопка на главной экране).
+7. СКОЛЬКО БРАТЬ: если спрашивают «на N человек» / «сколько кг» — упомяни что в карточке торта есть калькулятор «🧮 Сколько брать?». Сам тоже можешь подсказать: ~130 г/взрослого, ~80 г/ребёнка.
+8. Цена = price (итог со скидкой). Если discountPercent>0, упомяни: «1 856 ₽ (–20%, было 2 320 ₽)».
+9. Если первый search не нашёл — попробуй другие слова/contains. До 3 попыток.
 
-СТИЛЬ: дружелюбный, на «ты», как помощник в любимом кафе. 1-2 эмодзи, 2-5 предложений, русский. Не корпоративно («мы нашли») — обращайся лично («посмотри, нашла два»). UI рендерит карточки товаров — НЕ вставляй ссылки/картинки текстом, описывай выбор словами. Можно **жирным** выделять важное (название/цену).`,
+СТИЛЬ: дружелюбный, на «ты», как помощник в любимом кафе. 1-2 эмодзи, 2-5 предложений, русский. Не корпоративно («мы нашли») — обращайся лично («посмотри, нашла два»). UI рендерит карточки товаров с кнопкой «+ В корзину» — НЕ вставляй ссылки/картинки текстом, описывай выбор словами. Можно **жирным** выделять важное (название/цену).`,
   };
 
   // Жёсткое урезание истории — Groq free-tier 6000 TPM.
@@ -1360,6 +1366,102 @@ app.post("/api/lead", rateLimit(10), express.json({ limit: "8mb" }), async (req,
     res.json({ ok: true });
   } catch (e) {
     console.error("[ORDER] Bitrix24 error:", (e as Error).message);
+    res.status(502).json({ error: "Не удалось создать заявку, попробуйте позже" });
+  }
+});
+
+// Корпоративная заявка (B2B): отдельный канал — другие поля и тэг в лиде
+app.post("/api/lead-corporate", rateLimit(5), express.json({ limit: "1mb" }), async (req, res) => {
+  const b = req.body as {
+    company?: string; contact_name?: string; phone?: string; email?: string;
+    event_type?: string; people?: number | string; budget?: string;
+    date?: string; time?: string; address?: string;
+    extras?: string[]; comment?: string;
+  };
+  if (!b.contact_name || !b.phone) {
+    res.status(400).json({ error: "Контактное лицо и телефон обязательны" });
+    return;
+  }
+  const people = Number(b.people) || 0;
+  const extras = Array.isArray(b.extras) ? b.extras.filter((s) => typeof s === "string").slice(0, 10) : [];
+
+  const company = (b.company || "").trim() || "—";
+  const title = `🏢 Корпоратив · ${company} · ${b.contact_name}`;
+  const lines: string[] = [];
+  lines.push(`▼ Компания: ${company}`);
+  lines.push(`▼ Контакт: ${b.contact_name}`);
+  if (b.phone)      lines.push(`☎ Телефон: ${b.phone}`);
+  if (b.email)      lines.push(`✉ Email: ${b.email}`);
+  lines.push("");
+  if (b.event_type) lines.push(`🎯 Тип события: ${b.event_type}`);
+  if (people > 0)   lines.push(`👥 Кол-во гостей: ${people}`);
+  if (b.budget)     lines.push(`💰 Бюджет: ${b.budget}`);
+  if (b.date)       lines.push(`📅 Дата: ${b.date}${b.time ? " · " + b.time : ""}`);
+  if (b.address)    lines.push(`📍 Адрес доставки: ${b.address}`);
+  if (extras.length > 0) {
+    lines.push("");
+    lines.push("⚙ Доп. услуги:");
+    for (const e of extras) lines.push(`  • ${e}`);
+  }
+  if (b.comment) {
+    lines.push("");
+    lines.push(`ⓘ Комментарий:`);
+    lines.push(b.comment);
+  }
+  const comments = lines.join("\n");
+
+  if (!BITRIX_WEBHOOK) {
+    console.warn("[B2B] BITRIX_WEBHOOK not set, lead not created");
+    res.json({ ok: true, warn: "no_webhook" });
+    return;
+  }
+
+  try {
+    // Парсим ФИО из contact_name — Bitrix имеет отдельные NAME/LAST_NAME
+    const parts = String(b.contact_name).trim().split(/\s+/);
+    const firstName = parts[0] || b.contact_name;
+    const lastName  = parts.slice(1).join(" ");
+    const fields: Record<string, unknown> = {
+      TITLE:              title,
+      NAME:               firstName,
+      LAST_NAME:          lastName,
+      COMPANY_TITLE:      company !== "—" ? company : undefined,
+      PHONE:              [{ VALUE: b.phone, VALUE_TYPE: "WORK" }],
+      COMMENTS:           comments,
+      SOURCE_ID:          "WEB",
+      SOURCE_DESCRIPTION: "Telegram Mini App · B2B",
+    };
+    if (b.email) fields.EMAIL = [{ VALUE: b.email, VALUE_TYPE: "WORK" }];
+    if (b.address) fields.ADDRESS = b.address;
+
+    const body = JSON.stringify({ fields });
+    await new Promise<void>((resolve, reject) => {
+      const url = new URL(`${BITRIX_WEBHOOK}crm.lead.add.json`);
+      const opts: https.RequestOptions = {
+        hostname: url.hostname,
+        path: url.pathname + url.search,
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) },
+      };
+      const r = https.request(opts, (resp) => {
+        let d = "";
+        resp.on("data", (c) => (d += c));
+        resp.on("end", () => {
+          try {
+            const json = JSON.parse(d);
+            if (json.error) reject(new Error(json.error_description ?? json.error));
+            else resolve();
+          } catch (e) { reject(e); }
+        });
+      });
+      r.on("error", reject);
+      r.write(body);
+      r.end();
+    });
+    console.log(`[B2B] Lead created: ${title}`);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[B2B] Bitrix24 error:", (e as Error).message);
     res.status(502).json({ error: "Не удалось создать заявку, попробуйте позже" });
   }
 });

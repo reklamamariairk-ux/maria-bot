@@ -819,7 +819,92 @@ document.addEventListener('DOMContentLoaded', () => {
   loadHomeHits();
   loadHomePersona();
   loadUpcomingHoliday();
+  loadHomeClassics();
 });
+
+// ── Классика мамы — куратор-подбор ностальгических тортов ───────────────
+const CLASSICS_NAMES = ['медовик', 'наполеон', 'птичье молоко', 'птичка', 'прага', 'зебра', 'сметанник', 'графские развалины', 'трюфель'];
+const CLASSICS_STORY = `
+<div class="classics-story">
+  <div class="classics-story__lead">
+    «Мария» начала с одной маленькой кондитерской в Иркутске в 1993 году. С первого дня —
+    классические рецепты, ничего лишнего: натуральные сливки, мука высшего сорта,
+    сгущёнка без сухого молока.
+  </div>
+  <div class="classics-story__h">Что сохранилось без изменений</div>
+  <ul class="classics-story__list">
+    <li><b>Медовик</b> — рецепт первого пекаря, медово-сметанные коржи, выпеченные индивидуально</li>
+    <li><b>Зебра</b> — наш фирменный, светлые и тёмные слои, бестселлер 20+ лет</li>
+    <li><b>Птичье молоко</b> — суфле на агар-агаре, как делали в советских ресторанах</li>
+    <li><b>Наполеон</b> — слоёные коржи и заварной крем, без шортцатов</li>
+    <li><b>Прага</b> — насыщенный шоколад с абрикосовой прослойкой</li>
+  </ul>
+  <div class="classics-story__foot">
+    33 года в Иркутске · 17 кафе · 100 000+ клиентов клуба
+  </div>
+</div>`;
+
+async function loadHomeClassics() {
+  const wrap = document.getElementById('home-classics');
+  if (!wrap) return;
+  try {
+    // Подгружаем категорию «Торты» и фильтруем по name match с CLASSICS_NAMES
+    const r = await fetch('/api/catalog/products?category=Торты&limit=100', { cache: 'no-store' });
+    const d = await r.json();
+    const all = Array.isArray(d?.products) ? d.products : [];
+    const classics = all.filter((p) => {
+      const n = String(p.name || '').toLowerCase();
+      return CLASSICS_NAMES.some((kw) => n.includes(kw));
+    }).slice(0, 8);
+    if (classics.length === 0) { wrap.style.display = 'none'; return; }
+    wrap.innerHTML = classics.map((p) => {
+      const priceTxt = p.price || (p.priceNumber ? `${Number(p.priceNumber).toLocaleString('ru-RU')} ₽` : '');
+      const imgEl = p.image
+        ? `<img class="hit-card__img" src="/img?u=${encodeURIComponent(p.image)}" alt="${escapeAttr(p.name)}" loading="lazy">`
+        : '<span class="hit-card__noimg">🍰</span>';
+      return `
+        <div class="hit-card" data-haptic="light" onclick="haptic('light');catOpenProduct(${p.id})">
+          ${imgEl}
+          <div class="hit-card__name">${escapeHtml(p.name)}</div>
+          <div class="hit-card__price">${escapeHtml(priceTxt)}</div>
+        </div>`;
+    }).join('');
+    wrap.style.display = '';
+  } catch (e) {
+    console.error('[classics]', e);
+    wrap.style.display = 'none';
+  }
+}
+window.loadHomeClassics = loadHomeClassics;
+
+function openClassicsStory() {
+  let m = document.getElementById('classics-story-modal');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'classics-story-modal';
+    m.className = 'cat-modal';
+    m.style.display = 'none';
+    m.onclick = (e) => { if (e.target === m) closeClassicsStory(); };
+    m.innerHTML = `
+      <div class="cat-modal__sheet">
+        <button class="cat-modal__close" onclick="closeClassicsStory()">×</button>
+        <div class="classics-story__h-main">📖 Классика «Марии»</div>
+        ${CLASSICS_STORY}
+      </div>`;
+    document.body.appendChild(m);
+  }
+  m.style.display = 'flex';
+  window.scrollLock?.();
+  window.haptic?.('light');
+}
+window.openClassicsStory = openClassicsStory;
+
+function closeClassicsStory() {
+  const m = document.getElementById('classics-story-modal');
+  if (m) m.style.display = 'none';
+  window.scrollUnlock?.();
+}
+window.closeClassicsStory = closeClassicsStory;
 
 // ── Калькулятор порций ─────────────────────────────────────────────────────
 // Грамм/гость для разных контекстов мероприятия (общепринятые ориентиры:

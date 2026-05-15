@@ -257,10 +257,27 @@ function renderProductGrid(products) {
         <div class="ai-pcard__body">
           <div class="ai-pcard__name">${esc(p.name || '')}</div>
           <div class="ai-pcard__price">${esc(priceTxt)}</div>
+          ${id ? `<div class="ai-pcard__rating" data-pid="${id}" style="display:none"></div>` : ''}
         </div>
       </div>`;
   }).join('');
+  // Async-enrich карточек звёздами (как в каталоге)
+  setTimeout(() => enrichAiCardsWithReviews(products), 100);
   return `<div class="ai-pgrid">${cards}</div>`;
+}
+
+async function enrichAiCardsWithReviews(products) {
+  if (!window.loadReviewsStatsBatch) return;
+  const ids = products.map((p) => Number(p.id)).filter((n) => n > 0);
+  if (ids.length === 0) return;
+  const stats = await window.loadReviewsStatsBatch(ids);
+  for (const [pid, s] of Object.entries(stats)) {
+    const el = document.querySelector(`.ai-pcard__rating[data-pid="${pid}"]`);
+    if (el && s && s.count > 0) {
+      el.innerHTML = `<span class="ai-pcard__rating-star">★</span> <b>${Number(s.avg).toFixed(1).replace(/\.0$/, '')}</b> <span class="ai-pcard__rating-cnt">(${s.count})</span>`;
+      el.style.display = '';
+    }
+  }
 }
 
 // Add to cart прямо из чата + toast feedback

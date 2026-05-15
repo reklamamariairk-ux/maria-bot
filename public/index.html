@@ -229,6 +229,14 @@
     <div class="cat-loading">Подбираем самое вкусное…</div>
   </div>
 
+  <!-- Классика мамы — куратор-подбор ностальгических вкусов -->
+  <div class="sh sh--classics"><span class="sh__line"></span><span class="sh__text">Классика мамы</span><span class="sh__line"></span></div>
+  <div class="classics-intro" data-haptic="light" onclick="haptic('light');openClassicsStory()">
+    <div class="classics-intro__t">33 года готовим по классическим рецептам</div>
+    <div class="classics-intro__s">Медовик · Наполеон · Птичье молоко · Прага · Зебра — узнать историю →</div>
+  </div>
+  <div class="hits-row" id="home-classics" style="display:none"></div>
+
   <!-- Торт месяца — крупная карточка + countdown -->
   <div class="sh"><span class="sh__line"></span><span class="sh__text">Торт месяца</span><span class="sh__line"></span></div>
   <div class="promo promo--feature" id="promo-cake-of-month" data-haptic="light" onclick="catOpenProductFromPromo()">
@@ -248,6 +256,16 @@
     <div class="home-club-chip__body">
       <div class="home-club-chip__t">Клуб «Мария для своих»</div>
       <div class="home-club-chip__s">Кэшбэк до 10% · билет в розыгрыш iPhone 17</div>
+    </div>
+    <span class="home-club-chip__chev"><span data-icon="chevronRight" data-size="14"></span></span>
+  </button>
+
+  <!-- Корпоративные заказы — компактный chip -->
+  <button class="home-club-chip home-corp-chip" data-haptic="light" onclick="haptic('light');openCorpForm()">
+    <span class="home-club-chip__ic home-corp-chip__ic">🏢</span>
+    <div class="home-club-chip__body">
+      <div class="home-club-chip__t">Корпоративные заказы</div>
+      <div class="home-club-chip__s">ДР сотрудников · корпоративы · подарки партнёрам · от 30 шт</div>
     </div>
     <span class="home-club-chip__chev"><span data-icon="chevronRight" data-size="14"></span></span>
   </button>
@@ -1192,6 +1210,7 @@
 <script src="/js/catalog.js" defer></script>
 <script src="/js/reviews.js" defer></script>
 <script src="/js/wishshare.js" defer></script>
+<script src="/js/corporate.js" defer></script>
 <script src="/js/profile.js" defer></script>
 <script src="/js/club.js" defer></script>
 <script src="/js/cart.js" defer></script>
