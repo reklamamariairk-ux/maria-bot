@@ -2,6 +2,10 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WHEEL_PRIZES = exports.pool = void 0;
 exports.initDb = initDb;
+exports.createWishlistShare = createWishlistShare;
+exports.getWishlistShare = getWishlistShare;
+exports.incrementWishlistShareOpens = incrementWishlistShareOpens;
+exports.countWishlistSharesLast24h = countWishlistSharesLast24h;
 exports.getReviewsForProduct = getReviewsForProduct;
 exports.getReviewStats = getReviewStats;
 exports.getReviewStatsBatch = getReviewStatsBatch;
@@ -180,8 +184,62 @@ async function initDb() {
     );
     CREATE INDEX IF NOT EXISTS product_reviews_product_idx ON product_reviews (product_id, created_at DESC) WHERE hidden = FALSE;
     CREATE INDEX IF NOT EXISTS product_reviews_chat_idx ON product_reviews (chat_id, created_at DESC);
+
+    -- Share-link для wishlist'а (т.е. "вот что я хочу на ДР")
+    CREATE TABLE IF NOT EXISTS wishlist_shares (
+      short_code   TEXT   PRIMARY KEY,
+      owner_chat   BIGINT NOT NULL,
+      owner_name   TEXT,
+      product_ids  INT[]  NOT NULL,
+      message      TEXT   DEFAULT '',
+      created_at   TIMESTAMPTZ DEFAULT NOW(),
+      expires_at   TIMESTAMPTZ NOT NULL,
+      opens        INT    DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS wishlist_shares_owner_idx ON wishlist_shares (owner_chat, created_at DESC);
   `);
     console.log("[DB] Tables ready");
+}
+// Алфавит без неоднозначных символов (0/O, 1/I/l)
+const SHORT_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+function generateShortCode(len = 8) {
+    let s = "";
+    for (let i = 0; i < len; i++) {
+        s += SHORT_CODE_ALPHABET[Math.floor(Math.random() * SHORT_CODE_ALPHABET.length)];
+    }
+    return s;
+}
+async function createWishlistShare(ownerChat, ownerName, productIds, message, ttlDays = 90) {
+    // Несколько попыток на случай коллизии short_code (вероятность ~0 при 32^8)
+    for (let attempt = 0; attempt < 5; attempt++) {
+        const code = generateShortCode();
+        try {
+            const { rows } = await exports.pool.query(`INSERT INTO wishlist_shares (short_code, owner_chat, owner_name, product_ids, message, expires_at)
+         VALUES ($1, $2, $3, $4, $5, NOW() + ($6 || ' days')::interval)
+         RETURNING *`, [code, ownerChat, ownerName, productIds, message, String(ttlDays)]);
+            return rows[0];
+        }
+        catch (e) {
+            const msg = e.message || "";
+            if (!/duplicate key|unique/i.test(msg))
+                throw e;
+            // collision — повторяем
+        }
+    }
+    throw new Error("failed_to_generate_unique_code");
+}
+async function getWishlistShare(code) {
+    const { rows } = await exports.pool.query(`SELECT * FROM wishlist_shares
+     WHERE short_code = $1 AND expires_at > NOW()`, [code]);
+    return rows[0] ?? null;
+}
+async function incrementWishlistShareOpens(code) {
+    await exports.pool.query(`UPDATE wishlist_shares SET opens = opens + 1 WHERE short_code = $1`, [code]);
+}
+async function countWishlistSharesLast24h(chatId) {
+    const { rows } = await exports.pool.query(`SELECT COUNT(*)::int AS cnt FROM wishlist_shares
+     WHERE owner_chat = $1 AND created_at > NOW() - INTERVAL '24 hours'`, [chatId]);
+    return Number(rows[0]?.cnt ?? 0);
 }
 async function getReviewsForProduct(productId, limit = 20, offset = 0) {
     const { rows } = await exports.pool.query(`SELECT id, product_id, chat_id, rating, text, author_name, created_at, hidden

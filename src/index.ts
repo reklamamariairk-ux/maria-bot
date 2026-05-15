@@ -7,7 +7,7 @@ import https from "https";
 import cron from "node-cron";
 import { Bot, webhookCallback, InlineKeyboard } from "grammy";
 import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, fetchProductById, reloadDietaryOverrides, detectDietary, Product } from "./scraper";
-import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind, getNotificationPrefs, setNotificationPrefs, saveCartSnapshot, clearCartSnapshot, getAbandonedCarts, markCartAbandonedPushed, getSpinStatus, recordSpin, WHEEL_PRIZES, touchVisitStreak, getStreak, setSecretOfDay, getSecretOfDay, getUnusedRewards, consumeRewards, hasHolidayPushSent, markHolidayPushSent, getReviewsForProduct, getReviewStats, getReviewStatsBatch, getMyReview, upsertReview, deleteMyReview, setReviewHidden, countReviewsLast24h } from "./db";
+import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind, getNotificationPrefs, setNotificationPrefs, saveCartSnapshot, clearCartSnapshot, getAbandonedCarts, markCartAbandonedPushed, getSpinStatus, recordSpin, WHEEL_PRIZES, touchVisitStreak, getStreak, setSecretOfDay, getSecretOfDay, getUnusedRewards, consumeRewards, hasHolidayPushSent, markHolidayPushSent, getReviewsForProduct, getReviewStats, getReviewStatsBatch, getMyReview, upsertReview, deleteMyReview, setReviewHidden, countReviewsLast24h, createWishlistShare, getWishlistShare, incrementWishlistShareOpens, countWishlistSharesLast24h } from "./db";
 import {
   initClubSchema,
   getBalance,
@@ -1843,6 +1843,76 @@ app.post("/api/admin/reviews/:id/hide", async (req, res) => {
   const hidden = (req.body as { hidden?: boolean })?.hidden !== false; // по умолчанию hide=true
   const ok = await setReviewHidden(id, hidden);
   res.json({ ok, hidden });
+});
+
+// ─── Wishlist Share API ──────────────────────────────────────────────────────
+// POST создаёт share-link из своего wishlist (требует tma auth)
+app.post("/api/wishlist/share", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  const body = req.body as { product_ids?: unknown; message?: unknown };
+  const ids = Array.isArray(body.product_ids)
+    ? (body.product_ids as unknown[]).map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 30)
+    : [];
+  if (ids.length === 0) {
+    res.status(400).json({ error: "wishlist_empty" });
+    return;
+  }
+  const message = String(body.message ?? "").trim().slice(0, 200);
+  // Rate-limit 10 share-link/сутки
+  try {
+    const todayCount = await countWishlistSharesLast24h(u.id);
+    if (todayCount >= 10) {
+      res.status(429).json({ error: "rate_limit_exceeded", limit: 10 });
+      return;
+    }
+    const ownerName = (u.first_name || "").trim().slice(0, 60) || null;
+    const share = await createWishlistShare(u.id, ownerName, ids, message);
+    // Deep-link через startapp — Telegram откроет наш Mini App с этим параметром
+    const botUsername = "mariatortik_bot";
+    const startapp = `wish_${share.short_code}`;
+    const url = `https://t.me/${botUsername}?startapp=${startapp}`;
+    res.json({
+      ok: true,
+      code: share.short_code,
+      url,
+      expires_at: share.expires_at,
+      product_count: ids.length,
+    });
+  } catch (e) {
+    console.error("[wishlist/share POST]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+// GET wishlist по share-коду (публично, без auth — но инкрементим opens)
+app.get("/api/wishlist/share/:code", async (req, res) => {
+  const code = String(req.params.code || "").toUpperCase().slice(0, 16);
+  if (!/^[A-Z0-9]+$/.test(code)) {
+    res.status(400).json({ error: "bad_code" });
+    return;
+  }
+  try {
+    const share = await getWishlistShare(code);
+    if (!share) {
+      res.status(404).json({ error: "not_found_or_expired" });
+      return;
+    }
+    // Подмешиваем product detail из in-memory каталога
+    const products = share.product_ids
+      .map((pid) => catalog.find((p) => p.id === pid))
+      .filter((p): p is Product => Boolean(p));
+    incrementWishlistShareOpens(code).catch(() => {});
+    res.json({
+      code: share.short_code,
+      owner_name: share.owner_name,
+      message: share.message,
+      expires_at: share.expires_at,
+      products,
+    });
+  } catch (e) {
+    console.error("[wishlist/share GET]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
 });
 
 // Batch-статистика — для отображения звёзд на карточках в гриде

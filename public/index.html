@@ -847,6 +847,12 @@
         <span class="prof-row__val" id="prof-info-wishcount">0</span>
         <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
       </button>
+      <button class="prof-row" data-haptic="light" onclick="haptic('light');shareWishlist()">
+        <span class="prof-row__ic"><span data-icon="share" data-size="18"></span></span>
+        <span class="prof-row__t">Поделиться wishlist'ом</span>
+        <span class="prof-row__sub">Отправь другу — что хочешь на ДР</span>
+        <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
+      </button>
       <button class="prof-row prof-row--withthumbs" id="prof-recent-row" data-haptic="light" onclick="haptic('light');profOpenRecent()" style="display:none">
         <span class="prof-row__ic"><span data-icon="history" data-size="18"></span></span>
         <span class="prof-row__t">Недавно смотрели</span>
@@ -1185,6 +1191,7 @@
 <script src="/js/chat.js" defer></script>
 <script src="/js/catalog.js" defer></script>
 <script src="/js/reviews.js" defer></script>
+<script src="/js/wishshare.js" defer></script>
 <script src="/js/profile.js" defer></script>
 <script src="/js/club.js" defer></script>
 <script src="/js/cart.js" defer></script>

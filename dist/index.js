@@ -1858,6 +1858,76 @@ app.post("/api/admin/reviews/:id/hide", async (req, res) => {
     const ok = await (0, db_1.setReviewHidden)(id, hidden);
     res.json({ ok, hidden });
 });
+// ─── Wishlist Share API ──────────────────────────────────────────────────────
+// POST создаёт share-link из своего wishlist (требует tma auth)
+app.post("/api/wishlist/share", auth_1.requireTgUser, async (req, res) => {
+    const u = (0, auth_1.getTgUser)(req);
+    const body = req.body;
+    const ids = Array.isArray(body.product_ids)
+        ? body.product_ids.map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 30)
+        : [];
+    if (ids.length === 0) {
+        res.status(400).json({ error: "wishlist_empty" });
+        return;
+    }
+    const message = String(body.message ?? "").trim().slice(0, 200);
+    // Rate-limit 10 share-link/сутки
+    try {
+        const todayCount = await (0, db_1.countWishlistSharesLast24h)(u.id);
+        if (todayCount >= 10) {
+            res.status(429).json({ error: "rate_limit_exceeded", limit: 10 });
+            return;
+        }
+        const ownerName = (u.first_name || "").trim().slice(0, 60) || null;
+        const share = await (0, db_1.createWishlistShare)(u.id, ownerName, ids, message);
+        // Deep-link через startapp — Telegram откроет наш Mini App с этим параметром
+        const botUsername = "mariatortik_bot";
+        const startapp = `wish_${share.short_code}`;
+        const url = `https://t.me/${botUsername}?startapp=${startapp}`;
+        res.json({
+            ok: true,
+            code: share.short_code,
+            url,
+            expires_at: share.expires_at,
+            product_count: ids.length,
+        });
+    }
+    catch (e) {
+        console.error("[wishlist/share POST]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
+});
+// GET wishlist по share-коду (публично, без auth — но инкрементим opens)
+app.get("/api/wishlist/share/:code", async (req, res) => {
+    const code = String(req.params.code || "").toUpperCase().slice(0, 16);
+    if (!/^[A-Z0-9]+$/.test(code)) {
+        res.status(400).json({ error: "bad_code" });
+        return;
+    }
+    try {
+        const share = await (0, db_1.getWishlistShare)(code);
+        if (!share) {
+            res.status(404).json({ error: "not_found_or_expired" });
+            return;
+        }
+        // Подмешиваем product detail из in-memory каталога
+        const products = share.product_ids
+            .map((pid) => catalog.find((p) => p.id === pid))
+            .filter((p) => Boolean(p));
+        (0, db_1.incrementWishlistShareOpens)(code).catch(() => { });
+        res.json({
+            code: share.short_code,
+            owner_name: share.owner_name,
+            message: share.message,
+            expires_at: share.expires_at,
+            products,
+        });
+    }
+    catch (e) {
+        console.error("[wishlist/share GET]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
+});
 // Batch-статистика — для отображения звёзд на карточках в гриде
 // POST принимает { product_ids: [1,2,3] } чтобы не превышать длину URL
 app.post("/api/reviews/stats-batch", async (req, res) => {
