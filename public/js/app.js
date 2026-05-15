@@ -821,6 +821,161 @@ document.addEventListener('DOMContentLoaded', () => {
   loadUpcomingHoliday();
 });
 
+// ── Калькулятор порций ─────────────────────────────────────────────────────
+// Грамм/гость для разных контекстов мероприятия (общепринятые ориентиры:
+// «главное угощение» = тяжелее; «фуршет» = легче, потому что есть другая еда).
+const PORTIONS_RATES = {
+  main:    { adult: 150, kid: 100, hint: 'Если торт — гвоздь программы: 150 г/взрослый, 100 г/ребёнок' },
+  dessert: { adult: 130, kid: 80,  hint: 'После основного стола: 130 г/взрослый, 80 г/ребёнок' },
+  buffet:  { adult: 80,  kid: 60,  hint: 'На фуршете с другой едой: 80 г/взрослый, 60 г/ребёнок' },
+};
+
+const PORTIONS_STATE = {
+  context: null, // 'order' (из формы заказа) | 'product' (из карточки торта) | null (справочно)
+  adults: 6,
+  kids: 0,
+  ctx: 'dessert',
+};
+
+function pluralAdults(n) {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return 'взрослый';
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'взрослых';
+  return 'взрослых';
+}
+function pluralKids(n) {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return 'ребёнок';
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'ребёнка';
+  return 'детей';
+}
+function pluralPortions(n) {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return 'порция';
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'порции';
+  return 'порций';
+}
+
+function openPortionsCalc(context) {
+  PORTIONS_STATE.context = context || null;
+  // При входе из формы «На заказ» — стартуем с уже введённого числа порций
+  if (context === 'order') {
+    const cur = Number(document.getElementById('of-portions')?.value || 0);
+    if (cur > 0) { PORTIONS_STATE.adults = cur; PORTIONS_STATE.kids = 0; }
+  }
+  renderPortionsCalc();
+  const m = document.getElementById('portions-modal');
+  if (m) m.style.display = 'flex';
+  window.haptic?.('light');
+}
+window.openPortionsCalc = openPortionsCalc;
+
+function closePortionsCalc() {
+  const m = document.getElementById('portions-modal');
+  if (m) m.style.display = 'none';
+}
+window.closePortionsCalc = closePortionsCalc;
+
+function portionsAdj(field, delta) {
+  const max = field === 'adults' ? 100 : 50;
+  PORTIONS_STATE[field] = Math.max(0, Math.min(max, (PORTIONS_STATE[field] || 0) + delta));
+  renderPortionsCalc();
+  window.haptic?.('selection');
+}
+window.portionsAdj = portionsAdj;
+
+function portionsSetCtx(ctx) {
+  if (!PORTIONS_RATES[ctx]) return;
+  PORTIONS_STATE.ctx = ctx;
+  renderPortionsCalc();
+  window.haptic?.('selection');
+}
+window.portionsSetCtx = portionsSetCtx;
+
+function portionsCalcWeight() {
+  const r = PORTIONS_RATES[PORTIONS_STATE.ctx] || PORTIONS_RATES.dessert;
+  const grams = PORTIONS_STATE.adults * r.adult + PORTIONS_STATE.kids * r.kid;
+  return grams / 1000;
+}
+
+function renderPortionsCalc() {
+  const ad = document.getElementById('portions-adults');
+  const kd = document.getElementById('portions-kids');
+  const wt = document.getElementById('portions-weight');
+  const sm = document.getElementById('portions-summary');
+  const hn = document.getElementById('portions-hint');
+  if (!ad || !kd || !wt) return;
+  ad.textContent = PORTIONS_STATE.adults;
+  kd.textContent = PORTIONS_STATE.kids;
+  document.querySelectorAll('#portions-modal .portions__chip').forEach((b) => {
+    b.classList.toggle('portions__chip--on', b.dataset.ctx === PORTIONS_STATE.ctx);
+  });
+  const r = PORTIONS_RATES[PORTIONS_STATE.ctx] || PORTIONS_RATES.dessert;
+  if (hn) hn.textContent = r.hint;
+  const kg = portionsCalcWeight();
+  // Округляем до 50 г (0.05 кг) — реалистичная гранулярность тортов в каталоге
+  const rounded = Math.max(0.1, Math.round(kg * 20) / 20);
+  // Формат: 1 / 1.5 / 1.05 — без хвостовых нулей
+  wt.textContent = rounded % 1 === 0
+    ? String(rounded)
+    : rounded.toFixed(2).replace(/0$/, '').replace(/\.$/, '');
+  // Summary
+  const parts = [];
+  if (PORTIONS_STATE.adults > 0) parts.push(`${PORTIONS_STATE.adults} ${pluralAdults(PORTIONS_STATE.adults)}`);
+  if (PORTIONS_STATE.kids > 0)   parts.push(`${PORTIONS_STATE.kids} ${pluralKids(PORTIONS_STATE.kids)}`);
+  if (sm) sm.textContent = parts.length ? 'для ' + parts.join(' + ') : 'выберите гостей';
+  // CTA
+  const cta = document.getElementById('portions-cta');
+  if (cta) {
+    const totalPpl = PORTIONS_STATE.adults + PORTIONS_STATE.kids;
+    if (PORTIONS_STATE.context === 'order') {
+      cta.textContent = totalPpl > 0
+        ? `Применить · ${totalPpl} ${pluralPortions(totalPpl)} →`
+        : 'Применить';
+      cta.style.display = '';
+      cta.disabled = totalPpl === 0;
+    } else if (PORTIONS_STATE.context === 'product') {
+      cta.textContent = 'Подобрать торт →';
+      cta.style.display = '';
+      cta.disabled = totalPpl === 0;
+    } else {
+      cta.style.display = 'none';
+    }
+  }
+}
+
+function portionsApply() {
+  const totalPpl = PORTIONS_STATE.adults + PORTIONS_STATE.kids;
+  if (totalPpl === 0) return;
+  if (PORTIONS_STATE.context === 'order') {
+    const inp = document.getElementById('of-portions');
+    if (inp) {
+      inp.value = totalPpl;
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    // Дописываем подсказку в комментарий, чтобы менеджер видел контекст
+    const cmt = document.getElementById('of-comment');
+    if (cmt) {
+      const kg = portionsCalcWeight();
+      const ctxLabel = { main: 'главное угощение', dessert: 'десерт после еды', buffet: 'фуршет' }[PORTIONS_STATE.ctx];
+      const line = `📐 Калькулятор: ~${kg.toFixed(2).replace(/\.?0+$/, '')} кг (${PORTIONS_STATE.adults} взр + ${PORTIONS_STATE.kids} дет · ${ctxLabel})`;
+      const existing = cmt.value.trim();
+      // Не дублируем — заменяем старую строку калькулятора, если есть
+      const cleaned = existing.split('\n').filter((l) => !l.startsWith('📐 Калькулятор:')).join('\n').trim();
+      cmt.value = cleaned ? cleaned + '\n' + line : line;
+    }
+    window.haptic?.('success');
+  } else if (PORTIONS_STATE.context === 'product') {
+    // Открыть каталог тортов — юзер уже видел в модалке рекомендуемый вес,
+    // пусть выберет подходящий из списка вручную. Фильтр по весу — отдельная задача.
+    switchTab('menu');
+    setTimeout(() => window.catShowProducts?.('Торты'), 200);
+    window.haptic?.('success');
+  }
+  closePortionsCalc();
+}
+window.portionsApply = portionsApply;
+
 // ── Ближайший праздник — карточка на главной с countdown ────────────────────
 let _upcomingHoliday = null;
 async function loadUpcomingHoliday() {

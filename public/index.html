@@ -674,7 +674,10 @@
         <input class="of-input" id="of-date" type="date"/>
       </div>
       <div class="of-group" style="flex:1">
-        <label class="of-label">Порций</label>
+        <label class="of-label">
+          Порций
+          <button type="button" class="of-label__help" data-haptic="light" onclick="openPortionsCalc('order')">🧮 Калькулятор</button>
+        </label>
         <div class="of-portions">
           <button type="button" class="of-portions__btn" onclick="ofPortionsDec()">−</button>
           <input class="of-input of-portions__inp" id="of-portions" type="number" min="1" max="500" value="8" inputmode="numeric"/>
@@ -1053,6 +1056,53 @@
     <div class="modal__btns">
       <button class="btn-outline" onclick="closeConvertModal()">Отмена</button>
       <button class="btn-full" onclick="doConvert()">Обменять</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Калькулятор порций — «сколько торта взять» -->
+<div class="modal" id="portions-modal" style="display:none" onclick="if(event.target===this)closePortionsCalc()">
+  <div class="modal__sheet portions__sheet">
+    <button class="cat-modal__close" onclick="closePortionsCalc()">×</button>
+    <div class="portions__h">🧮 Сколько торта взять?</div>
+    <div class="portions__sub">Подскажем вес и подходящие позиции</div>
+
+    <div class="portions__row">
+      <div class="portions__lbl">Взрослые</div>
+      <div class="portions__stepper">
+        <button class="portions__step-btn" data-haptic="selection" onclick="portionsAdj('adults',-1)">−</button>
+        <span class="portions__step-val" id="portions-adults">6</span>
+        <button class="portions__step-btn" data-haptic="selection" onclick="portionsAdj('adults',1)">+</button>
+      </div>
+    </div>
+
+    <div class="portions__row">
+      <div class="portions__lbl">Дети до 12</div>
+      <div class="portions__stepper">
+        <button class="portions__step-btn" data-haptic="selection" onclick="portionsAdj('kids',-1)">−</button>
+        <span class="portions__step-val" id="portions-kids">0</span>
+        <button class="portions__step-btn" data-haptic="selection" onclick="portionsAdj('kids',1)">+</button>
+      </div>
+    </div>
+
+    <div class="portions__row portions__row--col">
+      <div class="portions__lbl">Контекст</div>
+      <div class="portions__chips">
+        <button class="portions__chip" data-ctx="main"    onclick="portionsSetCtx('main')">🎂 Главное угощение</button>
+        <button class="portions__chip portions__chip--on" data-ctx="dessert" onclick="portionsSetCtx('dessert')">🍰 Десерт</button>
+        <button class="portions__chip" data-ctx="buffet"  onclick="portionsSetCtx('buffet')">🎉 Фуршет</button>
+      </div>
+    </div>
+
+    <div class="portions__result">
+      <div class="portions__result-main">~<span id="portions-weight">0.78</span> кг</div>
+      <div class="portions__result-sub" id="portions-summary">для 6 взрослых</div>
+      <div class="portions__result-hint" id="portions-hint">После основного стола — 130 г/взрослый, 80 г/ребёнок</div>
+    </div>
+
+    <div class="portions__actions">
+      <button class="btn-outline" onclick="closePortionsCalc()">Закрыть</button>
+      <button class="btn-full" id="portions-cta" onclick="portionsApply()">Применить →</button>
     </div>
   </div>
 </div>

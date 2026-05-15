@@ -707,6 +707,12 @@ async function catOpenProduct(id) {
     const types = [...(p.cake_type || []), ...(p.pie_type || []), ...(p.dessert_type || [])].join(', ');
     if (types)     props.push(`<span><b>Тип:</b> ${escapeHtml(types)}</span>`);
 
+    // Калькулятор порций — кнопка для тортов (категория «Торты» или «Торты на заказ»)
+    const isCake = /торт/i.test(String(p.category || ''));
+    const portionsBtn = isCake
+      ? `<button class="cat-modal__portions" data-haptic="light" onclick="event.stopPropagation();openPortionsCalc('product')">🧮 Сколько брать?</button>`
+      : '';
+
     // Allergen chips — detect из описания/состава/начинки
     const allergens = detectAllergens(p);
     const allergenHtml = allergens.length ? `
@@ -743,6 +749,7 @@ async function catOpenProduct(id) {
         ${hasDiscount && oldPriceTxt ? `<span class="cat-modal__old">${escapeHtml(oldPriceTxt)}</span> <span class="cat-modal__pct">−${p.discountPercent}%</span>` : ''}
       </div>
       ${props.length ? `<div class="cat-modal__props">${props.join('')}</div>` : ''}
+      ${portionsBtn}
       ${dietHtml}
       ${allergenHtml}
       ${desc ? `<div class="cat-modal__desc">${escapeHtml(desc)}</div>` : ''}
