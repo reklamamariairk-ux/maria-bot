@@ -12,27 +12,40 @@
     try { tg.ready(); tg.expand(); } catch {}
 
     function applyTheme() {
-      // Принципиально: брендовый стиль приложения — белый фон + красно-золотые акценты.
-      // Не подхватываем background из themeParams — было бы непредсказуемо при смене темы.
-      // Подхватываем только text_color на случай если у юзера в TG настроен особый цвет.
+      // Уважаем Telegram colorScheme (light/dark). Брендовая цветовая
+      // схема — красно-золотые акценты — остаётся одна в обоих режимах;
+      // меняются только фон/поверхности через токены в style.css.
       const tp = tg.themeParams || {};
       const root = document.documentElement;
-      root.style.setProperty('--tg-bg-color',           '#ffffff');
-      root.style.setProperty('--tg-secondary-bg-color', '#ffffff');
-      root.style.setProperty('--tg-section-bg-color',   '#ffffff');
-      root.style.setProperty('--tg-text-color',         tp.text_color || '#130008');
-      root.style.setProperty('--tg-hint-color',         tp.hint_color || '#8b949e');
+      // Поддержка ?dark=1 / ?dark=0 для дев-тестирования без смены TG-настроек
+      const url = new URL(window.location.href);
+      const force = url.searchParams.get('dark');
+      const isDark = force === '1' ? true : force === '0' ? false : (tg.colorScheme === 'dark');
+
+      // Brand-цвета — одни и те же в light/dark
       root.style.setProperty('--tg-link-color',         '#d61f37');
       root.style.setProperty('--tg-button-color',       '#d61f37');
       root.style.setProperty('--tg-button-text-color',  '#ffffff');
 
-      // Сообщаем Telegram, какого цвета шапка — пусть подложит белый
-      try { tg.setHeaderColor?.('#ffffff'); } catch {}
-      try { tg.setBackgroundColor?.('#ffffff'); } catch {}
-
-      // Намеренно всегда light — приложение всегда «премиум-белое»
-      root.classList.add('tg-light');
-      root.classList.remove('tg-dark');
+      if (isDark) {
+        root.classList.add('tg-dark');
+        root.classList.remove('tg-light');
+        // Очищаем light-overrides — CSS html.tg-dark выставит warm bordeaux
+        ['--tg-bg-color','--tg-secondary-bg-color','--tg-section-bg-color','--tg-text-color','--tg-hint-color']
+          .forEach((p) => root.style.removeProperty(p));
+        try { tg.setHeaderColor?.('#160409'); } catch {}
+        try { tg.setBackgroundColor?.('#160409'); } catch {}
+      } else {
+        root.classList.add('tg-light');
+        root.classList.remove('tg-dark');
+        root.style.setProperty('--tg-bg-color',           '#ffffff');
+        root.style.setProperty('--tg-secondary-bg-color', '#ffffff');
+        root.style.setProperty('--tg-section-bg-color',   '#ffffff');
+        root.style.setProperty('--tg-text-color',         tp.text_color || '#130008');
+        root.style.setProperty('--tg-hint-color',         tp.hint_color || '#8b949e');
+        try { tg.setHeaderColor?.('#ffffff'); } catch {}
+        try { tg.setBackgroundColor?.('#ffffff'); } catch {}
+      }
     }
     applyTheme();
     tg.onEvent?.('themeChanged', applyTheme);

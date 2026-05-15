@@ -181,6 +181,89 @@ html.tg-dark .pcard-pr-skel__line{
   background-size:200% 100%;
 }
 
+/* ─── Broader dark overrides — cart/profile/club/forms ──────────────────── */
+/* Корзина / Чекаут */
+html.tg-dark .cart-item,
+html.tg-dark .cart-form,
+html.tg-dark .cart-foot,
+html.tg-dark .co-summary,
+html.tg-dark .co-shop-card,
+html.tg-dark .co-deltype__tab,
+html.tg-dark .co-deltype__tab--on,
+html.tg-dark .shop-picker__item,
+html.tg-dark .shops-modal__sheet{background:var(--surface);color:var(--text);border-color:var(--border)}
+html.tg-dark .co-deltype{background:var(--surface-2)}
+html.tg-dark .co-sum__img{background:var(--surface-2)}
+html.tg-dark .shop-picker__item:hover{background:var(--cream)}
+
+/* Профиль (iOS Wallet стиль — у него собственные --ap-* токены) */
+html.tg-dark #tab-profile{--ap-ink:#f4e8db;--ap-grey:#a89b94;--ap-grey-2:#7a6c64;
+  --ap-hairline:rgba(255,235,220,.08);--ap-bg:#160409}
+html.tg-dark .prof-row,
+html.tg-dark .prof-card,
+html.tg-dark .prof-row--toggle{background:var(--surface);color:var(--text);border-color:var(--border)}
+html.tg-dark .prof-row--toggle:hover{background:var(--surface-2)}
+html.tg-dark .prof-row__ic{background:var(--surface-2)}
+
+/* Клуб / лояльность */
+html.tg-dark .club-card,
+html.tg-dark .club-tile,
+html.tg-dark .loyalty-bar,
+html.tg-dark .reward-card{background:var(--surface);border-color:var(--border);color:var(--text)}
+
+/* Story viewer, sweet-check, holiday — уже на тёмной/градиентной подложке, не трогаем */
+
+/* Формы — input/textarea/select по всему UI */
+html.tg-dark input,
+html.tg-dark textarea,
+html.tg-dark select{
+  background:var(--surface);color:var(--text);
+  border-color:var(--border-strong);
+}
+html.tg-dark input::placeholder,
+html.tg-dark textarea::placeholder{color:var(--muted)}
+html.tg-dark .of-photo-input__btn,
+html.tg-dark .of-chip,
+html.tg-dark .of-portions__btn{background:var(--surface);color:var(--text);border-color:var(--border-strong)}
+html.tg-dark .of-chip:hover{background:var(--cream);border-color:rgba(214,31,55,.4)}
+
+/* Gift wizard, B2B, reviews модалки */
+html.tg-dark .modal-form,
+html.tg-dark .gw-card,
+html.tg-dark .rv-item,
+html.tg-dark .holiday-card{background:var(--surface);color:var(--text);border-color:var(--border)}
+
+/* Search autocomplete */
+html.tg-dark .menu-ac,
+html.tg-dark .menu-ac__item{background:var(--surface);color:var(--text);border-color:var(--border)}
+html.tg-dark .menu-ac__item:hover{background:var(--surface-2)}
+html.tg-dark .menu-ac__ph{background:var(--surface-2)}
+
+/* Promo-strip, chat-related elements */
+html.tg-dark .chat-input{background:var(--surface);color:var(--text);border-color:var(--border-strong)}
+html.tg-dark .chat-suggestion{background:var(--surface);color:var(--text);border-color:var(--border-strong)}
+
+/* Empty states */
+html.tg-dark .empty-state,
+html.tg-dark .cat-empty,
+html.tg-dark .cat-loading{color:var(--muted)}
+
+/* Cart hint badges — мягкие цветные плашки, оставляем но переводим на тёмные тона */
+html.tg-dark .cart-hint--bonus{background:#3a2a14;color:#f0c66a}
+html.tg-dark .cart-hint--warn{background:#3a1410;color:#ff9a82;border-color:#5a2418}
+
+/* Кнопки */
+html.tg-dark .btn-outline{background:var(--surface);color:var(--text);border-color:var(--border-strong)}
+html.tg-dark .btn-outline:hover{background:var(--surface-2);border-color:var(--red)}
+html.tg-dark .btn-ghost{color:var(--text)}
+
+/* Catalog category tile background — heavy hardcoded; делаем surface */
+html.tg-dark .ccat__name{color:var(--text)}
+
+/* Sticky cat chips */
+html.tg-dark .sticky-cat{background:var(--surface);color:var(--text);border-color:var(--border-strong)}
+html.tg-dark .sticky-cat--active{background:linear-gradient(135deg,var(--red),var(--red-d));color:#fff}
+
 /* ── RESET ───────────────────────────────────────────────────────────────── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
