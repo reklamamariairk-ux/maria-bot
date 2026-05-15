@@ -312,6 +312,23 @@ async function catShowAllWithDiet() {
 }
 window.catShowAllWithDiet = catShowAllWithDiet;
 
+// Подгрузить batch-статистику отзывов для видимых товаров и впрыснуть
+// звёздочки в карточки. Кэш — REVIEWS_BATCH_CACHE (заполняется в reviews.js)
+async function catEnrichWithReviewStats(products) {
+  if (!window.loadReviewsStatsBatch) return;
+  const ids = products.map((p) => Number(p.id)).filter((n) => n > 0);
+  if (ids.length === 0) return;
+  const stats = await window.loadReviewsStatsBatch(ids);
+  // После загрузки — впрыскиваем рейтинг в DOM-плейсхолдеры
+  for (const [pid, s] of Object.entries(stats)) {
+    const el = document.querySelector(`.pcard-pr__rating[data-pid="${pid}"]`);
+    if (el && s && s.count > 0) {
+      el.innerHTML = `<span class="pcard-pr__rating-star">★</span> <b>${Number(s.avg).toFixed(1).replace(/\.0$/, '')}</b> <span class="pcard-pr__rating-cnt">(${s.count})</span>`;
+      el.style.display = '';
+    }
+  }
+}
+
 // Применяем sort + price-фильтр + pagination к lastProducts и рендерим
 function catRenderToolbarAndProducts() {
   let products = [...(CATALOG_STATE.lastProducts || [])];
@@ -338,6 +355,8 @@ function catRenderToolbarAndProducts() {
   if (window.IconInflate) window.IconInflate(grid);
   // Setup infinite scroll observer (once)
   catInitInfiniteScroll();
+  // Подгружаем рейтинги для отображения звёзд на карточках
+  catEnrichWithReviewStats(pageProducts).catch(() => {});
 }
 
 // Lazy load: show ещё page при достижении конца списка
@@ -646,6 +665,7 @@ function catRenderProductsHtml(products) {
         <div class="pcard-pr__body">
           <div class="pcard-pr__name">${escapeHtml(p.name)}</div>
           ${weight}
+          ${hasId ? `<div class="pcard-pr__rating" data-pid="${p.id}" style="display:none"></div>` : ''}
           ${dietBadges}
           <div class="pcard-pr__row">
             <div class="pcard-pr__prices">
@@ -753,6 +773,7 @@ async function catOpenProduct(id) {
       ${dietHtml}
       ${allergenHtml}
       ${desc ? `<div class="cat-modal__desc">${escapeHtml(desc)}</div>` : ''}
+      <div class="cat-modal__reviews" id="rv-placeholder-${p.id}"></div>
       <div class="cat-modal__similar" id="cat-modal-similar"></div>
       <div class="cat-modal__actions">
         <div class="cat-modal__qty">
@@ -768,6 +789,9 @@ async function catOpenProduct(id) {
     `;
     // Render similar products (3 из той же категории)
     renderSimilarProducts(p);
+
+    // Render reviews block — async (грузится отдельным fetch'ем)
+    if (window.reviewsInjectInto) window.reviewsInjectInto(p.id);
 
     // Quantity selector state
     window._modalQty = 1;

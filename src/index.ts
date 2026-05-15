@@ -7,7 +7,7 @@ import https from "https";
 import cron from "node-cron";
 import { Bot, webhookCallback, InlineKeyboard } from "grammy";
 import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, fetchProductById, reloadDietaryOverrides, detectDietary, Product } from "./scraper";
-import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind, getNotificationPrefs, setNotificationPrefs, saveCartSnapshot, clearCartSnapshot, getAbandonedCarts, markCartAbandonedPushed, getSpinStatus, recordSpin, WHEEL_PRIZES, touchVisitStreak, getStreak, setSecretOfDay, getSecretOfDay, getUnusedRewards, consumeRewards, hasHolidayPushSent, markHolidayPushSent } from "./db";
+import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind, getNotificationPrefs, setNotificationPrefs, saveCartSnapshot, clearCartSnapshot, getAbandonedCarts, markCartAbandonedPushed, getSpinStatus, recordSpin, WHEEL_PRIZES, touchVisitStreak, getStreak, setSecretOfDay, getSecretOfDay, getUnusedRewards, consumeRewards, hasHolidayPushSent, markHolidayPushSent, getReviewsForProduct, getReviewStats, getReviewStatsBatch, getMyReview, upsertReview, deleteMyReview, setReviewHidden, countReviewsLast24h } from "./db";
 import {
   initClubSchema,
   getBalance,
@@ -1758,6 +1758,108 @@ app.get("/api/catalog/product/:id", async (req, res) => {
     (product as Record<string, unknown>).dietary = fromCache.dietary;
   }
   res.json({ product });
+});
+
+// ─── Reviews API ─────────────────────────────────────────────────────────────
+// GET список отзывов + статистика для товара
+app.get("/api/reviews/:pid", async (req, res) => {
+  const pid = Number(req.params.pid);
+  if (!pid) { res.status(400).json({ error: "bad_pid" }); return; }
+  const limit  = Math.min(Number(req.query.limit ?? 20), 50);
+  const offset = Math.max(Number(req.query.offset ?? 0), 0);
+  try {
+    const [reviews, stats] = await Promise.all([
+      getReviewsForProduct(pid, limit, offset),
+      getReviewStats(pid),
+    ]);
+    // Если юзер авторизован — отдаём также его собственный отзыв (для редактирования)
+    const tgUser = tryGetTgUser(req);
+    let mine: unknown = null;
+    if (tgUser) mine = await getMyReview(pid, tgUser.id);
+    res.json({ reviews, stats, mine });
+  } catch (e) {
+    console.error("[reviews/:pid]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+// POST новый/обновлённый отзыв (upsert: UNIQUE(product_id, chat_id))
+app.post("/api/reviews", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  const body = req.body as { product_id?: unknown; rating?: unknown; text?: unknown };
+  const productId = Number(body.product_id);
+  const rating    = Number(body.rating);
+  const text      = String(body.text ?? "").trim().slice(0, 500);
+  if (!productId)                     { res.status(400).json({ error: "product_id_required" }); return; }
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    res.status(400).json({ error: "rating_must_be_1_to_5" }); return;
+  }
+  // Товар должен существовать (защита от мусора)
+  if (!catalog.find((p) => p.id === productId)) {
+    res.status(404).json({ error: "product_not_found" }); return;
+  }
+  // Rate-limit: max 5 новых отзывов в сутки (update своего — не считается)
+  try {
+    const existing = await getMyReview(productId, u.id);
+    if (!existing) {
+      const todayCount = await countReviewsLast24h(u.id);
+      if (todayCount >= 5) {
+        res.status(429).json({ error: "rate_limit_exceeded", limit: 5 });
+        return;
+      }
+    }
+    const authorName = (u.first_name || "").trim().slice(0, 60) || null;
+    const review = await upsertReview(productId, u.id, rating, text, authorName);
+    res.json({ ok: true, review });
+  } catch (e) {
+    console.error("[reviews POST]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+// DELETE свой отзыв
+app.delete("/api/reviews/:id", requireTgUser, async (req, res) => {
+  const u = getTgUser(req)!;
+  const id = Number(req.params.id);
+  if (!id) { res.status(400).json({ error: "bad_id" }); return; }
+  try {
+    const ok = await deleteMyReview(id, u.id);
+    res.json({ ok });
+  } catch (e) {
+    console.error("[reviews DELETE]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+// Админ: скрыть/показать отзыв (модерация)
+app.post("/api/admin/reviews/:id/hide", async (req, res) => {
+  const token = req.header("x-user-token") || (req.body as { token?: string })?.token;
+  if (!token || token !== process.env.ADMIN_TOKEN) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  const id = Number(req.params.id);
+  if (!id) { res.status(400).json({ error: "bad_id" }); return; }
+  const hidden = (req.body as { hidden?: boolean })?.hidden !== false; // по умолчанию hide=true
+  const ok = await setReviewHidden(id, hidden);
+  res.json({ ok, hidden });
+});
+
+// Batch-статистика — для отображения звёзд на карточках в гриде
+// POST принимает { product_ids: [1,2,3] } чтобы не превышать длину URL
+app.post("/api/reviews/stats-batch", async (req, res) => {
+  const ids = (req.body as { product_ids?: unknown })?.product_ids;
+  if (!Array.isArray(ids)) { res.status(400).json({ error: "product_ids_required" }); return; }
+  const productIds = ids.map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 200);
+  try {
+    const map = await getReviewStatsBatch(productIds);
+    const stats: Record<string, { count: number; avg: number }> = {};
+    for (const [pid, s] of map.entries()) stats[String(pid)] = s;
+    res.json({ stats });
+  } catch (e) {
+    console.error("[reviews stats-batch]", (e as Error).message);
+    res.status(500).json({ error: "internal" });
+  }
 });
 
 // ─── Partners ────────────────────────────────────────────────────────────────

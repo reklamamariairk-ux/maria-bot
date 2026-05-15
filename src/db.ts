@@ -121,8 +121,144 @@ export async function initDb() {
       sent_at    TIMESTAMPTZ DEFAULT NOW(),
       PRIMARY KEY (chat_id, holiday_id, year)
     );
+
+    -- Отзывы на товары (один отзыв на товар от юзера, post-moderation)
+    CREATE TABLE IF NOT EXISTS product_reviews (
+      id         BIGSERIAL PRIMARY KEY,
+      product_id INT    NOT NULL,
+      chat_id    BIGINT NOT NULL,
+      rating     INT    NOT NULL CHECK (rating BETWEEN 1 AND 5),
+      text       TEXT   DEFAULT '',
+      author_name TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      hidden     BOOLEAN DEFAULT FALSE,
+      UNIQUE (product_id, chat_id)
+    );
+    CREATE INDEX IF NOT EXISTS product_reviews_product_idx ON product_reviews (product_id, created_at DESC) WHERE hidden = FALSE;
+    CREATE INDEX IF NOT EXISTS product_reviews_chat_idx ON product_reviews (chat_id, created_at DESC);
   `);
   console.log("[DB] Tables ready");
+}
+
+// Reviews ─────────────────────────────────────────────────
+export interface ProductReview {
+  id: number;
+  product_id: number;
+  chat_id: number;
+  rating: number;
+  text: string;
+  author_name: string | null;
+  created_at: Date;
+  hidden: boolean;
+}
+
+export interface ReviewStats {
+  count: number;
+  avg: number;          // округлённое до 1 знака
+  distribution: Record<1 | 2 | 3 | 4 | 5, number>;
+}
+
+export async function getReviewsForProduct(productId: number, limit = 20, offset = 0): Promise<ProductReview[]> {
+  const { rows } = await pool.query(
+    `SELECT id, product_id, chat_id, rating, text, author_name, created_at, hidden
+     FROM product_reviews
+     WHERE product_id = $1 AND hidden = FALSE
+     ORDER BY created_at DESC
+     LIMIT $2 OFFSET $3`,
+    [productId, limit, offset]
+  );
+  return rows;
+}
+
+export async function getReviewStats(productId: number): Promise<ReviewStats> {
+  const { rows } = await pool.query(
+    `SELECT rating, COUNT(*)::int AS cnt FROM product_reviews
+     WHERE product_id = $1 AND hidden = FALSE
+     GROUP BY rating`,
+    [productId]
+  );
+  const dist: Record<1 | 2 | 3 | 4 | 5, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  let total = 0, sum = 0;
+  for (const r of rows) {
+    const k = Number(r.rating) as 1 | 2 | 3 | 4 | 5;
+    if (k >= 1 && k <= 5) {
+      dist[k] = Number(r.cnt);
+      total += Number(r.cnt);
+      sum += k * Number(r.cnt);
+    }
+  }
+  const avg = total > 0 ? Math.round((sum / total) * 10) / 10 : 0;
+  return { count: total, avg, distribution: dist };
+}
+
+// Массовое получение статов для grid-карточек (1 query вместо N)
+export async function getReviewStatsBatch(productIds: number[]): Promise<Map<number, { count: number; avg: number }>> {
+  const result = new Map<number, { count: number; avg: number }>();
+  if (productIds.length === 0) return result;
+  const { rows } = await pool.query(
+    `SELECT product_id, COUNT(*)::int AS cnt, AVG(rating)::numeric(2,1) AS avg
+     FROM product_reviews
+     WHERE product_id = ANY($1::int[]) AND hidden = FALSE
+     GROUP BY product_id`,
+    [productIds]
+  );
+  for (const r of rows) {
+    result.set(Number(r.product_id), { count: Number(r.cnt), avg: Number(r.avg) });
+  }
+  return result;
+}
+
+export async function getMyReview(productId: number, chatId: number): Promise<ProductReview | null> {
+  const { rows } = await pool.query(
+    `SELECT id, product_id, chat_id, rating, text, author_name, created_at, hidden
+     FROM product_reviews
+     WHERE product_id = $1 AND chat_id = $2`,
+    [productId, chatId]
+  );
+  return rows[0] ?? null;
+}
+
+export async function upsertReview(
+  productId: number, chatId: number, rating: number, text: string, authorName: string | null
+): Promise<ProductReview> {
+  const { rows } = await pool.query(
+    `INSERT INTO product_reviews (product_id, chat_id, rating, text, author_name)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (product_id, chat_id) DO UPDATE SET
+       rating = EXCLUDED.rating,
+       text = EXCLUDED.text,
+       author_name = EXCLUDED.author_name,
+       created_at = NOW()
+     RETURNING id, product_id, chat_id, rating, text, author_name, created_at, hidden`,
+    [productId, chatId, rating, text, authorName]
+  );
+  return rows[0];
+}
+
+export async function deleteMyReview(reviewId: number, chatId: number): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `DELETE FROM product_reviews WHERE id = $1 AND chat_id = $2`,
+    [reviewId, chatId]
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+export async function setReviewHidden(reviewId: number, hidden: boolean): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `UPDATE product_reviews SET hidden = $2 WHERE id = $1`,
+    [reviewId, hidden]
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+// Rate-limit на новые отзывы (макс N в сутки на юзера, не считая update'ов)
+export async function countReviewsLast24h(chatId: number): Promise<number> {
+  const { rows } = await pool.query(
+    `SELECT COUNT(*)::int AS cnt FROM product_reviews
+     WHERE chat_id = $1 AND created_at > NOW() - INTERVAL '24 hours'`,
+    [chatId]
+  );
+  return Number(rows[0]?.cnt ?? 0);
 }
 
 // Holiday push dedup ─────────────────────────────────────

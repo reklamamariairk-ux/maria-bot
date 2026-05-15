@@ -1759,6 +1759,126 @@ app.get("/api/catalog/product/:id", async (req, res) => {
     }
     res.json({ product });
 });
+// ─── Reviews API ─────────────────────────────────────────────────────────────
+// GET список отзывов + статистика для товара
+app.get("/api/reviews/:pid", async (req, res) => {
+    const pid = Number(req.params.pid);
+    if (!pid) {
+        res.status(400).json({ error: "bad_pid" });
+        return;
+    }
+    const limit = Math.min(Number(req.query.limit ?? 20), 50);
+    const offset = Math.max(Number(req.query.offset ?? 0), 0);
+    try {
+        const [reviews, stats] = await Promise.all([
+            (0, db_1.getReviewsForProduct)(pid, limit, offset),
+            (0, db_1.getReviewStats)(pid),
+        ]);
+        // Если юзер авторизован — отдаём также его собственный отзыв (для редактирования)
+        const tgUser = (0, auth_1.tryGetTgUser)(req);
+        let mine = null;
+        if (tgUser)
+            mine = await (0, db_1.getMyReview)(pid, tgUser.id);
+        res.json({ reviews, stats, mine });
+    }
+    catch (e) {
+        console.error("[reviews/:pid]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
+});
+// POST новый/обновлённый отзыв (upsert: UNIQUE(product_id, chat_id))
+app.post("/api/reviews", auth_1.requireTgUser, async (req, res) => {
+    const u = (0, auth_1.getTgUser)(req);
+    const body = req.body;
+    const productId = Number(body.product_id);
+    const rating = Number(body.rating);
+    const text = String(body.text ?? "").trim().slice(0, 500);
+    if (!productId) {
+        res.status(400).json({ error: "product_id_required" });
+        return;
+    }
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+        res.status(400).json({ error: "rating_must_be_1_to_5" });
+        return;
+    }
+    // Товар должен существовать (защита от мусора)
+    if (!catalog.find((p) => p.id === productId)) {
+        res.status(404).json({ error: "product_not_found" });
+        return;
+    }
+    // Rate-limit: max 5 новых отзывов в сутки (update своего — не считается)
+    try {
+        const existing = await (0, db_1.getMyReview)(productId, u.id);
+        if (!existing) {
+            const todayCount = await (0, db_1.countReviewsLast24h)(u.id);
+            if (todayCount >= 5) {
+                res.status(429).json({ error: "rate_limit_exceeded", limit: 5 });
+                return;
+            }
+        }
+        const authorName = (u.first_name || "").trim().slice(0, 60) || null;
+        const review = await (0, db_1.upsertReview)(productId, u.id, rating, text, authorName);
+        res.json({ ok: true, review });
+    }
+    catch (e) {
+        console.error("[reviews POST]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
+});
+// DELETE свой отзыв
+app.delete("/api/reviews/:id", auth_1.requireTgUser, async (req, res) => {
+    const u = (0, auth_1.getTgUser)(req);
+    const id = Number(req.params.id);
+    if (!id) {
+        res.status(400).json({ error: "bad_id" });
+        return;
+    }
+    try {
+        const ok = await (0, db_1.deleteMyReview)(id, u.id);
+        res.json({ ok });
+    }
+    catch (e) {
+        console.error("[reviews DELETE]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
+});
+// Админ: скрыть/показать отзыв (модерация)
+app.post("/api/admin/reviews/:id/hide", async (req, res) => {
+    const token = req.header("x-user-token") || req.body?.token;
+    if (!token || token !== process.env.ADMIN_TOKEN) {
+        res.status(403).json({ error: "forbidden" });
+        return;
+    }
+    const id = Number(req.params.id);
+    if (!id) {
+        res.status(400).json({ error: "bad_id" });
+        return;
+    }
+    const hidden = req.body?.hidden !== false; // по умолчанию hide=true
+    const ok = await (0, db_1.setReviewHidden)(id, hidden);
+    res.json({ ok, hidden });
+});
+// Batch-статистика — для отображения звёзд на карточках в гриде
+// POST принимает { product_ids: [1,2,3] } чтобы не превышать длину URL
+app.post("/api/reviews/stats-batch", async (req, res) => {
+    const ids = req.body?.product_ids;
+    if (!Array.isArray(ids)) {
+        res.status(400).json({ error: "product_ids_required" });
+        return;
+    }
+    const productIds = ids.map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 200);
+    try {
+        const map = await (0, db_1.getReviewStatsBatch)(productIds);
+        const stats = {};
+        for (const [pid, s] of map.entries())
+            stats[String(pid)] = s;
+        res.json({ stats });
+    }
+    catch (e) {
+        console.error("[reviews stats-batch]", e.message);
+        res.status(500).json({ error: "internal" });
+    }
+});
 // ─── Partners ────────────────────────────────────────────────────────────────
 app.get("/api/partners", (_req, res) => {
     res.json({ partners: (0, partners_1.getPartners)(), meta: (0, partners_1.getPartnersMeta)() });

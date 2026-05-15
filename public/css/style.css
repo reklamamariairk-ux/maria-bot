@@ -4365,6 +4365,108 @@ body.chat-open{overflow:hidden}
 .modal__btns{display:flex;gap:10px;margin-top:16px}
 .modal__btns>*{flex:1}
 
+/* ── Отзывы и рейтинг товаров ─────────────────────────────────────────── */
+/* Блок отзывов внутри карточки товара */
+.cat-modal__reviews{padding:14px 18px 0;border-top:1px solid rgba(0,0,0,.06);margin-top:6px}
+.rv-block{padding:0}
+.rv-block--loading{font-size:12.5px;color:var(--muted);text-align:center;padding:18px 0}
+.rv-block__h{
+  font-size:11px;color:var(--muted);font-weight:600;
+  letter-spacing:.4px;text-transform:uppercase;margin-bottom:10px;
+}
+.rv-summary{display:flex;align-items:center;gap:14px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid rgba(0,0,0,.05)}
+.rv-summary__big{flex-shrink:0;text-align:center;min-width:84px}
+.rv-summary__avg{
+  font-family:'Playfair Display',serif;font-size:32px;font-weight:800;
+  color:var(--text);line-height:1;letter-spacing:-.5px;
+}
+.rv-summary__stars{margin-top:4px;line-height:1}
+.rv-summary__cnt{font-size:11.5px;color:var(--muted);margin-top:2px}
+
+.rv-star{color:#dadce0;letter-spacing:1px;line-height:1}
+.rv-star--on{color:#f0a020}
+
+.rv-dist{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0}
+.rv-dist-row{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted)}
+.rv-dist-row__lbl{flex-shrink:0;width:18px;color:#f0a020;font-weight:700}
+.rv-dist-row__bar{flex:1;height:6px;background:#f2f2f7;border-radius:3px;overflow:hidden}
+.rv-dist-row__fill{display:block;height:100%;background:linear-gradient(90deg,#f0a020,#ffc658);border-radius:3px;transition:width .3s ease}
+.rv-dist-row__cnt{flex-shrink:0;width:20px;text-align:right;font-weight:600}
+
+.rv-empty{text-align:center;padding:14px 0 18px;color:var(--muted)}
+.rv-empty__ic{font-size:30px;color:#dadce0;margin-bottom:6px}
+.rv-empty__h{font-size:14px;font-weight:700;color:var(--text);margin-bottom:3px}
+.rv-empty__s{font-size:12px;color:var(--muted)}
+
+.rv-list{display:flex;flex-direction:column;gap:12px;margin-bottom:14px}
+.rv-item{padding:10px 0;border-bottom:1px solid rgba(0,0,0,.04)}
+.rv-item:last-child{border-bottom:none}
+.rv-item__head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.rv-item__author{font-size:13px;font-weight:700;color:var(--text)}
+.rv-item__stars{line-height:1}
+.rv-item__time{font-size:11px;color:var(--muted);margin-left:auto}
+.rv-item__text{font-size:13px;color:#3a3a3c;line-height:1.4;white-space:pre-wrap;word-break:break-word}
+
+.rv-write-btn{
+  width:100%;padding:12px;border-radius:12px;
+  background:#fff;border:1px solid var(--border-strong);
+  color:var(--text);font-size:13.5px;font-weight:600;
+  cursor:pointer;transition:all var(--t-fast);
+}
+.rv-write-btn:hover{border-color:var(--red);color:var(--red);background:var(--red-xl,#fff5f6)}
+
+/* Рейтинг в карточке грида (под названием товара) */
+.pcard-pr__rating{
+  display:flex;align-items:center;gap:3px;
+  font-size:11.5px;color:var(--text);margin:2px 0 0;
+}
+.pcard-pr__rating-star{color:#f0a020;font-size:12px}
+.pcard-pr__rating-cnt{color:var(--muted);font-size:10.5px}
+
+/* Модалка написания отзыва */
+.rv-writer__sheet{padding:18px 16px calc(20px + env(safe-area-inset-bottom));position:relative}
+.rv-writer__h{
+  font-family:'Playfair Display',serif;font-size:20px;color:var(--dark);
+  margin-bottom:4px;text-align:center;
+}
+.rv-writer__sub{font-size:12.5px;color:var(--muted);text-align:center;margin-bottom:16px}
+.rv-writer__rating{display:flex;justify-content:center;gap:6px;margin-bottom:6px}
+.rv-writer__star{
+  background:none;border:none;cursor:pointer;
+  font-size:34px;color:#dadce0;padding:4px;
+  transition:transform var(--t-fast),color var(--t-fast);
+  line-height:1;
+}
+.rv-writer__star:hover{transform:scale(1.1)}
+.rv-writer__star--on{color:#f0a020}
+.rv-writer__rating-lbl{
+  text-align:center;font-size:13px;font-weight:600;
+  color:var(--text);margin-bottom:14px;
+}
+.rv-writer__text{
+  width:100%;min-height:100px;
+  padding:12px 14px;border-radius:12px;
+  border:1px solid var(--border-strong);background:#fff;
+  font-family:inherit;font-size:14px;color:var(--text);
+  resize:vertical;
+  transition:border-color var(--t-fast);
+}
+.rv-writer__text:focus{outline:none;border-color:var(--red)}
+.rv-writer__counter{text-align:right;font-size:11px;color:var(--muted);margin-top:4px}
+.rv-writer__actions{display:flex;gap:10px;margin-top:14px}
+.rv-writer__actions>*{flex:1}
+.rv-writer__err{
+  font-size:12.5px;color:var(--red);text-align:center;
+  margin-top:10px;padding:8px;background:var(--red-xl,#fff5f6);
+  border-radius:8px;
+}
+.rv-writer__delete{
+  display:block;margin:14px auto 0;
+  background:none;border:none;color:var(--muted);
+  font-size:12px;cursor:pointer;text-decoration:underline;
+}
+.rv-writer__delete:hover{color:var(--red)}
+
 /* Калькулятор порций — модалка */
 .portions__sheet{padding:18px 16px calc(20px + env(safe-area-inset-bottom));position:relative}
 .portions__h{
