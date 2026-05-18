@@ -106,6 +106,16 @@
     </button>
   </div>
 
+  <!-- Sweet Confessor — эмпатичный режим чата с Машей -->
+  <button class="confessor-card" data-haptic="light" onclick="haptic('light');openMashaConfessor()">
+    <span class="confessor-card__ic"><span data-icon="sparkles" data-size="20"></span></span>
+    <span class="confessor-card__body">
+      <span class="confessor-card__t">Расскажи, как день</span>
+      <span class="confessor-card__sub">Маша слушает — и подберёт десерт под настроение</span>
+    </span>
+    <span class="confessor-card__chev"><span data-icon="chevronRight" data-size="16"></span></span>
+  </button>
+
   <!-- Категории chips — быстрый entry -->
   <div class="home-cats" id="home-cats">
     <button class="home-cat" data-haptic="light" onclick="haptic('light');switchTab('menu');setTimeout(()=>window.catShowProducts?.('Торты'),200)">
@@ -619,6 +629,16 @@
       Индивидуальные торты <b>от 2 500 ₽</b> · минимум за <b>48 часов</b> до даты
     </div>
   </div>
+
+  <!-- AI-конструктор торта: опиши → 3 концепт-картинки → отправить менеджеру -->
+  <button type="button" class="concept-cta" data-haptic="medium" onclick="haptic('medium');openCakeConceptModal()">
+    <span class="concept-cta__ic"><span data-icon="sparkles" data-size="22"></span></span>
+    <span class="concept-cta__body">
+      <span class="concept-cta__t">Опиши торт мечты — AI нарисует</span>
+      <span class="concept-cta__sub">3 варианта за 30 секунд, отправим менеджеру как ТЗ</span>
+    </span>
+    <span class="concept-cta__chev"><span data-icon="chevronRight" data-size="16"></span></span>
+  </button>
 
   <form class="order-form" id="order-form" onsubmit="submitOrder(event)">
     <div class="of-group">
@@ -1215,6 +1235,7 @@
 
 <script src="/js/app.js" defer></script>
 <script src="/js/order.js" defer></script>
+<script src="/js/cake-concept.js" defer></script>
 <script src="/js/game.js" defer></script>
 <!-- /js/bakery.js удалён — Игры убраны до новой геймификации (см. game.js — wheel/streak/secret) -->
 <script src="/js/chat.js" defer></script>

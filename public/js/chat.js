@@ -13,6 +13,12 @@ try {
 const CHAT_HISTORY_MAX = 100; // 50 пар user+assistant — длинная сессия
 const _chatInitData = window.Telegram?.WebApp?.initData ?? "";
 
+// Режим разговора: 'cake' — обычный (поиск/заказ), 'confessor' — эмпатичный mood-pairing
+let _chatMode = 'cake';
+window.setChatMode = function(mode) {
+  _chatMode = mode === 'confessor' ? 'confessor' : 'cake';
+};
+
 function trimChatHistory() {
   if (chatHistory.length > CHAT_HISTORY_MAX) {
     chatHistory.splice(0, chatHistory.length - CHAT_HISTORY_MAX);
@@ -83,7 +89,7 @@ async function sendMessage() {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ messages: chatHistory }),
+      body: JSON.stringify({ messages: chatHistory, mode: _chatMode }),
     });
     typing.remove();
     if (!res.ok) {
@@ -150,7 +156,7 @@ async function streamChat(headers, typing) {
     res = await fetch('/api/chat-stream', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ messages: chatHistory }),
+      body: JSON.stringify({ messages: chatHistory, mode: _chatMode }),
     });
   } catch {
     return false;

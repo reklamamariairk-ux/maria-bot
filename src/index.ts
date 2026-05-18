@@ -29,6 +29,7 @@ import { fetchLk, getVerifiedPhone } from "./lk";
 import { createOrder, OrderRequest } from "./order";
 import { getNextHoliday, getHolidaysToPushToday, HOLIDAYS } from "./holidays";
 import { validatePromoSync, reloadPromoCodes, findPromo } from "./promo";
+import { generateCakeConcepts, isConceptEnabled } from "./cake-concept";
 
 // ─── Env ────────────────────────────────────────────────────────────────────
 const BOT_TOKEN    = process.env.BOT_TOKEN    ?? "";
@@ -886,13 +887,11 @@ type StreamEvent =
   | { type: "final"; text: string; products: Record<string, unknown>[]; cart_actions: ToolContext["cartActions"] }
   | { type: "error"; message: string };
 
-async function* chatAgentStream(
-  userMessages: ChatMessage[],
-  ctx: ToolContext,
-): AsyncGenerator<StreamEvent, void, void> {
-  const system: ChatMessage = {
-    role: "system",
-    content: `Ты — Маша, тёплый AI-помощник кондитерской «Мария» в Иркутске. Каталог: ${ctx.catalog.length} товаров.
+type ChatMode = "cake" | "confessor";
+
+// Системный prompt для основного режима (поиск/заказ торта)
+function cakeSystemPrompt(catalogLen: number): string {
+  return `Ты — Маша, тёплый AI-помощник кондитерской «Мария» в Иркутске. Каталог: ${catalogLen} товаров.
 
 КОНТАКТЫ: maria-irk.ru, +7 (3952) 50-40-80, 17 кафе. Клуб «Мария для своих»: кэшбэк 5–10%, бонусы до 30%, ДР-скидка −5/−10%. Сладкий чек: лотерея на iPhone 17, MacBook, PS5.
 
@@ -918,7 +917,43 @@ async function* chatAgentStream(
 8. Цена = price (итог со скидкой). Если discountPercent>0, упомяни: «1 856 ₽ (–20%, было 2 320 ₽)».
 9. Если первый search не нашёл — попробуй другие слова/contains. До 3 попыток.
 
-СТИЛЬ: дружелюбный, на «ты», как помощник в любимом кафе. 1-2 эмодзи, 2-5 предложений, русский. Не корпоративно («мы нашли») — обращайся лично («посмотри, нашла два»). UI рендерит карточки товаров с кнопкой «+ В корзину» — НЕ вставляй ссылки/картинки текстом, описывай выбор словами. Можно **жирным** выделять важное (название/цену).`,
+СТИЛЬ: дружелюбный, на «ты», как помощник в любимом кафе. 1-2 эмодзи, 2-5 предложений, русский. Не корпоративно («мы нашли») — обращайся лично («посмотри, нашла два»). UI рендерит карточки товаров с кнопкой «+ В корзину» — НЕ вставляй ссылки/картинки текстом, описывай выбор словами. Можно **жирным** выделять важное (название/цену).`;
+}
+
+// Системный prompt для режима «Сладкий исповедник» — эмпатичный mood-pairing
+function confessorSystemPrompt(catalogLen: number): string {
+  return `Ты — Маша, AI-помощник кондитерской «Мария» в Иркутске. Сейчас особый режим: «Сладкий исповедник».
+
+Юзер пришёл не за заказом — а поговорить про настроение, день, чувства. Слушай эмпатично, без давления продаж. Каталог: ${catalogLen} товаров.
+
+ПРАВИЛА:
+1. СНАЧАЛА послушай. Если юзер только поздоровался или коротко — задай 1 открытый вопрос про чувства/день. Не торопись с тортом.
+2. Только когда поймёшь настроение — МЯГКО предложи десерт под него через search_products. Не как продавец, а как друг.
+3. МАППИНГ настроение → вкус (примеры):
+   - тяжёлый день, устал → крепкий, основательный (Медовик, Наполеон, шоколадный)
+   - грустно, одиноко → мягкое, ванильное, нежное (Птичье молоко, чизкейк, эклер)
+   - радостно, празднично → яркое (бенто-сердечком, фруктовое, цветное)
+   - тревожно, нервно → лёгкое, освежающее (ягодное, цитрусовое, низкокалорийное)
+   - романтично → парное, на двоих (бенто, набор пирожных)
+4. ВСЕГДА search_products чтобы найти реальный товар. Не выдумывай.
+5. ОСТОРОЖНО: если пишут про серьёзные проблемы (потеря, депрессия, кризис, мысли о суициде) — отметь это с теплотой, скажи «торт не лечит, но иногда помогает побаловать себя». При очень серьёзных вещах деликатно упомяни телефон доверия 8-800-2000-122 (бесплатный, психолог). Не игнорируй.
+6. Не задавай вопросов про каталог/диету в стиле sales («какой бюджет?», «что любите?»). Это эмоциональный разговор.
+
+СТИЛЬ: тёплый, на «ты», как близкая подруга которая работает в кафе. 2-4 коротких предложения, 1 эмодзи. Не корпоративно, не натужно весело. Можно молчаливо посочувствовать.`;
+}
+
+function systemPromptFor(mode: ChatMode, catalogLen: number): string {
+  return mode === "confessor" ? confessorSystemPrompt(catalogLen) : cakeSystemPrompt(catalogLen);
+}
+
+async function* chatAgentStream(
+  userMessages: ChatMessage[],
+  ctx: ToolContext,
+  mode: ChatMode = "cake",
+): AsyncGenerator<StreamEvent, void, void> {
+  const system: ChatMessage = {
+    role: "system",
+    content: systemPromptFor(mode, ctx.catalog.length),
   };
 
   // Жёсткое ограничение истории — Groq free-tier 6000 TPM, длинная история убивает запрос.
@@ -1062,36 +1097,11 @@ function trimHistory(messages: ChatMessage[], maxNonSystem = 16): ChatMessage[] 
 async function chatAgent(
   userMessages: ChatMessage[],
   ctx: ToolContext,
+  mode: ChatMode = "cake",
 ): Promise<{ text: string; products: Record<string, unknown>[]; cart_actions: ToolContext["cartActions"] }> {
   const system: ChatMessage = {
     role: "system",
-    content: `Ты — Маша, тёплый AI-помощник кондитерской «Мария» в Иркутске. Каталог: ${ctx.catalog.length} товаров.
-
-КОНТАКТЫ: maria-irk.ru, +7 (3952) 50-40-80, 17 кафе. Клуб «Мария для своих»: кэшбэк 5–10%, бонусы до 30%, ДР-скидка −5/−10%. Сладкий чек: лотерея на iPhone 17, MacBook, PS5.
-
-ИНСТРУМЕНТЫ:
-- search_products(query, contains?, exclude?) — поиск. Ищет по name, filling, cake_type, preview, dietary. Используй contains для точного матча.
-- get_product(id) — детали
-- get_today_special() — торт месяца со скидкой
-- get_cake_types() — список типов
-- list_categories() — категории
-- check_my_loyalty() — баллы/билеты (нужен verified телефон)
-- get_my_orders() — заказы клиента
-- list_partners(category?) — партнёры со скидками
-- add_to_cart(product_id) — добавить в корзину
-
-ПРАВИЛА:
-1. ВСЕГДА используй search_products перед ответом про товары. Не отвечай по памяти.
-2. Цены, имена, веса — ТОЛЬКО из tool результатов.
-3. Если нет — честно «нет», не подменяй.
-4. ПРОАКТИВНОСТЬ: если юзер описывает событие/ситуацию (ДР, фуршет, корпоратив, гостям, "что-нибудь шоколадное") — СРАЗУ делай search_products и предложи 2-4 варианта, не задавай уточняющих вопросов.
-5. ДИЕТА: товары имеют теги dietary (sugar-free, gluten-free, vegan, lactose-free, low-cal, nut-free). На вопросы типа «без сахара / веганский / без глютена» — search с contains=["веган"], ["без сахара"] и т.п. Если нашёл — предложи; если нет — честно «такого пока нет, могу подсказать ближайшее».
-6. КОРПОРАТИВЫ: если юзер пишет про B2B/большой заказ/в офис/30+ человек — направь его на форму «Корпоративные заказы» (кнопка на главной экране).
-7. СКОЛЬКО БРАТЬ: если спрашивают «на N человек» / «сколько кг» — упомяни что в карточке торта есть калькулятор «🧮 Сколько брать?». Сам тоже можешь подсказать: ~130 г/взрослого, ~80 г/ребёнка.
-8. Цена = price (итог со скидкой). Если discountPercent>0, упомяни: «1 856 ₽ (–20%, было 2 320 ₽)».
-9. Если первый search не нашёл — попробуй другие слова/contains. До 3 попыток.
-
-СТИЛЬ: дружелюбный, на «ты», как помощник в любимом кафе. 1-2 эмодзи, 2-5 предложений, русский. Не корпоративно («мы нашли») — обращайся лично («посмотри, нашла два»). UI рендерит карточки товаров с кнопкой «+ В корзину» — НЕ вставляй ссылки/картинки текстом, описывай выбор словами. Можно **жирным** выделять важное (название/цену).`,
+    content: systemPromptFor(mode, ctx.catalog.length),
   };
 
   // Жёсткое урезание истории — Groq free-tier 6000 TPM.
@@ -1190,11 +1200,12 @@ async function chatAgent(
 }
 
 app.post("/api/chat", rateLimit(40), async (req, res) => {
-  const { messages } = req.body as { messages: ChatMessage[] };
+  const { messages, mode } = req.body as { messages: ChatMessage[]; mode?: string };
   if (!Array.isArray(messages) || messages.length === 0) {
     res.status(400).json({ error: "messages array is required" });
     return;
   }
+  const chatMode: ChatMode = mode === "confessor" ? "confessor" : "cake";
   // chatId — Telegram WebApp init data; если нет — ставим 0 (анон),
   // тогда tools auth-зависимые вернут unauthorised.
   const tgUser = getTgUser(req);
@@ -1207,7 +1218,7 @@ app.post("/api/chat", rateLimit(40), async (req, res) => {
       surfacedProducts: new Map(),
       cartActions: [],
     };
-    const out = await chatAgent(messages, ctx);
+    const out = await chatAgent(messages, ctx, chatMode);
     res.json({ text: out.text, products: out.products, cart_actions: out.cart_actions });
   } catch (err) {
     const e = err as GroqErr;
@@ -1280,11 +1291,12 @@ app.post("/api/transcribe",
 // SSE-стриминг чата: тот же формат, что /api/chat, но события приходят постепенно.
 // Клиент: fetch -> ReadableStream reader -> парсит "data: ..." и аппендит chunk-и в bubble.
 app.post("/api/chat-stream", rateLimit(40), async (req, res) => {
-  const { messages } = req.body as { messages: ChatMessage[] };
+  const { messages, mode } = req.body as { messages: ChatMessage[]; mode?: string };
   if (!Array.isArray(messages) || messages.length === 0) {
     res.status(400).json({ error: "messages array is required" });
     return;
   }
+  const chatMode: ChatMode = mode === "confessor" ? "confessor" : "cake";
   const tgUser = getTgUser(req);
   const chatId = tgUser?.id ?? 0;
 
@@ -1305,7 +1317,7 @@ app.post("/api/chat-stream", rateLimit(40), async (req, res) => {
   };
 
   try {
-    for await (const ev of chatAgentStream(messages, ctx)) {
+    for await (const ev of chatAgentStream(messages, ctx, chatMode)) {
       res.write(`data: ${JSON.stringify(ev)}\n\n`);
       if (ev.type === "final" || ev.type === "error") break;
     }
@@ -2062,6 +2074,120 @@ app.post("/api/promo/use", async (req, res) => {
   } catch (e) {
     console.error("[promo/use]", (e as Error).message);
     res.status(500).json({ error: "internal" });
+  }
+});
+
+// AI-конструктор торта на заказ: генерируем 3 концепт-картинки через DALL-E 3.
+// Каждый вызов ~$0.12 — защищаем rate-limit'ом 2/мин на IP + 503 если ключа нет.
+app.post("/api/cake-concept/generate", rateLimit(2), async (req, res) => {
+  if (!isConceptEnabled()) {
+    res.status(503).json({ error: "not_configured", message: "AI-конструктор временно недоступен" });
+    return;
+  }
+  const body = req.body as { prompt?: string };
+  const prompt = String(body.prompt ?? "").trim();
+  if (prompt.length < 5) {
+    res.status(400).json({ error: "prompt_too_short", message: "Опиши торт подробнее (минимум 5 символов)" });
+    return;
+  }
+  try {
+    const concepts = await generateCakeConcepts(prompt);
+    res.json({ ok: true, concepts });
+  } catch (e) {
+    const msg = (e as Error).message;
+    console.error("[cake-concept/generate]", msg);
+    if (msg === "not_configured") {
+      res.status(503).json({ error: "not_configured", message: "AI-конструктор временно недоступен" });
+    } else if (msg === "all_variants_failed") {
+      res.status(502).json({ error: "all_variants_failed", message: "Не удалось сгенерировать. Попробуй ещё раз через минуту." });
+    } else {
+      res.status(500).json({ error: "internal", message: "Что-то пошло не так. Попробуй ещё раз." });
+    }
+  }
+});
+
+// Отправка выбранного концепта менеджеру — заводит лид в Bitrix24 с image URL в комментарии.
+app.post("/api/cake-concept/submit", rateLimit(5), async (req, res) => {
+  const b = req.body as {
+    prompt?: string;
+    image_url?: string;
+    variant?: string;
+    name?: string;
+    phone?: string;
+    event_date?: string;
+    persons?: string;
+    comment?: string;
+  };
+  if (!b.image_url || !b.prompt || !b.name || !b.phone) {
+    res.status(400).json({ error: "missing_fields" });
+    return;
+  }
+  if (!BITRIX_WEBHOOK) {
+    res.status(503).json({ error: "no_webhook" });
+    return;
+  }
+  const tg = tryGetTgUser(req);
+  const lines: string[] = [];
+  lines.push(`▼ AI-конструктор торта на заказ`);
+  lines.push(`▼ Стилистика: ${b.variant || "—"}`);
+  lines.push("");
+  lines.push(`▼ Описание от клиента:`);
+  lines.push(b.prompt);
+  lines.push("");
+  if (b.event_date) lines.push(`📅 Дата: ${b.event_date}`);
+  if (b.persons) lines.push(`👥 Гостей: ${b.persons}`);
+  if (b.comment) {
+    lines.push("");
+    lines.push(`ⓘ Комментарий: ${b.comment}`);
+  }
+  lines.push("");
+  lines.push(`🖼 Концепт-картинка: ${b.image_url}`);
+  if (tg?.id) {
+    const tgInfo = [tg.username ? `@${tg.username}` : null, `id=${tg.id}`].filter(Boolean).join(" · ");
+    lines.push(`Telegram: ${tgInfo}`);
+  }
+  const parts = String(b.name).trim().split(/\s+/);
+  const firstName = parts[0] || b.name;
+  const lastName = parts.slice(1).join(" ");
+  try {
+    const base = BITRIX_WEBHOOK.endsWith("/") ? BITRIX_WEBHOOK : BITRIX_WEBHOOK + "/";
+    const url = new URL(`${base}crm.lead.add.json`);
+    const fields: Record<string, unknown> = {
+      TITLE: `🎨 AI-концепт торта · ${b.name}`,
+      NAME: firstName,
+      LAST_NAME: lastName,
+      PHONE: [{ VALUE: b.phone, VALUE_TYPE: "WORK" }],
+      COMMENTS: lines.join("\n"),
+      SOURCE_ID: "WEB",
+      SOURCE_DESCRIPTION: "Telegram Mini App · AI-концепт",
+    };
+    const reqBody = JSON.stringify({ fields });
+    await new Promise<void>((resolve, reject) => {
+      const r = https.request({
+        hostname: url.hostname,
+        path: url.pathname + url.search,
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(reqBody) },
+      }, (resp) => {
+        let d = "";
+        resp.on("data", (c) => (d += c));
+        resp.on("end", () => {
+          try {
+            const json = JSON.parse(d) as { error?: string; error_description?: string };
+            if (json.error) reject(new Error(json.error_description ?? json.error));
+            else resolve();
+          } catch (e) { reject(e); }
+        });
+      });
+      r.on("error", reject);
+      r.write(reqBody);
+      r.end();
+    });
+    console.log(`[cake-concept] lead created for ${b.name} (tg=${tg?.id ?? "-"})`);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[cake-concept/submit]", (e as Error).message);
+    res.status(502).json({ error: "lead_create_failed" });
   }
 });
 

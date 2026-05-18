@@ -155,6 +155,8 @@ function refreshChatChips() {
 function openAiChat() {
   const m = document.getElementById('ai-chat-modal');
   if (!m) return;
+  // По умолчанию — обычный режим (поиск/заказ). openMashaConfessor() переключит на confessor.
+  if (!window._chatModeOverride) window.setChatMode?.('cake');
   m.style.display = 'flex';
   document.body.classList.add('chat-open'); // dim background
   window.scrollLock?.();
@@ -208,6 +210,24 @@ async function customizeChatWelcome() {
   } catch {}
 }
 window.customizeChatWelcome = customizeChatWelcome;
+
+// Sweet Confessor — открыть чат с Машей в эмпатичном режиме «расскажи как день»
+function openMashaConfessor() {
+  // Переключаем чат-режим до открытия — следующий запрос пойдёт с mode='confessor'
+  window._chatModeOverride = true;
+  window.setChatMode?.('confessor');
+  openAiChat();
+  // снимаем override чтобы следующее «обычное» открытие чата вернулось к cake
+  setTimeout(() => { window._chatModeOverride = false; }, 100);
+  // Заменяем дефолтный welcome на конфессор-приветствие (только в этой сессии)
+  const txt = document.getElementById('chat-welcome-text');
+  if (txt) {
+    const time = txt.querySelector('.msg__time')?.outerHTML || '';
+    txt.innerHTML = `Привет 🌙 Я Маша. Расскажи, как у тебя день? Подберу что-то под настроение, а не просто торт.${time}`;
+    txt.dataset.customized = '1';
+  }
+}
+window.openMashaConfessor = openMashaConfessor;
 
 function closeAiChat() {
   const m = document.getElementById('ai-chat-modal');
