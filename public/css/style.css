@@ -405,13 +405,31 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 .btn-hero:hover{background:rgba(255,255,255,.25);transform:translateY(-2px);box-shadow:0 12px 40px rgba(0,0,0,.2)}
 .btn-hero:active{transform:scale(.96)}
 
-/* Hero photo overlay (Apple-Cinnabon style — фото торта в фоне) */
+/* Hero video — cinema-fon (Apple-style autoplay loop). Если файл отсутствует
+   или браузер не смог проиграть — hero__bg-фото фонит как fallback. */
+.hero__video{
+  position:absolute;inset:0;
+  width:100%;height:100%;
+  object-fit:cover;object-position:center;
+  opacity:0;transition:opacity .8s ease-out;
+  pointer-events:none;z-index:0;
+}
+.hero__video.is-playing{opacity:.55}
+/* Reduce-motion: совсем убираем видео */
+@media (prefers-reduced-motion: reduce){
+  .hero__video{display:none}
+}
+
+/* Hero photo overlay (Apple-Cinnabon style — фото торта в фоне, fallback под видео) */
 .hero__bg{
   position:absolute;inset:0;
   background-position:center;background-size:cover;
   opacity:0;transition:opacity .4s ease-out;
+  z-index:0;
 }
 .hero__bg.loaded{opacity:.35}
+/* Когда видео играет — фото-фон гасим (но не убираем — оно работает poster'ом) */
+.hero:has(.hero__video.is-playing) .hero__bg.loaded{opacity:.1}
 .hero__overlay{
   position:absolute;inset:0;
   background:linear-gradient(180deg, rgba(120,5,30,.55) 0%, rgba(214,31,55,.4) 100%);
@@ -554,6 +572,135 @@ html.tg-dark .confessor-card__ic{
   background:linear-gradient(135deg, var(--cream-d) 0%, var(--cream) 100%);
   color:var(--gold-l);
 }
+
+/* Home emotional row — confessor + selfie бок о бок */
+.home-emo-row{
+  display:grid;grid-template-columns:1fr 1fr;gap:8px;
+  margin:0 14px 8px;
+}
+.confessor-card--compact{
+  margin:0;width:100%;
+  padding:12px 12px;gap:10px;
+}
+.confessor-card--compact .confessor-card__ic{width:36px;height:36px;border-radius:10px}
+.confessor-card--compact .confessor-card__t{font-size:14px}
+.confessor-card--compact .confessor-card__sub{font-size:11px}
+.confessor-card--compact .confessor-card__chev{display:none}
+
+.selfie-card{
+  display:flex;align-items:center;gap:10px;
+  padding:12px 12px;width:100%;
+  background:
+    radial-gradient(ellipse 80% 60% at 110% 10%, rgba(232, 138, 168, .18) 0%, transparent 60%),
+    linear-gradient(180deg, #fff5f7 0%, #fff 100%);
+  border:1px solid #fad6df;
+  border-radius:18px;cursor:pointer;
+  box-shadow:var(--shadow-xs),inset 0 1px 0 rgba(255,255,255,.7);
+  transition:transform var(--t),box-shadow var(--t),border-color var(--t);
+  font-family:var(--ff-body);text-align:left;
+}
+.selfie-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-sm);border-color:#e88aa8}
+.selfie-card:active{transform:scale(.97);box-shadow:0 1px 3px rgba(13,6,8,.06)}
+.selfie-card__ic{
+  width:36px;height:36px;border-radius:10px;
+  background:linear-gradient(135deg, #e88aa8 0%, var(--red) 100%);
+  display:inline-flex;align-items:center;justify-content:center;
+  color:#fff;flex-shrink:0;font-size:20px;
+  box-shadow:0 4px 12px rgba(232,138,168,.30), inset 0 1px 0 rgba(255,255,255,.2);
+}
+.selfie-card__body{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.selfie-card__t{
+  font-family:var(--ff-display);font-size:14px;font-weight:700;
+  color:var(--text);letter-spacing:-.2px;line-height:1.2;
+}
+.selfie-card__sub{
+  font-size:11px;font-weight:500;color:var(--muted);
+  letter-spacing:-.05px;
+}
+html.tg-dark .selfie-card{
+  background:
+    radial-gradient(ellipse 80% 60% at 110% 10%, rgba(232, 138, 168, .20) 0%, transparent 60%),
+    linear-gradient(180deg, var(--surface-2) 0%, var(--surface) 100%);
+  border-color:rgba(232,138,168,.3);
+}
+
+/* Selfie-cake модалка */
+.selfie-h{padding:24px 20px 6px;text-align:center}
+.selfie-h__t{
+  font-family:var(--ff-display);font-size:22px;font-weight:700;
+  color:var(--text);letter-spacing:-.3px;margin-bottom:6px;
+}
+.selfie-h__sub{font-size:13px;color:var(--muted);line-height:1.45}
+
+.selfie-body{padding:8px 18px 22px}
+
+.selfie-upload{
+  display:block;cursor:pointer;
+  margin:8px 0 16px;
+}
+.selfie-upload__inner{
+  border:2px dashed var(--border-strong);
+  border-radius:16px;padding:32px 20px;
+  text-align:center;
+  background:var(--bg-soft);
+  transition:border-color var(--t-fast),background var(--t-fast);
+}
+.selfie-upload:hover .selfie-upload__inner{
+  border-color:var(--red);background:var(--red-xl);
+}
+.selfie-upload__ic{font-size:42px;margin-bottom:10px;line-height:1}
+.selfie-upload__t{
+  font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;
+}
+.selfie-upload__sub{font-size:12px;color:var(--muted)}
+
+.selfie-tips{
+  display:flex;flex-direction:column;gap:6px;
+  padding:0 4px;
+}
+.selfie-tip{
+  font-size:11px;color:var(--muted);line-height:1.4;
+  letter-spacing:-.05px;
+}
+
+/* Preview + результат */
+.selfie-preview{
+  position:relative;border-radius:14px;overflow:hidden;
+  margin-bottom:14px;aspect-ratio:1/1;max-width:240px;margin-left:auto;margin-right:auto;
+  background:#000;
+}
+.selfie-preview img{
+  width:100%;height:100%;object-fit:cover;display:block;opacity:.85;
+}
+.selfie-preview__overlay{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:linear-gradient(180deg,rgba(0,0,0,.4) 0%,rgba(0,0,0,.6) 100%);
+  color:#fff;text-align:center;padding:0 16px;
+}
+.selfie-preview__t{
+  font-family:var(--ff-display);font-size:17px;font-weight:700;
+  margin-bottom:6px;
+}
+.selfie-preview__sub{font-size:12px;opacity:.85}
+
+.selfie-pick{padding:8px 0}
+.selfie-pick__img{
+  display:block;margin:0 auto 8px;
+  max-width:280px;width:100%;
+  border-radius:14px;border:2px solid var(--gold-l);
+  box-shadow:var(--shadow-sm);
+}
+.selfie-pick__lbl{
+  text-align:center;font-size:12px;font-weight:700;
+  letter-spacing:.4px;text-transform:uppercase;color:var(--gold-d);
+  padding:8px;margin-bottom:14px;
+}
+.selfie-pick__actions{
+  display:flex;flex-direction:column;gap:8px;
+}
+html.tg-dark .selfie-upload__inner{background:var(--surface-2);border-color:var(--border-strong)}
+html.tg-dark .selfie-pick__img{border-color:var(--cream-d)}
 
 /* ═══ AI-конструктор торта на заказ ═══════════════════════════════════════ */
 .concept-cta{
@@ -729,6 +876,126 @@ html.tg-dark .concept-skel{
   background:linear-gradient(110deg,var(--surface-2) 8%,var(--cream-d) 18%,var(--surface-2) 33%);
   background-size:200% 100%;
 }
+
+/* ═══ Cinematic Onboarding «33 года Марии» ═══════════════════════════════ */
+.onb{
+  position:fixed;inset:0;z-index:2000;
+  background:#000;
+  display:flex;flex-direction:column;
+  animation:onbFadeIn .35s ease-out;
+}
+.onb--closing{animation:onbFadeOut .35s ease-out forwards}
+@keyframes onbFadeIn{from{opacity:0}to{opacity:1}}
+@keyframes onbFadeOut{from{opacity:1}to{opacity:0}}
+
+.onb__track{
+  flex:1;display:flex;
+  overflow-x:auto;overflow-y:hidden;
+  scroll-snap-type:x mandatory;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+}
+.onb__track::-webkit-scrollbar{display:none}
+
+.onb__panel{
+  flex:0 0 100%;height:100%;
+  scroll-snap-align:start;
+  position:relative;overflow:hidden;
+}
+/* Fallback-gradient если фото нет (на случай отсутствия /assets/onboarding/) */
+.onb__panel--sepia{background:linear-gradient(160deg,#2a1810 0%,#5a3a20 50%,#8a6840 100%)}
+.onb__panel--classic{background:linear-gradient(160deg,#1a2820 0%,#3a4a3a 50%,#5a6850 100%)}
+.onb__panel--now{background:linear-gradient(160deg,var(--red-dd) 0%,var(--red-d) 50%,var(--red) 100%)}
+
+.onb__photo{
+  position:absolute;inset:0;
+  background-size:cover;background-position:center;
+  /* Лёгкий zoom на старте — Ken Burns эффект */
+  animation:onbKenBurns 14s ease-in-out infinite alternate;
+  /* Если фото 404 — background-image просто не применится, fallback-gradient ниже виден */
+}
+@keyframes onbKenBurns{
+  from{transform:scale(1) translate(0,0)}
+  to  {transform:scale(1.08) translate(-1%, 1%)}
+}
+.onb__vignette{
+  position:absolute;inset:0;pointer-events:none;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(0,0,0,.7) 0%, transparent 60%),
+    linear-gradient(180deg, rgba(0,0,0,.2) 0%, transparent 30%, transparent 60%, rgba(0,0,0,.6) 100%);
+}
+.onb__content{
+  position:absolute;left:0;right:0;bottom:140px;
+  padding:0 32px;color:#fff;text-align:center;
+  display:flex;flex-direction:column;gap:12px;
+  animation:onbContentIn .8s .2s cubic-bezier(.22,1,.36,1) backwards;
+}
+@keyframes onbContentIn{
+  from{opacity:0;transform:translateY(24px)}
+  to  {opacity:1;transform:translateY(0)}
+}
+.onb__year{
+  font-family:var(--ff-display);
+  font-size:64px;font-weight:800;letter-spacing:-2px;
+  line-height:1;opacity:.95;
+  text-shadow:0 4px 20px rgba(0,0,0,.4);
+  font-feature-settings:"tnum" 1;
+}
+.onb__h{
+  font-family:var(--ff-display);
+  font-size:28px;font-weight:700;line-height:1.15;
+  letter-spacing:-.4px;
+  text-shadow:0 2px 12px rgba(0,0,0,.4);
+  text-wrap:balance;
+}
+.onb__body{
+  font-size:15px;font-weight:500;line-height:1.5;
+  opacity:.88;letter-spacing:-.1px;
+  max-width:340px;margin:0 auto;
+  text-shadow:0 1px 8px rgba(0,0,0,.3);
+}
+
+.onb__skip{
+  position:absolute;top:calc(14px + env(safe-area-inset-top));right:14px;
+  z-index:3;
+  background:rgba(255,255,255,.14);color:#fff;
+  border:1px solid rgba(255,255,255,.22);
+  padding:8px 14px;border-radius:999px;
+  font-size:12px;font-weight:600;letter-spacing:.2px;
+  cursor:pointer;backdrop-filter:blur(8px);
+  font-family:var(--ff-body);
+}
+.onb__skip:active{transform:scale(.94)}
+
+.onb__dots{
+  position:absolute;left:50%;bottom:88px;z-index:3;
+  display:flex;gap:8px;transform:translateX(-50%);
+}
+.onb__dot{
+  width:6px;height:6px;border-radius:50%;
+  background:rgba(255,255,255,.35);
+  transition:all .3s ease;
+}
+.onb__dot.is-active{
+  width:20px;border-radius:3px;background:#fff;
+  box-shadow:0 2px 10px rgba(255,255,255,.5);
+}
+
+.onb__nav{
+  position:absolute;left:0;right:0;bottom:calc(24px + env(safe-area-inset-bottom));
+  display:flex;justify-content:center;z-index:3;
+  padding:0 24px;
+}
+.onb__cta{
+  background:#fff;color:var(--text);
+  border:none;padding:14px 40px;
+  border-radius:999px;font-size:15px;font-weight:700;
+  letter-spacing:-.1px;cursor:pointer;
+  box-shadow:0 8px 24px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.6);
+  transition:transform var(--t);font-family:var(--ff-body);
+}
+.onb__cta:hover{transform:translateY(-2px)}
+.onb__cta:active{transform:scale(.96)}
 
 /* Fullscreen story viewer */
 .story-viewer{

@@ -30,6 +30,7 @@ import { createOrder, OrderRequest } from "./order";
 import { getNextHoliday, getHolidaysToPushToday, HOLIDAYS } from "./holidays";
 import { validatePromoSync, reloadPromoCodes, findPromo } from "./promo";
 import { generateCakeConcepts, isConceptEnabled } from "./cake-concept";
+import { storeSelfie, readSelfie, generateSelfieCakes, cleanupOldSelfies } from "./selfie-cake";
 
 // ─── Env ────────────────────────────────────────────────────────────────────
 const BOT_TOKEN    = process.env.BOT_TOKEN    ?? "";
@@ -315,6 +316,7 @@ function cleanupTmpDir(dir: string, maxAgeMs: number) {
 function runCleanup() {
   cleanupTmpDir("/tmp/img_cache", 7 * 24 * 60 * 60 * 1000);    // 7 дней
   cleanupTmpDir("/tmp/lead_photos", 90 * 24 * 60 * 60 * 1000); // 90 дней
+  cleanupOldSelfies();                                          // 2 часа (внутри модуля)
 }
 setInterval(runCleanup, 6 * 60 * 60 * 1000); // каждые 6 часов
 setTimeout(runCleanup, 5 * 60 * 1000);       // первая через 5 минут после старта
@@ -2185,6 +2187,53 @@ app.post("/api/cake-concept/submit", rateLimit(5), async (req, res) => {
     console.error("[cake-concept/submit]", (e as Error).message);
     res.status(502).json({ error: "lead_create_failed" });
   }
+});
+
+// AI-портрет на торте: юзер загружает селфи (base64) → бэк сохраняет временный
+// файл → Pollinations img2img генерит 3 концепта «себя как сахарной фигурки».
+app.post("/api/selfie-cake", rateLimit(3), express.json({ limit: "8mb" }), async (req, res) => {
+  const healthy = await isConceptEnabled();
+  if (!healthy) {
+    res.status(503).json({ error: "not_configured", message: "Сервис временно недоступен. Попробуй позже." });
+    return;
+  }
+  const body = req.body as { image_b64?: string };
+  const b64 = String(body.image_b64 ?? "");
+  if (!b64) {
+    res.status(400).json({ error: "no_image" });
+    return;
+  }
+  try {
+    // Construct public base URL — Pollinations должен мочь скачать наш selfie
+    const proto = (req.headers["x-forwarded-proto"] as string) || req.protocol || "https";
+    const host = (req.headers["x-forwarded-host"] as string) || req.headers.host || "";
+    const baseUrl = `${proto}://${host}`;
+    const stored = storeSelfie(b64, baseUrl);
+    const variants = generateSelfieCakes(stored.publicUrl);
+    res.json({ ok: true, variants, selfie_id: stored.id });
+  } catch (e) {
+    const msg = (e as Error).message;
+    console.error("[selfie-cake]", msg);
+    if (msg === "bad_image_format") {
+      res.status(400).json({ error: "bad_format", message: "Поддерживаются JPG, PNG, WebP" });
+    } else if (msg === "image_too_large") {
+      res.status(400).json({ error: "too_large", message: "Размер фото — до 6 МБ" });
+    } else if (msg === "image_too_small") {
+      res.status(400).json({ error: "too_small", message: "Слишком маленькое фото" });
+    } else {
+      res.status(500).json({ error: "internal", message: "Что-то пошло не так. Попробуй ещё раз." });
+    }
+  }
+});
+
+// Сервер раздачи временных selfie-файлов (Pollinations скачивает по этому URL).
+app.get("/api/selfie-img/:id", (req, res) => {
+  const id = String(req.params.id || "");
+  const file = readSelfie(id);
+  if (!file) { res.status(404).end(); return; }
+  res.setHeader("Content-Type", file.type);
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  res.end(file.buf);
 });
 
 // Hot-reload data/promo-codes.json без рестарта

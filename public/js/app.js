@@ -1217,6 +1217,18 @@ async function loadHomePersona() {
 }
 window.loadHomePersona = loadHomePersona;
 
+/* ── Hero video: помечаем играющим, чтобы CSS опустил фото-фон ─────────── */
+(function setupHeroVideo(){
+  const v = document.getElementById('hero-video');
+  if (!v) return;
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) { v.remove(); return; }
+  // 'playing' срабатывает когда видео действительно стартанулло. error/stalled — fallback
+  v.addEventListener('playing', () => v.classList.add('is-playing'), { once: true });
+  v.addEventListener('error', () => v.remove());
+  // На некоторых iOS-Safari autoplay не срабатывает без user gesture — пробуем play() явно
+  setTimeout(() => v.play?.().catch(() => {}), 100);
+})();
+
 /* ── Hero parallax: фон сдвигается в 0.35× скорости скролла ──────────────── */
 (function setupHeroParallax(){
   const heroBg = document.getElementById('hero-bg');

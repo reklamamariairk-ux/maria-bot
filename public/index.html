@@ -65,6 +65,12 @@
 
   <!-- Hero с фото бэкграунда -->
   <div class="hero">
+    <!-- Cinema video background (опционально, если файла нет — фотографический fallback) -->
+    <video class="hero__video" id="hero-video" autoplay muted loop playsinline preload="metadata"
+           poster="" aria-hidden="true">
+      <source src="/assets/hero.mp4" type="video/mp4"/>
+      <source src="/assets/hero.webm" type="video/webm"/>
+    </video>
     <div class="hero__bg" id="hero-bg"></div>
     <div class="hero__overlay"></div>
     <div class="hero__content">
@@ -106,15 +112,23 @@
     </button>
   </div>
 
-  <!-- Sweet Confessor — эмпатичный режим чата с Машей -->
-  <button class="confessor-card" data-haptic="light" onclick="haptic('light');openMashaConfessor()">
-    <span class="confessor-card__ic"><span data-icon="sparkles" data-size="20"></span></span>
-    <span class="confessor-card__body">
-      <span class="confessor-card__t">Расскажи, как день</span>
-      <span class="confessor-card__sub">Маша слушает — и подберёт десерт под настроение</span>
-    </span>
-    <span class="confessor-card__chev"><span data-icon="chevronRight" data-size="16"></span></span>
-  </button>
+  <!-- Sweet Confessor + AI Selfie — два эмоциональных entry-points в ряд -->
+  <div class="home-emo-row">
+    <button class="confessor-card confessor-card--compact" data-haptic="light" onclick="haptic('light');openMashaConfessor()">
+      <span class="confessor-card__ic"><span data-icon="sparkles" data-size="18"></span></span>
+      <span class="confessor-card__body">
+        <span class="confessor-card__t">Расскажи как день</span>
+        <span class="confessor-card__sub">Маша слушает</span>
+      </span>
+    </button>
+    <button class="selfie-card" data-haptic="light" onclick="haptic('light');openSelfieCakeModal()">
+      <span class="selfie-card__ic">📸</span>
+      <span class="selfie-card__body">
+        <span class="selfie-card__t">Ты как торт</span>
+        <span class="selfie-card__sub">AI-портрет</span>
+      </span>
+    </button>
+  </div>
 
   <!-- Категории chips — быстрый entry -->
   <div class="home-cats" id="home-cats">
@@ -1236,6 +1250,8 @@
 <script src="/js/app.js" defer></script>
 <script src="/js/order.js" defer></script>
 <script src="/js/cake-concept.js" defer></script>
+<script src="/js/onboarding.js" defer></script>
+<script src="/js/selfie-cake.js" defer></script>
 <script src="/js/game.js" defer></script>
 <!-- /js/bakery.js удалён — Игры убраны до новой геймификации (см. game.js — wheel/streak/secret) -->
 <script src="/js/chat.js" defer></script>
