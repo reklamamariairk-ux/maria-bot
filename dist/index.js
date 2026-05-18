@@ -2109,11 +2109,13 @@ app.post("/api/promo/use", async (req, res) => {
         res.status(500).json({ error: "internal" });
     }
 });
-// AI-конструктор торта на заказ: генерируем 3 концепт-картинки через DALL-E 3.
-// Каждый вызов ~$0.12 — защищаем rate-limit'ом 2/мин на IP + 503 если ключа нет.
+// AI-конструктор торта на заказ: 3 концепт-картинки через Pollinations.ai (бесплатно, Flux).
+// Бэк возвращает URL'ы мгновенно — Pollinations генерирует картинку при первом GET от
+// клиента (~10-30 сек на изображение). Фронт показывает skeleton до загрузки.
 app.post("/api/cake-concept/generate", rateLimit(2), async (req, res) => {
-    if (!(0, cake_concept_1.isConceptEnabled)()) {
-        res.status(503).json({ error: "not_configured", message: "AI-конструктор временно недоступен" });
+    const healthy = await (0, cake_concept_1.isConceptEnabled)();
+    if (!healthy) {
+        res.status(503).json({ error: "not_configured", message: "Сервис генерации картинок временно недоступен. Попробуй позже." });
         return;
     }
     const body = req.body;
@@ -2129,15 +2131,7 @@ app.post("/api/cake-concept/generate", rateLimit(2), async (req, res) => {
     catch (e) {
         const msg = e.message;
         console.error("[cake-concept/generate]", msg);
-        if (msg === "not_configured") {
-            res.status(503).json({ error: "not_configured", message: "AI-конструктор временно недоступен" });
-        }
-        else if (msg === "all_variants_failed") {
-            res.status(502).json({ error: "all_variants_failed", message: "Не удалось сгенерировать. Попробуй ещё раз через минуту." });
-        }
-        else {
-            res.status(500).json({ error: "internal", message: "Что-то пошло не так. Попробуй ещё раз." });
-        }
+        res.status(500).json({ error: "internal", message: "Что-то пошло не так. Попробуй ещё раз." });
     }
 });
 // Отправка выбранного концепта менеджеру — заводит лид в Bitrix24 с image URL в комментарии.

@@ -650,9 +650,15 @@ html.tg-dark .confessor-card__ic{
 .concept-result{
   position:relative;aspect-ratio:1/1;
   border:2px solid var(--border-strong);border-radius:14px;
-  overflow:hidden;cursor:pointer;background:#fff;padding:0;
+  overflow:hidden;cursor:pointer;padding:0;
+  /* Skeleton-фон: shimmer-градиент пока картинка не загрузилась */
+  background:linear-gradient(110deg,#f4f4f5 8%,#fafafb 18%,#f4f4f5 33%);
+  background-size:200% 100%;
+  animation:skelShimmer 1.4s infinite linear;
   transition:transform var(--t),border-color var(--t),box-shadow var(--t);
 }
+/* Когда картинка загрузилась — отключаем shimmer (img.loaded маркер) */
+.concept-result:has(img.loaded){animation:none;background:#fff}
 .concept-result:hover{transform:translateY(-3px);border-color:var(--gold);box-shadow:var(--shadow-gold)}
 .concept-result:active{transform:scale(.96)}
 .concept-result img{

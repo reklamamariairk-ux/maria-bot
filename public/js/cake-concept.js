@@ -76,11 +76,11 @@ async function generateConcept() {
 
   const body = document.getElementById('concept-body');
   if (!body) return;
-  // Skeleton-state на время генерации
+  // Skeleton-state — генерация на стороне Pollinations может занять до минуты
   body.innerHTML = `
     <div class="concept-loading">
       <div class="concept-loading__title">🎨 Маша рисует твой торт…</div>
-      <div class="concept-loading__sub">Это займёт ~30 секунд. Можно отвлечься на чай.</div>
+      <div class="concept-loading__sub">Картинки могут появляться по одной. До минуты, можно отвлечься на чай ☕</div>
       <div class="concept-skel-grid">
         <div class="concept-skel"></div>
         <div class="concept-skel"></div>
