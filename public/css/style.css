@@ -405,31 +405,25 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 .btn-hero:hover{background:rgba(255,255,255,.25);transform:translateY(-2px);box-shadow:0 12px 40px rgba(0,0,0,.2)}
 .btn-hero:active{transform:scale(.96)}
 
-/* Hero video — cinema-fon (Apple-style autoplay loop). Если файл отсутствует
-   или браузер не смог проиграть — hero__bg-фото фонит как fallback. */
-.hero__video{
-  position:absolute;inset:0;
-  width:100%;height:100%;
-  object-fit:cover;object-position:center;
-  opacity:0;transition:opacity .8s ease-out;
-  pointer-events:none;z-index:0;
-}
-.hero__video.is-playing{opacity:.55}
-/* Reduce-motion: совсем убираем видео */
-@media (prefers-reduced-motion: reduce){
-  .hero__video{display:none}
-}
-
-/* Hero photo overlay (Apple-Cinnabon style — фото торта в фоне, fallback под видео) */
+/* Hero cinematic background — AI-generated фото + Ken Burns анимация (zoom+pan).
+   Default фон уже задан CSS, JS может перезаписать на свежий торт месяца. */
 .hero__bg{
   position:absolute;inset:0;
+  background-image:url('/assets/hero-cinema.jpg');
   background-position:center;background-size:cover;
-  opacity:0;transition:opacity .4s ease-out;
-  z-index:0;
+  opacity:.5; /* виден сразу, не ждём JS */
+  transition:opacity .4s ease-out;
+  animation:heroKenBurns 18s ease-in-out infinite alternate;
+  z-index:0;will-change:transform;
 }
-.hero__bg.loaded{opacity:.35}
-/* Когда видео играет — фото-фон гасим (но не убираем — оно работает poster'ом) */
-.hero:has(.hero__video.is-playing) .hero__bg.loaded{opacity:.1}
+.hero__bg.loaded{opacity:.5}
+@keyframes heroKenBurns{
+  from{transform:scale(1) translate(0,0)}
+  to  {transform:scale(1.12) translate(-2%, 1.5%)}
+}
+@media (prefers-reduced-motion: reduce){
+  .hero__bg{animation:none}
+}
 .hero__overlay{
   position:absolute;inset:0;
   background:linear-gradient(180deg, rgba(120,5,30,.55) 0%, rgba(214,31,55,.4) 100%);

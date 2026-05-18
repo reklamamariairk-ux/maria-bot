@@ -65,12 +65,8 @@
 
   <!-- Hero с фото бэкграунда -->
   <div class="hero">
-    <!-- Cinema video background (опционально, если файла нет — фотографический fallback) -->
-    <video class="hero__video" id="hero-video" autoplay muted loop playsinline preload="metadata"
-           poster="" aria-hidden="true">
-      <source src="/assets/hero.mp4" type="video/mp4"/>
-      <source src="/assets/hero.webm" type="video/webm"/>
-    </video>
+    <!-- Cinematic hero photo + Ken Burns animation (AI-generated через Pollinations).
+         JS опционально перезаписывает на фото торта месяца. -->
     <div class="hero__bg" id="hero-bg"></div>
     <div class="hero__overlay"></div>
     <div class="hero__content">
