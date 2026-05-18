@@ -2748,6 +2748,17 @@ app.get("/api/shops", async (_req, res) => {
   }
 });
 
+// Сброс кеша адресов кафе — следующий /api/shops подтянет свежее с сайта
+app.post("/api/admin/shops/reload", (req, res) => {
+  const token = req.header("x-user-token") || (req.body as { token?: string })?.token;
+  if (!token || token !== process.env.ADMIN_TOKEN) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  _shopsCache = null;
+  res.json({ ok: true, cleared: true });
+});
+
 // Sweet Check — активная неделя/квест
 // Источник: data/sweet-check-weeks.json (hot-reload через /api/admin/sweet-check/reload).
 // Если файла нет — fallback на хардкод (на случай первого деплоя).

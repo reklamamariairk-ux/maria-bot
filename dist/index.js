@@ -2782,6 +2782,16 @@ app.get("/api/shops", async (_req, res) => {
         res.status(502).json({ count: 0, shops: [], error: "fetch_failed" });
     }
 });
+// Сброс кеша адресов кафе — следующий /api/shops подтянет свежее с сайта
+app.post("/api/admin/shops/reload", (req, res) => {
+    const token = req.header("x-user-token") || req.body?.token;
+    if (!token || token !== process.env.ADMIN_TOKEN) {
+        res.status(403).json({ error: "forbidden" });
+        return;
+    }
+    _shopsCache = null;
+    res.json({ ok: true, cleared: true });
+});
 const SWEET_CHECK_FALLBACK = [
     { from: "2026-04-13", to: "2026-04-19", name: "Неделя 4 · Старт", task: "Купи набор «Семейный»", reward: "5 билетов" },
     { from: "2026-04-20", to: "2026-04-26", name: "Неделя 5 · Сезон ягод", task: "Купи 2 пирога с ягодной начинкой", reward: "5 билетов" },
