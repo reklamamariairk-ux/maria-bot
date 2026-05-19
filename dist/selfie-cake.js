@@ -19,10 +19,12 @@ exports.cleanupOldSelfies = cleanupOldSelfies;
  * (см. index.ts) — добавляется в общий runCleanup с TTL 2 часа.
  */
 const fs_1 = __importDefault(require("fs"));
+const promises_1 = __importDefault(require("fs/promises"));
 const path_1 = __importDefault(require("path"));
 const crypto_1 = __importDefault(require("crypto"));
 const SELFIE_DIR = path_1.default.join("/tmp", "cake_selfies");
-// Создаём папку при импорте — раз и навсегда
+// Создаём папку при импорте — раз и навсегда. Здесь оставляем sync — это
+// один раз на процесс, не блокирует hot path.
 try {
     fs_1.default.mkdirSync(SELFIE_DIR, { recursive: true });
 }
@@ -68,7 +70,7 @@ function parseDataUrl(b64) {
     const ext = match[1].toLowerCase() === "jpg" ? "jpeg" : match[1].toLowerCase();
     return { buf: Buffer.from(match[2], "base64"), ext };
 }
-function storeSelfie(b64DataUrl, baseUrl) {
+async function storeSelfie(b64DataUrl, baseUrl) {
     const parsed = parseDataUrl(b64DataUrl);
     if (!parsed)
         throw new Error("bad_image_format");
@@ -79,19 +81,20 @@ function storeSelfie(b64DataUrl, baseUrl) {
         throw new Error("image_too_small");
     const id = crypto_1.default.randomBytes(8).toString("hex");
     const filename = `${id}.${parsed.ext}`;
-    fs_1.default.writeFileSync(path_1.default.join(SELFIE_DIR, filename), parsed.buf);
-    // baseUrl приходит из req-protocol+host. Pollinations нужен absolute URL.
+    await promises_1.default.writeFile(path_1.default.join(SELFIE_DIR, filename), parsed.buf);
+    // baseUrl: абсолютный URL нашего сервиса. Pollinations стучится сюда чтобы
+    // забрать селфи как conditioning image для img2img.
     const publicUrl = `${baseUrl.replace(/\/$/, "")}/api/selfie-img/${id}`;
     return { id, publicUrl };
 }
-function readSelfie(id) {
+async function readSelfie(id) {
     // Защита от path traversal
     if (!/^[0-9a-f]{16}$/.test(id))
         return null;
     for (const ext of ["jpeg", "png", "webp"]) {
         const fp = path_1.default.join(SELFIE_DIR, `${id}.${ext}`);
         try {
-            const buf = fs_1.default.readFileSync(fp);
+            const buf = await promises_1.default.readFile(fp);
             return { buf, type: ext === "jpeg" ? "image/jpeg" : `image/${ext}` };
         }
         catch { }
@@ -106,16 +109,17 @@ function generateSelfieCakes(publicSelfieUrl) {
     }));
 }
 // Опционально вызывается из общего runCleanup — удаляем selfie старше 2 часов
-function cleanupOldSelfies() {
+async function cleanupOldSelfies() {
     try {
         const now = Date.now();
         const maxAge = 2 * 60 * 60 * 1000;
-        for (const f of fs_1.default.readdirSync(SELFIE_DIR)) {
+        const files = await promises_1.default.readdir(SELFIE_DIR);
+        for (const f of files) {
             try {
                 const fp = path_1.default.join(SELFIE_DIR, f);
-                const st = fs_1.default.statSync(fp);
+                const st = await promises_1.default.stat(fp);
                 if (now - st.mtimeMs > maxAge)
-                    fs_1.default.unlinkSync(fp);
+                    await promises_1.default.unlink(fp);
             }
             catch { }
         }

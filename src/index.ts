@@ -316,7 +316,7 @@ function cleanupTmpDir(dir: string, maxAgeMs: number) {
 function runCleanup() {
   cleanupTmpDir("/tmp/img_cache", 7 * 24 * 60 * 60 * 1000);    // 7 дней
   cleanupTmpDir("/tmp/lead_photos", 90 * 24 * 60 * 60 * 1000); // 90 дней
-  cleanupOldSelfies();                                          // 2 часа (внутри модуля)
+  cleanupOldSelfies().catch(() => {});                          // 2 часа (внутри модуля)
 }
 setInterval(runCleanup, 6 * 60 * 60 * 1000); // каждые 6 часов
 setTimeout(runCleanup, 5 * 60 * 1000);       // первая через 5 минут после старта
@@ -506,6 +506,11 @@ bot.on("message:text", async (ctx) => {
 
 // ─── Express ─────────────────────────────────────────────────────────────────
 const app = express();
+
+// За Caddy / Cloudflare. Один hop — Caddy. Нужно чтобы req.protocol/req.ip
+// читались из X-Forwarded-*. Без этого Secure-cookies не выставятся, плюс
+// в selfie-cake baseUrl строится из заголовков и легко подменяется.
+app.set("trust proxy", 1);
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
@@ -2082,7 +2087,8 @@ app.post("/api/promo/use", async (req, res) => {
 // AI-конструктор торта на заказ: 3 концепт-картинки через Pollinations.ai (бесплатно, Flux).
 // Бэк возвращает URL'ы мгновенно — Pollinations генерирует картинку при первом GET от
 // клиента (~10-30 сек на изображение). Фронт показывает skeleton до загрузки.
-app.post("/api/cake-concept/generate", rateLimit(2), async (req, res) => {
+// requireTgUser защищает от анонимного абуза endpoint'а ботнетами.
+app.post("/api/cake-concept/generate", requireTgUser, rateLimit(2), async (req, res) => {
   const healthy = await isConceptEnabled();
   if (!healthy) {
     res.status(503).json({ error: "not_configured", message: "Сервис генерации картинок временно недоступен. Попробуй позже." });
@@ -2105,7 +2111,9 @@ app.post("/api/cake-concept/generate", rateLimit(2), async (req, res) => {
 });
 
 // Отправка выбранного концепта менеджеру — заводит лид в Bitrix24 с image URL в комментарии.
-app.post("/api/cake-concept/submit", rateLimit(5), async (req, res) => {
+// requireTgUser + whitelist image_url защищают от ботнет-спама Bitrix24 CRM
+// произвольными URL (порно/реклама).
+app.post("/api/cake-concept/submit", requireTgUser, rateLimit(5), async (req, res) => {
   const b = req.body as {
     prompt?: string;
     image_url?: string;
@@ -2118,6 +2126,12 @@ app.post("/api/cake-concept/submit", rateLimit(5), async (req, res) => {
   };
   if (!b.image_url || !b.prompt || !b.name || !b.phone) {
     res.status(400).json({ error: "missing_fields" });
+    return;
+  }
+  // image_url должен быть с нашего AI-генератора. Иначе любой может пробросить
+  // в лид Bitrix произвольную URL (через DevTools) — спам/реклама в CRM.
+  if (!b.image_url.startsWith("https://image.pollinations.ai/")) {
+    res.status(400).json({ error: "bad_image_url" });
     return;
   }
   if (!BITRIX_WEBHOOK) {
@@ -2191,7 +2205,8 @@ app.post("/api/cake-concept/submit", rateLimit(5), async (req, res) => {
 
 // AI-портрет на торте: юзер загружает селфи (base64) → бэк сохраняет временный
 // файл → Pollinations img2img генерит 3 концепта «себя как сахарной фигурки».
-app.post("/api/selfie-cake", rateLimit(3), express.json({ limit: "8mb" }), async (req, res) => {
+// requireTgUser защищает от анонимного абуза + I/O на /tmp с публичного интернета.
+app.post("/api/selfie-cake", requireTgUser, rateLimit(3), express.json({ limit: "8mb" }), async (req, res) => {
   const healthy = await isConceptEnabled();
   if (!healthy) {
     res.status(503).json({ error: "not_configured", message: "Сервис временно недоступен. Попробуй позже." });
@@ -2204,11 +2219,15 @@ app.post("/api/selfie-cake", rateLimit(3), express.json({ limit: "8mb" }), async
     return;
   }
   try {
-    // Construct public base URL — Pollinations должен мочь скачать наш selfie
-    const proto = (req.headers["x-forwarded-proto"] as string) || req.protocol || "https";
-    const host = (req.headers["x-forwarded-host"] as string) || req.headers.host || "";
-    const baseUrl = `${proto}://${host}`;
-    const stored = storeSelfie(b64, baseUrl);
+    // Pollinations должен мочь скачать наш selfie. baseUrl берётся из ENV (WEBHOOK_URL
+    // или MINI_APP_URL), НЕ из request-заголовков — иначе атакующий через подделку
+    // X-Forwarded-Host превратит наш API в SSRF-прокси (Pollinations скачает с evil.com).
+    const baseUrl = (process.env.WEBHOOK_URL || process.env.MINI_APP_URL || "").trim();
+    if (!baseUrl) {
+      res.status(503).json({ error: "no_base_url", message: "Сервис не сконфигурирован." });
+      return;
+    }
+    const stored = await storeSelfie(b64, baseUrl);
     const variants = generateSelfieCakes(stored.publicUrl);
     res.json({ ok: true, variants, selfie_id: stored.id });
   } catch (e) {
@@ -2227,9 +2246,12 @@ app.post("/api/selfie-cake", rateLimit(3), express.json({ limit: "8mb" }), async
 });
 
 // Сервер раздачи временных selfie-файлов (Pollinations скачивает по этому URL).
-app.get("/api/selfie-img/:id", (req, res) => {
+// Endpoint должен быть ПУБЛИЧНЫМ — у Pollinations нет наших credentials.
+// Защита от path traversal через regex в readSelfie. ID — 128-бит random,
+// угадать нельзя.
+app.get("/api/selfie-img/:id", async (req, res) => {
   const id = String(req.params.id || "");
-  const file = readSelfie(id);
+  const file = await readSelfie(id);
   if (!file) { res.status(404).end(); return; }
   res.setHeader("Content-Type", file.type);
   res.setHeader("Cache-Control", "public, max-age=3600");
