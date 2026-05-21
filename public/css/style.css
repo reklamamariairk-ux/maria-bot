@@ -482,7 +482,7 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 }
 .bento-card{
   position:relative;overflow:hidden;
-  background:#fff;
+  background:var(--surface);
   border:1px solid var(--border-strong);
   border-radius:18px;
   padding:12px 14px;
@@ -537,13 +537,13 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 }
 /* Gold accent — для iPhone-розыгрыша */
 .bento-card--gold{
-  background:linear-gradient(135deg,var(--gold-xl) 0%,#fff 100%);
+  background:linear-gradient(135deg,var(--gold-xl) 0%,var(--surface) 100%);
   border-color:var(--gold-l);
 }
 .bento-card--gold .bento-card__ic{background:var(--gold-xl);color:var(--gold-d)}
 /* Club accent — для VIP-карты */
 .bento-card--club{
-  background:linear-gradient(135deg,#fff 0%,var(--red-xl) 100%);
+  background:linear-gradient(135deg,var(--surface) 0%,var(--red-xl) 100%);
   border-color:var(--red-l);
 }
 .bento-card--club .bento-card__ic{background:var(--red-l);color:var(--red)}
@@ -567,7 +567,7 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
   margin:6px 14px 8px;padding:14px 14px;width:calc(100% - 28px);
   background:
     radial-gradient(ellipse 80% 60% at 110% 10%, rgba(214,31,55,.10) 0%, transparent 60%),
-    linear-gradient(180deg, var(--cream-xl) 0%, #fff 100%);
+    linear-gradient(180deg, var(--cream-xl) 0%, var(--surface) 100%);
   border:1px solid var(--cream-d);
   border-radius:18px;
   cursor:pointer;
@@ -624,7 +624,7 @@ html.tg-dark .confessor-card__ic{
   padding:12px 12px;width:100%;
   background:
     radial-gradient(ellipse 80% 60% at 110% 10%, rgba(232, 138, 168, .18) 0%, transparent 60%),
-    linear-gradient(180deg, var(--red-xl) 0%, #fff 100%);
+    linear-gradient(180deg, var(--red-xl) 0%, var(--surface) 100%);
   border:1px solid #fad6df;
   border-radius:18px;cursor:pointer;
   box-shadow:var(--shadow-xs),inset 0 1px 0 rgba(255,255,255,.7);
@@ -779,7 +779,7 @@ html.tg-dark .selfie-pick__img{border-color:var(--cream-d)}
 .concept-input{
   width:100%;padding:14px 14px;font-size:15px;line-height:1.5;
   font-family:var(--ff-body);color:var(--text);
-  background:#fff;border:1.5px solid var(--border-strong);
+  background:var(--surface);border:1.5px solid var(--border-strong);
   border-radius:14px;resize:vertical;min-height:96px;
   transition:border-color var(--t-fast),box-shadow var(--t-fast);
 }
@@ -837,7 +837,7 @@ html.tg-dark .selfie-pick__img{border-color:var(--cream-d)}
   transition:transform var(--t),border-color var(--t),box-shadow var(--t);
 }
 /* Когда картинка загрузилась — отключаем shimmer (img.loaded маркер) */
-.concept-result:has(img.loaded){animation:none;background:#fff}
+.concept-result:has(img.loaded){animation:none;background:var(--surface)}
 .concept-result:hover{transform:translateY(-3px);border-color:var(--gold);box-shadow:var(--shadow-gold)}
 .concept-result:active{transform:scale(.96)}
 .concept-result img{
@@ -1009,7 +1009,7 @@ html.tg-dark .concept-skel{
   transition:all .3s ease;
 }
 .onb__dot.is-active{
-  width:20px;border-radius:3px;background:#fff;
+  width:20px;border-radius:3px;background:var(--surface);
   box-shadow:0 2px 10px rgba(255,255,255,.5);
 }
 
@@ -1019,7 +1019,7 @@ html.tg-dark .concept-skel{
   padding:0 24px;
 }
 .onb__cta{
-  background:#fff;color:var(--text);
+  background:var(--surface);color:var(--text);
   border:none;padding:14px 40px;
   border-radius:999px;font-size:15px;font-weight:700;
   letter-spacing:-.1px;cursor:pointer;
@@ -1052,7 +1052,7 @@ html.tg-dark .concept-skel{
   border-radius:2px;overflow:hidden;
 }
 .story-viewer__bar-fill{
-  display:block;height:100%;background:#fff;width:0%;
+  display:block;height:100%;background:var(--surface);width:0%;
   transition:width 5s linear;
 }
 .story-viewer__bar--active .story-viewer__bar-fill{width:100%}
@@ -1104,8 +1104,8 @@ html.tg-dark .concept-skel{
 
 /* Компактный header вкладки Меню — заменяет старый красный hero */
 .menu-header{
-  padding:14px 16px 8px;background:#fff;
-  border-bottom:1px solid rgba(0,0,0,.05);
+  padding:14px 16px 8px;background:var(--surface);
+  border-bottom:1px solid var(--border);
 }
 .menu-header__title{
   font-family:var(--ff-display);
@@ -1118,7 +1118,7 @@ html.tg-dark .concept-skel{
   position:sticky;top:0;z-index:10;
   display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;
   padding:10px 14px;background:rgba(255,255,255,.95);backdrop-filter:blur(10px);
-  border-bottom:1px solid rgba(0,0,0,.05);
+  border-bottom:1px solid var(--border);
   scrollbar-width:none;
 }
 .cat-stickycats::-webkit-scrollbar{display:none}
@@ -1142,7 +1142,7 @@ html.tg-dark .concept-skel{
 .cat-suggested__chips{display:flex;flex-wrap:wrap;gap:6px}
 .cat-suggested__chip{
   padding:6px 12px;border-radius:16px;
-  background:#fff;border:1px solid rgba(0,0,0,.08);
+  background:var(--surface);border:1px solid var(--border);
   font-size:12px;color:var(--text);cursor:pointer;
   transition:all var(--t-fast);
 }
@@ -1167,7 +1167,7 @@ html.tg-dark .concept-skel{
 .cat-load-more{padding:20px 14px;text-align:center}
 .cat-load-more__btn{
   padding:12px 28px;border-radius:24px;
-  background:#fff;border:1px solid rgba(0,0,0,.08);
+  background:var(--surface);border:1px solid var(--border);
   font-size:13px;font-weight:600;color:var(--text);cursor:pointer;
 }
 .cat-load-more__btn:hover{background:var(--chip-bg);border-color:transparent}
@@ -1229,7 +1229,7 @@ html.tg-dark .concept-skel{
   position:sticky;top:48px;z-index:9;
   display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;
   padding:6px 14px 8px;background:rgba(255,255,255,.95);backdrop-filter:blur(10px);
-  border-bottom:1px solid rgba(0,0,0,.05);
+  border-bottom:1px solid var(--border);
   scrollbar-width:none;
 }
 .cat-dietchips::-webkit-scrollbar{display:none}
@@ -1261,7 +1261,7 @@ html.tg-dark .concept-skel{
 }
 
 /* Похожие товары в product modal */
-.cat-modal__similar{padding:14px 18px 0;border-top:1px solid rgba(0,0,0,.06);margin-top:6px}
+.cat-modal__similar{padding:14px 18px 0;border-top:1px solid var(--border);margin-top:6px}
 .cat-modal__similar-h{
   font-size:11px;color:var(--muted);font-weight:600;
   letter-spacing:.4px;text-transform:uppercase;margin-bottom:10px;
@@ -1270,7 +1270,7 @@ html.tg-dark .concept-skel{
   display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;
 }
 .cat-modal__similar-item{
-  background:#fff;border-radius:10px;
+  background:var(--surface);border-radius:10px;
   cursor:pointer;overflow:hidden;
   box-shadow:0 1px 3px rgba(0,0,0,.04);
   transition:transform var(--t-fast);
@@ -1346,11 +1346,11 @@ html.tg-dark .concept-skel{
 .co-summary__list{padding:0 14px 12px}
 .co-sum__row{
   display:flex;align-items:center;gap:10px;
-  padding:8px 0;border-top:1px solid rgba(0,0,0,.05);
+  padding:8px 0;border-top:1px solid var(--border);
 }
 .co-sum__row:first-child{border-top:none}
 .co-sum__img{
-  width:40px;height:40px;border-radius:8px;background:#fff;
+  width:40px;height:40px;border-radius:8px;background:var(--surface);
   flex-shrink:0;overflow:hidden;
   display:flex;align-items:center;justify-content:center;
 }
@@ -1380,7 +1380,7 @@ html.tg-dark .concept-skel{
 }
 .co-deltype__tab:hover{background:rgba(0,0,0,.04)}
 .co-deltype__tab--on{
-  background:#fff;color:var(--text);
+  background:var(--surface);color:var(--text);
   box-shadow:0 2px 6px rgba(0,0,0,.08);
 }
 
@@ -1401,7 +1401,7 @@ html.tg-dark .concept-skel{
 .reward-item{
   display:flex;align-items:flex-start;gap:12px;
   padding:12px 14px;
-  background:linear-gradient(180deg,var(--cream-xl) 0%,#fff 100%);
+  background:linear-gradient(180deg,var(--cream-xl) 0%,var(--surface) 100%);
   border:1.5px solid var(--cream-d);
   border-radius:12px;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.6);
@@ -1494,7 +1494,7 @@ html.tg-dark .concept-skel{
 /* Daily streak — 7 dots */
 .streak-card{
   margin:0 16px 12px;padding:12px 14px;
-  background:#fff;border:1px solid var(--border,#e5e5ea);
+  background:var(--surface);border:1px solid var(--border,#e5e5ea);
   border-radius:14px;
 }
 .streak-card__lbl{
@@ -1542,7 +1542,7 @@ html.tg-dark .concept-skel{
   font-size:12px;opacity:.95;letter-spacing:-.05px;line-height:1.4;
 }
 .wheel-card__btn{
-  background:#fff;color:var(--ap-red,#d61f37);
+  background:var(--surface);color:var(--ap-red,#d61f37);
   border:none;padding:10px 18px;border-radius:22px;
   font-size:13px;font-weight:700;cursor:pointer;
   font-family:inherit;flex-shrink:0;
@@ -1562,7 +1562,7 @@ html.tg-dark .concept-skel{
 }
 @keyframes wheelModalIn{from{opacity:0}to{opacity:1}}
 .wheel-modal__sheet{
-  background:#fff;width:100%;max-width:420px;
+  background:var(--surface);width:100%;max-width:420px;
   border-radius:24px 24px 0 0;padding:18px 20px 28px;
   position:relative;max-height:90vh;overflow:hidden;
   animation:wheelSheetUp .35s cubic-bezier(.4,0,.2,1);
@@ -1650,7 +1650,7 @@ html.tg-dark .concept-skel{
 
 /* Loyalty progress bar (Apple Wallet стиль) */
 .loyalty-bar{
-  background:#fff;border:1px solid var(--border,#e5e5ea);
+  background:var(--surface);border:1px solid var(--border,#e5e5ea);
   border-radius:14px;padding:12px 14px;
   display:flex;flex-direction:column;gap:8px;
   cursor:pointer;transition:all var(--t-fast);
@@ -1683,7 +1683,7 @@ html.tg-dark .concept-skel{
 /* Notification preference toggles */
 .prof-row--toggle{
   display:flex;align-items:center;gap:12px;
-  padding:12px 14px;background:#fff;
+  padding:12px 14px;background:var(--surface);
   border:1px solid var(--border,#e5e5ea);
   border-radius:12px;cursor:pointer;
   margin-bottom:6px;width:100%;
@@ -1701,7 +1701,7 @@ html.tg-dark .concept-skel{
 .prof-toggle__dot{
   position:absolute;top:2px;left:2px;
   width:20px;height:20px;border-radius:50%;
-  background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.15);
+  background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.15);
   transition:transform var(--t-fast);
 }
 .prof-toggle[data-on="true"] .prof-toggle__dot{transform:translateX(20px)}
@@ -1711,7 +1711,7 @@ html.tg-dark .concept-skel{
 /* Menu autocomplete dropdown */
 .menu-ac{
   position:relative;margin:0 14px;
-  background:#fff;border:1px solid var(--border,#e5e5ea);
+  background:var(--surface);border:1px solid var(--border,#e5e5ea);
   border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.08);
   z-index:10;overflow:hidden;
 }
@@ -1720,7 +1720,7 @@ html.tg-dark .concept-skel{
   width:100%;padding:8px 12px;
   background:transparent;border:none;cursor:pointer;
   font-family:inherit;text-align:left;
-  border-bottom:1px solid rgba(0,0,0,.04);
+  border-bottom:1px solid var(--border);
   transition:background var(--t-fast);
 }
 .menu-ac__item:hover{background:var(--chip-bg)}
@@ -1752,7 +1752,7 @@ html.tg-dark .concept-skel{
 .home-bundle{
   display:flex;align-items:center;gap:12px;
   width:100%;padding:14px 14px;
-  background:#fff;border:1px solid var(--border,#e5e5ea);
+  background:var(--surface);border:1px solid var(--border,#e5e5ea);
   border-radius:14px;cursor:pointer;
   font-family:inherit;text-align:left;
   transition:all var(--t-fast);
@@ -1847,7 +1847,7 @@ html.tg-dark .concept-skel{
   letter-spacing:.5px;margin-bottom:12px;user-select:all;
 }
 .ref-code-box__copy{
-  background:#fff;border:1.5px solid var(--border);
+  background:var(--surface);border:1.5px solid var(--border);
   padding:8px 16px;border-radius:18px;cursor:pointer;
   font-size:12px;font-weight:600;color:var(--text);
   font-family:inherit;letter-spacing:-.1px;
@@ -1868,7 +1868,7 @@ html.tg-dark .concept-skel{
   display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;
 }
 .co-addr-chip{
-  padding:7px 12px;border:1.5px solid var(--border);background:#fff;
+  padding:7px 12px;border:1.5px solid var(--border);background:var(--surface);
   border-radius:18px;font-size:12px;font-weight:600;color:var(--text);
   cursor:pointer;transition:all var(--t-fast);
   font-family:inherit;letter-spacing:-.1px;
@@ -1887,7 +1887,7 @@ html.tg-dark .concept-skel{
 .addr-empty{text-align:center;color:var(--text-hint);font-size:13px;padding:24px 12px}
 .addr-item{
   display:flex;align-items:center;gap:8px;
-  padding:12px 14px;background:#fff;border:1.5px solid var(--border);
+  padding:12px 14px;background:var(--surface);border:1.5px solid var(--border);
   border-radius:12px;transition:all var(--t-fast);
 }
 .addr-item--default{border-color:rgba(214,31,55,.4);background:rgba(214,31,55,.02)}
@@ -1919,7 +1919,7 @@ html.tg-dark .concept-skel{
 /* Shop picker button */
 .co-shop-btn{
   width:100%;text-align:left;padding:12px 14px;
-  background:#fff;border:1.5px solid var(--border);
+  background:var(--surface);border:1.5px solid var(--border);
   border-radius:10px;font-size:14px;color:var(--text);cursor:pointer;
   font-family:inherit;
 }
@@ -1937,8 +1937,8 @@ html.tg-dark .concept-skel{
 }
 .shop-picker__item{
   display:flex;align-items:center;gap:12px;
-  padding:12px 14px;background:#fff;
-  border:1px solid rgba(0,0,0,.06);border-radius:12px;
+  padding:12px 14px;background:var(--surface);
+  border:1px solid var(--border);border-radius:12px;
   cursor:pointer;text-align:left;width:100%;
   transition:all var(--t-fast);
 }
@@ -1954,7 +1954,7 @@ html.tg-dark .concept-skel{
 }
 .shop-picker__geo{
   margin:0 14px 12px;padding:10px 14px;
-  background:#fff;border:1.5px dashed var(--border,#e5e5ea);
+  background:var(--surface);border:1.5px dashed var(--border,#e5e5ea);
   border-radius:12px;font-size:13px;font-weight:600;
   color:var(--text);cursor:pointer;width:calc(100% - 28px);
   font-family:inherit;letter-spacing:-.1px;
@@ -1971,7 +1971,7 @@ html.tg-dark .concept-skel{
   display:block;margin-top:8px;
   padding:8px 12px;border:1px solid var(--border);
   border-radius:8px;font-size:13px;color:var(--text);
-  background:#fff;width:auto;
+  background:var(--surface);width:auto;
   font-family:inherit;
 }
 
@@ -2012,7 +2012,7 @@ html.tg-dark .concept-skel{
 .co-breakdown__row--bonus span,
 .co-breakdown__row--bonus b{color:var(--gold-fg)}
 .co-breakdown__row--total{
-  border-top:1px solid rgba(0,0,0,.08);margin-top:4px;padding-top:10px;
+  border-top:1px solid var(--border);margin-top:4px;padding-top:10px;
   font-size:15px;font-weight:700;
 }
 .co-breakdown__row--total b{color:var(--red);font-size:17px}
@@ -2051,7 +2051,7 @@ body.chat-open{overflow:hidden}
 }
 .of-chip{
   padding:7px 13px;border-radius:18px;
-  background:#fff;border:1px solid rgba(0,0,0,.12);
+  background:var(--surface);border:1px solid var(--border-strong);
   font-size:12.5px;font-weight:500;color:var(--text);
   cursor:pointer;white-space:nowrap;
   letter-spacing:-.1px;
@@ -2068,7 +2068,7 @@ body.chat-open{overflow:hidden}
 
 /* Порций — qty selector + presets */
 .of-portions{
-  display:flex;align-items:center;background:#fff;
+  display:flex;align-items:center;background:var(--surface);
   border:1.5px solid var(--border);border-radius:10px;
   overflow:hidden;
 }
@@ -2108,7 +2108,7 @@ body.chat-open{overflow:hidden}
 }
 .of-photo-add{
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  border:1.5px dashed rgba(0,0,0,.15);
+  border:1.5px dashed var(--border-strong);
   background:transparent;
   cursor:pointer;
   transition:all var(--t-fast);
@@ -2131,7 +2131,7 @@ body.chat-open{overflow:hidden}
 .chat-empty-cat{
   flex:1;min-width:90px;max-width:120px;
   display:flex;flex-direction:column;align-items:center;gap:6px;
-  background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:14px;
+  background:var(--surface);border:1px solid var(--border);border-radius:14px;
   padding:14px 8px;cursor:pointer;
   transition:all var(--t-fast);
 }
@@ -2195,7 +2195,7 @@ body.chat-open{overflow:hidden}
 /* Sticky search bar */
 .home-search{
   margin:-18px 16px 14px;padding:13px 16px;
-  background:#fff;border-radius:14px;
+  background:var(--surface);border-radius:14px;
   box-shadow:0 6px 20px rgba(0,0,0,.08), 0 1px 3px rgba(0,0,0,.04);
   display:flex;align-items:center;gap:10px;
   cursor:pointer;position:relative;z-index:2;
@@ -2213,7 +2213,7 @@ body.chat-open{overflow:hidden}
 .home-cats::-webkit-scrollbar{display:none}
 .home-cat{
   flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:6px;
-  background:#fff;border:none;border-radius:14px;
+  background:var(--surface);border:none;border-radius:14px;
   padding:12px 14px;min-width:74px;
   box-shadow:0 1px 3px rgba(0,0,0,.05);
   cursor:pointer;transition:all var(--t-fast);
@@ -2226,7 +2226,7 @@ body.chat-open{overflow:hidden}
 /* Persona block (для verified юзера) */
 .home-persona{
   margin:0 16px 14px;padding:16px;
-  background:#fff;border-radius:14px;
+  background:var(--surface);border-radius:14px;
   box-shadow:0 1px 3px rgba(0,0,0,.05);
 }
 .home-persona__row{
@@ -2247,7 +2247,7 @@ body.chat-open{overflow:hidden}
   cursor:pointer;
 }
 .home-persona__reorder{
-  margin-top:14px;padding-top:12px;border-top:1px solid rgba(0,0,0,.05);
+  margin-top:14px;padding-top:12px;border-top:1px solid var(--border);
   display:flex;align-items:center;gap:12px;
 }
 .home-persona__reorder-text{flex:1;min-width:0}
@@ -2270,7 +2270,7 @@ body.chat-open{overflow:hidden}
 .home-club-chip{
   width:calc(100% - 32px);margin:0 16px 14px;
   display:flex;align-items:center;gap:12px;
-  background:#fff;border:none;border-radius:14px;
+  background:var(--surface);border:none;border-radius:14px;
   padding:14px 16px;cursor:pointer;
   box-shadow:0 1px 3px rgba(0,0,0,.05);
   text-align:left;
@@ -2304,7 +2304,7 @@ body.chat-open{overflow:hidden}
 .promo-holiday:active{transform:scale(.99)}
 .promo-holiday__emoji{
   flex-shrink:0;width:42px;height:42px;border-radius:11px;
-  background:#fff;border:1px solid color-mix(in srgb, var(--holiday-accent) 18%, #eee);
+  background:var(--surface);border:1px solid color-mix(in srgb, var(--holiday-accent) 18%, #eee);
   display:flex;align-items:center;justify-content:center;
   font-size:22px;line-height:1;
 }
@@ -2330,7 +2330,7 @@ body.chat-open{overflow:hidden}
 /* Торт месяца — крупная карточка с фото */
 .promo--feature{
   margin:0 16px 14px;padding:0;
-  background:#fff;border-radius:14px;
+  background:var(--surface);border-radius:14px;
   overflow:hidden;cursor:pointer;
   box-shadow:0 1px 3px rgba(0,0,0,.05);
   display:flex;flex-direction:column;
@@ -2443,7 +2443,7 @@ body.chat-open{overflow:hidden}
   -webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;
 }
 .bento__sm--light{
-  background:#fff;color:var(--text);
+  background:var(--surface);color:var(--text);
   border:1px solid var(--border);box-shadow:var(--shadow-card);
 }
 .bento__sm-ic{font-size:26px;margin-bottom:8px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.18))}
@@ -2587,7 +2587,7 @@ body.chat-open{overflow:hidden}
 .cat-chip{
   flex-shrink:0;scroll-snap-align:start;
   display:inline-flex;align-items:center;gap:6px;
-  background:#fff;
+  background:var(--surface);
   border:1px solid var(--border-strong);
   border-radius:999px;
   padding:9px 16px 9px 14px;
@@ -2613,7 +2613,7 @@ body.chat-open{overflow:hidden}
   display:grid;grid-template-columns:1fr 1fr;gap:10px;
 }
 .pcard-pr{
-  background:#fff;
+  background:var(--surface);
   border:1px solid var(--border);
   border-radius:var(--r);
   padding:6px;
@@ -2769,7 +2769,7 @@ body.chat-open{overflow:hidden}
 .cat-modal__props span b{color:var(--muted);font-weight:600;margin-right:4px}
 .cat-modal__desc{
   padding:6px 18px 16px;font-size:14px;color:#333;line-height:1.55;
-  white-space:pre-wrap;border-top:1px solid rgba(0,0,0,.06);
+  white-space:pre-wrap;border-top:1px solid var(--border);
   margin-top:6px;padding-top:14px;
 }
 /* Sticky CTA-bar внизу sheet — стандартный e-com pattern */
@@ -2777,7 +2777,7 @@ body.chat-open{overflow:hidden}
   position:sticky;bottom:0;left:0;right:0;z-index:5;
   display:flex;align-items:center;gap:10px;
   padding:12px 16px calc(env(safe-area-inset-bottom, 12px) + 12px);
-  background:#fff;border-top:1px solid rgba(0,0,0,.07);
+  background:var(--surface);border-top:1px solid var(--border);
   box-shadow:0 -6px 18px rgba(0,0,0,.06);
 }
 .cat-modal__actions .cat-modal__share{
@@ -2804,7 +2804,7 @@ body.chat-open{overflow:hidden}
 }
 .shop{
   font-size:13px;color:var(--text);padding:8px 0;line-height:1.4;
-  border-bottom:1px solid rgba(0,0,0,.05);
+  border-bottom:1px solid var(--border);
 }
 .shop:last-child{border-bottom:none}
 .shop__t{display:inline-block;color:var(--muted);font-size:11px;margin-left:6px}
@@ -2813,7 +2813,7 @@ body.chat-open{overflow:hidden}
 
 /* ── SWEET CHECK — user tickets card ────────────────────────────────────── */
 .sc-my{
-  background:linear-gradient(135deg,#fff7e8 0%,#fff 100%);
+  background:linear-gradient(135deg,#fff7e8 0%,var(--surface) 100%);
   border:1.5px solid rgba(232,160,48,.35);
   border-radius:18px;padding:22px 20px 20px;text-align:center;
   margin:14px 0 18px;
@@ -2882,7 +2882,7 @@ body.chat-open{overflow:hidden}
 /* Правила Сладкого чека */
 .sc-rules{
   background:var(--surface);border-radius:14px;padding:14px 16px 12px;
-  margin-top:14px;border:1px solid rgba(0,0,0,.05);
+  margin-top:14px;border:1px solid var(--border);
 }
 .sc-rules h4{
   font-family:'Inter',sans-serif;font-weight:800;font-size:13px;
@@ -2972,7 +2972,7 @@ body.chat-open{overflow:hidden}
 .cart-list{padding:0 18px 14px}
 .cart-i{
   display:grid;grid-template-columns:64px 1fr;gap:12px;
-  padding:12px 0;border-bottom:1px solid rgba(0,0,0,.06);
+  padding:12px 0;border-bottom:1px solid var(--border);
 }
 .cart-i:last-child{border-bottom:none}
 .cart-i__img{
@@ -2998,15 +2998,15 @@ body.chat-open{overflow:hidden}
 .cart-foot{padding:0 18px 24px;display:flex;flex-direction:column;gap:8px}
 .cart-total{
   font-size:16px;color:var(--text);text-align:center;
-  padding:10px 0;border-top:1px solid rgba(0,0,0,.06);
+  padding:10px 0;border-top:1px solid var(--border);
 }
 .cart-total b{color:var(--red);font-size:18px}
 
 .cart-form{padding:0 18px 24px;display:flex;flex-direction:column;gap:10px}
 .cart-form label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);font-weight:600;gap:4px}
 .cart-form input, .cart-form textarea{
-  width:100%;padding:10px 12px;border-radius:10px;border:1px solid rgba(0,0,0,.12);
-  font-family:'Inter',sans-serif;font-size:14px;color:var(--text);background:#fff;
+  width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border-strong);
+  font-family:'Inter',sans-serif;font-size:14px;color:var(--text);background:var(--surface);
   resize:none;
 }
 .cart-form input:focus, .cart-form textarea:focus{
@@ -3024,11 +3024,11 @@ body.chat-open{overflow:hidden}
 .ai-pgrid{
   display:grid;grid-template-columns:repeat(auto-fill,minmax(125px,1fr));
   gap:8px;margin-top:10px;padding-top:10px;
-  border-top:1px solid rgba(0,0,0,.06);
+  border-top:1px solid var(--border);
 }
 .ai-pcard{
-  background:#fff;border-radius:12px;overflow:hidden;
-  cursor:pointer;border:1px solid rgba(0,0,0,.06);
+  background:var(--surface);border-radius:12px;overflow:hidden;
+  cursor:pointer;border:1px solid var(--border);
   transition:transform .15s, box-shadow .15s;
 }
 .ai-pcard:active{transform:scale(.97)}
@@ -3146,7 +3146,7 @@ body.chat-open{overflow:hidden}
 /* Partners */
 .pcard{
   display:flex;align-items:flex-start;gap:14px;
-  background:#fff;border-radius:14px;
+  background:var(--surface);border-radius:14px;
   padding:14px;margin:0 0 10px;
   border:none;
   box-shadow:0 1px 3px rgba(0,0,0,.05);
@@ -3176,7 +3176,7 @@ body.chat-open{overflow:hidden}
 .pcard__btn{
   display:inline-flex;align-items:center;gap:4px;
   margin-top:10px;padding:7px 12px;
-  background:#fff;color:var(--red);
+  background:var(--surface);color:var(--red);
   border:1px solid #ffd0d8;
   border-radius:8px;font-size:12px;font-weight:600;
   text-decoration:none;cursor:pointer;
@@ -3220,7 +3220,7 @@ body.chat-open{overflow:hidden}
 }
 .prize--2{
   background:linear-gradient(140deg,#555,#aaa,#e0e0e0);
-  color:#1a1a1a;
+  color:var(--text);
   box-shadow:0 4px 20px rgba(0,0,0,.15);
 }
 .prize--3{
@@ -3361,7 +3361,7 @@ body.chat-open{overflow:hidden}
   display:flex;align-items:center;justify-content:center;
 }
 .g2-over__box{
-  background:#fff;border-radius:var(--r);padding:22px 32px;text-align:center;
+  background:var(--surface);border-radius:var(--r);padding:22px 32px;text-align:center;
   display:flex;flex-direction:column;gap:12px;
   box-shadow:0 20px 60px rgba(0,0,0,.3);
 }
@@ -3535,7 +3535,7 @@ body.chat-open{overflow:hidden}
 }
 .msg--bot .msg__bbl,
 .msg--bot .msg__bubble{
-  background:#f1f3f5;color:#1a1a1a;
+  background:#f1f3f5;color:var(--text);
   border-bottom-left-radius:6px;
 }
 .msg--user .msg__bbl,
@@ -3624,7 +3624,7 @@ body.chat-open{overflow:hidden}
 #tab-profile .prof-hero__phone a{color:var(--ap-red);text-decoration:none;font-weight:500}
 #tab-profile .prof-hero__edit{
   width:36px;height:36px;border-radius:50%;border:none;
-  background:#fff;color:var(--ap-grey);cursor:pointer;
+  background:var(--surface);color:var(--ap-grey);cursor:pointer;
   display:flex;align-items:center;justify-content:center;
   box-shadow:0 1px 3px rgba(0,0,0,.06);
 }
@@ -3634,7 +3634,7 @@ body.chat-open{overflow:hidden}
 #tab-profile .prof-stats{
   display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;
   margin:0 16px 16px;padding:18px 8px;
-  background:#fff;border-radius:var(--ap-radius);
+  background:var(--surface);border-radius:var(--ap-radius);
   box-shadow:0 1px 3px rgba(0,0,0,.04);
 }
 #tab-profile .prof-stat{
@@ -3661,7 +3661,7 @@ body.chat-open{overflow:hidden}
 /* Action rows — iOS Settings (один white block с hairline разделителями) */
 #tab-profile .prof-actions{
   margin:0 16px 16px;padding:0;
-  background:#fff;border-radius:var(--ap-radius);
+  background:var(--surface);border-radius:var(--ap-radius);
   box-shadow:0 1px 3px rgba(0,0,0,.04);
   overflow:hidden;
 }
@@ -3670,7 +3670,7 @@ body.chat-open{overflow:hidden}
   grid-template-columns:32px 1fr 16px;
   grid-template-rows:auto auto;gap:0 12px;
   align-items:center;padding:14px 18px;
-  background:#fff;border:none;border-radius:0;
+  background:var(--surface);border:none;border-radius:0;
   margin-bottom:0;cursor:pointer;
   border-bottom:1px solid var(--ap-hairline);
   transition:background var(--t-fast);text-decoration:none;
@@ -3705,7 +3705,7 @@ body.chat-open{overflow:hidden}
 
 /* Список заказов внутри Профиля */
 #tab-profile .cat-bread{
-  margin:0 16px 12px;padding:12px 16px;background:#fff;
+  margin:0 16px 12px;padding:12px 16px;background:var(--surface);
   border-radius:var(--ap-radius);box-shadow:0 1px 3px rgba(0,0,0,.04);
 }
 #tab-profile .cat-bread__back{
@@ -3718,7 +3718,7 @@ body.chat-open{overflow:hidden}
   background:transparent;
 }
 #tab-profile .prof-order{
-  background:#fff;border:none;
+  background:var(--surface);border:none;
   border-radius:var(--ap-radius);
   padding:14px 16px;margin-bottom:8px;
   box-shadow:0 1px 3px rgba(0,0,0,.04);
@@ -3766,7 +3766,7 @@ body.chat-open{overflow:hidden}
   cursor:default;
 }
 #tab-profile .prof-row--info:hover,
-#tab-profile .prof-row--info:active{background:#fff}
+#tab-profile .prof-row--info:active{background:var(--surface)}
 
 /* Row with value (Apple Settings — текст справа) */
 #tab-profile .prof-row__val{
@@ -3830,8 +3830,8 @@ body.chat-open{overflow:hidden}
 
 /* Toggle row (Apple Settings switch) */
 #tab-profile .prof-row--toggle{cursor:default}
-#tab-profile .prof-row--toggle:hover{background:#fff}
-#tab-profile .prof-row--toggle:active{background:#fff}
+#tab-profile .prof-row--toggle:hover{background:var(--surface)}
+#tab-profile .prof-row--toggle:active{background:var(--surface)}
 #tab-profile .prof-toggle{
   grid-column:3 / span 2;grid-row:1 / span 2;
   align-self:center;justify-self:end;
@@ -3845,7 +3845,7 @@ body.chat-open{overflow:hidden}
 }
 #tab-profile .prof-toggle__sw::before{
   content:'';position:absolute;left:2px;top:2px;
-  width:27px;height:27px;background:#fff;border-radius:50%;
+  width:27px;height:27px;background:var(--surface);border-radius:50%;
   transition:transform .2s, box-shadow .2s;
   box-shadow:0 3px 8px rgba(0,0,0,.15), 0 0 0 1px rgba(0,0,0,.04);
 }
@@ -3891,7 +3891,7 @@ body.chat-open{overflow:hidden}
 }
 #tab-profile .prof-ach__item{
   flex-shrink:0;display:flex;align-items:center;gap:6px;
-  background:#fff;padding:8px 12px;border-radius:10px;
+  background:var(--surface);padding:8px 12px;border-radius:10px;
   box-shadow:0 1px 3px rgba(0,0,0,.04);
   font-size:12px;font-weight:500;color:var(--ap-ink);
   letter-spacing:-.1px;
@@ -3918,7 +3918,7 @@ body.chat-open{overflow:hidden}
 }
 #tab-profile .prof-thumb:first-child{margin-left:0}
 #tab-profile .prof-thumb img{width:100%;height:100%;object-fit:cover}
-#tab-profile .prof-thumb--ph{color:var(--ap-grey-2);background:#fff}
+#tab-profile .prof-thumb--ph{color:var(--ap-grey-2);background:var(--surface)}
 
 /* QR-карточка клуба — modal */
 .prof-qr{padding:24px 20px 28px;text-align:center}
@@ -3931,7 +3931,7 @@ body.chat-open{overflow:hidden}
 .prof-qr__img{
   display:flex;justify-content:center;
   margin:8px auto 18px;padding:16px;
-  background:#fff;border-radius:18px;
+  background:var(--surface);border-radius:18px;
   box-shadow:0 6px 18px rgba(0,0,0,.06);
   width:fit-content;
 }
@@ -3973,7 +3973,7 @@ body.chat-open{overflow:hidden}
 #tab-profile .prof-completion{
   position:relative;
   margin:0 16px 16px;padding:14px 36px 14px 18px;
-  background:#fff;border-radius:var(--ap-radius);
+  background:var(--surface);border-radius:var(--ap-radius);
   box-shadow:0 1px 3px rgba(0,0,0,.04);
 }
 #tab-profile .prof-completion__close{
@@ -4063,7 +4063,7 @@ body.chat-open{overflow:hidden}
 #tab-profile .prof-gallery__row::-webkit-scrollbar{display:none}
 #tab-profile .prof-gallery__item{
   flex-shrink:0;width:72px;height:72px;border-radius:12px;
-  background:#fff;border:none;cursor:pointer;overflow:hidden;
+  background:var(--surface);border:none;cursor:pointer;overflow:hidden;
   box-shadow:0 1px 3px rgba(0,0,0,.04);
   padding:0;
 }
@@ -4073,7 +4073,7 @@ body.chat-open{overflow:hidden}
 /* Categories breakdown */
 #tab-profile .prof-cats{
   margin:0 16px 16px;padding:14px 16px;
-  background:#fff;border-radius:var(--ap-radius);
+  background:var(--surface);border-radius:var(--ap-radius);
   box-shadow:0 1px 3px rgba(0,0,0,.04);
 }
 #tab-profile .prof-cats__h{
@@ -4763,7 +4763,7 @@ body.chat-open{overflow:hidden}
 /* ── LOYALTY HERO ────────────────────────────────────────────────────────── */
 /* Hero — белая карточка в стиле Tinkoff/Apple Wallet (minimalist) */
 .loy-hero{
-  background:#fff;
+  background:var(--surface);
   color:var(--text);
   border-radius:16px;
   padding:24px 20px 22px;margin:16px;
@@ -4820,7 +4820,7 @@ body.chat-open{overflow:hidden}
 /* Onboarding для нового юзера (3 шага) */
 .ob-card{
   margin:0 16px 16px;padding:18px;
-  background:#fff;
+  background:var(--surface);
   border-radius:16px;
   box-shadow:0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
 }
@@ -4833,7 +4833,7 @@ body.chat-open{overflow:hidden}
   display:flex;align-items:flex-start;gap:12px;
   padding:10px 0;
 }
-.ob-step + .ob-step{border-top:1px solid rgba(0,0,0,.05)}
+.ob-step + .ob-step{border-top:1px solid var(--border)}
 .ob-step__num{
   flex-shrink:0;width:28px;height:28px;border-radius:50%;
   background:var(--red-xl);color:var(--red);
@@ -4864,7 +4864,7 @@ body.chat-open{overflow:hidden}
 /* Привилегии клуба — inline-блок с галочками */
 .club-benefits{
   margin:0 16px 16px;padding:18px;
-  background:#fff;border-radius:16px;
+  background:var(--surface);border-radius:16px;
   box-shadow:0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
 }
 .club-benefits__h{
@@ -4963,7 +4963,7 @@ body.chat-open{overflow:hidden}
   padding:0 16px 16px;
 }
 .hiw{
-  background:#fff;
+  background:var(--surface);
   border-radius:14px;padding:16px 10px;text-align:center;
   box-shadow:0 1px 3px rgba(0,0,0,.05);
   transition:box-shadow var(--t-fast);
@@ -5093,7 +5093,7 @@ body.chat-open{overflow:hidden}
 .prom__exp{font-size:11px;color:var(--muted)}
 .prom__code{
   display:flex;justify-content:space-between;align-items:center;
-  background:#fff;border-radius:8px;padding:8px 12px;
+  background:var(--surface);border-radius:8px;padding:8px 12px;
 }
 .prom__codetxt{
   font-family:'SF Mono','Menlo',monospace;
@@ -5145,7 +5145,7 @@ body.chat-open{overflow:hidden}
 }
 @keyframes fadein{from{opacity:0}to{opacity:1}}
 .modal__sheet{
-  background:#fff;border-radius:24px 24px 0 0;
+  background:var(--surface);border-radius:24px 24px 0 0;
   width:100%;max-width:480px;
   padding:22px 18px calc(22px + env(safe-area-inset-bottom));
   animation:slideup .25s ease;
@@ -5160,14 +5160,14 @@ body.chat-open{overflow:hidden}
 
 /* ── Отзывы и рейтинг товаров ─────────────────────────────────────────── */
 /* Блок отзывов внутри карточки товара */
-.cat-modal__reviews{padding:14px 18px 0;border-top:1px solid rgba(0,0,0,.06);margin-top:6px}
+.cat-modal__reviews{padding:14px 18px 0;border-top:1px solid var(--border);margin-top:6px}
 .rv-block{padding:0}
 .rv-block--loading{font-size:12.5px;color:var(--muted);text-align:center;padding:18px 0}
 .rv-block__h{
   font-size:11px;color:var(--muted);font-weight:600;
   letter-spacing:.4px;text-transform:uppercase;margin-bottom:10px;
 }
-.rv-summary{display:flex;align-items:center;gap:14px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid rgba(0,0,0,.05)}
+.rv-summary{display:flex;align-items:center;gap:14px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)}
 .rv-summary__big{flex-shrink:0;text-align:center;min-width:84px}
 .rv-summary__avg{
   font-family:'Playfair Display',serif;font-size:32px;font-weight:800;
@@ -5192,7 +5192,7 @@ body.chat-open{overflow:hidden}
 .rv-empty__s{font-size:12px;color:var(--muted)}
 
 .rv-list{display:flex;flex-direction:column;gap:12px;margin-bottom:14px}
-.rv-item{padding:10px 0;border-bottom:1px solid rgba(0,0,0,.04)}
+.rv-item{padding:10px 0;border-bottom:1px solid var(--border)}
 .rv-item:last-child{border-bottom:none}
 .rv-item__head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
 .rv-item__author{font-size:13px;font-weight:700;color:var(--text)}
@@ -5202,7 +5202,7 @@ body.chat-open{overflow:hidden}
 
 .rv-write-btn{
   width:100%;padding:12px;border-radius:12px;
-  background:#fff;border:1px solid var(--border-strong);
+  background:var(--surface);border:1px solid var(--border-strong);
   color:var(--text);font-size:13.5px;font-weight:600;
   cursor:pointer;transition:all var(--t-fast);
 }
@@ -5239,7 +5239,7 @@ body.chat-open{overflow:hidden}
 .rv-writer__text{
   width:100%;min-height:100px;
   padding:12px 14px;border-radius:12px;
-  border:1px solid var(--border-strong);background:#fff;
+  border:1px solid var(--border-strong);background:var(--surface);
   font-family:inherit;font-size:14px;color:var(--text);
   resize:vertical;
   transition:border-color var(--t-fast);
@@ -5264,7 +5264,7 @@ body.chat-open{overflow:hidden}
 .sh--classics{margin-top:8px}
 .classics-intro{
   margin:0 16px 12px;padding:12px 16px;
-  background:linear-gradient(135deg, #fdf6e3 0%, #fff 100%);
+  background:linear-gradient(135deg, #fdf6e3 0%, var(--surface) 100%);
   border:1px solid #ebd8a8;border-left:3px solid #c08c30;
   border-radius:12px;cursor:pointer;
   transition:all var(--t-fast);
@@ -5365,7 +5365,7 @@ body.chat-open{overflow:hidden}
 .gw__opt{
   display:flex;flex-direction:column;align-items:center;gap:6px;
   padding:18px 10px;border-radius:14px;
-  background:#fff;border:1.5px solid var(--border);
+  background:var(--surface);border:1.5px solid var(--border);
   cursor:pointer;transition:all var(--t-fast);
 }
 .gw__opt:hover{border-color:var(--red, #d61f37)}
@@ -5377,7 +5377,7 @@ body.chat-open{overflow:hidden}
 .gw__list-opt{
   display:flex;align-items:center;justify-content:space-between;
   padding:14px 16px;border-radius:12px;
-  background:#fff;border:1.5px solid var(--border);
+  background:var(--surface);border:1.5px solid var(--border);
   cursor:pointer;font-size:14px;font-weight:600;color:var(--text);
   transition:all var(--t-fast);
 }
@@ -5396,7 +5396,7 @@ body.chat-open{overflow:hidden}
 .gw__chip:hover{background:var(--chip-bg-hover)}
 .gw__chip--on{background:var(--success-fg);color:#fff;border-color:var(--success-fg)}
 
-.gw__nav{display:flex;gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid rgba(0,0,0,.05)}
+.gw__nav{display:flex;gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
 .gw__nav>*{flex:1}
 
 .gw__results{display:flex;flex-direction:column;gap:12px;margin-top:8px}
@@ -5404,7 +5404,7 @@ body.chat-open{overflow:hidden}
   position:relative;
   display:grid;grid-template-columns:80px 1fr auto;align-items:center;gap:12px;
   padding:10px;border-radius:14px;
-  background:#fff;border:1px solid var(--border);
+  background:var(--surface);border:1px solid var(--border);
   cursor:pointer;transition:all var(--t-fast);
 }
 .gw__res-card:first-child{
@@ -5446,7 +5446,7 @@ body.chat-open{overflow:hidden}
 
 /* ── Корпоративные заказы (B2B) ──────────────────────────────────────── */
 .home-corp-chip{
-  background:linear-gradient(135deg, #fafaf7 0%, #fff 100%);
+  background:linear-gradient(135deg, #fafaf7 0%, var(--surface) 100%);
   border-left:3px solid var(--success-fg);
 }
 .home-corp-chip__ic{
@@ -5469,7 +5469,7 @@ body.chat-open{overflow:hidden}
 .corp__req{color:var(--red)}
 .corp__inp{
   width:100%;padding:11px 13px;border-radius:11px;
-  border:1px solid var(--border-strong);background:#fff;
+  border:1px solid var(--border-strong);background:var(--surface);
   font-family:inherit;font-size:14px;color:var(--text);
   transition:border-color var(--t-fast);
 }
@@ -5521,7 +5521,7 @@ body.chat-open{overflow:hidden}
 .wishshare__link-copy:hover{background:var(--red-d, #b01828)}
 
 /* Shared wishlist — превью у получателя */
-.shared-wish__head{padding:18px 18px 12px;text-align:center;border-bottom:1px solid rgba(0,0,0,.05)}
+.shared-wish__head{padding:18px 18px 12px;text-align:center;border-bottom:1px solid var(--border)}
 .shared-wish__title{
   font-family:'Playfair Display',serif;font-size:18px;color:var(--text);
   letter-spacing:-.3px;margin-bottom:6px;line-height:1.3;
@@ -5536,7 +5536,7 @@ body.chat-open{overflow:hidden}
 .shared-wish__list{padding:8px 18px}
 .shared-wish__item{
   display:flex;align-items:center;gap:10px;
-  padding:10px 0;border-bottom:1px solid rgba(0,0,0,.04);
+  padding:10px 0;border-bottom:1px solid var(--border);
   cursor:pointer;
 }
 .shared-wish__item:last-child{border-bottom:none}
@@ -5565,8 +5565,8 @@ body.chat-open{overflow:hidden}
 .shared-wish__add:active{transform:scale(.92)}
 .shared-wish__actions{
   display:flex;gap:10px;padding:14px 18px calc(18px + env(safe-area-inset-bottom));
-  border-top:1px solid rgba(0,0,0,.06);
-  background:#fff;position:sticky;bottom:0;
+  border-top:1px solid var(--border);
+  background:var(--surface);position:sticky;bottom:0;
 }
 .shared-wish__actions>*{flex:1}
 
@@ -5589,7 +5589,7 @@ body.chat-open{overflow:hidden}
   background:var(--chip-bg);border-radius:12px;padding:2px;
 }
 .portions__step-btn{
-  width:34px;height:34px;border:none;background:#fff;border-radius:10px;
+  width:34px;height:34px;border:none;background:var(--surface);border-radius:10px;
   font-size:18px;font-weight:700;color:var(--text);cursor:pointer;
   display:flex;align-items:center;justify-content:center;
   transition:transform var(--t-fast);
@@ -5612,7 +5612,7 @@ body.chat-open{overflow:hidden}
 .portions__chip--on{background:var(--red);color:#fff;border-color:var(--red)}
 .portions__result{
   margin:14px 0 4px;padding:14px;border-radius:12px;
-  background:linear-gradient(135deg, var(--red-xl, #fff5f6) 0%, #fff 100%);
+  background:linear-gradient(135deg, var(--red-xl, #fff5f6) 0%, var(--surface) 100%);
   border:1px solid var(--red-l, #ffd9de);text-align:center;
 }
 .portions__result-main{
@@ -5671,7 +5671,7 @@ body.chat-open{overflow:hidden}
 
 /* ── LK CARD (личный кабинет с сайта) ────────────────────────────────────── */
 .lk-card{
-  background:#fff;
+  background:var(--surface);
   border-radius:16px;
   padding:20px 18px;margin:0 16px 16px;
   box-shadow:0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
@@ -5715,7 +5715,7 @@ body.chat-open{overflow:hidden}
 .lk-ti__dt{color:var(--muted);font-size:11px}
 
 .lk-card__orders{margin-top:10px;padding-top:10px;border-top:1px solid rgba(232,160,48,.2)}
-.lk-ord{padding:8px 0;border-bottom:1px solid rgba(0,0,0,.05)}
+.lk-ord{padding:8px 0;border-bottom:1px solid var(--border)}
 .lk-ord:last-child{border-bottom:none}
 .lk-ord__row{display:flex;gap:8px;align-items:center;justify-content:space-between;font-size:12px;line-height:1.4}
 .lk-ord__row + .lk-ord__row{margin-top:3px}
@@ -5748,7 +5748,7 @@ body.chat-open{overflow:hidden}
 .hits-row::-webkit-scrollbar{display:none}
 .hit-card{
   flex:0 0 142px;scroll-snap-align:start;
-  background:#fff;border:1px solid var(--border);
+  background:var(--surface);border:1px solid var(--border);
   border-radius:18px;padding:6px;
   cursor:pointer;
   box-shadow:var(--shadow-card);
@@ -5845,7 +5845,7 @@ body.chat-open{overflow:hidden}
 /* ── Accordion (details / summary) ────────────────────────────────────────── */
 .acc{
   margin:10px 14px;
-  background:#fff;border:none;
+  background:var(--surface);border:none;
   border-radius:18px;
   overflow:hidden;
   box-shadow:
@@ -5901,7 +5901,7 @@ body.chat-open{overflow:hidden}
   border-radius:22px 22px 0 0;
   padding:0;
   overflow:hidden;
-  background:#fff;
+  background:var(--surface);
 }
 @media (min-width: 520px){
   .ai-chat__sheet{border-radius:22px;height:min(82vh,720px);margin:auto}
@@ -5909,7 +5909,7 @@ body.chat-open{overflow:hidden}
 .ai-chat__head{
   padding:18px 20px 14px;
   border-bottom:1px solid var(--border);
-  background:#fff;
+  background:var(--surface);
   flex-shrink:0;
 }
 .ai-chat__title{
@@ -5939,7 +5939,7 @@ body.chat-open{overflow:hidden}
 }
 .chip-pick{
   flex:0 0 auto;
-  background:#fff;
+  background:var(--surface);
   border:1.5px solid var(--border-strong);
   border-radius:12px;
   padding:9px 14px;
@@ -5986,7 +5986,7 @@ body.chat-open{overflow:hidden}
 .bday-promo{
   display:flex;gap:14px;
   margin:0 16px 16px;padding:16px;
-  background:#fff;
+  background:var(--surface);
   border:none;border-radius:16px;
   box-shadow:0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
   position:relative;
@@ -6006,7 +6006,7 @@ body.chat-open{overflow:hidden}
   flex:1;padding:10px 12px;
   border:1.5px solid var(--border-strong);border-radius:10px;
   font-family:var(--ff-body);font-size:13px;font-weight:600;
-  background:#fff;color:var(--text);outline:none;
+  background:var(--surface);color:var(--text);outline:none;
   transition:border-color var(--t-fast);
 }
 .bday-promo__input:focus{border-color:var(--gold)}
@@ -6020,7 +6020,7 @@ body.chat-open{overflow:hidden}
 /* Sweet Check — единая smart-карточка (task + status) */
 .sc-card{
   margin:0 16px 16px;padding:16px;
-  background:#fff;color:var(--text);
+  background:var(--surface);color:var(--text);
   border-radius:16px;
   box-shadow:0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
   cursor:pointer;
@@ -6073,7 +6073,7 @@ body.chat-open{overflow:hidden}
 
 /* ═══ SWEET CHECK PROMO CARD (large hero) ═══════════════════════════════ */
 .scp{
-  margin:0 16px 16px;background:#fff;
+  margin:0 16px 16px;background:var(--surface);
   border-radius:18px;overflow:hidden;
   box-shadow:0 4px 16px rgba(0,0,0,.08), 0 1px 3px rgba(0,0,0,.05);
 }
@@ -6124,7 +6124,7 @@ body.chat-open{overflow:hidden}
 /* Tickets block — большая цифра + подпись */
 .scp-tickets{
   display:flex;align-items:center;gap:14px;
-  padding:18px;border-bottom:1px solid rgba(0,0,0,.06);
+  padding:18px;border-bottom:1px solid var(--border);
 }
 .scp-tickets__num{
   font-family:'Playfair Display',serif;font-size:42px;font-weight:800;
@@ -6138,7 +6138,7 @@ body.chat-open{overflow:hidden}
 /* Other prizes row */
 .scp-prizes{
   display:grid;grid-template-columns:1fr 1fr 1fr 1fr;
-  gap:8px;padding:14px 18px;border-bottom:1px solid rgba(0,0,0,.06);
+  gap:8px;padding:14px 18px;border-bottom:1px solid var(--border);
 }
 .scp-prize{
   display:flex;flex-direction:column;align-items:center;gap:4px;
@@ -6152,7 +6152,7 @@ body.chat-open{overflow:hidden}
 .scp-prize > :not(span){font-size:24px;line-height:1}
 
 /* Active task block */
-.scp-task{padding:14px 18px;border-bottom:1px solid rgba(0,0,0,.06);background:#fffbf3}
+.scp-task{padding:14px 18px;border-bottom:1px solid var(--border);background:#fffbf3}
 .scp-task__tag{
   font-size:11px;color:var(--gold-fg);font-weight:700;
   letter-spacing:.4px;text-transform:uppercase;margin-bottom:4px;
@@ -6211,7 +6211,7 @@ body.chat-open{overflow:hidden}
 /* Sweet Check — карточка задания этой недели */
 .sc-week-card{
   margin:0 16px 16px;padding:16px;
-  background:#fff;
+  background:var(--surface);
   border-radius:16px;cursor:pointer;
   box-shadow:0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
   border-left:3px solid var(--gold);
@@ -6283,7 +6283,7 @@ body.chat-open{overflow:hidden}
 /* ── Повтор заказа в LK ─────────────────────────────────────────────────── */
 .lk-ord__repeat{
   margin-top:8px;width:100%;
-  background:#fff;border:1.5px solid var(--red);
+  background:var(--surface);border:1.5px solid var(--red);
   color:var(--red);
   border-radius:10px;padding:8px 12px;
   font-family:var(--ff-body);font-size:12px;font-weight:700;
@@ -6307,7 +6307,7 @@ body.chat-open{overflow:hidden}
   z-index:2;padding:0;
 }
 .pcard-pr__wish:active{transform:scale(.85)}
-.pcard-pr__wish.on{background:#fff;color:var(--red)}
+.pcard-pr__wish.on{background:var(--surface);color:var(--red)}
 .pcard-pr__wish.on svg{fill:var(--red);stroke:var(--red);animation:wishPop .35s cubic-bezier(.34,1.56,.64,1)}
 @keyframes wishPop{
   0%{transform:scale(1)}
@@ -6323,7 +6323,7 @@ body.chat-open{overflow:hidden}
 }
 .cat-toolbar__btn{
   display:inline-flex;align-items:center;gap:6px;
-  background:#fff;border:1.5px solid var(--border-strong);
+  background:var(--surface);border:1.5px solid var(--border-strong);
   border-radius:999px;padding:8px 14px;
   font-family:var(--ff-body);font-size:12px;font-weight:600;color:var(--text);
   cursor:pointer;transition:all var(--t-fast);
@@ -6343,7 +6343,7 @@ body.chat-open{overflow:hidden}
 }
 .popmenu{
   width:100%;max-width:440px;
-  background:#fff;border-radius:24px 24px 0 0;
+  background:var(--surface);border-radius:24px 24px 0 0;
   padding:18px 18px calc(20px + env(safe-area-inset-bottom));
   box-shadow:0 -12px 36px rgba(13,6,8,.15);
   animation:popmenuUp .28s cubic-bezier(.22,1,.36,1);
@@ -6375,7 +6375,7 @@ body.chat-open{overflow:hidden}
 
 /* ── Skeleton-карточки каталога (placeholder при загрузке) ──────────────── */
 .pcard-pr-skel{
-  background:#fff;border:1px solid var(--border);
+  background:var(--surface);border:1px solid var(--border);
   border-radius:var(--r);padding:6px;
   box-shadow:var(--shadow-card);
 }
@@ -6402,7 +6402,7 @@ body.chat-open{overflow:hidden}
 .of-photo-input{display:block;width:100%}
 .of-photo-input__btn{
   display:flex;align-items:center;justify-content:center;gap:8px;
-  background:#fff;border:1.5px dashed var(--border-strong);
+  background:var(--surface);border:1.5px dashed var(--border-strong);
   border-radius:14px;padding:14px;
   font-family:var(--ff-body);font-size:13px;font-weight:600;color:var(--text);
   cursor:pointer;transition:all var(--t-fast);
@@ -6551,7 +6551,7 @@ body.chat-open{overflow:hidden}
 
 /* ── Hero pass — Apple Wallet style ────────────────────────────────────── */
 #tab-club .loy-hero{
-  background:#fff;
+  background:var(--surface);
   color:var(--ap-ink);
   border-radius:var(--ap-radius);
   padding:20px;margin:16px;
@@ -6618,7 +6618,7 @@ body.chat-open{overflow:hidden}
   gap:8px;padding:0 16px 16px;
 }
 #tab-club .hiw{
-  background:#fff;border-radius:var(--ap-radius);padding:16px 10px;text-align:center;
+  background:var(--surface);border-radius:var(--ap-radius);padding:16px 10px;text-align:center;
   box-shadow:0 1px 3px rgba(0,0,0,.04);
   border:none;
 }
@@ -6635,7 +6635,7 @@ body.chat-open{overflow:hidden}
 
 /* ── Sweet Check smart card — Apple list row ─────────────────────────────── */
 #tab-club .sc-card{
-  margin:0 16px 16px;padding:18px 20px;background:#fff;
+  margin:0 16px 16px;padding:18px 20px;background:var(--surface);
   border-radius:var(--ap-radius);
   box-shadow:0 1px 3px rgba(0,0,0,.04);
   cursor:pointer;
@@ -6689,7 +6689,7 @@ body.chat-open{overflow:hidden}
 
 /* ── LK card — Apple Wallet pass ─────────────────────────────────────────── */
 #tab-club .lk-card{
-  margin:0 16px 16px;padding:24px 20px 18px;background:#fff;
+  margin:0 16px 16px;padding:24px 20px 18px;background:var(--surface);
   border-radius:var(--ap-radius);
   box-shadow:0 1px 3px rgba(0,0,0,.04);
 }
@@ -6792,7 +6792,7 @@ body.chat-open{overflow:hidden}
 
 /* ── Привилегии клуба — Apple list rows с группами ──────────────────────── */
 #tab-club .club-benefits{
-  margin:0 16px 16px;padding:18px 20px;background:#fff;
+  margin:0 16px 16px;padding:18px 20px;background:var(--surface);
   border-radius:var(--ap-radius);
   box-shadow:0 1px 3px rgba(0,0,0,.04);
 }
@@ -6858,7 +6858,7 @@ body.chat-open{overflow:hidden}
 
 /* ── Accordion — iOS settings row style ──────────────────────────────────── */
 #tab-club .acc{
-  margin:0 16px 8px;background:#fff;
+  margin:0 16px 8px;background:var(--surface);
   border-radius:var(--ap-radius);
   box-shadow:0 1px 3px rgba(0,0,0,.04);
 }
@@ -6879,7 +6879,7 @@ body.chat-open{overflow:hidden}
 
 /* ── Partner card — Apple list row ───────────────────────────────────────── */
 #tab-club .pcard{
-  background:#fff;border:none;
+  background:var(--surface);border:none;
   margin:0;border-radius:0;
   border-bottom:1px solid var(--ap-hairline);
   box-shadow:none;
@@ -6887,7 +6887,7 @@ body.chat-open{overflow:hidden}
 }
 #tab-club .pcard:last-of-type{border-bottom:none}
 #tab-club #partners-list{
-  background:#fff;border-radius:var(--ap-radius);
+  background:var(--surface);border-radius:var(--ap-radius);
   box-shadow:0 1px 3px rgba(0,0,0,.04);
   overflow:hidden;margin-bottom:10px;
 }
@@ -6948,7 +6948,7 @@ body.chat-open{overflow:hidden}
 /* ── ОВ-card / bday-promo — Apple light cards ────────────────────────────── */
 #tab-club .ob-card,
 #tab-club .bday-promo{
-  margin:0 16px 16px;background:#fff;
+  margin:0 16px 16px;background:var(--surface);
   border-radius:var(--ap-radius);
   box-shadow:0 1px 3px rgba(0,0,0,.04);
   padding:18px 20px;
