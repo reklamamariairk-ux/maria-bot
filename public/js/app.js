@@ -193,8 +193,7 @@ async function customizeChatWelcome() {
     try {
       const lkRes = await fetch('/api/lk', { headers: { Authorization: 'tma ' + initData } });
       if (lkRes.ok) {
-        const d = await lkRes.json();
-        const lk = d?.data || {};
+        const lk = (await lkRes.json()) || {};
         if (lk.found) {
           const parts = [];
           if (lk.balance > 0) parts.push(`${Number(lk.balance).toLocaleString('ru-RU')} баллов`);
@@ -1149,8 +1148,7 @@ async function loadHomePersona() {
 
     // /api/lk для баланса и заказов
     const lkRes = await fetch('/api/lk', { headers: { Authorization: 'tma ' + initData } });
-    const lkData = lkRes.ok ? await lkRes.json() : { data: {} };
-    const lk = lkData?.data || {};
+    const lk = lkRes.ok ? ((await lkRes.json()) || {}) : {};
 
     // Greeting
     const name = me.user?.first_name || 'Друг';

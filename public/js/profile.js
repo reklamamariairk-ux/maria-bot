@@ -229,8 +229,7 @@ async function profileLoadOrdersCount() {
   try {
     const r = await fetch('/api/lk', { headers: { Authorization: 'tma ' + initData } });
     if (!r.ok) return;
-    const data = await r.json();
-    const lk = data?.data || {};
+    const lk = await r.json() || {};
     const orders = Array.isArray(lk.orders) ? lk.orders : [];
 
     // Заполняем все 3 stat'а из LK (Bitrix-данные единственный источник)
@@ -1202,8 +1201,7 @@ async function profOpenOrders() {
   list.innerHTML = '<div class="cat-loading">Загружаем заказы…</div>';
   try {
     const r = await fetch('/api/lk', { headers: { Authorization: 'tma ' + initData } });
-    const data = await r.json();
-    const d = data?.data || {};
+    const d = await r.json() || {};
     if (!d.configured) {
       list.innerHTML = '<div class="cat-empty">Личный кабинет ещё не настроен. Заглядывай позже.</div>';
       return;
