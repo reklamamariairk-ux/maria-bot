@@ -12,15 +12,15 @@
     try { tg.ready(); tg.expand(); } catch {}
 
     function applyTheme() {
-      // Уважаем Telegram colorScheme (light/dark). Брендовая цветовая
-      // схема — красно-золотые акценты — остаётся одна в обоих режимах;
-      // меняются только фон/поверхности через токены в style.css.
+      // Mini App всегда в light — это бренд-решение «премиум-белое».
+      // Dark-режим оставлен в CSS (html.tg-dark) только для дев-теста через ?dark=1.
+      // tg.colorScheme игнорируется намеренно — иначе при тёмной теме TG
+      // часть компонентов с hardcoded цветами выглядит дисгармонично.
       const tp = tg.themeParams || {};
       const root = document.documentElement;
-      // Поддержка ?dark=1 / ?dark=0 для дев-тестирования без смены TG-настроек
       const url = new URL(window.location.href);
       const force = url.searchParams.get('dark');
-      const isDark = force === '1' ? true : force === '0' ? false : (tg.colorScheme === 'dark');
+      const isDark = force === '1';   // только явный ?dark=1; всё остальное — light
 
       // Brand-цвета — одни и те же в light/dark
       root.style.setProperty('--tg-link-color',         '#d61f37');
