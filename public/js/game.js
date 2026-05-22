@@ -55,19 +55,25 @@ async function secretOfDayInit() {
     if (!s || !s.product) return;
     const product = s.product;
     const price = Number(product.priceNumber || product.price) || 0;
-    const discounted = Math.round(price * (100 - s.discountPct) / 100);
+    // Скидку показываем ТОЛЬКО если она есть в самом товаре в каталоге (1С).
+    // Старая логика брала discountPct у секрета (захардкоженный 15%) — это была
+    // выдумка: при покупке у Маши никакой скидки не было. Никаких изобретений.
+    const catalogPct = Number(product.discountPercent) || 0;
+    const hasRealDiscount = catalogPct > 0;
+    const discounted = hasRealDiscount ? Math.round(price * (100 - catalogPct) / 100) : price;
     const img = product.image
       ? `<img src="/img?u=${encodeURIComponent(product.image)}" alt="" loading="lazy"/>`
       : `<span class="secret-card__ph">🎂</span>`;
+    const priceHtml = hasRealDiscount
+      ? `<span class="secret-card__old">${price.toLocaleString('ru-RU')} ₽</span>
+         <span class="secret-card__new">${discounted.toLocaleString('ru-RU')} ₽</span>
+         <span class="secret-card__off">−${catalogPct}%</span>`
+      : `<span class="secret-card__new">${price.toLocaleString('ru-RU')} ₽</span>`;
     document.getElementById('secret-card-body').innerHTML = `
       <div class="secret-card__img">${img}</div>
       <div class="secret-card__txt">
         <div class="secret-card__name">${String(product.name || '').replace(/</g,'&lt;')}</div>
-        <div class="secret-card__price">
-          <span class="secret-card__old">${price.toLocaleString('ru-RU')} ₽</span>
-          <span class="secret-card__new">${discounted.toLocaleString('ru-RU')} ₽</span>
-          <span class="secret-card__off">−${s.discountPct}%</span>
-        </div>
+        <div class="secret-card__price">${priceHtml}</div>
       </div>
       <button class="secret-card__cta" onclick="event.stopPropagation();catOpenProduct?.(${product.id})">→</button>`;
     card.style.display = '';

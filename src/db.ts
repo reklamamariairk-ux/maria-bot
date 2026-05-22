@@ -732,7 +732,7 @@ export async function touchVisitStreak(chatId: number): Promise<{ currentStreak:
 }
 
 // ─── Secret of the Day ───────────────────────────────────────────────────────
-export async function setSecretOfDay(productId: number, discountPct = 15) {
+export async function setSecretOfDay(productId: number, discountPct = 0) {
   const today = new Date();
   const toIrk = (d: Date) => new Date(d.getTime() + 8 * 3600_000);
   const dateIrk = toIrk(today).toISOString().slice(0, 10);

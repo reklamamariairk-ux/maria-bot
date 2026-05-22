@@ -2472,9 +2472,10 @@ app.get("/api/rewards/mine", requireTgUser, async (req, res) => {
   }
 });
 
-// Cron-функция: каждое утро 09:00 Иркутск выбирает «секрет дня»
+// Cron-функция: каждое утро 09:00 Иркутск выбирает «секрет дня» (рекомендация)
+// Никакой выдуманной скидки — discountPct = 0. Если у выбранного товара в 1С
+// есть реальная скидка, фронт её покажет из каталога. Иначе — просто рекомендация.
 async function rotateSecretOfDay() {
-  // Берём случайный товар (предпочитаем категории Торты/Десерты)
   if (catalog.length === 0) return;
   const eligibles = catalog.filter((p) =>
     ["Торты", "Пирожные и десерты", "Пироги"].includes(p.category) && p.id && (p.priceNumber ?? 0) >= 300
@@ -2482,7 +2483,7 @@ async function rotateSecretOfDay() {
   const pool = eligibles.length > 0 ? eligibles : catalog;
   const pick = pool[Math.floor(Math.random() * pool.length)];
   if (pick?.id) {
-    await setSecretOfDay(Number(pick.id), 15).catch((e) => console.error("[SECRET-OF-DAY]", (e as Error).message));
+    await setSecretOfDay(Number(pick.id), 0).catch((e) => console.error("[SECRET-OF-DAY]", (e as Error).message));
     console.log(`[SECRET-OF-DAY] picked id=${pick.id} "${pick.name}"`);
   }
 }
