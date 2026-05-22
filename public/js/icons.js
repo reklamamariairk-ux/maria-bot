@@ -60,11 +60,33 @@
     handshake: '<path d="m11 17 2 2a1 1 0 1 0 3-3"/><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="m21 3 1 11h-2"/><path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/>',
   };
 
+  // Уникальный uid на каждый рендер — чтобы defs (gradient + filter) не конфликтовали
+  let _uidSeq = 0;
+  function nextUid(name) { return `ic-${name}-${(_uidSeq++).toString(36)}`; }
+
   function svg(name, size) {
     const path = ICONS[name];
     if (!path) return '';
     const s = Math.round(size || 22);
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" class="ic">${path}</svg>`;
+    const uid = nextUid(name);
+    // Gradient + soft shadow используют currentColor → иконка наследует цвет от контекста
+    // (CSS), но получает «premium» depth: лёгкий верх→низ градиент по opacity
+    // и аккуратная тень. На малых размерах остаётся читабельной.
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" class="ic">`
+      + `<defs>`
+      +   `<linearGradient id="${uid}-g" x1="0" y1="0" x2="0" y2="1">`
+      +     `<stop offset="0%" stop-color="currentColor" stop-opacity="1"/>`
+      +     `<stop offset="100%" stop-color="currentColor" stop-opacity="0.7"/>`
+      +   `</linearGradient>`
+      +   `<filter id="${uid}-s" x="-15%" y="-15%" width="130%" height="130%">`
+      +     `<feGaussianBlur in="SourceAlpha" stdDeviation="0.25"/>`
+      +     `<feOffset dy="0.4"/>`
+      +     `<feComponentTransfer><feFuncA type="linear" slope="0.35"/></feComponentTransfer>`
+      +     `<feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>`
+      +   `</filter>`
+      + `</defs>`
+      + `<g stroke="url(#${uid}-g)" filter="url(#${uid}-s)">${path}</g>`
+      + `</svg>`;
   }
 
   window.Icon = svg;
