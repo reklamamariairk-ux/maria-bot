@@ -373,15 +373,23 @@ const GAMES_TEXT = `
 Нажми кнопку и играй прямо сейчас! 🎁
 `.trim();
 
-const SALE_TEXT = `
+// SALE_TEXT собирается динамически из data/sweet-check-prizes.json — призы
+// можно менять без правки кода.
+function buildSaleText(): string {
+  const cfg = loadSweetCheckPrizes();
+  const lotteryLine = cfg.headline_name
+    ? `🧾 *Лотерея «Сладкий чек»* — каждый чек = шанс выиграть ${cfg.headline_name} и другие призы (${cfg.quarter_label.toLowerCase()})`
+    : `🧾 *Лотерея «Сладкий чек»* — каждый чек = билет в розыгрыш`;
+  return `
 🌟 *Акции*
 
 🎂 *Торт месяца* — со скидкой, доставка от 1 000 ₽ бесплатно
 🎁 Фирменная коробка с лентой — бесплатно к любому заказу
-🧾 *Лотерея «Сладкий чек»* — каждый чек = шанс на iPhone 17 Pro Max, MacBook, PS5 Slim
+${lotteryLine}
 
 Подробнее на сайте maria-irk.ru ⏳
 `.trim();
+}
 
 const HELP_TEXT = `
 📞 *Контакты кондитерской «Мария»*
@@ -445,7 +453,7 @@ bot.on(":contact", async (ctx) => {
 });
 
 bot.command("games",  async (ctx) => ctx.reply(GAMES_TEXT,  { parse_mode: "Markdown", reply_markup: webAppButton(GAMES_TEXT, "🎮 Играть") }));
-bot.command("sale",   async (ctx) => ctx.reply(SALE_TEXT,   { parse_mode: "Markdown", reply_markup: webAppButton(SALE_TEXT, "🛒 Акции") }));
+bot.command("sale",   async (ctx) => { const t = buildSaleText(); await ctx.reply(t, { parse_mode: "Markdown", reply_markup: webAppButton(t, "🛒 Акции") }); });
 bot.command("help",   async (ctx) => ctx.reply(HELP_TEXT,   { parse_mode: "Markdown", reply_markup: webAppButton(HELP_TEXT, "📋 Открыть меню") }));
 
 // /broadcast <текст> — только для администраторов
@@ -3011,6 +3019,50 @@ app.post("/api/admin/sweet-check/reload", (req, res) => {
   _sweetWeeksCache = null;
   const weeks = loadSweetCheckWeeks();
   res.json({ ok: true, total: weeks.length, first: weeks[0]?.from, last: weeks.at(-1)?.to });
+});
+
+// ─── Sweet Check prizes (список призов лотереи, hot-reload) ─────────────────
+// Источник: data/sweet-check-prizes.json. Перезагрузка — POST /api/admin/sweet-check-prizes/reload.
+// Запасной вариант если файл недоступен — quarter_label без конкретных призов.
+interface SweetPrize { place: number; emoji: string; name: string; sub?: string }
+interface SweetPrizesConfig { quarter_label: string; headline_name: string; prizes: SweetPrize[] }
+const SWEET_PRIZES_FALLBACK: SweetPrizesConfig = {
+  quarter_label: "Розыгрыш каждый квартал",
+  headline_name: "Лотерея с призами",
+  prizes: [],
+};
+const SWEET_PRIZES_FILE = path.join(__dirname, "..", "data", "sweet-check-prizes.json");
+let _sweetPrizesCache: SweetPrizesConfig | null = null;
+function loadSweetCheckPrizes(): SweetPrizesConfig {
+  if (_sweetPrizesCache) return _sweetPrizesCache;
+  try {
+    const fs = require("fs") as typeof import("fs");
+    if (fs.existsSync(SWEET_PRIZES_FILE)) {
+      const raw = fs.readFileSync(SWEET_PRIZES_FILE, "utf-8");
+      const data = JSON.parse(raw) as SweetPrizesConfig;
+      if (Array.isArray(data.prizes)) {
+        _sweetPrizesCache = data;
+        return _sweetPrizesCache;
+      }
+    }
+  } catch (e) {
+    console.error("[sweet-prizes] load failed:", (e as Error).message);
+  }
+  _sweetPrizesCache = SWEET_PRIZES_FALLBACK;
+  return _sweetPrizesCache;
+}
+app.get("/api/sweet-check/prizes", (_req, res) => {
+  res.json(loadSweetCheckPrizes());
+});
+app.post("/api/admin/sweet-check-prizes/reload", (req, res) => {
+  const token = req.header("x-user-token") || (req.body as { token?: string })?.token;
+  if (!token || token !== process.env.ADMIN_TOKEN) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  _sweetPrizesCache = null;
+  const cfg = loadSweetCheckPrizes();
+  res.json({ ok: true, total: cfg.prizes.length, headline: cfg.headline_name });
 });
 
 app.get("/health", (_req, res) =>

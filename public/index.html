@@ -26,6 +26,7 @@
   <script src="/js/tg-bridge.js"></script>
   <script src="/js/icons.js"></script>
   <script src="/js/icons-3d.js"></script>
+  <script src="/js/sweet-prizes.js"></script>
   <link rel="stylesheet" href="/css/style.css"/>
 </head>
 <body>
@@ -277,7 +278,7 @@
     <span class="home-club-chip__ic"><span data-icon="diamond" data-size="20"></span></span>
     <div class="home-club-chip__body">
       <div class="home-club-chip__t">Клуб «Мария для своих»</div>
-      <div class="home-club-chip__s">Кэшбэк до 10% · билет в розыгрыш iPhone 17</div>
+      <div class="home-club-chip__s" id="home-club-chip-sub">Кэшбэк до 10% · билет в розыгрыш</div>
     </div>
     <span class="home-club-chip__chev"><span data-icon="chevronRight" data-size="14"></span></span>
   </button>
@@ -494,7 +495,7 @@
             <div class="ob-step__num">3</div>
             <div class="ob-step__body">
               <div class="ob-step__t">Каждый чек = билет в розыгрыш</div>
-              <div class="ob-step__s">iPhone 17, MacBook, PS5 — разыгрываем каждый квартал</div>
+              <div class="ob-step__s" id="ob-step-prizes">Разыгрываем технику каждый квартал</div>
             </div>
           </div>
         </div>
@@ -591,13 +592,8 @@
     <div class="acc__body">
       <p class="section-desc" style="padding-left:0;padding-right:0">Каждый чек — шанс выиграть технику мечты. Розыгрыш каждый квартал.</p>
       <div id="sc-my" style="display:none"></div>
-      <div class="prizes">
-        <div class="prize prize--1"><div class="prize__place">🥇</div><div class="prize__icon">📱</div><div class="prize__name">iPhone 17 Pro Max</div><div class="prize__sub">256 ГБ, оранжевый</div></div>
-        <div class="prize prize--2"><div class="prize__place">🥈</div><div class="prize__icon">💻</div><div class="prize__name">MacBook</div></div>
-        <div class="prize prize--2"><div class="prize__place">🥈</div><div class="prize__icon">🎮</div><div class="prize__name">PlayStation 5 Slim</div></div>
-        <div class="prize prize--3"><div class="prize__place">🥉</div><div class="prize__icon">⌚</div><div class="prize__name">Apple Watch Series</div></div>
-        <div class="prize prize--3"><div class="prize__place">🥉</div><div class="prize__icon">🔊</div><div class="prize__name">Колонка JBL</div></div>
-      </div>
+      <!-- Призы рендерятся динамически из data/sweet-check-prizes.json через sweet-prizes.js -->
+      <div class="prizes" id="sweet-prizes-list"></div>
       <div class="sc-rules">
         <h4>Как получить билет</h4>
         <ul>

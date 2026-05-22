@@ -1,0 +1,11 @@
+{
+  "quarter_label": "Розыгрыш каждый квартал",
+  "headline_name": "iPhone 17 Pro Max",
+  "prizes": [
+    { "place": 1, "emoji": "📱", "name": "iPhone 17 Pro Max", "sub": "256 ГБ, оранжевый" },
+    { "place": 2, "emoji": "💻", "name": "MacBook",          "sub": "" },
+    { "place": 3, "emoji": "🎮", "name": "PS5 Slim",         "sub": "" },
+    { "place": 3, "emoji": "⌚", "name": "Apple Watch Series","sub": "" },
+    { "place": 3, "emoji": "🔊", "name": "Колонка JBL",      "sub": "" }
+  ]
+}

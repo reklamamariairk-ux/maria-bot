@@ -200,14 +200,23 @@ function renderSweetCheckMy(data) {
     ? `window.open('https://t.me/mariatortik_bot','_blank')`
     : `switchTab('menu')`;
 
+  // Призы — из data/sweet-check-prizes.json (window.SWEET_PRIZES загружен sweet-prizes.js)
+  const cfg = window.SWEET_PRIZES;
+  const headPrize = cfg?.prizes?.[0];
+  const heroPrize = headPrize ? `${headPrize.emoji} ${headPrize.name}` : 'Лотерея';
+  const otherPrizes = (cfg?.prizes || []).slice(1, 5);
+  const otherPrizesHtml = otherPrizes.length > 0
+    ? otherPrizes.map(p => `<div class="scp-prize">${p.emoji}<span>${p.name}</span></div>`).join('')
+    : '';
+
   top.innerHTML = `
     <div class="scp">
-      <!-- Hero: фото iPhone + badge -->
+      <!-- Hero: главный приз (из конфига) + дата розыгрыша -->
       <div class="scp__hero">
         <div class="scp__hero-bg"></div>
         <div class="scp__hero-content">
           <div class="scp__hero-tag">Главный приз</div>
-          <div class="scp__hero-prize">📱 iPhone 17 Pro Max</div>
+          <div class="scp__hero-prize">${heroPrize}</div>
           <div class="scp__hero-date">⏱ Розыгрыш ${drawDateStr} · через <b>${daysLeft}</b> ${daysLeft === 1 ? 'день' : daysLeft < 5 ? 'дня' : 'дней'}</div>
         </div>
       </div>
@@ -215,13 +224,8 @@ function renderSweetCheckMy(data) {
       <!-- Tickets status -->
       ${ticketsBlock}
 
-      <!-- Other prizes preview row -->
-      <div class="scp-prizes">
-        <div class="scp-prize">💻<span>MacBook</span></div>
-        <div class="scp-prize">🎮<span>PS 5 Slim</span></div>
-        <div class="scp-prize">⌚<span>Apple Watch</span></div>
-        <div class="scp-prize">🔊<span>JBL</span></div>
-      </div>
+      <!-- Other prizes preview row (из конфига, 2-5 места) -->
+      ${otherPrizesHtml ? `<div class="scp-prizes">${otherPrizesHtml}</div>` : ''}
 
       ${taskBlock}
 

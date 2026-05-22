@@ -645,8 +645,9 @@ const STORIES_DATA = {
   },
   sweet: {
     emoji: '📱',
-    title: 'iPhone 17 Pro Max',
-    sub: 'Каждый чек — билет в розыгрыш. Призы: MacBook, PS5, Apple Watch, JBL. Розыгрыш каждый квартал.',
+    // title/sub — динамические из data/sweet-check-prizes.json (см. renderStory)
+    title: 'Сладкий чек',
+    sub: 'Каждый чек — билет в розыгрыш.',
     ctaText: 'Узнать про Сладкий чек',
     ctaAction: 'switchTab("club")',
   },
@@ -721,14 +722,24 @@ function renderStory() {
   // Динамически подставим имя/цену/скидку из _cakeOfMonth (берётся из 1С)
   const isPromo = STORIES_ORDER[_storyIdx] === 'promo';
   const pct = Number(_cakeOfMonth?.discountPercent) || 0;
-  const title = (isPromo && _cakeOfMonth?.name && pct > 0)
+  let title = (isPromo && _cakeOfMonth?.name && pct > 0)
     ? `«${_cakeOfMonth.name}» со скидкой −${pct}%`
     : (isPromo && _cakeOfMonth?.name)
       ? _cakeOfMonth.name
       : data.title;
-  const sub = (isPromo && _cakeOfMonth)
+  let sub = (isPromo && _cakeOfMonth)
     ? `${(_cakeOfMonth.preview || '').slice(0, 80) || 'Хит каталога'} · ${Number(_cakeOfMonth.priceNumber || _cakeOfMonth.price || 0).toLocaleString('ru-RU')} ₽`
     : data.sub;
+  // Sweet Check story — призы из data/sweet-check-prizes.json
+  if (STORIES_ORDER[_storyIdx] === 'sweet' && window.SWEET_PRIZES?.prizes?.length) {
+    const sp = window.SWEET_PRIZES;
+    const head = sp.prizes[0];
+    if (head) title = head.name;
+    const namesList = sp.prizes.slice(1, 5).map(p => p.name).join(', ');
+    sub = namesList
+      ? `Каждый чек — билет в розыгрыш. Призы: ${namesList}. ${sp.quarter_label}.`
+      : `Каждый чек — билет в розыгрыш. ${sp.quarter_label}.`;
+  }
   document.getElementById('story-content').innerHTML = `
     ${heroBlock}
     <div class="story-viewer__title">${title}</div>
