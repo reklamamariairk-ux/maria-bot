@@ -535,6 +535,9 @@ function renderLevelProgress(data) {
   const cur = getCurrentLevel(yearSpent, lkLevel);
   const idx = CLUB_LEVELS.indexOf(cur);
   const next = CLUB_LEVELS[idx + 1] || null;
+  // Кэшируем pct для корзины: cart.js использует _cachedLkLevelPct
+  // чтобы показать реальный кэшбэк, не захардкоженные 5%.
+  window._cachedLkLevelPct = Number(cur?.pct) || 0;
 
   // Chip с текущим уровнем (без emoji — Apple-style)
   const nm = document.getElementById('hero-level-name');

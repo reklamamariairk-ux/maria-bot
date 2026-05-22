@@ -192,17 +192,23 @@ function cartRender(view) {
       </div>`;
   }).join('');
 
-  // Хинты: cashback (5% по умолчанию для verified юзера), free delivery, min order
+  // Хинты: cashback (по уровню клуба из LK), free delivery, min order
   const total = cartTotal();
   const FREE_DELIVERY_MIN = 1000;
   const MIN_ORDER = 300;
-  const cashback = Math.round(total * 0.05); // 5% базовый кэшбэк
+  // Уровень/процент берём из LK через window._cachedLkLevel (записывается club.js).
+  // Если уровень неизвестен (не подключён клуб / нет verified phone) — показываем
+  // диапазон 5-10%, а не конкретное число (никаких выдумок).
+  const lvlPct = Number(window._cachedLkLevelPct) || 0;
+  const cashback = lvlPct > 0 ? Math.round(total * lvlPct / 100) : 0;
   const remaining = Math.max(0, FREE_DELIVERY_MIN - total);
   const freeDeliveryHtml = remaining > 0
     ? `<div class="cart-hint cart-hint--info">🚚 Ещё <b>${remaining.toLocaleString('ru-RU')} ₽</b> до бесплатной доставки</div>`
     : `<div class="cart-hint cart-hint--success">✓ Доставка бесплатно</div>`;
   const cashbackHtml = total >= MIN_ORDER
-    ? `<div class="cart-hint cart-hint--bonus">💎 <b>+${cashback.toLocaleString('ru-RU')} ₽</b> кэшбэка после заказа (5%)</div>`
+    ? (lvlPct > 0
+        ? `<div class="cart-hint cart-hint--bonus">💎 <b>+${cashback.toLocaleString('ru-RU')} ₽</b> кэшбэка после заказа (${lvlPct}%)</div>`
+        : `<div class="cart-hint cart-hint--bonus">💎 Кэшбэк 5–10% баллами — подключи клуб в профиле</div>`)
     : '';
   const minOrderHtml = total < MIN_ORDER
     ? `<div class="cart-hint cart-hint--warn">⚠ Минимальный заказ ${MIN_ORDER} ₽ — добавьте ещё на ${(MIN_ORDER - total).toLocaleString('ru-RU')} ₽</div>`

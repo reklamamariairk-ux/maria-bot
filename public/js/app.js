@@ -1191,6 +1191,13 @@ async function loadHomePersona() {
     // /api/lk для баланса и заказов
     const lkRes = await fetch('/api/lk', { headers: { Authorization: 'tma ' + initData } });
     const lk = lkRes.ok ? ((await lkRes.json()) || {}) : {};
+    // Кэшируем уровень клуба для корзины (cart.js берёт реальный pct, не хардкод 5%)
+    if (lk.found && window.getCurrentLevel) {
+      try {
+        const cur = window.getCurrentLevel(Number(lk.year_spent || 0), lk.level || null);
+        window._cachedLkLevelPct = Number(cur?.pct) || 0;
+      } catch {}
+    }
 
     // Greeting
     const name = me.user?.first_name || 'Друг';
