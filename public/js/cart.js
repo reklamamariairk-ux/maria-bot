@@ -872,14 +872,9 @@ async function cartSubmit() {
   }
 }
 
-function escHtml(s) {
-  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
-  );
-}
-function escAttr(s) {
-  return String(s ?? '').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
-}
+// escHtml/escAttr — алиасы на глобальные из utils.js (escapeHtml/escapeAttr).
+const escHtml = window.escapeHtml;
+const escAttr = window.escapeAttr;
 
 /* ── Helpers: phoneMask, pickDate, pickTime ─────────────────────────────── */
 function phoneMask(inp) {

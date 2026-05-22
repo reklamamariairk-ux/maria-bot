@@ -73,9 +73,8 @@ async function loadShops() {
   }
 }
 
-function escA(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
+// escA — алиас на window.escapeHtml из utils.js
+const escA = window.escapeHtml;
 
 function closeShopsModal() {
   const m = document.getElementById('shops-modal');
@@ -204,7 +203,9 @@ async function customizeChatWelcome() {
     } catch {}
     // Сохраняем timestamp если есть
     const time = txt.querySelector('.msg__time')?.outerHTML || '';
-    txt.innerHTML = `Привет, ${name}! 👋 Я Маша. ${stats || ''} Помогу подобрать торт, повторить заказ или ответить про клуб.${time}`;
+    // ВАЖНО: name приходит из tg.user.first_name (контролируется юзером, TG не валидирует HTML).
+    // stats формируется из чисел через template — безопасно. Эскейпим имя.
+    txt.innerHTML = `Привет, ${escapeHtml(name)}! 👋 Я Маша. ${stats || ''} Помогу подобрать торт, повторить заказ или ответить про клуб.${time}`;
     txt.dataset.customized = '1';
   } catch {}
 }
@@ -529,9 +530,8 @@ function bundleClose() {
 }
 window.bundleClose = bundleClose;
 
-function escAttrApp(s) {
-  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+// escAttrApp — алиас на window.escapeAttr из utils.js
+const escAttrApp = window.escapeAttr;
 
 /* ── Хит недели — карусель на главной ───────────────────────────────────── */
 async function loadHomeHits() {
@@ -740,10 +740,12 @@ function renderStory() {
       ? `Каждый чек — билет в розыгрыш. Призы: ${namesList}. ${sp.quarter_label}.`
       : `Каждый чек — билет в розыгрыш. ${sp.quarter_label}.`;
   }
+  // title/sub могут содержать имя товара из CATALOG_API — менеджер теоретически
+  // мог положить HTML/JS. heroBlock мы сами собираем, escape не нужен.
   document.getElementById('story-content').innerHTML = `
     ${heroBlock}
-    <div class="story-viewer__title">${title}</div>
-    <div class="story-viewer__sub">${sub}</div>`;
+    <div class="story-viewer__title">${escapeHtml(title)}</div>
+    <div class="story-viewer__sub">${escapeHtml(sub)}</div>`;
   const cta = document.getElementById('story-cta');
   cta.textContent = data.ctaText;
   cta.onclick = () => { closeStory(); setTimeout(() => { try { eval(data.ctaAction); } catch (e) { console.error(e); } }, 200); };
@@ -798,14 +800,18 @@ window.usechipText = usechipText;
 let _allPartners = [];
 
 function renderPartnerCard(p) {
-  const name = (p.name || '').replace(/</g,'&lt;');
-  const desc = (p.desc || '').replace(/</g,'&lt;');
-  const perk = (p.perk || '').replace(/</g,'&lt;');
-  const url = p.url ? String(p.url).replace(/"/g, '&quot;') : '';
-  const logoSrc = p.logo_url || '';
+  // Все строки приходят от менеджера через partners API maria-irk.ru.
+  // Используем полный escape — раньше вручную чистились только `<` и `"`,
+  // на `>` `&` `'` оставались дыры + onclick='${url}' давал JS-инъекцию.
+  const name = escapeHtml(p.name || '');
+  const desc = escapeHtml(p.desc || '');
+  const perk = escapeHtml(p.perk || '');
+  const url = p.url ? escapeAttr(p.url) : '';
+  const logoSrc = escapeAttr(p.logo_url || '');
+  const emoji = escapeHtml(p.emoji || '🎁');
   const logoHtml = logoSrc
-    ? `<img class="pcard__logo-img" src="${logoSrc.replace(/"/g,'&quot;')}" alt="" loading="lazy" onerror="this.style.display='none';this.parentElement.textContent='${p.emoji || '🎁'}'"/>`
-    : `${p.emoji || '🎁'}`;
+    ? `<img class="pcard__logo-img" src="${logoSrc}" alt="" loading="lazy" onerror="this.style.display='none';this.parentElement.textContent='${emoji}'"/>`
+    : emoji;
   return `
     <div class="pcard">
       <div class="pcard__logo">${logoHtml}</div>
@@ -815,7 +821,7 @@ function renderPartnerCard(p) {
           ${perk ? `<div class="pcard__badge">${perk}</div>` : ''}
         </div>
         <div class="pcard__desc">${desc}</div>
-        ${url ? `<a class="pcard__btn" href="${url}" target="_blank" rel="noopener" data-haptic="light" onclick="window.Telegram?.WebApp?.openLink?.('${url}');event.preventDefault?.()">Перейти на сайт →</a>` : ''}
+        ${url ? `<a class="pcard__btn" href="${url}" target="_blank" rel="noopener" data-haptic="light" data-tg-open="1">Перейти на сайт →</a>` : ''}
       </div>
     </div>`;
 }
@@ -892,6 +898,17 @@ document.addEventListener('DOMContentLoaded', () => {
   loadHomePersona();
   loadUpcomingHoliday();
   loadHomeClassics();
+
+  // Event-delegation для external-ссылок с data-tg-open: открываем через
+  // TG.WebApp.openLink (вместо inline onclick='${url}' — был JS-injection-вектор).
+  document.body.addEventListener('click', (e) => {
+    const a = e.target?.closest?.('a[data-tg-open]');
+    if (!a) return;
+    const href = a.getAttribute('href');
+    if (!href) return;
+    e.preventDefault();
+    try { window.Telegram?.WebApp?.openLink?.(href); } catch {}
+  });
 });
 
 // ── Классика мамы — куратор-подбор ностальгических тортов ───────────────

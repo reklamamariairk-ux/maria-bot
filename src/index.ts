@@ -520,7 +520,37 @@ const app = express();
 // в selfie-cake baseUrl строится из заголовков и легко подменяется.
 app.set("trust proxy", 1);
 
-app.use(helmet({ contentSecurityPolicy: false }));
+// CSP подобран под Telegram WebApp:
+// - frame-ancestors разрешает встраивание в web.telegram.org/k/a/z (web-клиенты)
+//   и на 'self' для прямого открытия в браузере (dev).
+// - default-src 'self' закрывает большинство XSS-каналов.
+// - script-src/style-src 'self' + 'unsafe-inline' (inline-onclick атрибуты у нас
+//   ещё используются; убираем их постепенно — см. рефакторинг partners на data-tg-open).
+// - img-src + connect-src: разрешаем maria-irk.ru (catalog images + LK API),
+//   pollinations.ai (AI-генерация), cloudinary (если будет), telegram.org
+//   (TG WebApp SDK).
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: {
+        "default-src": ["'self'"],
+        "frame-ancestors": ["'self'", "https://web.telegram.org", "https://t.me", "https://*.telegram.org"],
+        "script-src": ["'self'", "'unsafe-inline'", "https://telegram.org", "https://*.telegram.org"],
+        "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        "font-src": ["'self'", "https://fonts.gstatic.com", "data:"],
+        "img-src": ["'self'", "data:", "blob:", "https:", "http://image.pollinations.ai", "https://image.pollinations.ai"],
+        "connect-src": ["'self'", "https://image.pollinations.ai", "https://*.maria-irk.ru", "https://maria-irk.ru"],
+        "media-src": ["'self'", "blob:"],
+        "object-src": ["'none'"],
+        "base-uri": ["'self'"],
+        "form-action": ["'self'"],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 

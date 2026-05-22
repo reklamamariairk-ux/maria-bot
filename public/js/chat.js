@@ -390,9 +390,8 @@ function nowHM() {
 }
 window.nowHM = nowHM;
 
-function escAttr(s) {
-  return String(s ?? '').replace(/'/g,'&#39;').replace(/"/g,'&quot;');
-}
+// escAttr — алиас на window.escapeAttr из utils.js
+const escAttr = window.escapeAttr;
 
 function appendTyping() {
   const wrap = document.getElementById('chat-messages');
@@ -406,9 +405,8 @@ function appendTyping() {
   return div;
 }
 
-function esc(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+// esc — алиас на window.escapeHtml из utils.js (полный escape включая `'`)
+const esc = window.escapeHtml;
 
 /* ─── Voice input ─────────────────────────────────────────────────────────── */
 let _voiceRecorder = null;

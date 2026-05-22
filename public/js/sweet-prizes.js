@@ -44,9 +44,8 @@
     }
   }
 
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  }
+  // escapeHtml — используем глобальный window.escapeHtml из utils.js
+  const escapeHtml = window.escapeHtml;
 
   async function loadAndRender() {
     try {

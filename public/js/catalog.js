@@ -939,12 +939,10 @@ function catClearSearch() {
 window.catRunSuggestedSearch = catRunSuggestedSearch;
 window.catClearSearch = catClearSearch;
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-function escapeAttr(s) {
-  return String(s).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
-}
+// escapeHtml/escapeAttr перенесены в utils.js (window.escapeHtml/escapeAttr).
+// Объявляем локальные ссылки чтобы не переписывать существующие вызовы.
+const escapeHtml = window.escapeHtml;
+const escapeAttr = window.escapeAttr;
 
 document.addEventListener('DOMContentLoaded', () => {
   // Стартовая синхронизация wishlist'a с бэком — на случай если юзер уже накидал избранное

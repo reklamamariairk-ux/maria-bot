@@ -372,11 +372,8 @@ async function renderLk() {
   }
 }
 
-function escapeHtml(s) {
-  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
-  );
-}
+// escapeHtml перенесён в utils.js (window.escapeHtml).
+const escapeHtml = window.escapeHtml;
 
 // Человекочитаемая дата: "вчера" / "3 дня назад" / "28 апр" / "14 янв 2025"
 function formatRelativeDate(dateStr) {

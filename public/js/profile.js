@@ -1282,6 +1282,5 @@ function profEditBday() {
 }
 window.profEditBday = profEditBday;
 
-function escAttr(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+// escAttr — алиас на window.escapeAttr из utils.js
+const escAttr = window.escapeAttr;
