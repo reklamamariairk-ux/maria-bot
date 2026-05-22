@@ -1569,7 +1569,13 @@ app.post("/api/lead-corporate", rateLimit(5), express.json({ limit: "1mb" }), as
 });
 
 // ─── Статистика подписчиков ───────────────────────────────────────────────────
-app.get("/api/subscribers/count", async (_req, res) => {
+// Утечка бизнес-инфы — переведено под admin-token (раньше любой видел число подписчиков)
+app.get("/api/subscribers/count", async (req, res) => {
+  const token = req.header("x-user-token") || (req.query.token as string | undefined);
+  if (!token || token !== process.env.ADMIN_TOKEN) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
   const subs = await getAllSubscribers();
   res.json({ count: subs.length });
 });
@@ -1598,14 +1604,20 @@ app.post("/api/broadcast", async (req, res) => {
   console.log(`[BROADCAST] sent=${sent} failed=${failed}`);
 });
 
-// Ручное обновление каталога (для отладки)
-app.post("/api/refresh-catalog", async (_req, res) => {
+// Ручное обновление каталога (admin-only — раньше любой мог дёргать рефреш
+// → нагрузка на CATALOG_API maria-irk.ru через unauth-юзеров).
+app.post("/api/refresh-catalog", async (req, res) => {
+  const token = req.header("x-user-token") || (req.body as { token?: string })?.token;
+  if (!token || token !== process.env.ADMIN_TOKEN) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
   res.json({ status: "started" });
   await refreshCatalog();
 });
 
 // Статус каталога
-app.get("/api/catalog-status", (_req, res) => {
+app.get("/api/catalog-status", rateLimit(30), (_req, res) => {
   res.json({
     count: catalog.length,
     updated: catalogAge(),
@@ -1624,7 +1636,7 @@ async function getUserBirthday(chatId: number): Promise<string | null> {
   } catch { return null; }
 }
 
-app.post("/api/birthday", requireTgUser, async (req, res) => {
+app.post("/api/birthday", requireTgUser, rateLimit(5), async (req, res) => {
   const u = getTgUser(req)!;
   const body = req.body as { birthday?: string };
   const bday = String(body.birthday ?? "").trim();
@@ -1685,7 +1697,7 @@ app.get("/api/me", requireTgUser, async (req, res) => {
 // что contact.user_id == ctx.from.id. HTTP-endpoint не нужен и был бы дырой.
 
 // Отвязать телефон — обнуляем phone_verified_at и phone
-app.post("/api/unverify-phone", requireTgUser, async (req, res) => {
+app.post("/api/unverify-phone", requireTgUser, rateLimit(3), async (req, res) => {
   const u = getTgUser(req)!;
   try {
     const { pool } = await import("./db");
@@ -1700,7 +1712,7 @@ app.post("/api/unverify-phone", requireTgUser, async (req, res) => {
   }
 });
 
-app.post("/api/daily/claim", requireTgUser, async (req, res) => {
+app.post("/api/daily/claim", requireTgUser, rateLimit(10), async (req, res) => {
   const u = getTgUser(req)!;
   try {
     if (!(await isPhoneVerified(u.id))) {
@@ -1716,11 +1728,11 @@ app.post("/api/daily/claim", requireTgUser, async (req, res) => {
   }
 });
 
-app.get("/api/conversion-tiers", (_req, res) => {
+app.get("/api/conversion-tiers", rateLimit(30), (_req, res) => {
   res.json(CONVERSION_TIERS);
 });
 
-app.post("/api/convert", requireTgUser, async (req, res) => {
+app.post("/api/convert", requireTgUser, rateLimit(10), async (req, res) => {
   const u = getTgUser(req)!;
   const { stars } = req.body as { stars?: number };
   if (typeof stars !== "number") {
@@ -1737,7 +1749,7 @@ app.post("/api/convert", requireTgUser, async (req, res) => {
   }
 });
 
-app.get("/api/rewards", async (_req, res) => {
+app.get("/api/rewards", rateLimit(60), async (_req, res) => {
   try {
     const items = await getRewardsCatalog();
     res.json(items);
@@ -1747,7 +1759,7 @@ app.get("/api/rewards", async (_req, res) => {
   }
 });
 
-app.post("/api/redeem", requireTgUser, async (req, res) => {
+app.post("/api/redeem", requireTgUser, rateLimit(10), async (req, res) => {
   const u = getTgUser(req)!;
   const { rewardId } = req.body as { rewardId?: number };
   if (typeof rewardId !== "number") {
@@ -1779,7 +1791,7 @@ app.get("/api/my-rewards", requireTgUser, async (req, res) => {
   }
 });
 
-app.post("/api/game-result", requireTgUser, async (req, res) => {
+app.post("/api/game-result", requireTgUser, rateLimit(30), async (req, res) => {
   const u = getTgUser(req)!;
   const { game, score } = req.body as { game?: string; score?: number };
   if (!game || typeof score !== "number" || score < 0) {
@@ -1817,7 +1829,7 @@ app.get("/api/history", requireTgUser, async (req, res) => {
 
 // ─── Holidays API ────────────────────────────────────────────────────────────
 // Ближайший праздник (для карточки на главной)
-app.get("/api/holidays/upcoming", (_req, res) => {
+app.get("/api/holidays/upcoming", rateLimit(60), (_req, res) => {
   const next = getNextHoliday();
   if (!next) {
     res.json({ holiday: null });
@@ -1868,7 +1880,7 @@ app.post("/api/admin/dietary/reload", (req, res) => {
 });
 
 // ─── Catalog API ─────────────────────────────────────────────────────────────
-app.get("/api/catalog/categories", (_req, res) => {
+app.get("/api/catalog/categories", rateLimit(120), (_req, res) => {
   const counts = new Map<string, number>();
   for (const p of catalog) counts.set(p.category, (counts.get(p.category) ?? 0) + 1);
   const categories = Array.from(counts.entries()).map(([name, count]) => {
@@ -1881,7 +1893,7 @@ app.get("/api/catalog/categories", (_req, res) => {
 // ВАЖНО: НЕ фильтруем по available. В Bitrix available:false ставится для
 // заказных тортов («Торт под заказ Подарок» и пр.) — их физически нет в кафе,
 // но они доступны под заказ. Скрывать их нельзя.
-app.get("/api/catalog/products", (req, res) => {
+app.get("/api/catalog/products", rateLimit(60), (req, res) => {
   const category = String(req.query.category ?? "").trim();
   const limit = Math.min(Number(req.query.limit ?? 30), 100);
   const offset = Number(req.query.offset ?? 0);
@@ -1904,7 +1916,7 @@ app.get("/api/catalog/products", (req, res) => {
   res.json({ products, total: filtered.length, limit, offset });
 });
 
-app.get("/api/catalog/search", (req, res) => {
+app.get("/api/catalog/search", rateLimit(30), (req, res) => {
   const q = String(req.query.q ?? "").trim();
   if (!q) {
     res.json({ products: [], total: 0 });
@@ -1914,7 +1926,7 @@ app.get("/api/catalog/search", (req, res) => {
   res.json({ products, total: products.length });
 });
 
-app.get("/api/catalog/product/:id", async (req, res) => {
+app.get("/api/catalog/product/:id", rateLimit(120), async (req, res) => {
   const id = Number(req.params.id);
   if (!id) { res.status(400).json({ error: "bad_id" }); return; }
   const product = await fetchProductById(id);
@@ -1929,7 +1941,7 @@ app.get("/api/catalog/product/:id", async (req, res) => {
 
 // ─── Reviews API ─────────────────────────────────────────────────────────────
 // GET список отзывов + статистика для товара
-app.get("/api/reviews/:pid", async (req, res) => {
+app.get("/api/reviews/:pid", rateLimit(60), async (req, res) => {
   const pid = Number(req.params.pid);
   if (!pid) { res.status(400).json({ error: "bad_pid" }); return; }
   const limit  = Math.min(Number(req.query.limit ?? 20), 50);
@@ -1951,7 +1963,7 @@ app.get("/api/reviews/:pid", async (req, res) => {
 });
 
 // POST новый/обновлённый отзыв (upsert: UNIQUE(product_id, chat_id))
-app.post("/api/reviews", requireTgUser, async (req, res) => {
+app.post("/api/reviews", requireTgUser, rateLimit(3), async (req, res) => {
   const u = getTgUser(req)!;
   const body = req.body as { product_id?: unknown; rating?: unknown; text?: unknown };
   const productId = Number(body.product_id);
@@ -2014,7 +2026,7 @@ app.post("/api/admin/reviews/:id/hide", async (req, res) => {
 
 // ─── Wishlist Share API ──────────────────────────────────────────────────────
 // POST создаёт share-link из своего wishlist (требует tma auth)
-app.post("/api/wishlist/share", requireTgUser, async (req, res) => {
+app.post("/api/wishlist/share", requireTgUser, rateLimit(5), async (req, res) => {
   const u = getTgUser(req)!;
   const body = req.body as { product_ids?: unknown; message?: unknown };
   const ids = Array.isArray(body.product_ids)
@@ -2054,7 +2066,7 @@ app.post("/api/wishlist/share", requireTgUser, async (req, res) => {
 // ─── Promo Codes API ────────────────────────────────────────────────────────
 // Validate — проверяет существование, срок, min_order, one_per_user, max_uses_total.
 // Возвращает применимую скидку в ₽. Не списывает использование (это делает /api/order).
-app.post("/api/promo/validate", async (req, res) => {
+app.post("/api/promo/validate", rateLimit(20), async (req, res) => {
   const body = req.body as { code?: unknown; cart_total?: unknown };
   const code = String(body.code ?? "").trim();
   const cartTotal = Number(body.cart_total) || 0;
@@ -2105,7 +2117,7 @@ app.post("/api/promo/validate", async (req, res) => {
 });
 
 // Записать использование промокода (вызывает frontend после успешного создания заказа)
-app.post("/api/promo/use", async (req, res) => {
+app.post("/api/promo/use", rateLimit(10), async (req, res) => {
   const body = req.body as { code?: unknown; order_id?: unknown };
   const code = String(body.code ?? "").trim().toUpperCase();
   const orderId = body.order_id != null ? String(body.order_id).slice(0, 64) : null;
@@ -2287,7 +2299,7 @@ app.post("/api/selfie-cake", requireTgUser, rateLimit(3), express.json({ limit: 
 // Endpoint должен быть ПУБЛИЧНЫМ — у Pollinations нет наших credentials.
 // Защита от path traversal через regex в readSelfie. ID — 128-бит random,
 // угадать нельзя.
-app.get("/api/selfie-img/:id", async (req, res) => {
+app.get("/api/selfie-img/:id", rateLimit(120), async (req, res) => {
   const id = String(req.params.id || "");
   const file = await readSelfie(id);
   if (!file) { res.status(404).end(); return; }
@@ -2323,7 +2335,7 @@ app.get("/api/order-rating/:orderId", requireTgUser, async (req, res) => {
 });
 
 // POST upsert rating
-app.post("/api/order-rating", requireTgUser, async (req, res) => {
+app.post("/api/order-rating", requireTgUser, rateLimit(5), async (req, res) => {
   const u = getTgUser(req)!;
   const body = req.body as { order_id?: unknown; rating?: unknown; text?: unknown };
   const orderId = String(body.order_id ?? "").trim().slice(0, 64);
@@ -2343,7 +2355,7 @@ app.post("/api/order-rating", requireTgUser, async (req, res) => {
 });
 
 // GET wishlist по share-коду (публично, без auth — но инкрементим opens)
-app.get("/api/wishlist/share/:code", async (req, res) => {
+app.get("/api/wishlist/share/:code", rateLimit(30), async (req, res) => {
   const code = String(req.params.code || "").toUpperCase().slice(0, 16);
   if (!/^[A-Z0-9]+$/.test(code)) {
     res.status(400).json({ error: "bad_code" });
@@ -2375,7 +2387,7 @@ app.get("/api/wishlist/share/:code", async (req, res) => {
 
 // Batch-статистика — для отображения звёзд на карточках в гриде
 // POST принимает { product_ids: [1,2,3] } чтобы не превышать длину URL
-app.post("/api/reviews/stats-batch", async (req, res) => {
+app.post("/api/reviews/stats-batch", rateLimit(60), async (req, res) => {
   const ids = (req.body as { product_ids?: unknown })?.product_ids;
   if (!Array.isArray(ids)) { res.status(400).json({ error: "product_ids_required" }); return; }
   const productIds = ids.map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 200);
@@ -2391,7 +2403,7 @@ app.post("/api/reviews/stats-batch", async (req, res) => {
 });
 
 // ─── Partners ────────────────────────────────────────────────────────────────
-app.get("/api/partners", (_req, res) => {
+app.get("/api/partners", rateLimit(60), (_req, res) => {
   res.json({ partners: getPartners(), meta: getPartnersMeta() });
 });
 
@@ -2480,7 +2492,7 @@ app.post("/api/streak/touch", requireTgUser, async (req, res) => {
     res.status(500).json({ error: "internal" });
   }
 });
-app.get("/api/secret-of-day", async (_req, res) => {
+app.get("/api/secret-of-day", rateLimit(60), async (_req, res) => {
   try {
     const s = await getSecretOfDay();
     if (!s) { res.json({ secret: null }); return; }
@@ -2589,7 +2601,7 @@ app.post("/api/wishlist/sync", requireTgUser, async (req, res) => {
 });
 
 // ─── LK (Личный кабинет на сайте) ────────────────────────────────────────────
-app.get("/api/lk", requireTgUser, async (req, res) => {
+app.get("/api/lk", requireTgUser, rateLimit(30), async (req, res) => {
   const u = getTgUser(req)!;
   try {
     const result = await fetchLk(u.id);
@@ -2946,7 +2958,7 @@ function enrichShopCoords(s: Record<string, unknown>): Record<string, unknown> {
   return { ...s, lat: IRKUTSK_CENTER.lat, lon: IRKUTSK_CENTER.lon, _coords_source: "city_center" };
 }
 
-app.get("/api/shops", async (_req, res) => {
+app.get("/api/shops", rateLimit(60), async (_req, res) => {
   if (!SHOPS_API || !SHOPS_TOKEN) {
     res.status(503).json({ count: 0, shops: [], error: "shops_api_not_configured" });
     return;
@@ -3022,7 +3034,7 @@ function loadSweetCheckWeeks(): SweetWeek[] {
   return _sweetWeeksCache;
 }
 
-app.get("/api/sweet-check/active", (_req, res) => {
+app.get("/api/sweet-check/active", rateLimit(60), (_req, res) => {
   const weeks = loadSweetCheckWeeks();
   // Иркутск = UTC+8; недели заданы по местному календарю.
   const now = new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
@@ -3081,7 +3093,7 @@ function loadSweetCheckPrizes(): SweetPrizesConfig {
   _sweetPrizesCache = SWEET_PRIZES_FALLBACK;
   return _sweetPrizesCache;
 }
-app.get("/api/sweet-check/prizes", (_req, res) => {
+app.get("/api/sweet-check/prizes", rateLimit(60), (_req, res) => {
   res.json(loadSweetCheckPrizes());
 });
 app.post("/api/admin/sweet-check-prizes/reload", (req, res) => {
