@@ -1078,7 +1078,7 @@ async function catShowMood(code, label) {
     if (matches.length === 0) {
       grid.innerHTML = `
         <div class="empty-state">
-          <div class="empty-state__ic"><span data-icon="sparkles" data-size="28"></span></div>
+          <div class="empty-state__ic empty-state__ic--3d"><span data-icon-3d="sparkles" data-size="64"></span></div>
           <div class="empty-state__h">Здесь пока ничего нет</div>
           <div class="empty-state__sub">В категории «${escapeHtml(label || code)}» нет товаров. Попробуй другой тип.</div>
           <div class="empty-state__cta"><button class="btn-outline" onclick="catShowCategories()">К каталогу</button></div>

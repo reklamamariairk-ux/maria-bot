@@ -548,16 +548,26 @@ img.loaded{opacity:1;filter:blur(0) saturate(1)}
 }
 .bento-card--club .bento-card__ic{background:var(--red-l);color:var(--red)}
 
-/* 3D-иконки в bento — убираем фон/тени контейнера, чтобы glossy SVG звучал чисто */
-.bento-card__ic--3d{
+/* 3D-иконки: убираем фон/тени контейнера — у glossy SVG свой depth.
+   Применяется ко всем контейнерам где hero-3D вместо stroke-иконки. */
+.bento-card__ic--3d,
+.bento-card--hero .bento-card__ic--3d,
+.hiw__ic--3d,
+.bday-promo__ic--3d,
+.concept-cta__ic--3d,
+.empty-state__ic--3d{
   background:transparent !important;
   border:none !important;
   box-shadow:none !important;
   backdrop-filter:none !important;
   width:auto !important;height:auto !important;
+  padding:0 !important;
+  color:inherit;
 }
-.bento-card--hero .bento-card__ic--3d{
-  width:auto !important;height:auto !important;
+/* Empty state — у 3D-иконки сама depth, убираем колор-circle вокруг */
+.empty-state__ic--3d{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:80px;min-height:80px;
 }
 
 /* Узкие экраны: hero на полную ширину сверху, остальные 2×2 ниже */
