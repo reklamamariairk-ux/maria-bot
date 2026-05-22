@@ -238,18 +238,55 @@ function closeAiChat() {
 window.openAiChat = openAiChat;
 window.closeAiChat = closeAiChat;
 
-/* ── Торт месяца — динамика из каталога ─────────────────────────────────── */
+/* ── Торт месяца — динамика из каталога ───────────────────────────────────
+   ВАЖНО: «Торт месяца» это товар из 1С с реальной скидкой (discountPercent > 0).
+   Никаких «−20% статика» — % берётся из catalog. Если в 1С нет товара
+   со скидкой — _cakeOfMonth остаётся null и все промо-блоки скрываются.
+*/
 let _cakeOfMonth = null;
+
+/** Скрывает все промо-блоки «Торт месяца» когда в 1С нет товара со скидкой */
+function hideCakeOfMonthBlocks() {
+  document.getElementById('promo-strip')?.style.setProperty('display', 'none');
+  document.getElementById('promo-cake-of-month')?.style.setProperty('display', 'none');
+  // bento hero-карточка — если нет торта со скидкой, кликать некуда, скрываем
+  document.querySelector('.bento-card--hero')?.style.setProperty('display', 'none');
+}
+
+/** Прописывает реальную скидку из 1С в захардкоженные надписи «−20%» */
+function applyCakeOfMonthCopy(c) {
+  const pct = Number(c.discountPercent);
+  if (!pct || pct <= 0) { hideCakeOfMonthBlocks(); return; }
+  // bento-card hero sub
+  const bentoSub = document.querySelector('.bento-card--hero .bento-card__sub');
+  if (bentoSub) bentoSub.textContent = `−${pct}% всю неделю`;
+  // promo-strip
+  const stripT = document.getElementById('promo-strip-t');
+  if (stripT) stripT.textContent = `🎂 Торт месяца −${pct}%`;
+  // promo card badge (текст внутри .promo__badge)
+  const badge = document.querySelector('#promo-cake-of-month .promo__badge');
+  if (badge) badge.textContent = `−${pct}%`;
+  // Club benefits: «Торт месяца −X% ежедневно» (сохраняем галочку ✓)
+  const benefit = document.getElementById('club-benefit-cake-of-month');
+  if (benefit) benefit.innerHTML = `<span class="cb-tick">✓</span> Торт месяца −${pct}% ежедневно`;
+}
 
 async function loadCakeOfMonth() {
   try {
     const r = await fetch('/api/catalog/products?category=Торты&limit=80', {cache:'no-store'});
     const d = await r.json();
     const all = Array.isArray(d?.products) ? d.products : [];
-    const candidates = all.filter(p => p.hit && p.image);
-    if (candidates.length === 0) return;
-    const c = candidates[0];
+    // Реальный «Торт месяца» = товар со скидкой из 1С. hit + фото — желательны.
+    const withDiscount = all.filter(p => Number(p.discountPercent) > 0 && p.image);
+    if (withDiscount.length === 0) { hideCakeOfMonthBlocks(); return; }
+    // приоритет: hit + наибольшая скидка
+    withDiscount.sort((a, b) => {
+      if (a.hit !== b.hit) return a.hit ? -1 : 1;
+      return Number(b.discountPercent) - Number(a.discountPercent);
+    });
+    const c = withDiscount[0];
     _cakeOfMonth = c;
+    applyCakeOfMonthCopy(c);
 
     const card = document.getElementById('promo-cake-of-month');
     if (!card) return;
@@ -600,8 +637,9 @@ function showSubTab(name) {
 const STORIES_DATA = {
   promo: {
     emoji: '🎂',
-    title: 'Торт месяца со скидкой −20%',
-    sub: 'Банан-солёная карамель · воздушный бисквит, нежный крем · 1 856 ₽',
+    // title/sub проставляются динамически из _cakeOfMonth в renderStory()
+    title: 'Торт месяца',
+    sub: 'Загрузка…',
     ctaText: 'Заказать →',
     ctaAction: 'switchTab("menu");setTimeout(()=>catShowProducts?.("Торты"),200)',
   },
@@ -680,11 +718,15 @@ function renderStory() {
   const heroBlock = (STORIES_ORDER[_storyIdx] === 'promo' && _cakeOfMonth?.image)
     ? `<div class="story-viewer__photo" style="background-image:url('/img?u=${encodeURIComponent(_cakeOfMonth.image)}')"></div>`
     : `<div class="story-viewer__emoji">${data.emoji}</div>`;
-  // Динамически подставим имя/цену если есть _cakeOfMonth
-  const title = (STORIES_ORDER[_storyIdx] === 'promo' && _cakeOfMonth?.name)
-    ? `«${_cakeOfMonth.name}» со скидкой −20%`
-    : data.title;
-  const sub = (STORIES_ORDER[_storyIdx] === 'promo' && _cakeOfMonth)
+  // Динамически подставим имя/цену/скидку из _cakeOfMonth (берётся из 1С)
+  const isPromo = STORIES_ORDER[_storyIdx] === 'promo';
+  const pct = Number(_cakeOfMonth?.discountPercent) || 0;
+  const title = (isPromo && _cakeOfMonth?.name && pct > 0)
+    ? `«${_cakeOfMonth.name}» со скидкой −${pct}%`
+    : (isPromo && _cakeOfMonth?.name)
+      ? _cakeOfMonth.name
+      : data.title;
+  const sub = (isPromo && _cakeOfMonth)
     ? `${(_cakeOfMonth.preview || '').slice(0, 80) || 'Хит каталога'} · ${Number(_cakeOfMonth.priceNumber || _cakeOfMonth.price || 0).toLocaleString('ru-RU')} ₽`
     : data.sub;
   document.getElementById('story-content').innerHTML = `
