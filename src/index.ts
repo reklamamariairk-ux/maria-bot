@@ -12,6 +12,8 @@ import sweetCheckRouter, { loadSweetCheckPrizes } from "./routes/sweet-check";
 import holidaysRouter from "./routes/holidays";
 import { createCatalogRouter } from "./routes/catalog";
 import { createReviewsRouter } from "./routes/reviews";
+import clubRouter from "./routes/club";
+import lkRouter from "./routes/lk";
 import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, fetchProductById, reloadDietaryOverrides, detectDietary, Product } from "./scraper";
 import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind, getNotificationPrefs, setNotificationPrefs, saveCartSnapshot, clearCartSnapshot, getAbandonedCarts, markCartAbandonedPushed, getSpinStatus, recordSpin, WHEEL_PRIZES, touchVisitStreak, setSecretOfDay, getSecretOfDay, getUnusedRewards, consumeRewards, hasHolidayPushSent, markHolidayPushSent, getReviewsForProduct, getReviewStats, getReviewStatsBatch, getMyReview, upsertReview, deleteMyReview, setReviewHidden, countReviewsLast24h, createWishlistShare, getWishlistShare, incrementWishlistShareOpens, countWishlistSharesLast24h, getOrderRating, upsertOrderRating, hasRatingPromptSent, markRatingPromptSent, countPromoUses, hasUserUsedPromo, recordPromoUse } from "./db";
 import {
@@ -1692,84 +1694,9 @@ app.post("/api/unverify-phone", requireTgUser, rateLimit(3), async (req, res) =>
   }
 });
 
-app.post("/api/daily/claim", requireTgUser, rateLimit(10), async (req, res) => {
-  const u = getTgUser(req)!;
-  try {
-    if (!(await isPhoneVerified(u.id))) {
-      res.status(403).json({ error: "phone_not_verified" });
-      return;
-    }
-    const result = await claimDailyLogin(u.id);
-    const balance = await getBalance(u.id);
-    res.json({ ...result, balance });
-  } catch (e) {
-    console.error("[API /daily/claim]", (e as Error).message);
-    res.status(500).json({ error: "internal" });
-  }
-});
-
-app.get("/api/conversion-tiers", rateLimit(30), (_req, res) => {
-  res.json(CONVERSION_TIERS);
-});
-
-app.post("/api/convert", requireTgUser, rateLimit(10), async (req, res) => {
-  const u = getTgUser(req)!;
-  const { stars } = req.body as { stars?: number };
-  if (typeof stars !== "number") {
-    res.status(400).json({ error: "bad_stars" });
-    return;
-  }
-  try {
-    const result = await convertStars(u.id, stars);
-    const balance = await getBalance(u.id);
-    res.json({ ...result, balance });
-  } catch (e) {
-    console.error("[API /convert]", (e as Error).message);
-    res.status(500).json({ error: "internal" });
-  }
-});
-
-app.get("/api/rewards", rateLimit(60), async (_req, res) => {
-  try {
-    const items = await getRewardsCatalog();
-    res.json(items);
-  } catch (e) {
-    console.error("[API /rewards]", (e as Error).message);
-    res.status(500).json({ error: "internal" });
-  }
-});
-
-app.post("/api/redeem", requireTgUser, rateLimit(10), async (req, res) => {
-  const u = getTgUser(req)!;
-  const { rewardId } = req.body as { rewardId?: number };
-  if (typeof rewardId !== "number") {
-    res.status(400).json({ error: "bad_reward_id" });
-    return;
-  }
-  try {
-    if (!(await isPhoneVerified(u.id))) {
-      res.status(403).json({ error: "phone_not_verified" });
-      return;
-    }
-    const result = await redeemReward(u.id, rewardId);
-    const balance = await getBalance(u.id);
-    res.json({ ...result, balance });
-  } catch (e) {
-    console.error("[API /redeem]", (e as Error).message);
-    res.status(500).json({ error: "internal" });
-  }
-});
-
-app.get("/api/my-rewards", requireTgUser, async (req, res) => {
-  const u = getTgUser(req)!;
-  try {
-    const items = await getMyRewards(u.id);
-    res.json(items);
-  } catch (e) {
-    console.error("[API /my-rewards]", (e as Error).message);
-    res.status(500).json({ error: "internal" });
-  }
-});
+// Club routes (daily, convert, redeem, rewards, my-rewards, conversion-tiers)
+// вынесены в src/routes/club.ts
+app.use(clubRouter);
 
 app.post("/api/game-result", requireTgUser, rateLimit(30), async (req, res) => {
   const u = getTgUser(req)!;
@@ -2308,16 +2235,7 @@ app.get("/api/secret-of-day", rateLimit(60), async (_req, res) => {
   }
 });
 
-app.get("/api/rewards/mine", requireTgUser, async (req, res) => {
-  const u = getTgUser(req)!;
-  try {
-    const rewards = await getUnusedRewards(u.id);
-    res.json({ rewards });
-  } catch (e) {
-    console.error("[rewards/mine]", (e as Error).message);
-    res.status(500).json({ error: "internal" });
-  }
-});
+// /api/rewards/mine также вынесен в src/routes/club.ts
 
 // Cron-функция: каждое утро 09:00 Иркутск выбирает «секрет дня» (рекомендация)
 // Никакой выдуманной скидки — discountPct = 0. Если у выбранного товара в 1С
@@ -2397,22 +2315,8 @@ app.post("/api/wishlist/sync", requireTgUser, async (req, res) => {
   }
 });
 
-// ─── LK (Личный кабинет на сайте) ────────────────────────────────────────────
-app.get("/api/lk", requireTgUser, rateLimit(30), async (req, res) => {
-  const u = getTgUser(req)!;
-  try {
-    const result = await fetchLk(u.id);
-    if (!result.ok) {
-      const code = result.reason === "phone_not_verified" ? 403 : 502;
-      res.status(code).json({ error: result.reason });
-      return;
-    }
-    res.json(result.data);
-  } catch (e) {
-    log.error({ err: e, chatId: u.id }, "/api/lk failed");
-    res.status(500).json({ error: "internal" });
-  }
-});
+// LK (личный кабинет с maria-irk.ru через Bitrix) вынесен в src/routes/lk.ts
+app.use(lkRouter);
 
 // Создание заказа из миниаппа — обёртка вокруг /api/order-create.php на сайте
 // Auth не обязателен (юзер может ввести phone руками); если есть verified TG user —
