@@ -40,8 +40,15 @@ const PORT         = Number(process.env.PORT  ?? 3000);
 const MINI_APP_URL = process.env.MINI_APP_URL ?? WEBHOOK_URL;
 const ADMIN_IDS    = (process.env.ADMIN_IDS ?? "").split(",").map(Number).filter(Boolean);
 
-if (!BOT_TOKEN) throw new Error("BOT_TOKEN is required");
-if (!GROQ_KEY)  throw new Error("GROQ_KEY is required");
+// Preview-режим (staging): если BOT_TOKEN пуст — поднимаем только HTTP-сервер
+// (Mini App + API), но НЕ инициализируем Telegram-бота. Webhook не ставится,
+// бот не конфликтует с prod-ботом. GROQ_KEY тоже не строго обязателен — без него
+// AI-чат отдаёт 503, но всё остальное работает.
+const PREVIEW_MODE = !BOT_TOKEN;
+if (PREVIEW_MODE) {
+  console.log("[STAGE] BOT_TOKEN пустой → preview mode: Telegram-бот отключён, работают только HTTP + Mini App");
+}
+if (!GROQ_KEY && !PREVIEW_MODE) console.warn("[startup] GROQ_KEY не задан — AI-чат вернёт 503");
 
 // ─── Каталог (в памяти) ──────────────────────────────────────────────────────
 let catalog: Product[] = loadCatalog();
@@ -322,7 +329,11 @@ setInterval(runCleanup, 6 * 60 * 60 * 1000); // каждые 6 часов
 setTimeout(runCleanup, 5 * 60 * 1000);       // первая через 5 минут после старта
 
 // ─── Telegram Bot ───────────────────────────────────────────────────────────
-const bot = new Bot(BOT_TOKEN);
+// В preview-режиме (staging без BOT_TOKEN) создаём бот с dummy-токеном —
+// grammy не пингует api при new Bot(), а реальные вызовы к TG API будут
+// валиться с 401 (которые уже под try/catch в push/notification коде).
+// Webhook не ставится и bot.start() не вызывается — см. startup-блок внизу.
+const bot = new Bot(BOT_TOKEN || "1:DUMMY_PREVIEW_TOKEN_AAAAAAAAAAAAAAAAAAAAAA");
 
 // Smart-notification wrapper — учитывает quiet hours, weekly quota, daily quota
 async function sendPushSafely(
@@ -3212,7 +3223,12 @@ async function main() {
     console.log("[STARTUP] PARTNERS_API not set — partners served from data/partners.json");
   }
 
-  if (WEBHOOK_URL) {
+  if (PREVIEW_MODE) {
+    // Staging preview: только Express, без TG-webhook и без bot.start().
+    // Mini App + API работают; команды бота и push'и — нет (Telegram отвергнет
+    // вызовы с dummy-токеном, ошибки проглатываются существующими try/catch).
+    app.listen(PORT, () => console.log(`🚀 Preview server on port ${PORT} (no Telegram bot)`));
+  } else if (WEBHOOK_URL) {
     const webhookPath = `/webhook/${BOT_TOKEN}`;
     app.use(webhookPath, webhookCallback(bot, "express"));
     app.listen(PORT, async () => {
