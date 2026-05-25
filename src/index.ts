@@ -23,6 +23,10 @@ import leadsRouter from "./routes/leads";
 import partnersRouter from "./routes/partners";
 import notifyPrefsRouter from "./routes/notify-prefs";
 import { createSecretOfDayRouter } from "./routes/secret-of-day";
+import { createPushService } from "./push";
+import { createReferralRouter } from "./routes/referral";
+import { createWheelStreakRouter } from "./routes/wheel-streak";
+import { pool as _dbPoolForRouters } from "./db";
 import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, fetchProductById, reloadDietaryOverrides, detectDietary, Product } from "./scraper";
 import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind, getNotificationPrefs, setNotificationPrefs, saveCartSnapshot, clearCartSnapshot, getAbandonedCarts, markCartAbandonedPushed, getSpinStatus, recordSpin, WHEEL_PRIZES, touchVisitStreak, setSecretOfDay, getSecretOfDay, getUnusedRewards, consumeRewards, hasHolidayPushSent, markHolidayPushSent, getReviewsForProduct, getReviewStats, getReviewStatsBatch, getMyReview, upsertReview, deleteMyReview, setReviewHidden, countReviewsLast24h, createWishlistShare, getWishlistShare, incrementWishlistShareOpens, countWishlistSharesLast24h, getOrderRating, upsertOrderRating, hasRatingPromptSent, markRatingPromptSent, countPromoUses, hasUserUsedPromo, recordPromoUse } from "./db";
 import {
@@ -352,30 +356,11 @@ setTimeout(runCleanup, 5 * 60 * 1000);       // первая через 5 мин
 // Webhook не ставится и bot.start() не вызывается — см. startup-блок внизу.
 const bot = new Bot(BOT_TOKEN || "1:DUMMY_PREVIEW_TOKEN_AAAAAAAAAAAAAAAAAAAAAA");
 
-// Smart-notification wrapper — учитывает quiet hours, weekly quota, daily quota
-async function sendPushSafely(
-  chatId: number,
-  kind: NotificationKind,
-  text: string,
-  opts?: { parse_mode?: "Markdown" | "HTML" }
-): Promise<boolean> {
-  const gate = await canSendNotification(chatId, kind).catch(() => ({ ok: false, reason: "db_error" }));
-  if (!gate.ok) {
-    console.log(`[push skipped] ${chatId} · ${kind} · ${gate.reason}`);
-    return false;
-  }
-  try {
-    await bot.api.sendMessage(chatId, text, { parse_mode: opts?.parse_mode ?? "Markdown" });
-    await logNotification(chatId, kind).catch(() => {});
-    return true;
-  } catch (e) {
-    const msg = (e as Error).message || "";
-    if (!/blocked|forbidden|chat not found/i.test(msg)) {
-      console.warn(`[push] ${chatId} ${kind}:`, msg);
-    }
-    return false;
-  }
-}
+// Push-service вынесен в src/push.ts. sendPushSafely остаётся доступным
+// через привычное имя — фасад для существующих вызовов (push-functions,
+// cron-jobs, /api/streak/touch, /api/wheel/spin и т.д.)
+const _pushService = createPushService(bot);
+const sendPushSafely = _pushService.sendPushSafely;
 
 function webAppButton(_text: string, label = "🍰 Открыть Mini App") {
   return new InlineKeyboard().webApp(label, MINI_APP_URL || "https://t.me");
@@ -1525,91 +1510,10 @@ app.use(createSecretOfDayRouter(() => catalog));
 // Notification prefs → src/routes/notify-prefs.ts
 app.use(notifyPrefsRouter);
 
-// ─── Referrals ──────────────────────────────────────────────────────────────
-app.get("/api/referral/me", requireTgUser, async (req, res) => {
-  const u = getTgUser(req)!;
-  try {
-    const code = await getOrCreateReferralCode(u.id, u.first_name);
-    const used = await _dbPool.query(
-      `SELECT COUNT(*)::int AS used FROM referral_uses WHERE code = $1`,
-      [code]
-    );
-    res.json({ code, used: used.rows[0]?.used ?? 0, share_url: `https://t.me/mariatortik_bot?start=ref_${code}` });
-  } catch (e) {
-    console.error("[referral/me]", (e as Error).message);
-    res.status(500).json({ error: "internal" });
-  }
-});
-
-app.post("/api/referral/use", requireTgUser, async (req, res) => {
-  const u = getTgUser(req)!;
-  const code = String(req.body?.code ?? "").trim().toUpperCase();
-  if (!code) {
-    res.status(400).json({ error: "code_required" });
-    return;
-  }
-  try {
-    const r = await recordReferralUse(u.id, code);
-    if (!r.ok) {
-      res.status(400).json({ error: r.reason });
-      return;
-    }
-    // Уведомляем владельца кода
-    if (r.ownerChat) {
-      const userName = [u.first_name, u.last_name].filter(Boolean).join(" ") || "Новый друг";
-      bot.api.sendMessage(
-        r.ownerChat,
-        `🎉 *${userName}* пришёл по твоему коду \`${code}\` — спасибо, что зовёшь друзей в «Марию»!`,
-        { parse_mode: "Markdown" }
-      ).catch(() => {});
-    }
-    res.json({ ok: true });
-  } catch (e) {
-    console.error("[referral/use]", (e as Error).message);
-    res.status(500).json({ error: "internal" });
-  }
-});
-
-// ─── Game zone: Wheel + Streak + Secret-of-day ───────────────────────────────
-app.get("/api/wheel/status", requireTgUser, async (req, res) => {
-  const u = getTgUser(req)!;
-  try {
-    const status = await getSpinStatus(u.id);
-    res.json({ canSpin: status.canSpin, lastPrize: status.lastPrize, nextSpinAt: status.nextSpinAt, prizes: WHEEL_PRIZES });
-  } catch (e) {
-    console.error("[wheel/status]", (e as Error).message);
-    res.status(500).json({ error: "internal" });
-  }
-});
-app.post("/api/wheel/spin", requireTgUser, async (req, res) => {
-  const u = getTgUser(req)!;
-  try {
-    const r = await recordSpin(u.id);
-    const idx = WHEEL_PRIZES.findIndex((p) => p.kind === r.prize.kind);
-    res.json({ prize: r.prize, prizeIndex: idx, alreadySpunToday: r.alreadySpunToday });
-  } catch (e) {
-    console.error("[wheel/spin]", (e as Error).message);
-    res.status(500).json({ error: "internal" });
-  }
-});
-
-app.post("/api/streak/touch", requireTgUser, async (req, res) => {
-  const u = getTgUser(req)!;
-  try {
-    const r = await touchVisitStreak(u.id);
-    if (r.reachedReward) {
-      // Награда — пуш юзеру
-      sendPushSafely(
-        u.id, "transactional",
-        `🎉 *Streak 7 дней!*\n\nТы заходишь в Mini App неделю подряд — получаешь *бесплатный десерт* при следующем заказе. Промокод применится автоматически.`,
-      ).catch(() => {});
-    }
-    res.json(r);
-  } catch (e) {
-    console.error("[streak/touch]", (e as Error).message);
-    res.status(500).json({ error: "internal" });
-  }
-});
+// Referrals (me + use) → src/routes/referral.ts
+app.use(createReferralRouter(bot, _dbPoolForRouters));
+// Wheel + streak → src/routes/wheel-streak.ts
+app.use(createWheelStreakRouter(_pushService));
 // /api/secret-of-day вынесен в src/routes/secret-of-day.ts (см. createSecretOfDayRouter выше)
 
 // /api/rewards/mine также вынесен в src/routes/club.ts
