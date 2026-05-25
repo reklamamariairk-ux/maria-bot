@@ -10,6 +10,8 @@ import { log, requestLogger, sentryExpressErrorHandler, captureError } from "./l
 import { rateLimit, requireAdminToken } from "./middleware";
 import sweetCheckRouter, { loadSweetCheckPrizes } from "./routes/sweet-check";
 import holidaysRouter from "./routes/holidays";
+import { createCatalogRouter } from "./routes/catalog";
+import { createReviewsRouter } from "./routes/reviews";
 import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, fetchProductById, reloadDietaryOverrides, detectDietary, Product } from "./scraper";
 import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind, getNotificationPrefs, setNotificationPrefs, saveCartSnapshot, clearCartSnapshot, getAbandonedCarts, markCartAbandonedPushed, getSpinStatus, recordSpin, WHEEL_PRIZES, touchVisitStreak, setSecretOfDay, getSecretOfDay, getUnusedRewards, consumeRewards, hasHolidayPushSent, markHolidayPushSent, getReviewsForProduct, getReviewStats, getReviewStatsBatch, getMyReview, upsertReview, deleteMyReview, setReviewHidden, countReviewsLast24h, createWishlistShare, getWishlistShare, incrementWishlistShareOpens, countWishlistSharesLast24h, getOrderRating, upsertOrderRating, hasRatingPromptSent, markRatingPromptSent, countPromoUses, hasUserUsedPromo, recordPromoUse } from "./db";
 import {
@@ -1828,145 +1830,16 @@ app.post("/api/admin/dietary/reload", requireAdminToken, (_req, res) => {
   res.json({ ok: true, total: catalog.length, tagged });
 });
 
-// ─── Catalog API ─────────────────────────────────────────────────────────────
-app.get("/api/catalog/categories", rateLimit(120), (_req, res) => {
-  const counts = new Map<string, number>();
-  for (const p of catalog) counts.set(p.category, (counts.get(p.category) ?? 0) + 1);
-  const categories = Array.from(counts.entries()).map(([name, count]) => {
-    const sample = catalog.find((p) => p.category === name && p.image);
-    return { name, count, sample: sample?.image ?? null };
-  });
-  res.json({ categories, total: catalog.length, updated: catalogAge() });
-});
-
-// ВАЖНО: НЕ фильтруем по available. В Bitrix available:false ставится для
-// заказных тортов («Торт под заказ Подарок» и пр.) — их физически нет в кафе,
-// но они доступны под заказ. Скрывать их нельзя.
-app.get("/api/catalog/products", rateLimit(60), (req, res) => {
-  const category = String(req.query.category ?? "").trim();
-  const limit = Math.min(Number(req.query.limit ?? 30), 100);
-  const offset = Number(req.query.offset ?? 0);
-  // diet=vegan,sugar-free — товар должен содержать ВСЕ переданные теги
-  const diet = String(req.query.diet ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  let filtered = catalog.slice();
-  if (category) filtered = filtered.filter((p) => p.category === category);
-  if (diet.length > 0) {
-    filtered = filtered.filter((p) => {
-      const tags = p.dietary || [];
-      return diet.every((d) => tags.includes(d as never));
-    });
-  }
-
-  const products = filtered.slice(offset, offset + limit);
-  res.json({ products, total: filtered.length, limit, offset });
-});
-
-app.get("/api/catalog/search", rateLimit(30), (req, res) => {
-  const q = String(req.query.q ?? "").trim();
-  if (!q) {
-    res.json({ products: [], total: 0 });
-    return;
-  }
-  const products = searchCatalog(catalog, q, 30);
-  res.json({ products, total: products.length });
-});
-
-app.get("/api/catalog/product/:id", rateLimit(120), async (req, res) => {
-  const id = Number(req.params.id);
-  if (!id) { res.status(400).json({ error: "bad_id" }); return; }
-  const product = await fetchProductById(id);
-  if (!product) { res.status(404).json({ error: "not_found" }); return; }
-  // Подмешиваем dietary из in-memory каталога (где разметка уже сделана)
-  const fromCache = catalog.find((p) => p.id === id);
-  if (fromCache?.dietary && fromCache.dietary.length > 0) {
-    (product as Record<string, unknown>).dietary = fromCache.dietary;
-  }
-  res.json({ product });
-});
+// Catalog routes вынесены в src/routes/catalog.ts. Передаём getter — чтобы
+// router всегда работал с актуальным in-memory массивом (refreshCatalog его
+// мутирует через `catalog = ...` ниже в этом файле).
+app.use(createCatalogRouter({ getCatalog: () => catalog, catalogAge }));
 
 // ─── Reviews API ─────────────────────────────────────────────────────────────
 // GET список отзывов + статистика для товара
-app.get("/api/reviews/:pid", rateLimit(60), async (req, res) => {
-  const pid = Number(req.params.pid);
-  if (!pid) { res.status(400).json({ error: "bad_pid" }); return; }
-  const limit  = Math.min(Number(req.query.limit ?? 20), 50);
-  const offset = Math.max(Number(req.query.offset ?? 0), 0);
-  try {
-    const [reviews, stats] = await Promise.all([
-      getReviewsForProduct(pid, limit, offset),
-      getReviewStats(pid),
-    ]);
-    // Если юзер авторизован — отдаём также его собственный отзыв (для редактирования)
-    const tgUser = tryGetTgUser(req);
-    let mine: unknown = null;
-    if (tgUser) mine = await getMyReview(pid, tgUser.id);
-    res.json({ reviews, stats, mine });
-  } catch (e) {
-    console.error("[reviews/:pid]", (e as Error).message);
-    res.status(500).json({ error: "internal" });
-  }
-});
-
-// POST новый/обновлённый отзыв (upsert: UNIQUE(product_id, chat_id))
-app.post("/api/reviews", requireTgUser, rateLimit(3), async (req, res) => {
-  const u = getTgUser(req)!;
-  const body = req.body as { product_id?: unknown; rating?: unknown; text?: unknown };
-  const productId = Number(body.product_id);
-  const rating    = Number(body.rating);
-  const text      = String(body.text ?? "").trim().slice(0, 500);
-  if (!productId)                     { res.status(400).json({ error: "product_id_required" }); return; }
-  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-    res.status(400).json({ error: "rating_must_be_1_to_5" }); return;
-  }
-  // Товар должен существовать (защита от мусора)
-  if (!catalog.find((p) => p.id === productId)) {
-    res.status(404).json({ error: "product_not_found" }); return;
-  }
-  // Rate-limit: max 5 новых отзывов в сутки (update своего — не считается)
-  try {
-    const existing = await getMyReview(productId, u.id);
-    if (!existing) {
-      const todayCount = await countReviewsLast24h(u.id);
-      if (todayCount >= 5) {
-        res.status(429).json({ error: "rate_limit_exceeded", limit: 5 });
-        return;
-      }
-    }
-    const authorName = (u.first_name || "").trim().slice(0, 60) || null;
-    const review = await upsertReview(productId, u.id, rating, text, authorName);
-    res.json({ ok: true, review });
-  } catch (e) {
-    console.error("[reviews POST]", (e as Error).message);
-    res.status(500).json({ error: "internal" });
-  }
-});
-
-// DELETE свой отзыв
-app.delete("/api/reviews/:id", requireTgUser, async (req, res) => {
-  const u = getTgUser(req)!;
-  const id = Number(req.params.id);
-  if (!id) { res.status(400).json({ error: "bad_id" }); return; }
-  try {
-    const ok = await deleteMyReview(id, u.id);
-    res.json({ ok });
-  } catch (e) {
-    console.error("[reviews DELETE]", (e as Error).message);
-    res.status(500).json({ error: "internal" });
-  }
-});
-
-// Админ: скрыть/показать отзыв (модерация)
-app.post("/api/admin/reviews/:id/hide", requireAdminToken, async (req, res) => {
-  const id = Number(req.params.id);
-  if (!id) { res.status(400).json({ error: "bad_id" }); return; }
-  const hidden = (req.body as { hidden?: boolean })?.hidden !== false; // по умолчанию hide=true
-  const ok = await setReviewHidden(id, hidden);
-  res.json({ ok, hidden });
-});
+// Reviews routes (CRUD + admin hide) вынесены в src/routes/reviews.ts.
+// Передаём getter каталога — для валидации product_id при POST review.
+app.use(createReviewsRouter(() => catalog));
 
 // ─── Wishlist Share API ──────────────────────────────────────────────────────
 // POST создаёт share-link из своего wishlist (требует tma auth)
@@ -2324,22 +2197,7 @@ app.get("/api/wishlist/share/:code", rateLimit(30), async (req, res) => {
   }
 });
 
-// Batch-статистика — для отображения звёзд на карточках в гриде
-// POST принимает { product_ids: [1,2,3] } чтобы не превышать длину URL
-app.post("/api/reviews/stats-batch", rateLimit(60), async (req, res) => {
-  const ids = (req.body as { product_ids?: unknown })?.product_ids;
-  if (!Array.isArray(ids)) { res.status(400).json({ error: "product_ids_required" }); return; }
-  const productIds = ids.map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 200);
-  try {
-    const map = await getReviewStatsBatch(productIds);
-    const stats: Record<string, { count: number; avg: number }> = {};
-    for (const [pid, s] of map.entries()) stats[String(pid)] = s;
-    res.json({ stats });
-  } catch (e) {
-    console.error("[reviews stats-batch]", (e as Error).message);
-    res.status(500).json({ error: "internal" });
-  }
-});
+// /api/reviews/stats-batch также вынесен в src/routes/reviews.ts
 
 // ─── Partners ────────────────────────────────────────────────────────────────
 app.get("/api/partners", rateLimit(60), (_req, res) => {
