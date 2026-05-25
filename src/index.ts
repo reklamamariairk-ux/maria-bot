@@ -20,6 +20,9 @@ import cakeConceptRouter from "./routes/cake-concept";
 import selfieCakeRouter from "./routes/selfie-cake";
 import { createWishlistRouter } from "./routes/wishlist";
 import leadsRouter from "./routes/leads";
+import partnersRouter from "./routes/partners";
+import notifyPrefsRouter from "./routes/notify-prefs";
+import { createSecretOfDayRouter } from "./routes/secret-of-day";
 import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, fetchProductById, reloadDietaryOverrides, detectDietary, Product } from "./scraper";
 import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind, getNotificationPrefs, setNotificationPrefs, saveCartSnapshot, clearCartSnapshot, getAbandonedCarts, markCartAbandonedPushed, getSpinStatus, recordSpin, WHEEL_PRIZES, touchVisitStreak, setSecretOfDay, getSecretOfDay, getUnusedRewards, consumeRewards, hasHolidayPushSent, markHolidayPushSent, getReviewsForProduct, getReviewStats, getReviewStatsBatch, getMyReview, upsertReview, deleteMyReview, setReviewHidden, countReviewsLast24h, createWishlistShare, getWishlistShare, incrementWishlistShareOpens, countWishlistSharesLast24h, getOrderRating, upsertOrderRating, hasRatingPromptSent, markRatingPromptSent, countPromoUses, hasUserUsedPromo, recordPromoUse } from "./db";
 import {
@@ -1515,10 +1518,12 @@ app.use(orderRatingRouter);
 // /api/wishlist/share/:code вынесен в src/routes/wishlist.ts
 // /api/reviews/stats-batch также вынесен в src/routes/reviews.ts
 
-// ─── Partners ────────────────────────────────────────────────────────────────
-app.get("/api/partners", rateLimit(60), (_req, res) => {
-  res.json({ partners: getPartners(), meta: getPartnersMeta() });
-});
+// Partners (GET list + admin sync) вынесен в src/routes/partners.ts
+app.use(partnersRouter);
+// Secret-of-day → src/routes/secret-of-day.ts
+app.use(createSecretOfDayRouter(() => catalog));
+// Notification prefs → src/routes/notify-prefs.ts
+app.use(notifyPrefsRouter);
 
 // ─── Referrals ──────────────────────────────────────────────────────────────
 app.get("/api/referral/me", requireTgUser, async (req, res) => {
@@ -1605,24 +1610,7 @@ app.post("/api/streak/touch", requireTgUser, async (req, res) => {
     res.status(500).json({ error: "internal" });
   }
 });
-app.get("/api/secret-of-day", rateLimit(60), async (_req, res) => {
-  try {
-    const s = await getSecretOfDay();
-    if (!s) { res.json({ secret: null }); return; }
-    const product = catalog.find((p) => p.id === s.productId);
-    res.json({
-      secret: {
-        productId: s.productId,
-        discountPct: s.discountPct,
-        expiresAt: s.expiresAt,
-        product: product || null,
-      },
-    });
-  } catch (e) {
-    console.error("[secret-of-day]", (e as Error).message);
-    res.status(500).json({ error: "internal" });
-  }
-});
+// /api/secret-of-day вынесен в src/routes/secret-of-day.ts (см. createSecretOfDayRouter выше)
 
 // /api/rewards/mine также вынесен в src/routes/club.ts
 
@@ -1642,33 +1630,7 @@ async function rotateSecretOfDay() {
   }
 }
 
-// ─── Notification preferences ───────────────────────────────────────────────
-app.get("/api/notify-prefs", requireTgUser, async (req, res) => {
-  const u = getTgUser(req)!;
-  try {
-    const prefs = await getNotificationPrefs(u.id);
-    res.json(prefs);
-  } catch (e) {
-    console.error("[notify-prefs GET]", (e as Error).message);
-    res.status(500).json({ error: "internal" });
-  }
-});
-
-app.post("/api/notify-prefs", requireTgUser, async (req, res) => {
-  const u = getTgUser(req)!;
-  const body = req.body as { marketing_promo?: boolean; marketing_rewards?: boolean };
-  const prefs: { marketing_promo?: boolean; marketing_rewards?: boolean } = {};
-  if (typeof body.marketing_promo === "boolean") prefs.marketing_promo = body.marketing_promo;
-  if (typeof body.marketing_rewards === "boolean") prefs.marketing_rewards = body.marketing_rewards;
-  try {
-    await setNotificationPrefs(u.id, prefs);
-    const fresh = await getNotificationPrefs(u.id);
-    res.json(fresh);
-  } catch (e) {
-    console.error("[notify-prefs POST]", (e as Error).message);
-    res.status(500).json({ error: "internal" });
-  }
-});
+// /api/notify-prefs (GET + POST) вынесены в src/routes/notify-prefs.ts
 
 // ─── Cart sync (для abandonment push) ────────────────────────────────────────
 app.post("/api/cart/sync", requireTgUser, async (req, res) => {
@@ -1966,10 +1928,7 @@ _Узнать статус: напишите боту_`;
   res.json(result);
 });
 
-app.post("/api/partners/sync", requireAdminToken, async (_req, res) => {
-  const result = await syncPartners();
-  res.json(result);
-});
+// /api/partners/sync вынесен в src/routes/partners.ts
 
 // Прокси к /api/shops.php на сайте — миниапп получает реальные адреса
 const SHOPS_API   = process.env.SHOPS_API   ?? "";
