@@ -27,6 +27,9 @@ import { createPushService } from "./push";
 import { createReferralRouter } from "./routes/referral";
 import { createWheelStreakRouter } from "./routes/wheel-streak";
 import { pool as _dbPoolForRouters } from "./db";
+import userRouter from "./routes/user";
+import gameRouter from "./routes/game";
+import cartRouter from "./routes/cart";
 import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, fetchProductById, reloadDietaryOverrides, detectDietary, Product } from "./scraper";
 import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind, getNotificationPrefs, setNotificationPrefs, saveCartSnapshot, clearCartSnapshot, getAbandonedCarts, markCartAbandonedPushed, getSpinStatus, recordSpin, WHEEL_PRIZES, touchVisitStreak, setSecretOfDay, getSecretOfDay, getUnusedRewards, consumeRewards, hasHolidayPushSent, markHolidayPushSent, getReviewsForProduct, getReviewStats, getReviewStatsBatch, getMyReview, upsertReview, deleteMyReview, setReviewHidden, countReviewsLast24h, createWishlistShare, getWishlistShare, incrementWishlistShareOpens, countWishlistSharesLast24h, getOrderRating, upsertOrderRating, hasRatingPromptSent, markRatingPromptSent, countPromoUses, hasUserUsedPromo, recordPromoUse } from "./db";
 import {
@@ -1314,132 +1317,15 @@ app.get("/api/catalog-status", rateLimit(30), (_req, res) => {
   });
 });
 
-// ─── Club / Loyalty API ──────────────────────────────────────────────────────
-
-// День рождения юзера — для UI показа карточки-приглашения
-import { pool as _dbPool } from "./db";
-async function getUserBirthday(chatId: number): Promise<string | null> {
-  try {
-    const { rows } = await _dbPool.query(`SELECT birthday FROM user_birthdays WHERE chat_id = $1`, [chatId]);
-    return rows[0]?.birthday ? String(rows[0].birthday).slice(0, 10) : null;
-  } catch { return null; }
-}
-
-app.post("/api/birthday", requireTgUser, rateLimit(5), async (req, res) => {
-  const u = getTgUser(req)!;
-  const body = req.body as { birthday?: string };
-  const bday = String(body.birthday ?? "").trim();
-  // Принимаем yyyy-mm-dd (input type=date)
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(bday)) {
-    res.status(400).json({ ok: false, error: "Неверный формат даты" });
-    return;
-  }
-  try {
-    await setUserBirthday(u.id, bday);
-    res.json({ ok: true });
-  } catch (e) {
-    console.error("[BIRTHDAY]", (e as Error).message);
-    res.status(500).json({ ok: false, error: "Не получилось сохранить" });
-  }
-});
-
-app.get("/api/me", requireTgUser, async (req, res) => {
-  const u = getTgUser(req)!;
-  try {
-    await touchSubscriber(u.id, u.username, u.first_name).catch(() => {});
-    const [verified, balance, daily, myRewards, birthday, subInfo, phone] = await Promise.all([
-      isPhoneVerified(u.id),
-      getBalance(u.id),
-      getDailyStatus(u.id),
-      getMyRewards(u.id),
-      getUserBirthday(u.id),
-      getSubscriberInfo(u.id),
-      getVerifiedPhone(u.id),
-    ]);
-    // Маскируем телефон: +7 (***) ***-12-34 — показываем только последние 4 цифры
-    let phoneMasked: string | null = null;
-    if (phone) {
-      const digits = phone.replace(/\D/g, "");
-      if (digits.length >= 11) {
-        const last4 = digits.slice(-4);
-        phoneMasked = `+7 (***) ***-${last4.slice(0,2)}-${last4.slice(2)}`;
-      }
-    }
-    res.json({
-      user: { id: u.id, first_name: u.first_name, username: u.username },
-      phoneVerified: verified,
-      phoneMasked,
-      balance,
-      daily,
-      activeRewards: myRewards.length,
-      birthday,
-      joinedAt: subInfo?.joined_at ?? null,
-      launchCount: subInfo?.launch_count ?? 0,
-    });
-  } catch (e) {
-    console.error("[API /me]", (e as Error).message);
-    res.status(500).json({ error: "internal" });
-  }
-});
-
-// Привязка телефона идёт только через bot.on(":contact"), где Telegram гарантирует,
-// что contact.user_id == ctx.from.id. HTTP-endpoint не нужен и был бы дырой.
-
-// Отвязать телефон — обнуляем phone_verified_at и phone
-app.post("/api/unverify-phone", requireTgUser, rateLimit(3), async (req, res) => {
-  const u = getTgUser(req)!;
-  try {
-    const { pool } = await import("./db");
-    await pool.query(
-      `UPDATE subscribers SET phone = NULL, phone_verified_at = NULL WHERE chat_id = $1`,
-      [u.id]
-    );
-    res.json({ ok: true });
-  } catch (e) {
-    console.error("[API /unverify-phone]", (e as Error).message);
-    res.status(500).json({ error: "internal" });
-  }
-});
+// User-related (me, birthday, unverify-phone, history) → src/routes/user.ts
+app.use(userRouter);
 
 // Club routes (daily, convert, redeem, rewards, my-rewards, conversion-tiers)
 // вынесены в src/routes/club.ts
 app.use(clubRouter);
 
-app.post("/api/game-result", requireTgUser, rateLimit(30), async (req, res) => {
-  const u = getTgUser(req)!;
-  const { game, score } = req.body as { game?: string; score?: number };
-  if (!game || typeof score !== "number" || score < 0) {
-    res.status(400).json({ error: "bad_input" });
-    return;
-  }
-  if (!["flappy_cake", "memory", "bakery"].includes(game)) {
-    res.status(400).json({ error: "unknown_game" });
-    return;
-  }
-  try {
-    if (!(await isPhoneVerified(u.id))) {
-      res.json({ starsAwarded: 0, recordBeaten: false, recordBonus: 0, capped: false, gated: true });
-      return;
-    }
-    const result = await recordGameResult(u.id, game, score);
-    const balance = await getBalance(u.id);
-    res.json({ ...result, balance });
-  } catch (e) {
-    console.error("[API /game-result]", (e as Error).message);
-    res.status(500).json({ error: "internal" });
-  }
-});
-
-app.get("/api/history", requireTgUser, async (req, res) => {
-  const u = getTgUser(req)!;
-  try {
-    const rows = await getHistory(u.id, 30);
-    res.json(rows);
-  } catch (e) {
-    console.error("[API /history]", (e as Error).message);
-    res.status(500).json({ error: "internal" });
-  }
-});
+// Game results → src/routes/game.ts
+app.use(gameRouter);
 
 // GET /api/holidays/upcoming вынесен в src/routes/holidays.ts
 app.use(holidaysRouter);
@@ -1536,24 +1422,8 @@ async function rotateSecretOfDay() {
 
 // /api/notify-prefs (GET + POST) вынесены в src/routes/notify-prefs.ts
 
-// ─── Cart sync (для abandonment push) ────────────────────────────────────────
-app.post("/api/cart/sync", requireTgUser, async (req, res) => {
-  const u = getTgUser(req)!;
-  const body = req.body as { items?: Array<{ id: number; qty: number; price?: number; name?: string }> };
-  const items = Array.isArray(body.items) ? body.items.filter((i) => i && Number(i.id) > 0 && Number(i.qty) > 0) : [];
-  try {
-    if (items.length === 0) {
-      await clearCartSnapshot(u.id);
-    } else {
-      const totalSum = items.reduce((s, it) => s + (Number(it.price) || 0) * (Number(it.qty) || 0), 0);
-      await saveCartSnapshot(u.id, items, totalSum);
-    }
-    res.json({ ok: true });
-  } catch (e) {
-    console.error("[cart/sync]", (e as Error).message);
-    res.status(500).json({ error: "internal" });
-  }
-});
+// Cart sync (для cart-abandonment push) → src/routes/cart.ts
+app.use(cartRouter);
 
 // /api/wishlist/sync (back-in-stock subscribe) вынесен в src/routes/wishlist.ts
 
