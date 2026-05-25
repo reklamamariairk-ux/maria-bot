@@ -6,6 +6,7 @@ import path from "path";
 import https from "https";
 import cron from "node-cron";
 import { Bot, webhookCallback, InlineKeyboard } from "grammy";
+import { log, requestLogger, sentryExpressErrorHandler, captureError } from "./logger";
 import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, fetchProductById, reloadDietaryOverrides, detectDietary, Product } from "./scraper";
 import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind, getNotificationPrefs, setNotificationPrefs, saveCartSnapshot, clearCartSnapshot, getAbandonedCarts, markCartAbandonedPushed, getSpinStatus, recordSpin, WHEEL_PRIZES, touchVisitStreak, setSecretOfDay, getSecretOfDay, getUnusedRewards, consumeRewards, hasHolidayPushSent, markHolidayPushSent, getReviewsForProduct, getReviewStats, getReviewStatsBatch, getMyReview, upsertReview, deleteMyReview, setReviewHidden, countReviewsLast24h, createWishlistShare, getWishlistShare, incrementWishlistShareOpens, countWishlistSharesLast24h, getOrderRating, upsertOrderRating, hasRatingPromptSent, markRatingPromptSent, countPromoUses, hasUserUsedPromo, recordPromoUse } from "./db";
 import {
@@ -564,6 +565,8 @@ app.use(
 );
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
+// Structured request log — reqId + duration + status, /health пропускается
+app.use(requestLogger());
 
 // ─── Rate limit ─────────────────────────────────────────────────────────────
 // Простой sliding window per-IP: разные лимиты для разных эндпоинтов.
@@ -1477,7 +1480,7 @@ app.post("/api/lead", rateLimit(10), express.json({ limit: "8mb" }), async (req,
     console.log(`[ORDER] Lead created: ${title}`);
     res.json({ ok: true });
   } catch (e) {
-    console.error("[ORDER] Bitrix24 error:", (e as Error).message);
+    log.error({ err: e }, "[ORDER] Bitrix24 sync failed");
     res.status(502).json({ error: "Не удалось создать заявку, попробуйте позже" });
   }
 });
@@ -2623,7 +2626,7 @@ app.get("/api/lk", requireTgUser, rateLimit(30), async (req, res) => {
     }
     res.json(result.data);
   } catch (e) {
-    console.error("[API /lk]", (e as Error).message);
+    log.error({ err: e, chatId: u.id }, "/api/lk failed");
     res.status(500).json({ error: "internal" });
   }
 });
@@ -3163,10 +3166,17 @@ async function main() {
   await initDb();
   await initClubSchema();
 
-  console.log(`[STARTUP] BOT_TOKEN=${BOT_TOKEN ? "set" : "MISSING"}`);
-  console.log(`[STARTUP] GROQ_KEY=${GROQ_KEY ? "set" : "MISSING"}`);
-  console.log(`[STARTUP] WEBHOOK_URL=${WEBHOOK_URL || "(empty — long polling)"}`);
-  console.log(`[STARTUP] PORT=${PORT}`);
+  // Sentry error handler — после всех routes, до listen
+  app.use(sentryExpressErrorHandler());
+
+  log.info({
+    botToken: BOT_TOKEN ? "set" : "MISSING",
+    groqKey: GROQ_KEY ? "set" : "MISSING",
+    webhookUrl: WEBHOOK_URL || "(empty — long polling)",
+    port: PORT,
+    previewMode: PREVIEW_MODE,
+    sentry: process.env.SENTRY_DSN ? "enabled" : "disabled",
+  }, "startup");
 
   // Ежедневные поздравления с днём рождения в 10:00 по Иркутску (UTC+8 = 02:00 UTC)
   cron.schedule("0 2 * * *", () => {
@@ -3196,7 +3206,7 @@ async function main() {
 
   // Cart abandonment cron — каждый час шлёт пуш юзерам с забытой корзиной >24h
   cron.schedule("23 * * * *", () => {
-    pushCartAbandonments().catch((e) => console.error("[CART ABANDON CRON]", e));
+    pushCartAbandonments().catch((e) => log.error({ err: e }, "[CART ABANDON CRON]"));
   });
   console.log("[STARTUP] Cart-abandonment cron scheduled (hourly)");
 
@@ -3214,9 +3224,9 @@ async function main() {
 
   // Партнёры — синк с Bitrix раз в час (если PARTNERS_API задан)
   if (process.env.PARTNERS_API) {
-    syncPartners().catch((e) => console.error("[PARTNERS] startup sync:", e));
+    syncPartners().catch((e) => log.error({ err: e }, "[PARTNERS] startup sync"));
     cron.schedule("17 * * * *", () => {
-      syncPartners().catch((e) => console.error("[PARTNERS CRON]", e));
+      syncPartners().catch((e) => log.error({ err: e }, "[PARTNERS CRON]"));
     });
     console.log("[STARTUP] Partners cron scheduled (hourly)");
   } else {
@@ -3241,7 +3251,7 @@ async function main() {
         }
         console.log(`🚀 Server on port ${PORT} | Webhook set`);
       } catch (e) {
-        console.error("[STARTUP] Failed to set webhook:", (e as Error).message);
+        log.error({ err: e }, "[STARTUP] Failed to set webhook");
       }
     });
   } else {
@@ -3249,10 +3259,22 @@ async function main() {
     try {
       await bot.start();
     } catch (e) {
-      console.error("[STARTUP] bot.start() failed:", (e as Error).message);
+      log.error({ err: e }, "[STARTUP] bot.start() failed");
       throw e;
     }
   }
 }
 
-main().catch((err) => { console.error("Fatal:", err.stack ?? err); process.exit(1); });
+main().catch((err) => {
+  log.fatal({ err }, "fatal startup error");
+  // Даём Sentry время отправить event, потом exit
+  setTimeout(() => process.exit(1), 500);
+});
+
+// Также ловим unhandled rejections / uncaught exceptions глобально
+process.on("unhandledRejection", (reason) => {
+  log.error({ err: reason }, "unhandledRejection");
+});
+process.on("uncaughtException", (err) => {
+  log.error({ err }, "uncaughtException");
+});
