@@ -7,6 +7,9 @@ import https from "https";
 import cron from "node-cron";
 import { Bot, webhookCallback, InlineKeyboard } from "grammy";
 import { log, requestLogger, sentryExpressErrorHandler, captureError } from "./logger";
+import { rateLimit, requireAdminToken } from "./middleware";
+import sweetCheckRouter, { loadSweetCheckPrizes } from "./routes/sweet-check";
+import holidaysRouter from "./routes/holidays";
 import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, fetchProductById, reloadDietaryOverrides, detectDietary, Product } from "./scraper";
 import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind, getNotificationPrefs, setNotificationPrefs, saveCartSnapshot, clearCartSnapshot, getAbandonedCarts, markCartAbandonedPushed, getSpinStatus, recordSpin, WHEEL_PRIZES, touchVisitStreak, setSecretOfDay, getSecretOfDay, getUnusedRewards, consumeRewards, hasHolidayPushSent, markHolidayPushSent, getReviewsForProduct, getReviewStats, getReviewStatsBatch, getMyReview, upsertReview, deleteMyReview, setReviewHidden, countReviewsLast24h, createWishlistShare, getWishlistShare, incrementWishlistShareOpens, countWishlistSharesLast24h, getOrderRating, upsertOrderRating, hasRatingPromptSent, markRatingPromptSent, countPromoUses, hasUserUsedPromo, recordPromoUse } from "./db";
 import {
@@ -568,34 +571,8 @@ app.use(express.json({ limit: "1mb" }));
 // Structured request log — reqId + duration + status, /health пропускается
 app.use(requestLogger());
 
-// ─── Rate limit ─────────────────────────────────────────────────────────────
-// Простой sliding window per-IP: разные лимиты для разных эндпоинтов.
-const rateBuckets = new Map<string, number[]>();
-function rateLimit(maxPerMinute: number) {
-  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
-    const key = `${ip}:${req.path}`;
-    const now = Date.now();
-    const win = 60_000;
-    const arr = (rateBuckets.get(key) || []).filter((t) => now - t < win);
-    if (arr.length >= maxPerMinute) {
-      res.status(429).json({ ok: false, error: "rate_limited", message: "Слишком много запросов. Подожди минуту." });
-      return;
-    }
-    arr.push(now);
-    rateBuckets.set(key, arr);
-    next();
-  };
-}
-// Чистим старые ведра раз в 5 минут чтобы Map не разрастался
-setInterval(() => {
-  const now = Date.now();
-  for (const [k, arr] of rateBuckets) {
-    const fresh = arr.filter((t) => now - t < 60_000);
-    if (fresh.length === 0) rateBuckets.delete(k);
-    else rateBuckets.set(k, fresh);
-  }
-}, 5 * 60_000);
+// rateLimit и requireAdminToken вынесены в `./middleware`
+// (см. волну рефакторинга #5). Импортируются ниже.
 
 app.use(express.static(path.join(__dirname, "..", "public")));
 
@@ -1582,25 +1559,17 @@ app.post("/api/lead-corporate", rateLimit(5), express.json({ limit: "1mb" }), as
   }
 });
 
-// ─── Статистика подписчиков ───────────────────────────────────────────────────
+// ─── Admin-only утилиты (через requireAdminToken middleware) ────────────────
+
 // Утечка бизнес-инфы — переведено под admin-token (раньше любой видел число подписчиков)
-app.get("/api/subscribers/count", async (req, res) => {
-  const token = req.header("x-user-token") || (req.query.token as string | undefined);
-  if (!token || token !== process.env.ADMIN_TOKEN) {
-    res.status(403).json({ error: "forbidden" });
-    return;
-  }
+app.get("/api/subscribers/count", requireAdminToken, async (_req, res) => {
   const subs = await getAllSubscribers();
   res.json({ count: subs.length });
 });
 
-// ─── Рассылка через API (для будущей админ-панели) ────────────────────────────
-app.post("/api/broadcast", async (req, res) => {
-  const { token, text } = req.body as { token?: string; text?: string };
-  if (!token || token !== process.env.ADMIN_TOKEN) {
-    res.status(403).json({ error: "forbidden" });
-    return;
-  }
+// Рассылка через API (для будущей админ-панели)
+app.post("/api/broadcast", requireAdminToken, async (req, res) => {
+  const { text } = req.body as { text?: string };
   if (!text?.trim()) {
     res.status(400).json({ error: "text required" });
     return;
@@ -1615,17 +1584,12 @@ app.post("/api/broadcast", async (req, res) => {
     } catch { failed++; }
     await new Promise((r) => setTimeout(r, 50));
   }
-  console.log(`[BROADCAST] sent=${sent} failed=${failed}`);
+  log.info({ sent, failed, total: subscribers.length }, "[BROADCAST] done");
 });
 
 // Ручное обновление каталога (admin-only — раньше любой мог дёргать рефреш
 // → нагрузка на CATALOG_API maria-irk.ru через unauth-юзеров).
-app.post("/api/refresh-catalog", async (req, res) => {
-  const token = req.header("x-user-token") || (req.body as { token?: string })?.token;
-  if (!token || token !== process.env.ADMIN_TOKEN) {
-    res.status(403).json({ error: "forbidden" });
-    return;
-  }
+app.post("/api/refresh-catalog", requireAdminToken, async (_req, res) => {
   res.json({ status: "started" });
   await refreshCatalog();
 });
@@ -1841,48 +1805,19 @@ app.get("/api/history", requireTgUser, async (req, res) => {
   }
 });
 
-// ─── Holidays API ────────────────────────────────────────────────────────────
-// Ближайший праздник (для карточки на главной)
-app.get("/api/holidays/upcoming", rateLimit(60), (_req, res) => {
-  const next = getNextHoliday();
-  if (!next) {
-    res.json({ holiday: null });
-    return;
-  }
-  res.json({
-    holiday: {
-      id: next.holiday.id,
-      name: next.holiday.name,
-      emoji: next.holiday.emoji,
-      hint: next.holiday.hint,
-      accent: next.holiday.accent,
-      searchQuery: next.holiday.searchQuery,
-      date: next.date.toISOString().slice(0, 10),
-      daysUntil: next.daysUntil,
-      preorderDays: next.holiday.preorderDays,
-    },
-  });
-});
+// GET /api/holidays/upcoming вынесен в src/routes/holidays.ts
+app.use(holidaysRouter);
 
-// Админ: руками триггернуть pushHolidayPreorder (для тестов)
-app.post("/api/admin/holidays/push", async (req, res) => {
-  const token = req.header("x-user-token") || (req.body as { token?: string })?.token;
-  if (!token || token !== process.env.ADMIN_TOKEN) {
-    res.status(403).json({ error: "forbidden" });
-    return;
-  }
-  pushHolidayPreorder().catch((e) => console.error("[HOLIDAY MANUAL]", e));
+// Админ: руками триггернуть pushHolidayPreorder (для тестов).
+// Остаётся в index.ts т.к. push-функция здесь же; перенесём с push-волной.
+app.post("/api/admin/holidays/push", requireAdminToken, async (_req, res) => {
+  pushHolidayPreorder().catch((e) => log.error({ err: e }, "[HOLIDAY MANUAL]"));
   res.json({ ok: true, status: "scheduled" });
 });
 
 // Админ: перезагрузить data/dietary-overrides.json и переразметить in-memory каталог
 // без рестарта (для оперативной коррекции false-positive)
-app.post("/api/admin/dietary/reload", (req, res) => {
-  const token = req.header("x-user-token") || (req.body as { token?: string })?.token;
-  if (!token || token !== process.env.ADMIN_TOKEN) {
-    res.status(403).json({ error: "forbidden" });
-    return;
-  }
+app.post("/api/admin/dietary/reload", requireAdminToken, (_req, res) => {
   reloadDietaryOverrides();
   let tagged = 0;
   for (const p of catalog) {
@@ -2025,12 +1960,7 @@ app.delete("/api/reviews/:id", requireTgUser, async (req, res) => {
 });
 
 // Админ: скрыть/показать отзыв (модерация)
-app.post("/api/admin/reviews/:id/hide", async (req, res) => {
-  const token = req.header("x-user-token") || (req.body as { token?: string })?.token;
-  if (!token || token !== process.env.ADMIN_TOKEN) {
-    res.status(403).json({ error: "forbidden" });
-    return;
-  }
+app.post("/api/admin/reviews/:id/hide", requireAdminToken, async (req, res) => {
   const id = Number(req.params.id);
   if (!id) { res.status(400).json({ error: "bad_id" }); return; }
   const hidden = (req.body as { hidden?: boolean })?.hidden !== false; // по умолчанию hide=true
@@ -2323,12 +2253,7 @@ app.get("/api/selfie-img/:id", rateLimit(120), async (req, res) => {
 });
 
 // Hot-reload data/promo-codes.json без рестарта
-app.post("/api/admin/promo/reload", (req, res) => {
-  const token = req.header("x-user-token") || (req.body as { token?: string })?.token;
-  if (!token || token !== process.env.ADMIN_TOKEN) {
-    res.status(403).json({ error: "forbidden" });
-    return;
-  }
+app.post("/api/admin/promo/reload", requireAdminToken, (_req, res) => {
   const total = reloadPromoCodes();
   res.json({ ok: true, total });
 });
@@ -2903,12 +2828,7 @@ _Узнать статус: напишите боту_`;
   res.json(result);
 });
 
-app.post("/api/partners/sync", async (req, res) => {
-  const { token } = req.body as { token?: string };
-  if (!token || token !== process.env.ADMIN_TOKEN) {
-    res.status(403).json({ error: "forbidden" });
-    return;
-  }
+app.post("/api/partners/sync", requireAdminToken, async (_req, res) => {
   const result = await syncPartners();
   res.json(result);
 });
@@ -3007,119 +2927,13 @@ app.get("/api/shops", rateLimit(60), async (_req, res) => {
 });
 
 // Сброс кеша адресов кафе — следующий /api/shops подтянет свежее с сайта
-app.post("/api/admin/shops/reload", (req, res) => {
-  const token = req.header("x-user-token") || (req.body as { token?: string })?.token;
-  if (!token || token !== process.env.ADMIN_TOKEN) {
-    res.status(403).json({ error: "forbidden" });
-    return;
-  }
+app.post("/api/admin/shops/reload", requireAdminToken, (_req, res) => {
   _shopsCache = null;
   res.json({ ok: true, cleared: true });
 });
 
-// Sweet Check — активная неделя/квест
-// Источник: data/sweet-check-weeks.json (hot-reload через /api/admin/sweet-check/reload).
-// Если файла нет — fallback на хардкод (на случай первого деплоя).
-interface SweetWeek { from: string; to: string; name: string; task: string; reward: string }
-const SWEET_CHECK_FALLBACK: SweetWeek[] = [
-  { from: "2026-04-13", to: "2026-04-19", name: "Неделя 4 · Старт",        task: "Купи набор «Семейный»", reward: "5 билетов" },
-  { from: "2026-04-20", to: "2026-04-26", name: "Неделя 5 · Сезон ягод",   task: "Купи 2 пирога с ягодной начинкой", reward: "5 билетов" },
-  { from: "2026-04-27", to: "2026-05-03", name: "Неделя 6 · Капкейки",     task: "Купи 4 капкейка любых вкусов", reward: "5 билетов" },
-  { from: "2026-05-04", to: "2026-05-10", name: "Неделя 7 · Подарок другу",task: "Купи бенто-торт + капкейк или десерт в стакане", reward: "5 билетов" },
-];
-const SWEET_CHECK_FILE = path.join(__dirname, "..", "data", "sweet-check-weeks.json");
-let _sweetWeeksCache: SweetWeek[] | null = null;
-function loadSweetCheckWeeks(): SweetWeek[] {
-  if (_sweetWeeksCache) return _sweetWeeksCache;
-  try {
-    const fs = require("fs") as typeof import("fs");
-    if (fs.existsSync(SWEET_CHECK_FILE)) {
-      const raw = fs.readFileSync(SWEET_CHECK_FILE, "utf-8");
-      const data = JSON.parse(raw) as { weeks?: SweetWeek[] };
-      if (Array.isArray(data.weeks) && data.weeks.length > 0) {
-        _sweetWeeksCache = data.weeks;
-        return _sweetWeeksCache;
-      }
-    }
-  } catch (e) {
-    console.error("[sweet-check] load failed:", (e as Error).message);
-  }
-  _sweetWeeksCache = SWEET_CHECK_FALLBACK;
-  return _sweetWeeksCache;
-}
-
-app.get("/api/sweet-check/active", rateLimit(60), (_req, res) => {
-  const weeks = loadSweetCheckWeeks();
-  // Иркутск = UTC+8; недели заданы по местному календарю.
-  const now = new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
-  const active = weeks.find((w) => w.from <= now && now <= w.to) ?? null;
-  const next   = weeks.find((w) => w.from > now) ?? null;
-  const fmt = (d: string) => {
-    const [y, m, dd] = d.split("-");
-    return `${dd}.${m}.${y}`;
-  };
-  res.json({
-    active: active ? { ...active, dates: `${fmt(active.from)} — ${fmt(active.to)}` } : null,
-    next:   next   ? { ...next,   dates: `${fmt(next.from)} — ${fmt(next.to)}` }     : null,
-    period: { from: weeks[0]?.from, to: weeks.at(-1)?.to },
-  });
-});
-
-// Hot-reload расписания «Сладкого чека» (без рестарта)
-app.post("/api/admin/sweet-check/reload", (req, res) => {
-  const token = req.header("x-user-token") || (req.body as { token?: string })?.token;
-  if (!token || token !== process.env.ADMIN_TOKEN) {
-    res.status(403).json({ error: "forbidden" });
-    return;
-  }
-  _sweetWeeksCache = null;
-  const weeks = loadSweetCheckWeeks();
-  res.json({ ok: true, total: weeks.length, first: weeks[0]?.from, last: weeks.at(-1)?.to });
-});
-
-// ─── Sweet Check prizes (список призов лотереи, hot-reload) ─────────────────
-// Источник: data/sweet-check-prizes.json. Перезагрузка — POST /api/admin/sweet-check-prizes/reload.
-// Запасной вариант если файл недоступен — quarter_label без конкретных призов.
-interface SweetPrize { place: number; emoji: string; name: string; sub?: string }
-interface SweetPrizesConfig { quarter_label: string; headline_name: string; prizes: SweetPrize[] }
-const SWEET_PRIZES_FALLBACK: SweetPrizesConfig = {
-  quarter_label: "Розыгрыш каждый квартал",
-  headline_name: "Лотерея с призами",
-  prizes: [],
-};
-const SWEET_PRIZES_FILE = path.join(__dirname, "..", "data", "sweet-check-prizes.json");
-let _sweetPrizesCache: SweetPrizesConfig | null = null;
-function loadSweetCheckPrizes(): SweetPrizesConfig {
-  if (_sweetPrizesCache) return _sweetPrizesCache;
-  try {
-    const fs = require("fs") as typeof import("fs");
-    if (fs.existsSync(SWEET_PRIZES_FILE)) {
-      const raw = fs.readFileSync(SWEET_PRIZES_FILE, "utf-8");
-      const data = JSON.parse(raw) as SweetPrizesConfig;
-      if (Array.isArray(data.prizes)) {
-        _sweetPrizesCache = data;
-        return _sweetPrizesCache;
-      }
-    }
-  } catch (e) {
-    console.error("[sweet-prizes] load failed:", (e as Error).message);
-  }
-  _sweetPrizesCache = SWEET_PRIZES_FALLBACK;
-  return _sweetPrizesCache;
-}
-app.get("/api/sweet-check/prizes", rateLimit(60), (_req, res) => {
-  res.json(loadSweetCheckPrizes());
-});
-app.post("/api/admin/sweet-check-prizes/reload", (req, res) => {
-  const token = req.header("x-user-token") || (req.body as { token?: string })?.token;
-  if (!token || token !== process.env.ADMIN_TOKEN) {
-    res.status(403).json({ error: "forbidden" });
-    return;
-  }
-  _sweetPrizesCache = null;
-  const cfg = loadSweetCheckPrizes();
-  res.json({ ok: true, total: cfg.prizes.length, headline: cfg.headline_name });
-});
+// Sweet Check (недели + призы) вынесены в src/routes/sweet-check.ts
+app.use(sweetCheckRouter);
 
 app.get("/health", (_req, res) =>
   res.json({ status: "ok", catalog: catalog.length, partners: getPartnersMeta() })
