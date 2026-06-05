@@ -555,12 +555,14 @@ app.use(
       useDefaults: false,
       directives: {
         "default-src": ["'self'"],
-        "frame-ancestors": ["'self'", "https://web.telegram.org", "https://t.me", "https://*.telegram.org"],
-        "script-src": ["'self'", "'unsafe-inline'", "https://telegram.org", "https://*.telegram.org"],
+        // VK-порт: мини-апп открывается в iframe vk.com/m.vk.com (web) — нужны
+        // frame-ancestors; vk-bridge SDK грузится с unpkg (script-src)
+        "frame-ancestors": ["'self'", "https://web.telegram.org", "https://t.me", "https://*.telegram.org", "https://vk.com", "https://*.vk.com", "https://*.vk-apps.com"],
+        "script-src": ["'self'", "'unsafe-inline'", "https://telegram.org", "https://*.telegram.org", "https://unpkg.com"],
         "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         "font-src": ["'self'", "https://fonts.gstatic.com", "data:"],
         "img-src": ["'self'", "data:", "blob:", "https:", "http://image.pollinations.ai", "https://image.pollinations.ai"],
-        "connect-src": ["'self'", "https://image.pollinations.ai", "https://*.maria-irk.ru", "https://maria-irk.ru"],
+        "connect-src": ["'self'", "https://image.pollinations.ai", "https://*.maria-irk.ru", "https://maria-irk.ru", "https://api.vk.com"],
         "media-src": ["'self'", "blob:"],
         "object-src": ["'none'"],
         "base-uri": ["'self'"],

@@ -21,6 +21,15 @@ import { log } from "../logger";
 export function createVkRouter(): Router {
   const router = Router();
 
+  // Публичная конфигурация для фронт-бриджа (share-ссылки, AllowMessagesFromGroup).
+  // app_id и group_id — публичные значения, секретов здесь нет.
+  router.get("/api/vk/config", (_req, res) => {
+    res.json({
+      app_id: process.env.VK_APP_ID ?? null,
+      group_id: process.env.VK_GROUP_ID ?? null,
+    });
+  });
+
   router.post("/api/vk/verify-phone", requireUser, rateLimit(10), async (req, res) => {
     const u = getUser(req)!;
     if (u.platform !== "vk") {

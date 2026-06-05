@@ -1,61 +1,129 @@
-/* ── Telegram WebApp bridge ──────────────────────────────────────────────────
-   - Подхватывает themeParams и проставляет CSS-переменные:
-     --tg-bg, --tg-text, --tg-hint, --tg-link, --tg-btn, --tg-btn-text,
-     --tg-secondary-bg, --tg-card, --tg-section-bg
-   - Включает class="tg-dark" на html, если colorScheme = dark
-   - Экспортирует window.haptic('light'|'medium'|'heavy'|'success'|'error'|'warning')
-   - Экспортирует window.tweenNumber(el, from, to, dur)
+/* ── Platform bridge: Telegram WebApp + VK Mini Apps ─────────────────────────
+   Детекция платформы:
+     - VK:    в location.search есть vk_app_id (launch params от VK)
+     - TG:    window.Telegram.WebApp.initData непустой
+     - guest: обычный браузер (дев-режим)
+
+   Экспортирует (как раньше):
+     window.haptic, window.tgMain, window.tgBack, window.scrollLock/Unlock,
+     window.linkifyPhones, window.tweenNumber, CSS-переменные --tg-*
+
+   Новый единый API (используйте его, а не window.Telegram напрямую):
+     App.platform               'tg' | 'vk' | 'guest'
+     App.ready()                Promise — дождаться init (VK: SDK + user info)
+     App.authHeader()           объект заголовков для fetch
+     App.isAuthed()             bool
+     App.user()                 {id, first_name, last_name, username, photo_url} | null
+     App.startParam()           deep-link параметр (tg start_param | vk hash | ?wish/?rate_order)
+     App.confirm(msg)           Promise<boolean>
+     App.alert(msg)             Promise<void>
+     App.share(url, text)       нативный share текущей платформы
+     App.openExternal(url)      внешняя ссылка
+     App.allowMessages()        VK: запрос разрешения сообщений сообщества
+     App.verifyPhoneVk()        VK: GetPhoneNumber → POST /api/vk/verify-phone
+     App.main / App.back        = tgMain / tgBack
 */
 (function(){
-  const tg = window.Telegram?.WebApp;
+  // ─── Детекция платформы ────────────────────────────────────────────────────
+  const _search = new URLSearchParams(location.search);
+  const IS_VK = _search.has('vk_app_id');
+  const tg = !IS_VK ? window.Telegram?.WebApp : null;
+  const PLATFORM = IS_VK ? 'vk' : (tg?.initData ? 'tg' : 'guest');
+
+  // VK state
+  let _vkBridge = null;          // vkBridge global после загрузки SDK
+  let _vkUser = null;            // кэш VKWebAppGetUserInfo
+  let _vkConfig = null;          // {app_id, group_id} c /api/vk/config
+  let _readyPromise = null;
+
+  // ─── Telegram init + тема ──────────────────────────────────────────────────
   if (tg) {
     try { tg.ready(); tg.expand(); } catch {}
-
-    function applyTheme() {
-      // Mini App всегда в light — это бренд-решение «премиум-белое».
-      // Dark-режим оставлен в CSS (html.tg-dark) только для дев-теста через ?dark=1.
-      // tg.colorScheme игнорируется намеренно — иначе при тёмной теме TG
-      // часть компонентов с hardcoded цветами выглядит дисгармонично.
-      const tp = tg.themeParams || {};
-      const root = document.documentElement;
-      const url = new URL(window.location.href);
-      const force = url.searchParams.get('dark');
-      const isDark = force === '1';   // только явный ?dark=1; всё остальное — light
-
-      // Brand-цвета — одни и те же в light/dark
-      root.style.setProperty('--tg-link-color',         '#d61f37');
-      root.style.setProperty('--tg-button-color',       '#d61f37');
-      root.style.setProperty('--tg-button-text-color',  '#ffffff');
-
-      if (isDark) {
-        root.classList.add('tg-dark');
-        root.classList.remove('tg-light');
-        // Очищаем light-overrides — CSS html.tg-dark выставит warm bordeaux
-        ['--tg-bg-color','--tg-secondary-bg-color','--tg-section-bg-color','--tg-text-color','--tg-hint-color']
-          .forEach((p) => root.style.removeProperty(p));
-        try { tg.setHeaderColor?.('#160409'); } catch {}
-        try { tg.setBackgroundColor?.('#160409'); } catch {}
-      } else {
-        root.classList.add('tg-light');
-        root.classList.remove('tg-dark');
-        root.style.setProperty('--tg-bg-color',           '#ffffff');
-        root.style.setProperty('--tg-secondary-bg-color', '#ffffff');
-        root.style.setProperty('--tg-section-bg-color',   '#ffffff');
-        root.style.setProperty('--tg-text-color',         tp.text_color || '#130008');
-        root.style.setProperty('--tg-hint-color',         tp.hint_color || '#8b949e');
-        try { tg.setHeaderColor?.('#ffffff'); } catch {}
-        try { tg.setBackgroundColor?.('#ffffff'); } catch {}
-      }
-    }
-    applyTheme();
-    tg.onEvent?.('themeChanged', applyTheme);
-  } else {
-    // не TMA — fallback на light
-    document.documentElement.classList.add('tg-light');
   }
+
+  function applyTheme() {
+    // Mini App всегда в light — это бренд-решение «премиум-белое».
+    // Dark-режим оставлен в CSS (html.tg-dark) только для дев-теста через ?dark=1.
+    const tp = (tg && tg.themeParams) || {};
+    const root = document.documentElement;
+    const url = new URL(window.location.href);
+    const force = url.searchParams.get('dark');
+    const isDark = force === '1';   // только явный ?dark=1; всё остальное — light
+
+    // Brand-цвета — одни и те же в light/dark и на всех платформах
+    root.style.setProperty('--tg-link-color',         '#d61f37');
+    root.style.setProperty('--tg-button-color',       '#d61f37');
+    root.style.setProperty('--tg-button-text-color',  '#ffffff');
+
+    if (isDark) {
+      root.classList.add('tg-dark');
+      root.classList.remove('tg-light');
+      ['--tg-bg-color','--tg-secondary-bg-color','--tg-section-bg-color','--tg-text-color','--tg-hint-color']
+        .forEach((p) => root.style.removeProperty(p));
+      try { tg?.setHeaderColor?.('#160409'); } catch {}
+      try { tg?.setBackgroundColor?.('#160409'); } catch {}
+    } else {
+      root.classList.add('tg-light');
+      root.classList.remove('tg-dark');
+      root.style.setProperty('--tg-bg-color',           '#ffffff');
+      root.style.setProperty('--tg-secondary-bg-color', '#ffffff');
+      root.style.setProperty('--tg-section-bg-color',   '#ffffff');
+      root.style.setProperty('--tg-text-color',         tp.text_color || '#130008');
+      root.style.setProperty('--tg-hint-color',         tp.hint_color || '#8b949e');
+      try { tg?.setHeaderColor?.('#ffffff'); } catch {}
+      try { tg?.setBackgroundColor?.('#ffffff'); } catch {}
+    }
+  }
+  applyTheme();
+  if (tg) tg.onEvent?.('themeChanged', applyTheme);
+
+  // ─── VK init (lazy SDK c CDN) ──────────────────────────────────────────────
+  function loadVkSdk() {
+    return new Promise((resolve) => {
+      if (window.vkBridge) { resolve(window.vkBridge); return; }
+      const s = document.createElement('script');
+      s.src = 'https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js';
+      s.onload = () => resolve(window.vkBridge || null);
+      s.onerror = () => resolve(null);
+      document.head.appendChild(s);
+    });
+  }
+
+  async function initVk() {
+    _vkBridge = await loadVkSdk();
+    if (!_vkBridge) return;
+    try { await _vkBridge.send('VKWebAppInit', {}); } catch {}
+    // Имя/аватар — для приветствия, share-текстов и x-vk-user (display-only)
+    try { _vkUser = await _vkBridge.send('VKWebAppGetUserInfo', {}); } catch {}
+    // app_id/group_id с бэка (для share-ссылок и AllowMessagesFromGroup)
+    try {
+      const r = await fetch('/api/vk/config');
+      if (r.ok) _vkConfig = await r.json();
+    } catch {}
+  }
+
+  function ready() {
+    if (!_readyPromise) {
+      _readyPromise = IS_VK ? initVk() : Promise.resolve();
+    }
+    return _readyPromise;
+  }
+  if (IS_VK) ready(); // стартуем сразу, не дожидаясь вызова
 
   // ─── Haptic ────────────────────────────────────────────────────────────────
   window.haptic = function(kind) {
+    if (IS_VK) {
+      if (!_vkBridge) return;
+      try {
+        if (kind === 'success' || kind === 'error' || kind === 'warning')
+          _vkBridge.send('VKWebAppTapticNotificationOccurred', { type: kind });
+        else if (kind === 'selection')
+          _vkBridge.send('VKWebAppTapticSelectionChanged', {});
+        else
+          _vkBridge.send('VKWebAppTapticImpactOccurred', { style: kind || 'light' });
+      } catch {}
+      return;
+    }
     const h = window.Telegram?.WebApp?.HapticFeedback;
     if (!h) return;
     try {
@@ -71,51 +139,86 @@
     if (t) window.haptic(t.dataset.haptic);
   }, { capture: true });
 
-  // ─── MainButton — нативная закреплённая кнопка снизу ──────────────────────
-  // Использование: tgMain.show('Оформить · 1 200 ₽', () => cartSubmit());
+  // ─── MainButton ────────────────────────────────────────────────────────────
+  // TG: нативная кнопка Telegram. VK/guest: DOM-фоллбек — sticky-кнопка над BNav.
+  function domMainButton() {
+    let el = document.getElementById('pf-main-btn');
+    if (!el) {
+      el = document.createElement('button');
+      el.id = 'pf-main-btn';
+      el.style.cssText = [
+        'position:fixed', 'left:12px', 'right:12px', 'z-index:980',
+        'padding:14px 16px', 'border:none', 'border-radius:14px',
+        'background:var(--tg-button-color,#d61f37)', 'color:var(--tg-button-text-color,#fff)',
+        'font:600 16px/1.2 inherit', 'box-shadow:0 6px 20px rgba(214,31,55,.35)',
+        'display:none', 'cursor:pointer',
+      ].join(';');
+      document.body.appendChild(el);
+    }
+    // над нижней навигацией (если есть)
+    const nav = document.querySelector('.bnav');
+    const navH = nav ? nav.offsetHeight : 0;
+    el.style.bottom = (navH + 10) + 'px';
+    return el;
+  }
+
   window.tgMain = {
     show(text, onClick, opts = {}) {
-      const mb = window.Telegram?.WebApp?.MainButton;
-      if (!mb) return false;
+      const mb = !IS_VK && window.Telegram?.WebApp?.MainButton;
+      if (mb) {
+        try {
+          mb.setText(text);
+          if (opts.color) mb.color = opts.color;
+          if (opts.textColor) mb.textColor = opts.textColor;
+          if (this._onClick) { try { mb.offClick(this._onClick); } catch {} }
+          this._onClick = () => { window.haptic?.('medium'); onClick && onClick(); };
+          mb.onClick(this._onClick);
+          if (opts.disabled) mb.disable(); else mb.enable();
+          if (opts.progress) mb.showProgress(false); else mb.hideProgress();
+          mb.show();
+          return true;
+        } catch { return false; }
+      }
+      // VK/guest: DOM-фоллбек
       try {
-        mb.setText(text);
-        if (opts.color) mb.color = opts.color;
-        if (opts.textColor) mb.textColor = opts.textColor;
-        // удаляем предыдущие хендлеры (Telegram не предоставляет removeEventListener)
-        if (this._onClick) {
-          try { mb.offClick(this._onClick); } catch {}
-        }
-        this._onClick = () => { window.haptic?.('medium'); onClick && onClick(); };
-        mb.onClick(this._onClick);
-        if (opts.disabled) mb.disable(); else mb.enable();
-        if (opts.progress) mb.showProgress(false); else mb.hideProgress();
-        mb.show();
+        const el = domMainButton();
+        el.textContent = text;
+        el.disabled = Boolean(opts.disabled);
+        el.onclick = () => { window.haptic?.('medium'); onClick && onClick(); };
+        el.style.display = 'block';
         return true;
       } catch { return false; }
     },
     hide() {
-      const mb = window.Telegram?.WebApp?.MainButton;
-      if (!mb) return;
-      try {
-        if (this._onClick) { try { mb.offClick(this._onClick); } catch {} this._onClick = null; }
-        mb.hide();
-      } catch {}
+      const mb = !IS_VK && window.Telegram?.WebApp?.MainButton;
+      if (mb) {
+        try {
+          if (this._onClick) { try { mb.offClick(this._onClick); } catch {} this._onClick = null; }
+          mb.hide();
+        } catch {}
+        return;
+      }
+      const el = document.getElementById('pf-main-btn');
+      if (el) el.style.display = 'none';
     },
     progress(on) {
-      const mb = window.Telegram?.WebApp?.MainButton;
-      if (!mb) return;
-      try { on ? mb.showProgress(false) : mb.hideProgress(); } catch {}
+      const mb = !IS_VK && window.Telegram?.WebApp?.MainButton;
+      if (mb) { try { on ? mb.showProgress(false) : mb.hideProgress(); } catch {} return; }
+      const el = document.getElementById('pf-main-btn');
+      if (el) { el.disabled = Boolean(on); el.style.opacity = on ? '.6' : '1'; }
     },
     setText(text) {
-      const mb = window.Telegram?.WebApp?.MainButton;
-      try { mb && mb.setText(text); } catch {}
+      const mb = !IS_VK && window.Telegram?.WebApp?.MainButton;
+      if (mb) { try { mb.setText(text); } catch {} return; }
+      const el = document.getElementById('pf-main-btn');
+      if (el) el.textContent = text;
     },
   };
 
-  // ─── BackButton — нативная кнопка «назад» в шапке Telegram ─────────────────
+  // ─── BackButton — в VK нативной нет; коллеров вне TG сейчас нет, no-op ─────
   window.tgBack = {
     show(onBack) {
-      const bb = window.Telegram?.WebApp?.BackButton;
+      const bb = !IS_VK && window.Telegram?.WebApp?.BackButton;
       if (!bb) return false;
       try {
         if (this._onClick) { try { bb.offClick(this._onClick); } catch {} }
@@ -126,7 +229,7 @@
       } catch { return false; }
     },
     hide() {
-      const bb = window.Telegram?.WebApp?.BackButton;
+      const bb = !IS_VK && window.Telegram?.WebApp?.BackButton;
       if (!bb) return;
       try {
         if (this._onClick) { try { bb.offClick(this._onClick); } catch {} this._onClick = null; }
@@ -135,11 +238,141 @@
     },
   };
 
+  // ─── Единый App API ────────────────────────────────────────────────────────
+  const App = {
+    platform: PLATFORM,
+    ready,
+
+    isAuthed() {
+      return PLATFORM === 'tg' ? Boolean(tg?.initData) : PLATFORM === 'vk';
+    },
+
+    authHeader() {
+      if (PLATFORM === 'tg' && tg?.initData) {
+        return { Authorization: 'tma ' + tg.initData };
+      }
+      if (PLATFORM === 'vk') {
+        const h = { Authorization: 'vk ' + location.search.slice(1) };
+        if (_vkUser) {
+          // Display-only имя (бэк НЕ доверяет ему для security)
+          try { h['x-vk-user'] = JSON.stringify({ first_name: _vkUser.first_name, last_name: _vkUser.last_name }); } catch {}
+        }
+        return h;
+      }
+      return {};
+    },
+
+    user() {
+      if (PLATFORM === 'tg') {
+        const u = tg?.initDataUnsafe?.user;
+        return u ? { id: u.id, first_name: u.first_name, last_name: u.last_name, username: u.username, photo_url: u.photo_url } : null;
+      }
+      if (PLATFORM === 'vk') {
+        const id = Number(_search.get('vk_user_id')) || undefined;
+        if (_vkUser) return { id, first_name: _vkUser.first_name, last_name: _vkUser.last_name, photo_url: _vkUser.photo_200 || _vkUser.photo_100 };
+        return id ? { id } : null;
+      }
+      return null;
+    },
+
+    startParam() {
+      let sp = '';
+      if (PLATFORM === 'tg') sp = tg?.initDataUnsafe?.start_param || '';
+      else if (PLATFORM === 'vk') {
+        try { sp = decodeURIComponent((location.hash || '').replace(/^#/, '')); } catch { sp = (location.hash || '').slice(1); }
+      }
+      if (!sp) {
+        // Универсальные URL-фоллбеки (исторические, работают на всех платформах)
+        const u = new URL(window.location.href);
+        const wish = u.searchParams.get('wish');
+        const rate = u.searchParams.get('rate_order');
+        if (wish) sp = 'wish_' + wish;
+        else if (rate) sp = 'rate_' + rate;
+      }
+      // только безопасные символы deep-link'ов
+      return /^[\w-]{1,64}$/.test(sp) ? sp : '';
+    },
+
+    confirm(msg) {
+      return new Promise((resolve) => {
+        if (PLATFORM === 'tg' && tg?.showConfirm) {
+          try { tg.showConfirm(msg, (ok) => resolve(Boolean(ok))); return; } catch {}
+        }
+        resolve(window.confirm(msg));
+      });
+    },
+
+    alert(msg) {
+      return new Promise((resolve) => {
+        if (PLATFORM === 'tg' && tg?.showAlert) {
+          try { tg.showAlert(msg, () => resolve()); return; } catch {}
+        }
+        window.alert(msg);
+        resolve();
+      });
+    },
+
+    share(url, text) {
+      if (PLATFORM === 'vk' && _vkBridge) {
+        // VKWebAppShare шарит ссылку; текст юзер допишет сам
+        _vkBridge.send('VKWebAppShare', { link: url }).catch(() => {});
+        return;
+      }
+      if (PLATFORM === 'tg' && tg?.openTelegramLink) {
+        const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text || '')}`;
+        try { tg.openTelegramLink(shareUrl); return; } catch {}
+      }
+      if (navigator.share) { navigator.share({ url, text }).catch(() => {}); return; }
+      try { navigator.clipboard?.writeText(url + (text ? '\n' + text : '')); } catch {}
+    },
+
+    openExternal(url) {
+      if (PLATFORM === 'tg' && tg?.openLink) { try { tg.openLink(url); return; } catch {} }
+      window.open(url, '_blank', 'noopener');
+    },
+
+    /** VK: запрос «разрешить сообщения от сообщества» (для пушей). */
+    async allowMessages() {
+      if (PLATFORM !== 'vk' || !_vkBridge) return false;
+      await ready();
+      const groupId = Number(_vkConfig?.group_id) || 0;
+      if (!groupId) return false;
+      try {
+        const r = await _vkBridge.send('VKWebAppAllowMessagesFromGroup', { group_id: groupId });
+        return Boolean(r?.result);
+      } catch { return false; }
+    },
+
+    /** VK: верификация телефона — GetPhoneNumber → серверная проверка sign. */
+    async verifyPhoneVk() {
+      if (PLATFORM !== 'vk' || !_vkBridge) return { ok: false, error: 'not_vk' };
+      await ready();
+      let res;
+      try {
+        res = await _vkBridge.send('VKWebAppGetPhoneNumber', {});
+      } catch (e) {
+        return { ok: false, error: 'denied' };
+      }
+      if (!res?.phone_number || !res?.sign) return { ok: false, error: 'no_phone' };
+      try {
+        const r = await fetch('/api/vk/verify-phone', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...App.authHeader() },
+          body: JSON.stringify({ phone_number: res.phone_number, sign: res.sign }),
+        });
+        return await r.json();
+      } catch {
+        return { ok: false, error: 'network' };
+      }
+    },
+
+    main: window.tgMain,
+    back: window.tgBack,
+  };
+  window.App = App;
+
   // ─── Scroll Lock ───────────────────────────────────────────────────────────
   // Безшовное открытие модалок — фиксируем body, не теряя позицию скролла.
-  // Раньше использовали body.style.overflow = 'hidden', что вызывало:
-  //   1) на десктопе — сдвиг контента вправо (исчезает скроллбар)
-  //   2) на iOS Safari — прыжок sticky-хедера и проскролл фона
   let _scrollLockY = 0;
   let _scrollLockCount = 0;  // счётчик вложенных модалок
   window.scrollLock = function() {
@@ -165,14 +398,11 @@
 
   // ─── Auto-linkify phones — оборачивает любые +7-номера в текстовых нодах
   // в кликабельные tel:-ссылки. Применять к динамическому контенту.
-  // window.linkifyPhones(document.getElementById('shops-content'))
-  // ────────────────────────────────────────────────────────────────────────────
   const PHONE_RE = /(\+?7|8)[\s\-().]*(\d{3,4})[\s\-().]*(\d{2,3})[\s\-().]*(\d{2})[\s\-().]*(\d{2})/g;
   window.linkifyPhones = function(root) {
     if (!root || !root.querySelectorAll) return;
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode(n) {
-        // Игнорируем text внутри <a>, <input>, <textarea>, <script>
         const p = n.parentElement;
         if (!p) return NodeFilter.FILTER_REJECT;
         const tag = p.tagName;
