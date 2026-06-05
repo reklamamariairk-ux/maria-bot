@@ -51,7 +51,7 @@ import {
   getDailyStatus,
   CONVERSION_TIERS,
 } from "./club";
-import { requireTgUser, getTgUser, tryGetTgUser } from "./auth";
+import { requireTgUser, getTgUser, tryGetTgUser, tryGetUser } from "./auth";
 import { getPartners, getPartnersMeta, syncPartners } from "./partners";
 import { fetchLk, getVerifiedPhone } from "./lk";
 import { createOrder, OrderRequest } from "./order";
@@ -1490,7 +1490,7 @@ function translateOrderError(err: string | undefined): string {
 }
 
 app.post("/api/order", rateLimit(15), async (req, res) => {
-  const tg = tryGetTgUser(req); // optional, без блокировки
+  const tg = tryGetUser(req); // optional, без блокировки (AppUser: platform + platformId)
   const body = req.body as Partial<OrderRequest> & { useVerifiedPhone?: boolean };
 
   let phone = String(body.phone ?? "").trim();
@@ -1564,14 +1564,20 @@ app.post("/api/order", rateLimit(15), async (req, res) => {
   const ctx: string[] = [];
   if (body.comment) ctx.push(`Комментарий: ${body.comment}`);
   if (tg?.id) {
-    const tgInfo = [
-      tg.username ? `@${tg.username}` : null,
-      `id=${tg.id}`,
-      [tg.first_name, tg.last_name].filter(Boolean).join(" ") || null,
-    ].filter(Boolean).join(" · ");
-    ctx.push(`Telegram: ${tgInfo}`);
+    // ⚠️ Наружу (менеджеру в Bitrix) — только родной id платформы, не internal
+    const displayName = [tg.first_name, tg.last_name].filter(Boolean).join(" ") || null;
+    if (tg.platform === "vk") {
+      ctx.push(`VK: id=${tg.platformId} · vk.com/id${tg.platformId}${displayName ? ` · ${displayName}` : ""}`);
+    } else {
+      const tgInfo = [
+        tg.username ? `@${tg.username}` : null,
+        `id=${tg.platformId}`,
+        displayName,
+      ].filter(Boolean).join(" · ");
+      ctx.push(`Telegram: ${tgInfo}`);
+    }
   } else {
-    ctx.push("Telegram: гость (не залогинен в Mini App)");
+    ctx.push("Mini App: гость (не залогинен)");
   }
   if (lkData) {
     if (lkData.configured) {
@@ -1643,6 +1649,7 @@ app.post("/api/order", rateLimit(15), async (req, res) => {
   const result = await createOrder({
     phone,
     name:          String(body.name).trim(),
+    platform:      tg?.platform,
     items,
     address:       body.address       ? String(body.address).trim()       : undefined,
     delivery_date: body.delivery_date ? String(body.delivery_date).trim() : undefined,

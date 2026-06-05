@@ -26,7 +26,8 @@ import {
 } from "../club";
 import { getVerifiedPhone } from "../lk";
 import { rateLimit } from "../middleware";
-import { requireTgUser, getTgUser } from "../auth";
+import { requireTgUser, getTgUser, getUser } from "../auth";
+import { toPlatformId } from "../platform";
 import { log } from "../logger";
 
 const router = Router();
@@ -81,8 +82,11 @@ router.get("/api/me", requireTgUser, async (req, res) => {
         phoneMasked = `+7 (***) ***-${last4.slice(0, 2)}-${last4.slice(2)}`;
       }
     }
+    // ⚠️ id наружу — ТОЛЬКО родной id платформы (internal 2e12+ не светим:
+    // он уходит в QR-карту клуба и виден юзеру как «№ карты»)
+    const platform = getUser(req)?.platform ?? "tg";
     res.json({
-      user: { id: u.id, first_name: u.first_name, username: u.username },
+      user: { id: toPlatformId(u.id), first_name: u.first_name, username: u.username, platform },
       phoneVerified: verified,
       phoneMasked,
       balance,
