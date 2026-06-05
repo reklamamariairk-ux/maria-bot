@@ -35,6 +35,16 @@ export function referralLink(internalId: number, code: string): string {
 }
 
 /**
+ * Для VK-получателя добавляет в конец текста ссылку на мини-апп (в VK push
+ * без ссылки ведёт в никуда — нет постоянной webApp-кнопки как в TG-чате).
+ * Для TG возвращает текст без изменений (байт-в-байт прежнее поведение).
+ */
+export function withAppLinkForVk(internalId: number, text: string): string {
+  if (platformOf(internalId) !== "vk" || !VK_APP_ID) return text;
+  return `${text}\n\n${miniAppLink(internalId)}`;
+}
+
+/**
  * VK messages.send не понимает Markdown — перед отправкой VK-юзеру текст
  * прогоняется через это. Снимает жирный, курсив, `code` и [text](url) → "text url".
  */

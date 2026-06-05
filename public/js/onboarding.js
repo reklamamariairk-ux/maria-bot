@@ -132,7 +132,51 @@ document.addEventListener('DOMContentLoaded', () => {
   if (shouldShowOnboarding()) {
     setTimeout(openOnboarding, 350);
   }
+  vkFirstLaunchExtras();
 });
+
+/* ── VK-специфика первого запуска ────────────────────────────────────────────
+   1) Просим разрешение на сообщения сообщества (один раз) — без него не
+      работают пуши: статусы заказов, ДР, праздники.
+   2) Редимим реферальный код из hash (#ref_MARIA-XXX) — в TG это делает бот
+      на /start, в VK бот-команд нет, делаем с фронта. Сервер дедупит по юзеру. */
+function vkFirstLaunchExtras() {
+  if (window.App?.platform !== 'vk') return;
+
+  // Реферальный deep-link
+  try {
+    const sp = App.startParam();
+    if (sp && sp.startsWith('ref_') && !localStorage.getItem('maria_vk_ref_done')) {
+      fetch('/api/referral/use', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...App.authHeader() },
+        body: JSON.stringify({ code: sp.slice(4) }),
+      }).then((r) => {
+        // 400 = свой код/уже использовал — тоже не повторяем
+        if (r.ok || r.status === 400) try { localStorage.setItem('maria_vk_ref_done', '1'); } catch {}
+      }).catch(() => {});
+    }
+  } catch {}
+
+  // Разрешение сообщений — после онбординга/первой паузы, один раз
+  try {
+    if (!localStorage.getItem('maria_vk_msg_asked_v1')) {
+      const ask = () => {
+        App.allowMessages().finally(() => {
+          try { localStorage.setItem('maria_vk_msg_asked_v1', '1'); } catch {}
+        });
+      };
+      // Не наслаиваемся на онбординг: ждём его закрытия либо 4с
+      const delay = shouldShowOnboarding() ? 1000 : 4000;
+      const timer = setInterval(() => {
+        if (!document.getElementById('onboarding')) {
+          clearInterval(timer);
+          setTimeout(ask, 800);
+        }
+      }, delay);
+    }
+  } catch {}
+}
 
 // Дев-toggle для теста: ?onboarding=1 принудительно показывает
 try {

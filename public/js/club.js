@@ -819,6 +819,25 @@ function renderReferral() {
 
 /* ── Verification ────────────────────────────────────────────────────────── */
 function startVerification() {
+  // VK: телефон через VKWebAppGetPhoneNumber + серверная проверка подписи sign
+  if (window.App?.platform === 'vk') {
+    const st = document.getElementById("verify-status");
+    if (st) st.textContent = "Запрашиваем номер…";
+    App.verifyPhoneVk().then(async (r) => {
+      if (r?.ok) {
+        if (st) st.textContent = "";
+        await refreshMe();
+        window.haptic?.('success');
+        renderClub();
+        if (r.bonusAwarded > 0) App.alert(`✅ Номер подтверждён! Начислено +${r.bonusAwarded} баллов`);
+      } else if (r?.error === 'denied') {
+        if (st) st.textContent = "";
+      } else {
+        if (st) st.textContent = "Не удалось подтвердить номер, попробуйте позже";
+      }
+    });
+    return;
+  }
   const tg = window.Telegram?.WebApp;
   if (!tg) {
     alert("Откройте через Telegram");

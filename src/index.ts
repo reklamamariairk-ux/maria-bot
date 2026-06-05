@@ -27,7 +27,7 @@ import { createPushService } from "./push";
 import { createVkSender } from "./vk/sender";
 import { createVkCallbackRouter } from "./vk/callback";
 import { createVkRouter } from "./routes/vk";
-import { miniAppLink } from "./links";
+import { miniAppLink, withAppLinkForVk } from "./links";
 import { createReferralRouter } from "./routes/referral";
 import { createWheelStreakRouter } from "./routes/wheel-streak";
 import { pool as _dbPoolForRouters } from "./db";
@@ -122,7 +122,7 @@ async function notifyWishlistBackInStock(productIds: number[]) {
       return `• ${p.name}${priceStr ? ` — ${priceStr}` : ""}`;
     }).join("\n");
     const msg = `🎂 *Снова в наличии*\n\n${list}\n\nЗабери, пока есть — открой Mini App.`;
-    const ok = await sendPushSafely(chatId, "marketing_rewards", msg);
+    const ok = await sendPushSafely(chatId, "marketing_rewards", withAppLinkForVk(chatId, msg));
     if (ok) sent++;
   }
   if (sent > 0) console.log(`[WISHLIST] notified ${sent} subscribers about ${productIds.length} new product(s)`);
@@ -148,7 +148,7 @@ async function pushHolidayPreorder() {
       // marketing_promo проверяет prefs+quiet hours+глобальный 5/сутки.
       // Weekly-quota=1 проигнорировать нельзя — это поведение sendPushSafely;
       // но праздничные пуши разнесены минимум на 10 дней, так что в норме проходят.
-      const ok = await sendPushSafely(chat_id, "marketing_promo", text);
+      const ok = await sendPushSafely(chat_id, "marketing_promo", withAppLinkForVk(chat_id, text));
       if (ok) {
         sent++;
         await markHolidayPushSent(chat_id, occ.holiday.id, occ.year).catch(() => {});
@@ -214,7 +214,7 @@ async function pushCartAbandonments() {
     const cnt = Number(snap.item_count) || 0;
     const pluralItem = cnt === 1 ? "товар" : cnt < 5 ? "товара" : "товаров";
     const msg = `🛒 *Не забыл?*\n\nУ тебя в корзине ${cnt} ${pluralItem} на ${sum.toLocaleString("ru-RU")} ₽.\n\nЗабери до конца дня — открой Mini App.`;
-    const ok = await sendPushSafely(snap.chat_id, "marketing_promo", msg);
+    const ok = await sendPushSafely(snap.chat_id, "marketing_promo", withAppLinkForVk(snap.chat_id, msg));
     if (ok) sent++;
     // Помечаем как pushed чтобы не дёргать повторно
     await markCartAbandonedPushed(snap.chat_id).catch(() => {});
@@ -1692,7 +1692,7 @@ app.post("/api/order", rateLimit(15), async (req, res) => {
 
 Менеджер позвонит для подтверждения в течение 1 часа.
 _Узнать статус: напишите боту_`;
-    sendRaw(tg.id, msg, { parse_mode: "Markdown" }).then((ok) => {
+    sendRaw(tg.id, withAppLinkForVk(tg.id, msg), { parse_mode: "Markdown" }).then((ok) => {
       if (!ok) console.warn(`[ORDER push] failed for chat ${tg.id}`);
     });
 
@@ -1851,7 +1851,7 @@ async function sendBirthdayGreetings() {
     const name = first_name ? `, ${first_name}` : "";
     const ok = await sendRaw(
       chat_id,
-      `🎂 С днём рождения${name}!\n\nКондитерская «Мария» поздравляет вас и дарит скидку:\n🎁 *−5% вам* и *−10% детям* (действует ±5 дней от дня рождения)\n\nПриходите порадовать себя сладким! 🍰`,
+      withAppLinkForVk(chat_id, `🎂 С днём рождения${name}!\n\nКондитерская «Мария» поздравляет вас и дарит скидку:\n🎁 *−5% вам* и *−10% детям* (действует ±5 дней от дня рождения)\n\nПриходите порадовать себя сладким! 🍰`),
       { parse_mode: "Markdown" }
     );
     if (ok) {
