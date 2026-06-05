@@ -20,6 +20,7 @@ import {
 import type { Product } from "../scraper";
 import { rateLimit } from "../middleware";
 import { requireTgUser, getTgUser } from "../auth";
+import { miniAppLink } from "../links";
 import { log } from "../logger";
 
 export function createWishlistRouter(getCatalog: () => Product[]): Router {
@@ -44,10 +45,8 @@ export function createWishlistRouter(getCatalog: () => Product[]): Router {
       }
       const ownerName = (u.first_name || "").trim().slice(0, 60) || null;
       const share = await createWishlistShare(u.id, ownerName, ids, message);
-      // Deep-link через startapp — Telegram откроет наш Mini App с этим параметром
-      const botUsername = "mariatortik_bot";
-      const startapp = `wish_${share.short_code}`;
-      const url = `https://t.me/${botUsername}?startapp=${startapp}`;
+      // Deep-link на платформу владельца (TG: ?startapp=, VK: #hash)
+      const url = miniAppLink(u.id, `wish_${share.short_code}`);
       res.json({
         ok: true,
         code: share.short_code,

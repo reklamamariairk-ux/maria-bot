@@ -23,6 +23,9 @@ export async function initDb() {
 
     ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
     ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS launch_count INT DEFAULT 0;
+    -- VK-порт: разрешил ли юзер сообщения от сообщества
+    -- (NULL = неизвестно; ставится callback-событиями message_allow / message_deny)
+    ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS vk_messages_allowed BOOLEAN;
 
     CREATE TABLE IF NOT EXISTS wishlist_subs (
       chat_id    BIGINT NOT NULL,
@@ -927,6 +930,26 @@ export async function addSubscriber(chatId: number, username: string | undefined
 export async function getAllSubscribers(): Promise<{ chat_id: number }[]> {
   const { rows } = await pool.query(`SELECT chat_id FROM subscribers`);
   return rows;
+}
+
+// ─── VK: разрешение сообщений от сообщества ──────────────────────────────────
+
+export async function setVkMessagesAllowed(chatId: number, allowed: boolean) {
+  await pool.query(
+    `INSERT INTO subscribers (chat_id, vk_messages_allowed)
+     VALUES ($1, $2)
+     ON CONFLICT (chat_id) DO UPDATE SET vk_messages_allowed = $2`,
+    [chatId, allowed]
+  );
+}
+
+/** null = неизвестно (юзер ещё не отвечал на запрос) — пробуем отправить. */
+export async function getVkMessagesAllowed(chatId: number): Promise<boolean | null> {
+  const { rows } = await pool.query(
+    `SELECT vk_messages_allowed FROM subscribers WHERE chat_id = $1`,
+    [chatId]
+  );
+  return rows[0]?.vk_messages_allowed ?? null;
 }
 
 export async function setUserBirthday(chatId: number, birthday: string) {

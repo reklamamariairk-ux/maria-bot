@@ -24,6 +24,8 @@ import partnersRouter from "./routes/partners";
 import notifyPrefsRouter from "./routes/notify-prefs";
 import { createSecretOfDayRouter } from "./routes/secret-of-day";
 import { createPushService } from "./push";
+import { createVkSender } from "./vk/sender";
+import { miniAppLink } from "./links";
 import { createReferralRouter } from "./routes/referral";
 import { createWheelStreakRouter } from "./routes/wheel-streak";
 import { pool as _dbPoolForRouters } from "./db";
@@ -187,9 +189,8 @@ async function pushOrderRatingPrompts() {
         await markRatingPromptSent(s.chat_id, orderId).catch(() => {});
         continue;
       }
-      // Отправляем push с deep-link на rating-форму
-      const botUsername = "mariatortik_bot";
-      const link = `https://t.me/${botUsername}?startapp=rate_${orderId}`;
+      // Отправляем push с deep-link на rating-форму (платформа получателя)
+      const link = miniAppLink(s.chat_id, `rate_${orderId}`);
       const msg = `⭐ *Как тебе заказ №${orderId}?*\n\nОцени за 5 секунд — поможешь нам стать лучше. И получишь персональную подсказку, что попробовать в следующий раз 🍰\n\n[Открыть форму](${link})`;
       const ok = await sendPushSafely(s.chat_id, "marketing_promo", msg);
       if (ok) {
@@ -362,8 +363,12 @@ const bot = new Bot(BOT_TOKEN || "1:DUMMY_PREVIEW_TOKEN_AAAAAAAAAAAAAAAAAAAAAA")
 // Push-service вынесен в src/push.ts. sendPushSafely остаётся доступным
 // через привычное имя — фасад для существующих вызовов (push-functions,
 // cron-jobs, /api/streak/touch, /api/wheel/spin и т.д.)
-const _pushService = createPushService(bot);
+// VK-порт: пуши роутятся по платформе получателя (isVkId). Прямые
+// bot.api.sendMessage по сохранённому chat_id запрещены — только send* отсюда.
+const vkSender = createVkSender();
+const _pushService = createPushService(bot, vkSender);
 const sendPushSafely = _pushService.sendPushSafely;
+const sendRaw = _pushService.sendRaw;
 
 function webAppButton(_text: string, label = "🍰 Открыть Mini App") {
   return new InlineKeyboard().webApp(label, MINI_APP_URL || "https://t.me");
@@ -431,7 +436,8 @@ bot.command("start", async (ctx) => {
         const r = await recordReferralUse(ctx.from.id, rest).catch(() => null);
         if (r?.ok && r.ownerChat) {
           const userName = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" ") || "Новый друг";
-          await bot.api.sendMessage(
+          // sendRaw: владелец кода может оказаться VK-юзером
+          await sendRaw(
             r.ownerChat,
             `🎉 *${userName}* пришёл по твоему коду \`${rest.toUpperCase()}\` — спасибо, что зовёшь друзей в «Марию»!`,
             { parse_mode: "Markdown" }
@@ -487,12 +493,8 @@ bot.command("broadcast", async (ctx) => {
   await ctx.reply(`📤 Начинаю рассылку для ${subscribers.length} подписчиков…`);
   let sent = 0, failed = 0;
   for (const { chat_id } of subscribers) {
-    try {
-      await bot.api.sendMessage(chat_id, text, { parse_mode: "Markdown" });
-      sent++;
-    } catch {
-      failed++;
-    }
+    const ok = await sendRaw(chat_id, text, { parse_mode: "Markdown" });
+    if (ok) sent++; else failed++;
     await new Promise((r) => setTimeout(r, 50));
   }
   await ctx.reply(`✅ Готово: отправлено ${sent}, ошибок ${failed}`);
@@ -1292,10 +1294,8 @@ app.post("/api/broadcast", requireAdminToken, async (req, res) => {
   res.json({ status: "started", total: subscribers.length });
   let sent = 0, failed = 0;
   for (const { chat_id } of subscribers) {
-    try {
-      await bot.api.sendMessage(chat_id, text, { parse_mode: "Markdown" });
-      sent++;
-    } catch { failed++; }
+    const ok = await sendRaw(chat_id, text, { parse_mode: "Markdown" });
+    if (ok) sent++; else failed++;
     await new Promise((r) => setTimeout(r, 50));
   }
   log.info({ sent, failed, total: subscribers.length }, "[BROADCAST] done");
@@ -1397,7 +1397,7 @@ app.use(createSecretOfDayRouter(() => catalog));
 app.use(notifyPrefsRouter);
 
 // Referrals (me + use) → src/routes/referral.ts
-app.use(createReferralRouter(bot, _dbPoolForRouters));
+app.use(createReferralRouter(_pushService, _dbPoolForRouters));
 // Wheel + streak → src/routes/wheel-streak.ts
 app.use(createWheelStreakRouter(_pushService));
 // /api/secret-of-day вынесен в src/routes/secret-of-day.ts (см. createSecretOfDayRouter выше)
@@ -1676,8 +1676,8 @@ app.post("/api/order", rateLimit(15), async (req, res) => {
 
 Менеджер позвонит для подтверждения в течение 1 часа.
 _Узнать статус: напишите боту_`;
-    bot.api.sendMessage(tg.id, msg, { parse_mode: "Markdown" }).catch((e) => {
-      console.warn(`[ORDER push] failed for chat ${tg.id}:`, (e as Error).message);
+    sendRaw(tg.id, msg, { parse_mode: "Markdown" }).then((ok) => {
+      if (!ok) console.warn(`[ORDER push] failed for chat ${tg.id}`);
     });
 
     // Если есть delivery_date — schedule напоминание за 2 часа до
@@ -1691,7 +1691,7 @@ _Узнать статус: напишите боту_`;
           const delay = reminderTime - Date.now();
           if (delay > 0 && delay < 30 * 24 * 60 * 60 * 1000) { // только если в пределах 30 дней
             setTimeout(() => {
-              bot.api.sendMessage(tg.id, `🔔 Через 2 часа ваш заказ №${result.orderId} будет готов!\n\n${body.delivery_time} · ${body.delivery_date}`).catch(() => {});
+              sendRaw(tg.id, `🔔 Через 2 часа ваш заказ №${result.orderId} будет готов!\n\n${body.delivery_time} · ${body.delivery_date}`).catch(() => {});
             }, delay);
           }
         }
@@ -1832,17 +1832,17 @@ bot.catch((err) => {
 async function sendBirthdayGreetings() {
   const users = await getTodayBirthdays();
   for (const { chat_id, first_name } of users) {
-    try {
-      const name = first_name ? `, ${first_name}` : "";
-      await bot.api.sendMessage(
-        chat_id,
-        `🎂 С днём рождения${name}!\n\nКондитерская «Мария» поздравляет вас и дарит скидку:\n🎁 *−5% вам* и *−10% детям* (действует ±5 дней от дня рождения)\n\nПриходите порадовать себя сладким! 🍰`,
-        { parse_mode: "Markdown" }
-      );
-      await markBirthdayNotified(chat_id);
+    const name = first_name ? `, ${first_name}` : "";
+    const ok = await sendRaw(
+      chat_id,
+      `🎂 С днём рождения${name}!\n\nКондитерская «Мария» поздравляет вас и дарит скидку:\n🎁 *−5% вам* и *−10% детям* (действует ±5 дней от дня рождения)\n\nПриходите порадовать себя сладким! 🍰`,
+      { parse_mode: "Markdown" }
+    );
+    if (ok) {
+      await markBirthdayNotified(chat_id).catch(() => {});
       console.log(`[BIRTHDAY] Поздравили chat_id=${chat_id}`);
-    } catch (e) {
-      console.error(`[BIRTHDAY] Ошибка для chat_id=${chat_id}:`, (e as Error).message);
+    } else {
+      console.error(`[BIRTHDAY] Не доставлено chat_id=${chat_id}`);
     }
   }
 }

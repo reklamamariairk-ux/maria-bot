@@ -4,18 +4,19 @@
  * - GET  /api/referral/me   — мой код + количество использований
  * - POST /api/referral/use  — записать использование чужого кода (с уведомлением владельца)
  *
- * Уведомление владельца кода идёт через bot.api.sendMessage — fabric принимает
- * Bot reference.
+ * Уведомление владельца кода идёт через push.sendRaw — владелец может быть
+ * юзером любой платформы (TG/VK), сервис роутит сам.
  */
 
 import { Router } from "express";
-import type { Bot } from "grammy";
 import type { Pool } from "pg";
 import { getOrCreateReferralCode, recordReferralUse } from "../db";
 import { requireTgUser, getTgUser } from "../auth";
+import { referralLink } from "../links";
+import type { PushService } from "../push";
 import { log } from "../logger";
 
-export function createReferralRouter(bot: Bot, pool: Pool): Router {
+export function createReferralRouter(push: PushService, pool: Pool): Router {
   const router = Router();
 
   router.get("/api/referral/me", requireTgUser, async (req, res) => {
@@ -29,7 +30,8 @@ export function createReferralRouter(bot: Bot, pool: Pool): Router {
       res.json({
         code,
         used: used.rows[0]?.used ?? 0,
-        share_url: `https://t.me/mariatortik_bot?start=ref_${code}`,
+        // Ссылка на платформу владельца кода (друг скорее всего там же)
+        share_url: referralLink(u.id, code),
       });
     } catch (e) {
       log.error({ err: e, chatId: u.id }, "[referral/me]");
@@ -50,10 +52,10 @@ export function createReferralRouter(bot: Bot, pool: Pool): Router {
         res.status(400).json({ error: r.reason });
         return;
       }
-      // Уведомляем владельца кода — best-effort
+      // Уведомляем владельца кода — best-effort (он может быть на другой платформе)
       if (r.ownerChat) {
         const userName = [u.first_name, u.last_name].filter(Boolean).join(" ") || "Новый друг";
-        bot.api.sendMessage(
+        push.sendRaw(
           r.ownerChat,
           `🎉 *${userName}* пришёл по твоему коду \`${code}\` — спасибо, что зовёшь друзей в «Марию»!`,
           { parse_mode: "Markdown" }
