@@ -7,8 +7,8 @@ const ORDER_PHOTO_MAX = 3;
 async function orderAutoFill() {
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem('maria_checkout_v1') || '{}'); } catch {}
-  const tg = window.Telegram?.WebApp?.initDataUnsafe?.user;
-  const tgName = tg ? `${tg.first_name || ''} ${tg.last_name || ''}`.trim() : '';
+  const u = App.user();
+  const tgName = u ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : '';
 
   // Локальные fallback из localStorage / TG
   const nameEl = document.getElementById('of-name');
@@ -26,10 +26,9 @@ async function orderAutoFill() {
   }
 
   // Auto-fill из /api/me (телефон маскированный — невозможно вернуть, но имя — да)
-  const initData = window.Telegram?.WebApp?.initData || '';
-  if (initData) {
+  if (App.isAuthed()) {
     try {
-      const r = await fetch('/api/me', { headers: { Authorization: 'tma ' + initData } });
+      const r = await fetch('/api/me', { headers: { ...App.authHeader() } });
       if (r.ok) {
         const me = await r.json();
         if (me.user?.first_name && nameEl && !nameEl.value) nameEl.value = me.user.first_name;

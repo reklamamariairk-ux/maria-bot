@@ -1,10 +1,7 @@
 /* ── Club / Loyalty frontend ─────────────────────────────────────────────── */
 
-const initData = window.Telegram?.WebApp?.initData ?? "";
-
 async function api(path, opts = {}) {
-  const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
-  if (initData) headers["Authorization"] = "tma " + initData;
+  const headers = { "Content-Type": "application/json", ...(opts.headers || {}), ...App.authHeader() };
   const res = await fetch(path, { ...opts, headers });
   if (res.status === 401) {
     return { __unauthorized: true };
@@ -47,7 +44,7 @@ function pulseCounter(id) {
 
 /* ── Init ────────────────────────────────────────────────────────────────── */
 async function clubInit() {
-  if (!initData) {
+  if (!App.isAuthed()) {
     document.getElementById("club-no-tg").style.display = "block";
     document.getElementById("club-content").style.display = "none";
     return;
@@ -135,13 +132,8 @@ function scJoin() {
   btn.disabled = true;
   btn.innerHTML = '✅ Вы участвуете';
   // Toast
-  const tg = window.Telegram?.WebApp;
-  tg?.HapticFeedback?.notificationOccurred?.('success');
-  if (tg?.showAlert) {
-    tg.showAlert('Отлично! Делайте покупки в наших кафе — за каждое выполненное задание недели получите 5 билетов 🎟');
-  } else {
-    alert('Делайте покупки в кафе «Мария» — за каждое выполненное задание недели получите 5 билетов!');
-  }
+  window.haptic?.('success');
+  App.alert('Отлично! Делайте покупки в наших кафе — за каждое выполненное задание недели получите 5 билетов 🎟');
   // Сохраняем флаг в localStorage чтобы в следующий раз не показывать
   try { localStorage.setItem('maria_sc_joined', '1'); } catch {}
 }
@@ -270,7 +262,7 @@ async function saveBirthday() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(window.Telegram?.WebApp?.initData ? { 'Authorization': 'tma ' + window.Telegram.WebApp.initData } : {})
+        ...App.authHeader()
       },
       body: JSON.stringify({ birthday: inp.value })
     });
@@ -833,7 +825,7 @@ function startVerification() {
     return;
   }
   if (typeof tg.requestContact !== "function") {
-    tg.showAlert?.(
+    App.alert(
       "Подтверждение через приложение требует Telegram 6.9+. Откройте /start в боте — там кнопка «Поделиться номером»"
     );
     return;
@@ -981,13 +973,7 @@ function copyRedeemCode() {
 function shareReferral() {
   const link = document.getElementById("ref-link").value;
   const text = `Заходи в Marию — бот кондитерской «Мария» в Иркутске. Игры, скидки, бонусы 🎂`;
-  const tg = window.Telegram?.WebApp;
-  if (tg?.openTelegramLink) {
-    tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
-  } else {
-    navigator.clipboard?.writeText(link);
-    alert("Ссылка скопирована");
-  }
+  App.share(link, text);
 }
 
 /* ── History ─────────────────────────────────────────────────────────────── */

@@ -9,14 +9,12 @@ async function profileLoad(force) {
     const tab = document.getElementById('tab-profile');
     if (tab) window.IconInflate(tab);
   }
-  const tg = window.Telegram?.WebApp;
-  const initData = tg?.initData ?? "";
-  if (!initData) {
+  if (!App.isAuthed()) {
     profileRenderGuest();
     return null;
   }
   try {
-    const r = await fetch('/api/me', { headers: { Authorization: 'tma ' + initData } });
+    const r = await fetch('/api/me', { headers: { ...App.authHeader() } });
     if (!r.ok) throw new Error('fetch /api/me failed');
     const data = await r.json();
     _profileData = data;
@@ -54,9 +52,9 @@ function profileRender(data) {
   const ticketsEl = document.getElementById('prof-stat-tickets');
   const verifiedBadge = document.getElementById('prof-verified-badge');
 
-  // Аватар: photo_url из Telegram → fallback на coloured gradient с инициалом
-  const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
-  const photoUrl = tgUser?.photo_url || data.photoUrl;
+  // Аватар: photo_url из платформы → fallback на coloured gradient с инициалом
+  const platUser = App.user();
+  const photoUrl = platUser?.photo_url || data.photoUrl;
   if (avInit) avInit.textContent = u.first_name?.[0]?.toUpperCase() || '?';
   if (avImg) {
     if (photoUrl) {
@@ -223,11 +221,9 @@ function profileRenderGuest() {
 }
 
 async function profileLoadOrdersCount() {
-  const tg = window.Telegram?.WebApp;
-  const initData = tg?.initData ?? "";
-  if (!initData) return;
+  if (!App.isAuthed()) return;
   try {
-    const r = await fetch('/api/lk', { headers: { Authorization: 'tma ' + initData } });
+    const r = await fetch('/api/lk', { headers: { ...App.authHeader() } });
     if (!r.ok) return;
     const lk = await r.json() || {};
     const orders = Array.isArray(lk.orders) ? lk.orders : [];
@@ -350,13 +346,12 @@ function renderProductThumbs(containerId, ids, maxCount = 4) {
 
 // QR-карточка клуба — modal с QR (через api.qrserver.com)
 function profOpenQrCard() {
-  const tg = window.Telegram?.WebApp;
-  const tgUser = tg?.initDataUnsafe?.user;
-  const userId = _profileData?.user?.id || tgUser?.id || 0;
-  // Verified-check: либо есть данные с сервера, либо есть TG user — даём показать карту
-  const verified = _profileData?.phoneVerified ?? !!tgUser?.id;
+  const platUser = App.user();
+  const userId = _profileData?.user?.id || platUser?.id || 0;
+  // Verified-check: либо есть данные с сервера, либо есть platform user — даём показать карту
+  const verified = _profileData?.phoneVerified ?? !!platUser?.id;
   if (!verified) {
-    try { tg?.showAlert?.('Подтверди номер в Клубе чтобы получить карточку'); } catch { alert('Подтверди номер в Клубе'); }
+    App.alert('Подтверди номер в Клубе чтобы получить карточку');
     return;
   }
   if (!userId) return;
@@ -737,9 +732,7 @@ function profEditOneAddress(id) {
 window.profEditOneAddress = profEditOneAddress;
 
 function profDeleteAddress(id) {
-  const tg = window.Telegram?.WebApp;
-  const ask = (cb) => tg?.showConfirm ? tg.showConfirm('Удалить адрес?', cb) : cb(confirm('Удалить адрес?'));
-  ask((ok) => {
+  App.confirm('Удалить адрес?').then((ok) => {
     if (!ok) return;
     let list = addrLoad();
     const wasDef = list.find((a) => a.id === id)?.isDefault;
@@ -763,28 +756,20 @@ window.profSetDefaultAddress = profSetDefaultAddress;
 
 window.profEditAddress = profEditAddress;
 
-// Поделиться приложением через TG share-link
+// Поделиться приложением через нативный share текущей платформы
 function profShareApp() {
-  const tg = window.Telegram?.WebApp;
-  const botName = 'mariatortik_bot'; // имя нашего бота
-  const url = `https://t.me/${botName}`;
   const text = 'Кондитерская «Мария» — закажи торты, получай кэшбэк, участвуй в розыгрыше iPhone';
-  const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
-  if (tg?.openTelegramLink) tg.openTelegramLink(shareUrl);
-  else if (navigator.share) navigator.share({ title: 'Мария', text, url }).catch(()=>{});
-  else window.open(shareUrl, '_blank');
+  App.appLink().then((url) => App.share(url, text));
 }
 window.profShareApp = profShareApp;
 
 /* ── Referral code ─────────────────────────────────────────────────────────── */
 let _referralCache = null;
 async function profLoadReferral() {
-  const tg = window.Telegram?.WebApp;
-  const initData = tg?.initData || '';
-  if (!initData) return null;
+  if (!App.isAuthed()) return null;
   if (_referralCache) return _referralCache;
   try {
-    const r = await fetch('/api/referral/me', { headers: { Authorization: 'tma ' + initData } });
+    const r = await fetch('/api/referral/me', { headers: { ...App.authHeader() } });
     if (!r.ok) return null;
     _referralCache = await r.json();
     const subEl = document.getElementById('prof-ref-sub');
@@ -813,7 +798,8 @@ async function profOpenReferral() {
     document.body.appendChild(modal);
   }
   const shareText = `Заходи в кондитерскую «Мария» по моему коду ${data.code} — попробуй наши торты!`;
-  const tgShare = `https://t.me/share/url?url=${encodeURIComponent(data.share_url)}&text=${encodeURIComponent(shareText)}`;
+  // share_url из /api/referral/me уже платформо-зависимый — отдаём его в нативный share
+  _referralShare = { url: data.share_url, text: shareText };
   modal.innerHTML = `
     <div class="cat-modal__sheet">
       <button class="cat-modal__close" onclick="profCloseReferral()">×</button>
@@ -825,12 +811,19 @@ async function profOpenReferral() {
         <button class="ref-code-box__copy" onclick="profCopyReferralCode()">Скопировать</button>
       </div>
       <div class="ref-stat">${data.used > 0 ? `Уже перешли по твоему коду: <b>${data.used}</b>` : 'Ещё никто не перешёл — будь первым, кто поделится'}</div>
-      <a class="btn-full ref-share-btn" href="${escAttr(tgShare)}" target="_blank" rel="noopener">📤 Поделиться через Telegram</a>
+      <button class="btn-full ref-share-btn" data-haptic="medium" onclick="profShareReferral()">📤 Поделиться</button>
     </div>`;
   modal.style.display = 'flex';
   window.scrollLock?.();
 }
 window.profOpenReferral = profOpenReferral;
+
+let _referralShare = null;
+function profShareReferral() {
+  if (!_referralShare?.url) return;
+  App.share(_referralShare.url, _referralShare.text);
+}
+window.profShareReferral = profShareReferral;
 
 function profCloseReferral() {
   const m = document.getElementById('ref-modal');
@@ -858,11 +851,9 @@ window.profCopyReferralCode = profCopyReferralCode;
 /* ── Notification preferences ─────────────────────────────────────────────── */
 let _notifyPrefs = { marketing_promo: true, marketing_rewards: true };
 async function profLoadNotifyPrefs() {
-  const tg = window.Telegram?.WebApp;
-  const initData = tg?.initData || '';
-  if (!initData) return;
+  if (!App.isAuthed()) return;
   try {
-    const r = await fetch('/api/notify-prefs', { headers: { Authorization: 'tma ' + initData } });
+    const r = await fetch('/api/notify-prefs', { headers: { ...App.authHeader() } });
     if (!r.ok) return;
     _notifyPrefs = await r.json();
     renderNotifyToggles();
@@ -882,13 +873,11 @@ async function profToggleNotify(key) {
   _notifyPrefs[key] = next;
   renderNotifyToggles();
   window.haptic?.('selection');
-  const tg = window.Telegram?.WebApp;
-  const initData = tg?.initData || '';
-  if (!initData) return;
+  if (!App.isAuthed()) return;
   try {
     const r = await fetch('/api/notify-prefs', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'tma ' + initData },
+      headers: { 'Content-Type': 'application/json', ...App.authHeader() },
       body: JSON.stringify({ [key]: next }),
     });
     if (r.ok) _notifyPrefs = await r.json();
@@ -910,11 +899,9 @@ const REWARD_META = {
 
 let _rewardsCache = null;
 async function profLoadRewards() {
-  const tg = window.Telegram?.WebApp;
-  const initData = tg?.initData || '';
-  if (!initData) return;
+  if (!App.isAuthed()) return;
   try {
-    const r = await fetch('/api/rewards/mine', { headers: { Authorization: 'tma ' + initData } });
+    const r = await fetch('/api/rewards/mine', { headers: { ...App.authHeader() } });
     if (!r.ok) return;
     const data = await r.json();
     _rewardsCache = Array.isArray(data?.rewards) ? data.rewards : [];
@@ -1133,32 +1120,25 @@ function renderLegalTabContent(tab) {
 
 // Отвязать телефон
 function profUnverifyConfirm() {
-  const tg = window.Telegram?.WebApp;
   const msg = 'Отвязать телефон? Вы перестанете получать кэшбэк и баллы, билеты Sweet Check будут заморожены.';
-  if (tg?.showConfirm) {
-    tg.showConfirm(msg, async (ok) => { if (ok) await profUnverifyDo(); });
-  } else if (confirm(msg)) {
-    profUnverifyDo();
-  }
+  App.confirm(msg).then((ok) => { if (ok) profUnverifyDo(); });
 }
 window.profUnverifyConfirm = profUnverifyConfirm;
 async function profUnverifyDo() {
-  const tg = window.Telegram?.WebApp;
-  const initData = tg?.initData ?? '';
-  if (!initData) return;
+  if (!App.isAuthed()) return;
   try {
     const r = await fetch('/api/unverify-phone', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'tma ' + initData },
+      headers: { 'Content-Type': 'application/json', ...App.authHeader() },
     });
     if (r.ok) {
-      tg?.showAlert?.('Телефон отвязан.') || alert('Телефон отвязан.');
+      App.alert('Телефон отвязан.');
       profileLoad(true);
     } else {
-      tg?.showAlert?.('Не удалось отвязать. Попробуй позже.') || alert('Не удалось отвязать.');
+      App.alert('Не удалось отвязать. Попробуй позже.');
     }
   } catch {
-    tg?.showAlert?.('Ошибка сети.') || alert('Ошибка сети.');
+    App.alert('Ошибка сети.');
   }
 }
 
@@ -1171,8 +1151,7 @@ function profInitNotificationPrefs() {
     if (stored !== null) inp.checked = stored === '1';
     inp.addEventListener('change', () => {
       localStorage.setItem('maria_pref_' + key, inp.checked ? '1' : '0');
-      const tg = window.Telegram?.WebApp;
-      tg?.HapticFeedback?.selectionChanged?.();
+      window.haptic('selection');
     });
   });
 }
@@ -1191,16 +1170,14 @@ async function profOpenOrders() {
     el.style.display = 'none';
   });
 
-  const tg = window.Telegram?.WebApp;
-  const initData = tg?.initData ?? "";
-  if (!initData) {
+  if (!App.isAuthed()) {
     list.innerHTML = '<div class="cat-empty">Открой через Telegram, чтобы видеть заказы.</div>';
     return;
   }
 
   list.innerHTML = '<div class="cat-loading">Загружаем заказы…</div>';
   try {
-    const r = await fetch('/api/lk', { headers: { Authorization: 'tma ' + initData } });
+    const r = await fetch('/api/lk', { headers: { ...App.authHeader() } });
     const d = await r.json() || {};
     if (!d.configured) {
       list.innerHTML = '<div class="cat-empty">Личный кабинет ещё не настроен. Заглядывай позже.</div>';
@@ -1253,8 +1230,7 @@ function profCloseOrders() {
 window.profCloseOrders = profCloseOrders;
 
 function profEditBday() {
-  // Простой диалог через TG showAlert или нативный prompt
-  const tg = window.Telegram?.WebApp;
+  // Простой диалог через нативный prompt
   const ask = (cb) => {
     const v = prompt('Когда у тебя день рождения? (ДД.ММ или ДД.ММ.ГГГГ)');
     if (v) cb(v);
@@ -1262,7 +1238,7 @@ function profEditBday() {
   ask(async (raw) => {
     const m = raw.match(/^(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?$/);
     if (!m) {
-      tg?.showAlert?.('Введи в формате ДД.ММ, например 14.07') || alert('Введи в формате ДД.ММ');
+      App.alert('Введи в формате ДД.ММ, например 14.07');
       return;
     }
     const dd = m[1].padStart(2, '0'), mm = m[2].padStart(2, '0'), yy = m[3] ?? '';
@@ -1270,11 +1246,11 @@ function profEditBday() {
     try {
       const r = await fetch('/api/birthday', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'tma ' + (tg?.initData ?? '') },
+        headers: { 'Content-Type': 'application/json', ...App.authHeader() },
         body: JSON.stringify({ birthday: date }),
       });
       if (r.ok) {
-        tg?.showAlert?.('Сохранено! 🎂') || alert('Сохранено!');
+        App.alert('Сохранено! 🎂');
         profileLoad(true);
       }
     } catch {}

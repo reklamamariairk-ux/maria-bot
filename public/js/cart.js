@@ -1,7 +1,6 @@
 /* ── Корзина: храним в localStorage, оформляем через POST /api/order ────── */
 
 const CART_KEY = 'maria_cart_v1';
-const _cartInitData = window.Telegram?.WebApp?.initData ?? '';
 
 function cartLoad() {
   try {
@@ -23,12 +22,10 @@ let _cartSyncT = null;
 function cartSyncDebounced(items) {
   if (_cartSyncT) clearTimeout(_cartSyncT);
   _cartSyncT = setTimeout(() => {
-    const tg = window.Telegram?.WebApp;
-    const initData = tg?.initData || '';
-    if (!initData) return;
+    if (!App.isAuthed()) return;
     fetch('/api/cart/sync', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'tma ' + initData },
+      headers: { 'Content-Type': 'application/json', ...App.authHeader() },
       body: JSON.stringify({ items: Array.isArray(items) ? items.map((x) => ({ id: Number(x.id), qty: Number(x.qty)||0, price: Number(x.price)||0, name: x.name })) : [] }),
     }).catch(() => {});
   }, 1500);
@@ -115,12 +112,7 @@ function cartClear() {
 }
 
 function cartClearConfirm() {
-  const tg = window.Telegram?.WebApp;
-  if (tg?.showConfirm) {
-    tg.showConfirm('Очистить корзину?', (ok) => { if (ok) cartClear(); });
-    return;
-  }
-  if (confirm('Очистить корзину?')) cartClear();
+  App.confirm('Очистить корзину?').then((ok) => { if (ok) cartClear(); });
 }
 window.cartClearConfirm = cartClearConfirm;
 
@@ -259,8 +251,7 @@ function dateLabel(offset) {
 function cartRenderCheckout() {
   const wrap = document.getElementById('cart-body');
   if (!wrap) return;
-  const tg = window.Telegram?.WebApp;
-  const u = tg?.initDataUnsafe?.user;
+  const u = App.user();
   const tgName = u ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : '';
   const saved = checkoutLoad();
   // Auto-fill адреса: 1) saved checkout 2) Profile default address 3) пусто
@@ -440,12 +431,10 @@ async function coValidatePromo() {
   const subtotal = Number(bd?.dataset?.subtotal) || 0;
   const delivery = Number(bd?.dataset?.delivery) || 0;
   const cartTotal = subtotal + delivery;
-  const tg = window.Telegram?.WebApp;
-  const initData = tg?.initData || '';
   try {
     const r = await fetch('/api/promo/validate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(initData ? { Authorization: 'tma ' + initData } : {}) },
+      headers: { 'Content-Type': 'application/json', ...App.authHeader() },
       body: JSON.stringify({ code, cart_total: cartTotal }),
     });
     const data = await r.json();
@@ -807,8 +796,7 @@ async function cartSubmit() {
   window.tgMain?.progress(true);
 
   try {
-    const headers = { 'Content-Type': 'application/json' };
-    if (_cartInitData) headers['Authorization'] = 'tma ' + _cartInitData;
+    const headers = { 'Content-Type': 'application/json', ...App.authHeader() };
     // Address: для самовывоза передаём название кафе как address (backend остаётся unchanged)
     const finalAddress = deltype === 'pickup' ? `Самовывоз · ${shop}` : address;
     const res = await fetch('/api/order', {
@@ -842,11 +830,9 @@ async function cartSubmit() {
     // Регистрируем использование промокода (если применён)
     if (window._coAppliedPromo?.code) {
       try {
-        const tg = window.Telegram?.WebApp;
-        const initData = tg?.initData || '';
         fetch('/api/promo/use', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(initData ? { Authorization: 'tma ' + initData } : {}) },
+          headers: { 'Content-Type': 'application/json', ...App.authHeader() },
           body: JSON.stringify({ code: window._coAppliedPromo.code, order_id: String(data.orderId || '') }),
         }).catch(() => {});
       } catch {}

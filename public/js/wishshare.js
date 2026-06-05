@@ -2,16 +2,13 @@
 
 // ── A. Создание share-link из своего wishlist ──────────────────────────────
 async function shareWishlist() {
-  const tg = window.Telegram?.WebApp;
-  const initData = tg?.initData || '';
-  if (!initData) {
-    alert('Открой Mini App через Telegram, чтобы поделиться wishlist\'ом');
+  if (!App.isAuthed()) {
+    App.alert('Открой Mini App через Telegram, чтобы поделиться wishlist\'ом');
     return;
   }
   const wishlist = (window.wishLoad ? window.wishLoad() : []).map(Number).filter((n) => n > 0);
   if (wishlist.length === 0) {
-    if (tg?.showAlert) tg.showAlert('Сначала добавь товары в избранное — нажми ♡ на карточке');
-    else alert('Сначала добавь товары в избранное — нажми ♡ на карточке');
+    App.alert('Сначала добавь товары в избранное — нажми ♡ на карточке');
     return;
   }
   // Открываем модалку с вводом сообщения
@@ -79,14 +76,12 @@ function ensureWishShareModal() {
 let _lastWishShareUrl = '';
 
 async function createWishShare() {
-  const tg = window.Telegram?.WebApp;
-  const initData = tg?.initData || '';
   const wishlist = (window.wishLoad ? window.wishLoad() : []).map(Number).filter((n) => n > 0);
   const message = (document.getElementById('wishshare-msg')?.value || '').trim().slice(0, 200);
   const errEl = document.getElementById('wishshare-err');
   const submitBtn = document.getElementById('wishshare-submit');
   if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
-  if (!initData) {
+  if (!App.isAuthed()) {
     if (errEl) { errEl.textContent = 'Открой Mini App через Telegram'; errEl.style.display = ''; }
     return;
   }
@@ -94,7 +89,7 @@ async function createWishShare() {
   try {
     const r = await fetch('/api/wishlist/share', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'tma ' + initData },
+      headers: { 'Content-Type': 'application/json', ...App.authHeader() },
       body: JSON.stringify({ product_ids: wishlist, message }),
     });
     if (r.status === 429) {
@@ -144,15 +139,12 @@ window.copyWishShareLink = copyWishShareLink;
 
 function shareWishShareLink() {
   if (!_lastWishShareUrl) return;
-  const tg = window.Telegram?.WebApp;
   const wishlist = (window.wishLoad ? window.wishLoad() : []).map(Number).filter((n) => n > 0);
-  const ownerName = (tg?.initDataUnsafe?.user?.first_name || '').trim();
+  const ownerName = (App.user()?.first_name || '').trim();
   const intro = ownerName ? `${ownerName} делится wishlist'ом` : 'Wishlist из кондитерской «Мария»';
   const body = `🎁 ${intro}\n${wishlist.length} ${wishlist.length === 1 ? 'позиция' : wishlist.length < 5 ? 'позиции' : 'позиций'} ждут заказа\n\nОткрой 👇`;
-  // Telegram даёт нативный share через t.me/share/url?url=...&text=...
-  const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(_lastWishShareUrl)}&text=${encodeURIComponent(body)}`;
-  if (tg?.openTelegramLink) tg.openTelegramLink(shareUrl);
-  else window.open(shareUrl, '_blank');
+  // Нативный share текущей платформы
+  App.share(_lastWishShareUrl, body);
   window.haptic?.('medium');
 }
 window.shareWishShareLink = shareWishShareLink;
@@ -288,17 +280,8 @@ window.sharedWishAddAll = sharedWishAddAll;
 
 // ── C. Handle deep-link при старте Mini App ────────────────────────────────
 function handleWishShareDeepLink() {
-  const tg = window.Telegram?.WebApp;
-  // start_param из ?startapp=wish_M3X7K2P9
-  let startParam = tg?.initDataUnsafe?.start_param || '';
-  // Fallback: URL ?wish=M3X7K2P9 (если открыли в браузере не через TG)
-  if (!startParam) {
-    try {
-      const u = new URL(window.location.href);
-      const wishParam = u.searchParams.get('wish');
-      if (wishParam) startParam = 'wish_' + wishParam;
-    } catch {}
-  }
+  // start_param из ?startapp=wish_M3X7K2P9 (+ универсальные URL-фоллбеки внутри App.startParam)
+  const startParam = App.startParam();
   if (!startParam || !startParam.startsWith('wish_')) return;
   const code = startParam.slice(5);
   if (!code) return;

@@ -86,9 +86,7 @@ async function onSelfieSelected(e) {
   // Сжимаем + base64
   try {
     const b64 = await fileToBase64(file, 1024); // resize to 1024
-    const tg = window.Telegram?.WebApp;
-    const headers = { 'Content-Type': 'application/json' };
-    if (tg?.initData) headers['Authorization'] = 'tma ' + tg.initData;
+    const headers = { 'Content-Type': 'application/json', ...App.authHeader() };
 
     const r = await fetch('/api/selfie-cake', {
       method: 'POST', headers,
@@ -158,16 +156,8 @@ window.renderSelfieResults = renderSelfieResults;
 function shareSelfie(idx) {
   const v = _selfieResults?.[idx];
   if (!v) return;
-  const tg = window.Telegram?.WebApp;
-  // Telegram Mini App share через openTelegramLink
-  const text = encodeURIComponent('Смотри, я в виде торта от Марии 🎂');
-  const url = encodeURIComponent(v.url);
-  const shareUrl = `https://t.me/share/url?url=${url}&text=${text}`;
-  if (tg?.openTelegramLink) {
-    tg.openTelegramLink(shareUrl);
-  } else {
-    window.open(shareUrl, '_blank');
-  }
+  // Нативный share текущей платформы (TG/VK/браузер)
+  App.share(v.url, 'Смотри, я в виде торта от Марии 🎂');
 }
 window.shareSelfie = shareSelfie;
 

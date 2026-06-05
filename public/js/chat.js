@@ -11,7 +11,6 @@ try {
 } catch {}
 
 const CHAT_HISTORY_MAX = 100; // 50 пар user+assistant — длинная сессия
-const _chatInitData = window.Telegram?.WebApp?.initData ?? "";
 
 // Режим разговора: 'cake' — обычный (поиск/заказ), 'confessor' — эмпатичный mood-pairing
 let _chatMode = 'cake';
@@ -27,7 +26,6 @@ function trimChatHistory() {
 }
 
 function clearChat() {
-  const tg = window.Telegram?.WebApp;
   const doClear = () => {
     chatHistory = [];
     try { sessionStorage.removeItem(CHAT_KEY); } catch {}
@@ -42,8 +40,7 @@ function clearChat() {
     if (window.refreshChatChips) window.refreshChatChips();
     window.haptic?.('selection');
   };
-  if (tg?.showConfirm) tg.showConfirm('Очистить историю чата?', (ok) => { if (ok) doClear(); });
-  else if (confirm('Очистить историю чата?')) doClear();
+  App.confirm('Очистить историю чата?').then((ok) => { if (ok) doClear(); });
 }
 window.clearChat = clearChat;
 
@@ -77,8 +74,7 @@ async function sendMessage() {
   // Streaming-первый: пытаемся через SSE; если не поддерживается — fallback на /api/chat
   const supportsStream = typeof TextDecoder !== 'undefined' && typeof ReadableStream !== 'undefined';
   try {
-    const headers = { 'Content-Type': 'application/json' };
-    if (_chatInitData) headers['Authorization'] = 'tma ' + _chatInitData;
+    const headers = { 'Content-Type': 'application/json', ...App.authHeader() };
 
     if (supportsStream) {
       const ok = await streamChat(headers, typing);
@@ -424,7 +420,6 @@ function _voiceMime() {
 }
 
 async function toggleVoice() {
-  const tg = window.Telegram?.WebApp;
   const btn = document.getElementById('chat-mic');
   if (!btn) return;
 
@@ -435,8 +430,7 @@ async function toggleVoice() {
   }
 
   if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-    if (tg?.showAlert) tg.showAlert('Ваш браузер не поддерживает запись голоса.');
-    else alert('Ваш браузер не поддерживает запись голоса.');
+    App.alert('Ваш браузер не поддерживает запись голоса.');
     return;
   }
 
@@ -445,8 +439,7 @@ async function toggleVoice() {
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
     });
   } catch {
-    if (tg?.showAlert) tg.showAlert('Нет доступа к микрофону. Разреши в настройках.');
-    else alert('Нет доступа к микрофону. Разреши в настройках.');
+    App.alert('Нет доступа к микрофону. Разреши в настройках.');
     return;
   }
 
@@ -455,7 +448,7 @@ async function toggleVoice() {
     _voiceRecorder = mime ? new MediaRecorder(_voiceStream, { mimeType: mime }) : new MediaRecorder(_voiceStream);
   } catch {
     _voiceStream.getTracks().forEach(t => t.stop());
-    if (tg?.showAlert) tg.showAlert('Запись недоступна.');
+    App.alert('Запись недоступна.');
     return;
   }
 
@@ -503,21 +496,18 @@ async function onVoiceStop() {
   if (input) { input.placeholder = 'Распознаём…'; input.disabled = true; }
 
   try {
-    const headers = { 'Content-Type': mime };
-    if (_chatInitData) headers['Authorization'] = 'tma ' + _chatInitData;
+    const headers = { 'Content-Type': mime, ...App.authHeader() };
     const res = await fetch('/api/transcribe', { method: 'POST', headers, body: blob });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       const msg = err.error || 'Не удалось распознать голос.';
-      const tg = window.Telegram?.WebApp;
-      if (tg?.showAlert) tg.showAlert(msg); else alert(msg);
+      App.alert(msg);
       return;
     }
     const data = await res.json();
     const text = (data.text || '').trim();
     if (!text) {
-      const tg = window.Telegram?.WebApp;
-      if (tg?.showAlert) tg.showAlert('Голос не распознан. Попробуй ещё раз.');
+      App.alert('Голос не распознан. Попробуй ещё раз.');
       return;
     }
     if (input) {
@@ -527,8 +517,7 @@ async function onVoiceStop() {
     }
     window.haptic?.('selection');
   } catch {
-    const tg = window.Telegram?.WebApp;
-    if (tg?.showAlert) tg.showAlert('Ошибка распознавания.'); else alert('Ошибка распознавания.');
+    App.alert('Ошибка распознавания.');
   } finally {
     if (input) { input.placeholder = prevPlaceholder || 'Напишите вопрос…'; input.disabled = false; }
   }

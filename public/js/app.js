@@ -1,10 +1,6 @@
-/* ── Telegram ────────────────────────────────────────────────────────────── */
-const tg = window.Telegram?.WebApp;
-if (tg) { tg.ready(); tg.expand(); }
-
+/* ── Платформа (инициализация — в tg-bridge.js, глобал App) ───────────────── */
 function openSite(url) {
-  if (tg) tg.openLink(url);
-  else window.open(url, '_blank');
+  App.openExternal(url);
 }
 
 /* ── Магазины (модалка адресов) ─────────────────────────────────────────── */
@@ -83,8 +79,7 @@ function closeShopsModal() {
 }
 function openMaps() {
   const url = 'https://yandex.ru/maps/?text=Мария кондитерская Иркутск';
-  if (tg?.openLink) tg.openLink(url);
-  else window.open(url, '_blank');
+  App.openExternal(url);
 }
 window.openShopsModal = openShopsModal;
 window.closeShopsModal = closeShopsModal;
@@ -178,11 +173,9 @@ function openAiChat() {
 async function customizeChatWelcome() {
   const txt = document.getElementById('chat-welcome-text');
   if (!txt || txt.dataset.customized === '1') return;
-  const tg = window.Telegram?.WebApp;
-  const initData = tg?.initData || '';
-  if (!initData) return; // guest mode — оставить дефолт
+  if (!App.isAuthed()) return; // guest mode — оставить дефолт
   try {
-    const r = await fetch('/api/me', { headers: { Authorization: 'tma ' + initData } });
+    const r = await fetch('/api/me', { headers: { ...App.authHeader() } });
     if (!r.ok) return;
     const me = await r.json();
     if (!me.phoneVerified) return;
@@ -190,7 +183,7 @@ async function customizeChatWelcome() {
     // Опционально проверим LK для cтат
     let stats = '';
     try {
-      const lkRes = await fetch('/api/lk', { headers: { Authorization: 'tma ' + initData } });
+      const lkRes = await fetch('/api/lk', { headers: { ...App.authHeader() } });
       if (lkRes.ok) {
         const lk = (await lkRes.json()) || {};
         if (lk.found) {
@@ -900,14 +893,14 @@ document.addEventListener('DOMContentLoaded', () => {
   loadHomeClassics();
 
   // Event-delegation для external-ссылок с data-tg-open: открываем через
-  // TG.WebApp.openLink (вместо inline onclick='${url}' — был JS-injection-вектор).
+  // нативный openExternal платформы (вместо inline onclick='${url}' — был JS-injection-вектор).
   document.body.addEventListener('click', (e) => {
     const a = e.target?.closest?.('a[data-tg-open]');
     if (!a) return;
     const href = a.getAttribute('href');
     if (!href) return;
     e.preventDefault();
-    try { window.Telegram?.WebApp?.openLink?.(href); } catch {}
+    try { App.openExternal(href); } catch {}
   });
 });
 
@@ -1206,18 +1199,16 @@ window.holidayOpenSelection = holidayOpenSelection;
 async function loadHomePersona() {
   const personaEl = document.getElementById('home-persona');
   if (!personaEl) return;
-  const tg = window.Telegram?.WebApp;
-  const initData = tg?.initData || '';
-  if (!initData) { personaEl.style.display = 'none'; return; }
+  if (!App.isAuthed()) { personaEl.style.display = 'none'; return; }
   try {
     // /api/me для базовой инфы
-    const meRes = await fetch('/api/me', { headers: { Authorization: 'tma ' + initData } });
+    const meRes = await fetch('/api/me', { headers: { ...App.authHeader() } });
     if (!meRes.ok) { personaEl.style.display = 'none'; return; }
     const me = await meRes.json();
     if (!me.phoneVerified) { personaEl.style.display = 'none'; return; }
 
     // /api/lk для баланса и заказов
-    const lkRes = await fetch('/api/lk', { headers: { Authorization: 'tma ' + initData } });
+    const lkRes = await fetch('/api/lk', { headers: { ...App.authHeader() } });
     const lk = lkRes.ok ? ((await lkRes.json()) || {}) : {};
     // Кэшируем уровень клуба для корзины (cart.js берёт реальный pct, не хардкод 5%)
     if (lk.found && window.getCurrentLevel) {

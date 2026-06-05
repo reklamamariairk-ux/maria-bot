@@ -70,12 +70,10 @@ let _wishSyncT = null;
 function wishSyncDebounced(ids) {
   if (_wishSyncT) clearTimeout(_wishSyncT);
   _wishSyncT = setTimeout(() => {
-    const tg = window.Telegram?.WebApp;
-    const initData = tg?.initData || '';
-    if (!initData) return;
+    if (!App.isAuthed()) return;
     fetch('/api/wishlist/sync', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'tma ' + initData },
+      headers: { 'Content-Type': 'application/json', ...App.authHeader() },
       body: JSON.stringify({ ids: (ids || []).map(Number).filter((x) => x > 0) }),
     }).catch(() => {});
   }, 800);
@@ -1152,22 +1150,7 @@ async function shareProduct(id) {
   }
   const url = p?.url || `https://www.maria-irk.ru/`;
   const text = p ? `${p.name} в кондитерской «Мария»` : 'Кондитерская «Мария»';
-  const tg = window.Telegram?.WebApp;
-  const shareLink = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
-  if (tg?.openTelegramLink) {
-    tg.openTelegramLink(shareLink);
-  } else if (navigator.share) {
-    navigator.share({ url, text }).catch(() => {});
-  } else {
-    // Fallback — скопировать ссылку в clipboard
-    navigator.clipboard?.writeText(url).then(() => {
-      const t = document.createElement('div');
-      t.textContent = '🔗 Ссылка скопирована';
-      t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(20,15,15,.92);color:#fff;padding:10px 18px;border-radius:24px;z-index:9999;font-size:13px';
-      document.body.appendChild(t);
-      setTimeout(() => t.remove(), 2000);
-    });
-  }
+  App.share(url, text);
 }
 window.shareProduct = shareProduct;
 window.catShowCategories = catShowCategories;

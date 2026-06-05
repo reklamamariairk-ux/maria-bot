@@ -24,12 +24,10 @@ async function openOrderRating(orderId) {
   OR_STATE.existing = null;
   ensureOrderRatingModal();
   // Подгружаем существующую оценку (если уже оценивал — покажем как edit)
-  const tg = window.Telegram?.WebApp;
-  const initData = tg?.initData || '';
-  if (initData) {
+  if (App.isAuthed()) {
     try {
       const r = await fetch(`/api/order-rating/${encodeURIComponent(id)}`, {
-        headers: { Authorization: 'tma ' + initData }, cache: 'no-store',
+        headers: { ...App.authHeader() }, cache: 'no-store',
       });
       if (r.ok) {
         const data = await r.json();
@@ -124,12 +122,10 @@ function orSetRating(r) {
 window.orSetRating = orSetRating;
 
 async function submitOrderRating() {
-  const tg = window.Telegram?.WebApp;
-  const initData = tg?.initData || '';
   const errEl = document.getElementById('or-err');
   const submitBtn = document.getElementById('or-submit');
   if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
-  if (!initData) {
+  if (!App.isAuthed()) {
     if (errEl) { errEl.textContent = 'Открой Mini App через Telegram'; errEl.style.display = ''; }
     return;
   }
@@ -137,7 +133,7 @@ async function submitOrderRating() {
   try {
     const r = await fetch('/api/order-rating', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'tma ' + initData },
+      headers: { 'Content-Type': 'application/json', ...App.authHeader() },
       body: JSON.stringify({
         order_id: OR_STATE.orderId,
         rating: OR_STATE.rating,
@@ -151,8 +147,7 @@ async function submitOrderRating() {
     }
     window.haptic?.('success');
     closeOrderRating();
-    if (tg?.showAlert) tg.showAlert('Спасибо! Твоя оценка очень важна 💚');
-    else alert('Спасибо! Твоя оценка очень важна.');
+    App.alert('Спасибо! Твоя оценка очень важна 💚');
   } catch {
     if (errEl) { errEl.textContent = 'Ошибка сети'; errEl.style.display = ''; }
   } finally {
@@ -163,15 +158,7 @@ window.submitOrderRating = submitOrderRating;
 
 // Handle deep-link при старте Mini App: ?startapp=rate_<orderId>
 function handleOrderRatingDeepLink() {
-  const tg = window.Telegram?.WebApp;
-  let startParam = tg?.initDataUnsafe?.start_param || '';
-  if (!startParam) {
-    try {
-      const u = new URL(window.location.href);
-      const rateParam = u.searchParams.get('rate_order');
-      if (rateParam) startParam = 'rate_' + rateParam;
-    } catch {}
-  }
+  const startParam = App.startParam();
   if (!startParam || !startParam.startsWith('rate_')) return;
   const orderId = startParam.slice(5);
   if (!orderId) return;

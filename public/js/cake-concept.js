@@ -89,9 +89,7 @@ async function generateConcept() {
     </div>`;
 
   try {
-    const tg = window.Telegram?.WebApp;
-    const headers = { 'Content-Type': 'application/json' };
-    if (tg?.initData) headers['Authorization'] = 'tma ' + tg.initData;
+    const headers = { 'Content-Type': 'application/json', ...App.authHeader() };
     const r = await fetch('/api/cake-concept/generate', {
       method: 'POST', headers,
       body: JSON.stringify({ prompt }),
@@ -199,9 +197,7 @@ async function submitConcept(e, idx) {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Отправляем…'; }
 
   try {
-    const tg = window.Telegram?.WebApp;
-    const headers = { 'Content-Type': 'application/json' };
-    if (tg?.initData) headers['Authorization'] = 'tma ' + tg.initData;
+    const headers = { 'Content-Type': 'application/json', ...App.authHeader() };
     const r = await fetch('/api/cake-concept/submit', {
       method: 'POST', headers,
       body: JSON.stringify({

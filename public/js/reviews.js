@@ -46,11 +46,9 @@ function reviewsRelTime(iso) {
 async function loadReviews(productId) {
   const pid = Number(productId);
   if (!pid) return null;
-  const tg = window.Telegram?.WebApp;
-  const initData = tg?.initData || '';
   try {
     const r = await fetch(`/api/reviews/${pid}`, {
-      headers: initData ? { Authorization: 'tma ' + initData } : {},
+      headers: { ...App.authHeader() },
       cache: 'no-store',
     });
     if (!r.ok) return null;
@@ -87,9 +85,7 @@ function reviewsRenderBlock(productId, opts) {
   const data = REVIEWS_CACHE[productId];
   if (!data) return '<div class="rv-block rv-block--loading">Загрузка отзывов…</div>';
   const { reviews, stats, mine } = data;
-  const tg = window.Telegram?.WebApp;
-  const initData = tg?.initData || '';
-  const canWrite = !!initData;
+  const canWrite = App.isAuthed();
 
   const limit = opts?.preview ? 3 : reviews.length;
   const shown = reviews.slice(0, limit);
@@ -271,12 +267,10 @@ async function submitReview() {
   const pid = REVIEW_WRITER_STATE.productId;
   const rating = REVIEW_WRITER_STATE.rating;
   const text = (REVIEW_WRITER_STATE.text || '').trim();
-  const tg = window.Telegram?.WebApp;
-  const initData = tg?.initData || '';
   const errEl = document.getElementById('rv-writer-err');
   const submitBtn = document.getElementById('rv-writer-submit');
   if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
-  if (!initData) {
+  if (!App.isAuthed()) {
     if (errEl) { errEl.textContent = 'Открой через Telegram чтобы оставить отзыв'; errEl.style.display = ''; }
     return;
   }
@@ -284,7 +278,7 @@ async function submitReview() {
   try {
     const r = await fetch('/api/reviews', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'tma ' + initData },
+      headers: { 'Content-Type': 'application/json', ...App.authHeader() },
       body: JSON.stringify({ product_id: pid, rating, text }),
     });
     if (r.status === 429) {
@@ -312,14 +306,12 @@ async function deleteMyReview() {
   const pid = REVIEW_WRITER_STATE.productId;
   const mine = REVIEWS_CACHE[pid]?.mine;
   if (!mine?.id) return;
-  if (!confirm('Удалить ваш отзыв?')) return;
-  const tg = window.Telegram?.WebApp;
-  const initData = tg?.initData || '';
-  if (!initData) return;
+  if (!App.isAuthed()) return;
+  if (!(await App.confirm('Удалить ваш отзыв?'))) return;
   try {
     await fetch(`/api/reviews/${mine.id}`, {
       method: 'DELETE',
-      headers: { Authorization: 'tma ' + initData },
+      headers: { ...App.authHeader() },
     });
     window.haptic?.('success');
     closeReviewWriter();

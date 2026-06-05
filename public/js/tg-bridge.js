@@ -331,6 +331,16 @@
       window.open(url, '_blank', 'noopener');
     },
 
+    /** Ссылка на само приложение текущей платформы (для «поделиться приложением»). */
+    async appLink() {
+      if (PLATFORM === 'vk') {
+        await ready();
+        const appId = _vkConfig?.app_id;
+        if (appId) return 'https://vk.com/app' + appId;
+      }
+      return 'https://t.me/mariatortik_bot';
+    },
+
     /** VK: запрос «разрешить сообщения от сообщества» (для пушей). */
     async allowMessages() {
       if (PLATFORM !== 'vk' || !_vkBridge) return false;

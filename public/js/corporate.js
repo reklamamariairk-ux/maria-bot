@@ -214,9 +214,7 @@ async function submitCorpForm(e) {
     }
     window.haptic?.('success');
     closeCorpForm();
-    const tg = window.Telegram?.WebApp;
-    if (tg?.showAlert) tg.showAlert('✅ Заявка отправлена! Менеджер свяжется в течение 2 часов.');
-    else alert('Заявка отправлена! Менеджер свяжется в течение 2 часов.');
+    App.alert('✅ Заявка отправлена! Менеджер свяжется в течение 2 часов.');
   } catch {
     if (errEl) { errEl.textContent = 'Ошибка сети'; errEl.style.display = ''; }
   } finally {

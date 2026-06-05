@@ -1,8 +1,7 @@
 /* ── Game zone: Wheel + Streak + Secret-of-day ────────────────────────────── */
 
 const _gameAuth = () => {
-  const tg = window.Telegram?.WebApp;
-  return tg?.initData ? { Authorization: 'tma ' + tg.initData } : null;
+  return App.isAuthed() ? { ...App.authHeader() } : null;
 };
 
 /* ── Streak ──────────────────────────────────────────────────────────────── */
