@@ -1259,4 +1259,4 @@ function profEditBday() {
 window.profEditBday = profEditBday;
 
 // escAttr — алиас на window.escapeAttr из utils.js
-const escAttr = window.escapeAttr;
+var escAttr = window.escapeAttr; // var: один алиас на несколько classic-скриптов, const кидал "already declared"

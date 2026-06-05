@@ -939,7 +939,7 @@ window.catClearSearch = catClearSearch;
 
 // escapeHtml/escapeAttr перенесены в utils.js (window.escapeHtml/escapeAttr).
 // Объявляем локальные ссылки чтобы не переписывать существующие вызовы.
-const escapeHtml = window.escapeHtml;
+var escapeHtml = window.escapeHtml; // var: один алиас на несколько classic-скриптов, const кидал "already declared"
 const escapeAttr = window.escapeAttr;
 
 document.addEventListener('DOMContentLoaded', () => {

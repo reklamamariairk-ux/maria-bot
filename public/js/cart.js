@@ -860,7 +860,7 @@ async function cartSubmit() {
 
 // escHtml/escAttr — алиасы на глобальные из utils.js (escapeHtml/escapeAttr).
 const escHtml = window.escapeHtml;
-const escAttr = window.escapeAttr;
+var escAttr = window.escapeAttr; // var: один алиас на несколько classic-скриптов, const кидал "already declared"
 
 /* ── Helpers: phoneMask, pickDate, pickTime ─────────────────────────────── */
 function phoneMask(inp) {

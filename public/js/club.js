@@ -365,7 +365,7 @@ async function renderLk() {
 }
 
 // escapeHtml перенесён в utils.js (window.escapeHtml).
-const escapeHtml = window.escapeHtml;
+var escapeHtml = window.escapeHtml; // var: один алиас на несколько classic-скриптов, const кидал "already declared"
 
 // Человекочитаемая дата: "вчера" / "3 дня назад" / "28 апр" / "14 янв 2025"
 function formatRelativeDate(dateStr) {

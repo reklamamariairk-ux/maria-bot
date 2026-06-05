@@ -387,7 +387,7 @@ function nowHM() {
 window.nowHM = nowHM;
 
 // escAttr — алиас на window.escapeAttr из utils.js
-const escAttr = window.escapeAttr;
+var escAttr = window.escapeAttr; // var: один алиас на несколько classic-скриптов, const кидал "already declared"
 
 function appendTyping() {
   const wrap = document.getElementById('chat-messages');
