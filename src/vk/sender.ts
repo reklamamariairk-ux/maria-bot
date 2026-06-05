@@ -19,8 +19,11 @@ const VK_API_VERSION = "5.199";
 
 export interface VkSender {
   configured: boolean;
-  /** vkUserId — РОДНОЙ VK id (не internal). Возвращает true если доставлено. */
-  send(vkUserId: number, text: string): Promise<boolean>;
+  /**
+   * vkUserId — РОДНОЙ VK id (не internal). Возвращает true если доставлено.
+   * keyboard — опциональный JSON VK-клавиатуры (см. callback.ts appKeyboard).
+   */
+  send(vkUserId: number, text: string, keyboard?: string): Promise<boolean>;
 }
 
 // Коды ошибок messages.send, означающие «юзер не разрешил/запретил сообщения»
@@ -33,7 +36,7 @@ export function createVkSender(): VkSender {
   }
   return {
     configured: true,
-    async send(vkUserId, text) {
+    async send(vkUserId, text, keyboard) {
       try {
         const params = new URLSearchParams({
           user_id: String(vkUserId),
@@ -42,6 +45,7 @@ export function createVkSender(): VkSender {
           access_token: token,
           v: VK_API_VERSION,
         });
+        if (keyboard) params.set("keyboard", keyboard);
         const res = await fetch(`${VK_API}/messages.send`, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },

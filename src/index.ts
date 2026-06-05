@@ -25,6 +25,7 @@ import notifyPrefsRouter from "./routes/notify-prefs";
 import { createSecretOfDayRouter } from "./routes/secret-of-day";
 import { createPushService } from "./push";
 import { createVkSender } from "./vk/sender";
+import { createVkCallbackRouter } from "./vk/callback";
 import { miniAppLink } from "./links";
 import { createReferralRouter } from "./routes/referral";
 import { createWheelStreakRouter } from "./routes/wheel-streak";
@@ -1400,6 +1401,9 @@ app.use(notifyPrefsRouter);
 app.use(createReferralRouter(_pushService, _dbPoolForRouters));
 // Wheel + streak → src/routes/wheel-streak.ts
 app.use(createWheelStreakRouter(_pushService));
+// VK Callback API (входящие события сообщества) → src/vk/callback.ts
+// Без VK_CALLBACK_SECRET/VK_CONFIRMATION_CODE отвечает 404 (TG-only режим)
+app.use(createVkCallbackRouter(vkSender));
 // /api/secret-of-day вынесен в src/routes/secret-of-day.ts (см. createSecretOfDayRouter выше)
 
 // /api/rewards/mine также вынесен в src/routes/club.ts
