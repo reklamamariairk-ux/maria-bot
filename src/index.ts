@@ -26,6 +26,7 @@ import { createSecretOfDayRouter } from "./routes/secret-of-day";
 import { createPushService } from "./push";
 import { createVkSender } from "./vk/sender";
 import { createVkCallbackRouter } from "./vk/callback";
+import { createVkRouter } from "./routes/vk";
 import { miniAppLink } from "./links";
 import { createReferralRouter } from "./routes/referral";
 import { createWheelStreakRouter } from "./routes/wheel-streak";
@@ -1404,6 +1405,8 @@ app.use(createWheelStreakRouter(_pushService));
 // VK Callback API (входящие события сообщества) → src/vk/callback.ts
 // Без VK_CALLBACK_SECRET/VK_CONFIRMATION_CODE отвечает 404 (TG-only режим)
 app.use(createVkCallbackRouter(vkSender));
+// VK verify-phone (крипто-проверка sign от VKWebAppGetPhoneNumber) → src/routes/vk.ts
+app.use(createVkRouter());
 // /api/secret-of-day вынесен в src/routes/secret-of-day.ts (см. createSecretOfDayRouter выше)
 
 // /api/rewards/mine также вынесен в src/routes/club.ts
