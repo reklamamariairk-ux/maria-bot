@@ -94,7 +94,7 @@ header{position:sticky;top:0;z-index:40;background:rgba(253,250,243,.9);
 .trust .t b{font-size:26px;color:var(--red-dd);font-weight:800;line-height:1}
 .trust .t span{font-size:13px;color:var(--hint);margin-top:4px}
 .hero-art{position:relative;aspect-ratio:4/5;border-radius:28px;overflow:hidden;
-  box-shadow:var(--shadow);background:
+  will-change:transform;box-shadow:var(--shadow);background:
     radial-gradient(circle at 30% 30%,#ffd9e1,transparent 55%),
     radial-gradient(circle at 75% 70%,#ffe9c7,transparent 55%),
     linear-gradient(135deg,#fff0f3,#fbe6d6);
@@ -563,6 +563,38 @@ footer a:hover{opacity:1;color:var(--gold-l)}
       if(r.top < window.innerHeight) el.classList.add("in");
     }); }, 2500);
   }
+
+  // ── Лёгкий parallax в hero: фото плывёт при скролле + слегка следует за курсором ──
+  (function(){
+    if(prefersReduced) return;
+    var art = document.querySelector(".hero-art");
+    var hero = document.querySelector(".hero");
+    if(!art || !hero) return;
+    var sy = 0, px = 0, py = 0, ticking = false;
+    function apply(){
+      art.style.transform = "translate3d(" + px.toFixed(1) + "px," + (sy + py).toFixed(1) + "px,0)";
+      ticking = false;
+    }
+    function schedule(){ if(!ticking){ ticking = true; requestAnimationFrame(apply); } }
+    function onScroll(){
+      var y = window.pageYOffset || 0;
+      if(y > hero.offsetHeight + 100) return;   // считаем только пока герой рядом
+      sy = y * 0.14;                             // фото отстаёт от скролла → глубина
+      schedule();
+    }
+    window.addEventListener("scroll", onScroll, { passive:true });
+    onScroll();
+    // указатель — только на устройствах с точным курсором (десктоп)
+    if(window.matchMedia && window.matchMedia("(pointer:fine)").matches){
+      hero.addEventListener("mousemove", function(e){
+        var r = hero.getBoundingClientRect();
+        px = ((e.clientX - r.left) / r.width  - 0.5) * 14;
+        py = ((e.clientY - r.top)  / r.height - 0.5) * 10;
+        schedule();
+      });
+      hero.addEventListener("mouseleave", function(){ px = 0; py = 0; schedule(); });
+    }
+  })();
 
   // ─────────────────────────────────────────────────────────────
   // ⚙️ ПРАЙС — откалиброван по ЖИВОМУ каталогу 1С (08.06.2026):
