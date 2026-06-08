@@ -8,7 +8,7 @@
 import { pool } from "./db";
 
 export type PetNeed = "hunger" | "mood" | "energy" | "hygiene";
-export type PetAction = "feed" | "sleep" | "wash" | "play";
+export type PetAction = "feed" | "sleep" | "wash" | "play" | "walk";
 export type PetLocation = "kitchen" | "bedroom" | "playroom" | "yard";
 
 export interface PetState {
@@ -25,6 +25,7 @@ const RESTORE: Record<PetAction, Partial<Record<PetNeed, number>>> = {
   sleep: { energy: 55, mood: 5 },
   wash:  { hygiene: 60, mood: 5 },
   play:  { mood: 35, energy: -10 },
+  walk:  { mood: 18, energy: -4 },
 };
 const XP_PER_ACTION = 12;
 const COINS_PER_ACTION = 3;

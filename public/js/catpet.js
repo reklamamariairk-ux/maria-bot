@@ -19,7 +19,6 @@
     { k: 'hunger', icon: '🍖', name: 'Сытость' },
     { k: 'mood', icon: '😺', name: 'Настроение' },
     { k: 'energy', icon: '💤', name: 'Энергия' },
-    { k: 'hygiene', icon: '🛁', name: 'Чистота' },
   ];
   const LS = 'maria_pet_v1';
 
@@ -40,7 +39,7 @@
   }
   function localAction(action) {
     const s = localGet();
-    const R = { feed: { hunger: 45, mood: 8 }, sleep: { energy: 55, mood: 5 }, wash: { hygiene: 60, mood: 5 }, play: { mood: 35, energy: -10 } }[action] || {};
+    const R = { feed: { hunger: 45, mood: 8 }, sleep: { energy: 55, mood: 5 }, play: { mood: 35, energy: -10 }, walk: { mood: 18, energy: -4 } }[action] || {};
     Object.keys(R).forEach(k => s[k] = Math.max(0, Math.min(100, s[k] + R[k])));
     s.xp += 12; s.coins += 3; while (s.xp >= s.xpNext) { s.xp -= s.xpNext; s.level++; s.xpNext = s.level * 100; }
     s._ts = Date.now(); localStorage.setItem(LS, JSON.stringify(s)); return s;
