@@ -21,7 +21,7 @@ router.post("/api/game-result", requireTgUser, rateLimit(30), async (req, res) =
     res.status(400).json({ error: "bad_input" });
     return;
   }
-  if (!["flappy_cake", "memory", "bakery"].includes(game)) {
+  if (!["flappy_cake", "memory", "bakery", "cat_catch"].includes(game)) {
     res.status(400).json({ error: "unknown_game" });
     return;
   }

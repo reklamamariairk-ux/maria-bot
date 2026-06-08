@@ -469,6 +469,18 @@
         </div>
       </div>
 
+      <!-- Игра «Котик ловит пироги» -->
+      <div class="wheel-card" id="catgame-card" onclick="catGameOpen()" style="cursor:pointer;background:linear-gradient(135deg,#fff3e2,#ffe2c4)">
+        <div class="wheel-card__row">
+          <img src="/assets/images/cat-mascot-cut.png" alt="Котик" style="width:54px;height:54px;object-fit:contain;margin-right:10px;flex:0 0 auto" loading="lazy"/>
+          <div class="wheel-card__body">
+            <div class="wheel-card__h">🐱 Котик ловит пироги</div>
+            <div class="wheel-card__sub">Лови пироги, ставь рекорд и зарабатывай звёзды</div>
+          </div>
+          <button class="wheel-card__btn" onclick="event.stopPropagation();catGameOpen()">Играть</button>
+        </div>
+      </div>
+
       <!-- Sweet Check — единая smart-карточка: task этой недели + статус билетов -->
       <div id="sc-my-top" style="display:none"></div>
       <!-- Скрытый узел для backward-compat (старый sc-week-top больше не используется) -->
@@ -1247,6 +1259,7 @@
 <script src="/js/onboarding.js" defer></script>
 <script src="/js/selfie-cake.js" defer></script>
 <script src="/js/game.js" defer></script>
+<script src="/js/catgame.js" defer></script>
 <!-- /js/bakery.js удалён — Игры убраны до новой геймификации (см. game.js — wheel/streak/secret) -->
 <script src="/js/chat.js" defer></script>
 <script src="/js/catalog.js" defer></script>
