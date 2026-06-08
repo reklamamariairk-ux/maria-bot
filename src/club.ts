@@ -450,6 +450,8 @@ const STAR_RATES: Record<string, (score: number) => number> = {
   // «Котик ловит пироги»: 1 звезда за каждые 50 очков (1 пирог = 10 очков).
   // Дневной кап (STAR_DAILY_CAP) защищает экономику от накрутки.
   cat_catch:   (score) => Math.floor(score / 50),
+  // «Накорми Котика»: счёт выше (комбо ×N) → 1 звезда за 100 очков.
+  cat_feed:    (score) => Math.floor(score / 100),
 };
 
 export async function recordGameResult(
