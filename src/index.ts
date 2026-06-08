@@ -33,6 +33,8 @@ import { createWheelStreakRouter } from "./routes/wheel-streak";
 import { pool as _dbPoolForRouters } from "./db";
 import userRouter from "./routes/user";
 import gameRouter from "./routes/game";
+import petRouter from "./routes/pet";
+import { initPetSchema } from "./pet";
 import cartRouter from "./routes/cart";
 import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, fetchProductById, reloadDietaryOverrides, detectDietary, Product } from "./scraper";
 import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind, getNotificationPrefs, setNotificationPrefs, saveCartSnapshot, clearCartSnapshot, getAbandonedCarts, markCartAbandonedPushed, getSpinStatus, recordSpin, WHEEL_PRIZES, touchVisitStreak, setSecretOfDay, getSecretOfDay, getUnusedRewards, consumeRewards, hasHolidayPushSent, markHolidayPushSent, getReviewsForProduct, getReviewStats, getReviewStatsBatch, getMyReview, upsertReview, deleteMyReview, setReviewHidden, countReviewsLast24h, createWishlistShare, getWishlistShare, incrementWishlistShareOpens, countWishlistSharesLast24h, getOrderRating, upsertOrderRating, hasRatingPromptSent, markRatingPromptSent, countPromoUses, hasUserUsedPromo, recordPromoUse } from "./db";
@@ -1331,6 +1333,9 @@ app.use(clubRouter);
 // Game results → src/routes/game.ts
 app.use(gameRouter);
 
+// Виртуальный питомец → src/routes/pet.ts
+app.use(petRouter);
+
 // GET /api/holidays/upcoming вынесен в src/routes/holidays.ts
 app.use(holidaysRouter);
 
@@ -1866,6 +1871,7 @@ async function sendBirthdayGreetings() {
 async function main() {
   await initDb();
   await initClubSchema();
+  await initPetSchema();
 
   // Sentry error handler — после всех routes, до listen
   app.use(sentryExpressErrorHandler());
