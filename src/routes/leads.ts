@@ -22,15 +22,25 @@ const BITRIX_WEBHOOK = () => process.env.BITRIX_WEBHOOK ?? "";
 
 // ─── Индивидуальный заказ торта ─────────────────────────────────────────────
 router.post("/api/lead", rateLimit(10), express.json({ limit: "8mb" }), async (req, res) => {
-  const { name, phone, description, date, portions, comment, photo } = req.body as {
+  const { name, phone, description, date, portions, comment, photo, source, utm } = req.body as {
     name?: string; phone?: string; description?: string;
     date?: string; portions?: string; comment?: string; photo?: string;
+    source?: string; utm?: Record<string, string>;
   };
 
   if (!name || !phone) {
     res.status(400).json({ error: "Имя и телефон обязательны" });
     return;
   }
+
+  // Источник лида (для атрибуции рекламных каналов в CRM). По умолчанию — Mini App.
+  const srcLabel = (typeof source === "string" && source.trim()) ? source.trim().slice(0, 80) : "Telegram Mini App";
+  // UTM-метки рекламной кампании → одна строка в комментарий + SOURCE_DESCRIPTION
+  const utmStr = utm && typeof utm === "object"
+    ? ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"]
+        .map((k) => (utm[k] ? `${k}=${String(utm[k]).slice(0, 80)}` : null))
+        .filter(Boolean).join(" · ")
+    : "";
 
   // Photo-референс → /tmp + URL в комментарии лида
   let photoUrl = "";
@@ -55,13 +65,14 @@ router.post("/api/lead", rateLimit(10), express.json({ limit: "8mb" }), async (r
     }
   }
 
-  const title = `Заказ торта — ${name} (Telegram Mini App)`;
+  const title = `Заказ торта — ${name} (${srcLabel})`;
   const comments = [
     description && `Торт: ${description}`,
     date        && `Дата: ${date}`,
     portions    && `Порций: ${portions}`,
     comment     && `Комментарий: ${comment}`,
     photoUrl    && `Фото референса: ${photoUrl}`,
+    utmStr      && `UTM: ${utmStr}`,
   ].filter(Boolean).join("\n");
 
   const webhook = BITRIX_WEBHOOK();
@@ -79,6 +90,7 @@ router.post("/api/lead", rateLimit(10), express.json({ limit: "8mb" }), async (r
         PHONE: [{ VALUE: phone, VALUE_TYPE: "WORK" }],
         COMMENTS: comments,
         SOURCE_ID: "WEB",
+        SOURCE_DESCRIPTION: [srcLabel, utmStr].filter(Boolean).join(" · "),
       },
     });
 
