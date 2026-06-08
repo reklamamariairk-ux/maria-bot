@@ -72,8 +72,10 @@ header{position:sticky;top:0;z-index:40;background:rgba(253,250,243,.92);
     radial-gradient(circle at 75% 70%,#ffe9c7,transparent 55%),
     linear-gradient(135deg,#fff0f3,#fbe6d6);
   display:flex;align-items:center;justify-content:center}
+.hero-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .hero-art .emoji{font-size:130px;filter:drop-shadow(0 12px 20px rgba(106,0,24,.18))}
-.hero-art .tag{position:absolute;left:18px;bottom:18px;background:#fff;border-radius:14px;
+.hero-art.noimg::after{content:"🎂";font-size:120px}
+.hero-art .tag{position:absolute;left:18px;bottom:18px;z-index:2;background:#fff;border-radius:14px;
   padding:10px 16px;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.10);font-size:14px}
 .hero-art .tag b{color:var(--red)}
 @media(max-width:860px){.hero-grid{grid-template-columns:1fr;gap:26px;padding:34px 0 40px}
@@ -94,6 +96,15 @@ section.block{padding:64px 0}
 .card h3{font-size:19px;margin-bottom:7px}
 .card p{color:var(--hint);font-size:15px}
 @media(max-width:760px){.cards3{grid-template-columns:1fr}}
+
+/* gallery */
+.gallery{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-top:38px}
+.g-item{margin:0;aspect-ratio:1;border-radius:16px;overflow:hidden;background:#f3e4d6;
+  box-shadow:0 4px 16px rgba(106,0,24,.07)}
+.g-item img{width:100%;height:100%;object-fit:cover;transition:.3s}
+.g-item:hover img{transform:scale(1.06)}
+@media(max-width:860px){.gallery{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:440px){.gallery{grid-template-columns:repeat(2,1fr);gap:10px}}
 
 /* ── QUIZ ── */
 .quiz-wrap{background:linear-gradient(180deg,#fff,var(--cream-xl));border-radius:28px;
@@ -202,10 +213,11 @@ footer a:hover{opacity:1;color:var(--gold-l)}
         <div class="t"><b>«Зебра»</b><span>наша легенда</span></div>
       </div>
     </div>
-    <!-- ЗАМЕНИ блок .hero-art на реальное фото бенто-пирога (img src) для +конверсии -->
+    <!-- Реальное фото бенто из каталога 1С (через image-proxy → webp) -->
     <div class="hero-art">
-      <div class="emoji">🎂</div>
-      <div class="tag">от <b id="hero-from">990 ₽</b> · готово за 1 день</div>
+      <img src="/img?u=https%3A%2F%2Fwww.maria-irk.ru%2Fupload%2Fiblock%2Ff1e%2Feu1whbpy0c514576dfily903ryfpzuir%2Fbento_tort_58.png"
+           alt="Бенто-пирог Мария" loading="eager" onerror="this.parentElement.classList.add('noimg');this.remove()">
+      <div class="tag">от <b id="hero-from">690 ₽</b> · готово за 1 день</div>
     </div>
   </div>
 </div>
@@ -235,6 +247,35 @@ footer a:hover{opacity:1;color:var(--gold-l)}
   </div>
 </section>
 
+<!-- ══════════ ГАЛЕРЕЯ (реальные фото из каталога) ══════════ -->
+<section class="block" style="padding-top:0">
+  <div class="wrap">
+    <h2 class="sec-title">Какими бывают наши бенто</h2>
+    <p class="sec-sub">Реальные пироги из каталога «Марии» — от 690 ₽. Декор и надпись — на ваш вкус</p>
+    <div class="gallery">
+      <figure class="g-item"><img loading="lazy" alt="Бенто-пирог Мария"
+        src="/img?u=https%3A%2F%2Fwww.maria-irk.ru%2Fupload%2Fiblock%2F075%2F7u9cnv1vtb97qu3kfjrwskuuf2r49g5n%2Fbento_tort_64.png"
+        onerror="this.closest('.g-item').remove()"></figure>
+      <figure class="g-item"><img loading="lazy" alt="Бенто-пирог Мария"
+        src="/img?u=https%3A%2F%2Fwww.maria-irk.ru%2Fupload%2Fiblock%2Fcf7%2F93dstj0tc4bc8cljxek74zbmq72yc2f2%2Fbento_tort_62.png"
+        onerror="this.closest('.g-item').remove()"></figure>
+      <figure class="g-item"><img loading="lazy" alt="Бенто-пирог Мария"
+        src="/img?u=https%3A%2F%2Fwww.maria-irk.ru%2Fupload%2Fiblock%2F268%2Fph0jtl5kcz8lkn6vn4w83fdu48al2rsa%2Fbento_tort_61.png"
+        onerror="this.closest('.g-item').remove()"></figure>
+      <figure class="g-item"><img loading="lazy" alt="Бенто-пирог Мария"
+        src="/img?u=https%3A%2F%2Fwww.maria-irk.ru%2Fupload%2Fiblock%2Fcc8%2Fx1myscx4iwfb249ce7k3xossy7ct95n0%2Fbento_tort_60.png"
+        onerror="this.closest('.g-item').remove()"></figure>
+      <figure class="g-item"><img loading="lazy" alt="Бенто-пирог Мария"
+        src="/img?u=https%3A%2F%2Fwww.maria-irk.ru%2Fupload%2Fiblock%2F25d%2Fq75l7v0w7e3blnyhdhkp9z8st68kc3os%2Fbento_tort_56.png"
+        onerror="this.closest('.g-item').remove()"></figure>
+      <figure class="g-item"><img loading="lazy" alt="Бенто-пирог Мария"
+        src="/img?u=https%3A%2F%2Fwww.maria-irk.ru%2Fupload%2Fiblock%2F25a%2Fomaj8w5fy0ky2o0gi1042815hiwxyvu3%2Fbento_tort_54.png"
+        onerror="this.closest('.g-item').remove()"></figure>
+    </div>
+    <div class="center" style="margin-top:30px"><a class="btn btn--lg" href="#quiz">Хочу такой же →</a></div>
+  </div>
+</section>
+
 <!-- ══════════ QUIZ-КАЛЬКУЛЯТОР ══════════ -->
 <a id="quiz"></a>
 <section class="block" style="background:linear-gradient(180deg,#fff5f6,var(--cream-xl));padding-top:48px">
@@ -255,10 +296,10 @@ footer a:hover{opacity:1;color:var(--gold-l)}
           <div class="q">Что хотите заказать?</div>
           <div class="q-hint">Выберите формат — он влияет на расчёт</div>
           <div class="opts" data-group="type">
-            <div class="opt" data-val="Бенто-пирог" data-base="990"><span class="e">🧁</span><div>Бенто-пирог<small>на 1–2 персоны</small></div></div>
+            <div class="opt" data-val="Бенто-пирог" data-base="690"><span class="e">🧁</span><div>Бенто-пирог<small>на 1–2 персоны</small></div></div>
             <div class="opt" data-val="Торт на заказ" data-base="2500"><span class="e">🎂</span><div>Торт на заказ<small>на компанию</small></div></div>
             <div class="opt" data-val="Набор пирожных" data-base="1200"><span class="e">🍰</span><div>Набор пирожных<small>ассорти</small></div></div>
-            <div class="opt" data-val="Пока не решил" data-base="990"><span class="e">🤔</span><div>Пока не решил<small>подскажем</small></div></div>
+            <div class="opt" data-val="Пока не решил" data-base="690"><span class="e">🤔</span><div>Пока не решил<small>подскажем</small></div></div>
           </div>
         </div>
 
@@ -414,14 +455,17 @@ footer a:hover{opacity:1;color:var(--gold-l)}
   "use strict";
 
   // ─────────────────────────────────────────────────────────────
-  // ⚙️ ПРАЙС — ПРЕДВАРИТЕЛЬНАЯ ОЦЕНКА (НЕ из 1С!).
-  // Это база для калькулятора-вилки на лендинге, НЕ финальная цена.
-  // ЗАМЕНИ числа на реальные ориентиры от кондитера перед запуском рекламы.
+  // ⚙️ ПРАЙС — откалиброван по ЖИВОМУ каталогу 1С (08.06.2026):
+  //   • bentoBase 690 = реальная мин. цена бенто-пирога в каталоге (690–890 ₽).
+  //   • cakeBase 2500 + perPortion 320: на тире 7–12 чел даёт ~5380 ₽ —
+  //     совпадает с реальной медианой тортов на заказ (5300 ₽, 2–3 кг).
+  //   Это вилка-ОЦЕНКА для лендинга, точную цену подтверждает кондитер.
+  //   При смене прайса в 1С — сверить эти 3 числа.
   // ─────────────────────────────────────────────────────────────
   var PRICING = {
-    perPortion: 350,   // ₽ за порцию для тортов на заказ (оценка)
-    bentoBase:  990,   // ₽ — старт бенто-пирога (1–2 персоны)
-    minOrder:   890,   // ₽ — нижняя граница
+    perPortion: 320,   // ₽/порция для тортов на заказ (калибровка по медиане каталога)
+    bentoBase:  690,   // ₽ — реальный старт бенто-пирога (из каталога)
+    minOrder:   690,   // ₽ — нижняя граница
     rangeLow:   0.95,  // вилка «от»
     rangeHigh:  1.20   // вилка «до»
   };
