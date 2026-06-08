@@ -20,6 +20,25 @@ const router = Router();
 
 const BITRIX_WEBHOOK = () => process.env.BITRIX_WEBHOOK ?? "";
 
+// Fire-and-forget копия лида в дашборд кампании (maria-marketing) для расчёта
+// CPL/CAC/ROAS по каналам. Не блокирует ответ клиенту, ошибки只 логируются.
+function pushLeadToMarketing(payload: {
+  name?: string; phone?: string; source?: string;
+  utm?: Record<string, string>; description?: string; portions?: string; comment?: string;
+}): void {
+  const url = process.env.MARKETING_INGEST_URL ?? "";
+  if (!url) return;
+  const token = process.env.MARKETING_INGEST_TOKEN ?? "";
+  fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(token ? { "X-Ingest-Token": token } : {}) },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(5000),
+  }).then((r) => {
+    if (!r.ok) log.warn({ status: r.status }, "[LEAD→mk] ingest non-200");
+  }).catch((e) => log.warn({ err: (e as Error).message }, "[LEAD→mk] ingest failed"));
+}
+
 // ─── Индивидуальный заказ торта ─────────────────────────────────────────────
 router.post("/api/lead", rateLimit(10), express.json({ limit: "8mb" }), async (req, res) => {
   const { name, phone, description, date, portions, comment, photo, source, utm } = req.body as {
@@ -41,6 +60,9 @@ router.post("/api/lead", rateLimit(10), express.json({ limit: "8mb" }), async (r
         .map((k) => (utm[k] ? `${k}=${String(utm[k]).slice(0, 80)}` : null))
         .filter(Boolean).join(" · ")
     : "";
+
+  // Копия лида в дашборд кампании (не ждём ответа)
+  pushLeadToMarketing({ name, phone, source: srcLabel, utm, description, portions, comment });
 
   // Photo-референс → /tmp + URL в комментарии лида
   let photoUrl = "";
