@@ -5,7 +5,7 @@
  * - POST /api/pet/location {location} — сменить локацию
  */
 import { Router } from "express";
-import { getPet, doPetAction, setPetLocation, type PetAction } from "../pet";
+import { getPet, doPetAction, setPetLocation, buyPetItem, equipPetItem, SHOP, type PetAction } from "../pet";
 import { rateLimit } from "../middleware";
 import { requireTgUser, getTgUser } from "../auth";
 import { log } from "../logger";
@@ -42,6 +42,35 @@ router.post("/api/pet/location", requireTgUser, rateLimit(60), async (req, res) 
     res.json(await setPetLocation(u.id, location));
   } catch (e) {
     log.error({ err: e, chatId: u.id }, "[POST /api/pet/location]");
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+// Каталог магазина (публичный, без авторизации)
+router.get("/api/pet/shop", (_req, res) => res.json({ shop: SHOP }));
+
+router.post("/api/pet/buy", requireTgUser, rateLimit(40), async (req, res) => {
+  const u = getTgUser(req)!;
+  const item = String((req.body as { item?: string }).item || "");
+  try {
+    const r = await buyPetItem(u.id, item);
+    if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
+    res.json(r.state);
+  } catch (e) {
+    log.error({ err: e, chatId: u.id, item }, "[POST /api/pet/buy]");
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+router.post("/api/pet/equip", requireTgUser, rateLimit(60), async (req, res) => {
+  const u = getTgUser(req)!;
+  const item = String((req.body as { item?: string }).item || "");
+  try {
+    const r = await equipPetItem(u.id, item);
+    if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
+    res.json(r.state);
+  } catch (e) {
+    log.error({ err: e, chatId: u.id, item }, "[POST /api/pet/equip]");
     res.status(500).json({ error: "internal" });
   }
 });

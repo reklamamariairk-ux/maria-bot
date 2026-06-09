@@ -21,21 +21,39 @@
     { k: 'energy', icon: '💤', name: 'Энергия' },
   ];
   const LS = 'maria_pet_v1';
+  // Магазин (цены — источник правды на бэке; здесь зеркало + арт и посадка на голову)
+  const SHOP = [
+    { id: 'detective', name: 'Шапка сыщика',      price: 120, img: 'hat-detective.png', w: 0.66, dx: 0.02, dy: -0.02 },
+    { id: 'pirate',    name: 'Пиратская шляпа',   price: 180, img: 'hat-pirate.png',    w: 0.78, dx: 0.00, dy: 0.00 },
+    { id: 'wizard',    name: 'Колпак волшебника', price: 250, img: 'hat-wizard.png',    w: 0.60, dx: 0.02, dy: -0.16 },
+    { id: 'crown',     name: 'Корона',            price: 400, img: 'hat-crown.png',     w: 0.52, dx: 0.02, dy: 0.06 },
+  ];
+  const HAT = (id) => SHOP.find(h => h.id === id);
 
   let ov, state, loc = 'kitchen', cat = { x: 0.5, dir: 1, vx: 0.04, mode: 'walk', frame: 0, t: 0, busy: false };
   let raf, lastTs = 0, walkImgs = [];
 
   // ── Состояние: сервер или localStorage ──────────────────────────────────────
   function authed() { return !!(window.App && App.isAuthed && App.isAuthed()); }
-  function localDefault() { return { hunger: 80, mood: 80, energy: 80, hygiene: 80, level: 1, xp: 0, xpNext: 100, coins: 0, location: 'kitchen', _ts: Date.now() }; }
+  function localDefault() { return { hunger: 80, mood: 80, energy: 80, hygiene: 80, level: 1, xp: 0, xpNext: 100, coins: 0, location: 'kitchen', items: { owned: [], equipped: null }, _ts: Date.now() }; }
   function localGet() {
     let s; try { s = JSON.parse(localStorage.getItem(LS)); } catch (_) {}
     if (!s) s = localDefault();
+    if (!s.items) s.items = { owned: [], equipped: null };
     const hrs = Math.max(0, (Date.now() - (s._ts || Date.now())) / 3600000);
     const dec = { hunger: 12, mood: 8, energy: 6, hygiene: 5 };
     ['hunger', 'mood', 'energy', 'hygiene'].forEach(k => s[k] = Math.max(0, Math.min(100, Math.round(s[k] - dec[k] * hrs))));
     s._ts = Date.now(); localStorage.setItem(LS, JSON.stringify(s));
     return s;
+  }
+  function localBuy(id) {
+    const s = localGet(); const it = HAT(id); if (!it) return s;
+    if (!s.items.owned.includes(id) && s.coins >= it.price) { s.coins -= it.price; s.items.owned.push(id); }
+    localStorage.setItem(LS, JSON.stringify(s)); return s;
+  }
+  function localEquip(id) {
+    const s = localGet(); s.items.equipped = (id && s.items.owned.includes(id)) ? id : null;
+    localStorage.setItem(LS, JSON.stringify(s)); return s;
   }
   function localAction(action) {
     const s = localGet();
@@ -55,6 +73,16 @@
     renderNeeds();
   }
   async function saveLoc() { if (authed()) { api('/api/pet/location', { method: 'POST', body: JSON.stringify({ location: loc }) }).catch(() => {}); } else { const s = localGet(); s.location = loc; localStorage.setItem(LS, JSON.stringify(s)); } }
+  async function buyItem(id) {
+    if (authed()) { try { const r = await api('/api/pet/buy', { method: 'POST', body: JSON.stringify({ item: id }) }); if (!r.error) state = r; } catch (_) {} }
+    else state = localBuy(id);
+    renderNeeds(); renderShop(); renderHat();
+  }
+  async function equipItem(id) {
+    if (authed()) { try { const r = await api('/api/pet/equip', { method: 'POST', body: JSON.stringify({ item: id }) }); if (!r.error) state = r; } catch (_) {} }
+    else state = localEquip(id);
+    renderShop(); renderHat();
+  }
 
   // ── UI ────────────────────────────────────────────────────────────────────────
   function styles() {
@@ -87,6 +115,21 @@
       .pet-play__card h3{margin:0 0 12px;color:#7a3b12}
       .pet-play__g{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
       .pet-play__g button{border:none;border-radius:16px;padding:14px 18px;font-weight:800;cursor:pointer;background:#ff7a2d;color:#fff;font-size:15px}
+      .pet-shop-btn{position:absolute;top:8px;right:88px;z-index:4;width:34px;height:34px;border:none;border-radius:50%;background:rgba(0,0,0,.3);color:#fff;font-size:17px;cursor:pointer}
+      .pet-hat{position:absolute;z-index:2;pointer-events:none;will-change:left,top,transform;filter:drop-shadow(0 4px 5px rgba(0,0,0,.25))}
+      .pet-shop{position:absolute;inset:0;z-index:7;display:none;flex-direction:column;background:rgba(40,20,8,.55);backdrop-filter:blur(3px)}
+      .pet-shop.on{display:flex}
+      .pet-shop__h{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;color:#fff;font-weight:900;font-size:18px}
+      .pet-shop__h button{border:none;border-radius:12px;padding:8px 14px;font-weight:800;background:#fff;color:#7a3b12;cursor:pointer}
+      .pet-shop__grid{flex:1;overflow:auto;display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 14px 18px}
+      .pet-item{background:#fff7ee;border-radius:18px;padding:12px;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+      .pet-item img{width:78px;height:78px;object-fit:contain}
+      .pet-item__n{font-weight:800;color:#7a3b12;font-size:13px;margin:4px 0}
+      .pet-item__b{border:none;border-radius:12px;padding:9px 0;width:100%;font-weight:800;cursor:pointer;font-size:13px}
+      .pet-item__b.buy{background:#ffcf3f;color:#7a3b12}
+      .pet-item__b.buy:disabled{background:#e7ddcf;color:#b3a48f;cursor:default}
+      .pet-item__b.equip{background:#ff7a2d;color:#fff}
+      .pet-item__b.on{background:#7ed957;color:#fff}
     `;
     document.head.appendChild(s);
   }
@@ -98,11 +141,17 @@
       <div class="pet-top" id="pet-needs"></div>
       <div class="pet-lvl" id="pet-lvl"></div>
       <button class="pet-x" id="pet-x">×</button>
+      <button class="pet-shop-btn" id="pet-shop-btn">🎩</button>
       <div class="pet-stage" id="pet-stage">
         <div class="pet-name" id="pet-locname"></div>
         <img class="pet-cat" id="pet-cat" draggable="false"/>
+        <img class="pet-hat" id="pet-hat" draggable="false" style="display:none"/>
         <div class="pet-fx" id="pet-fx"></div>
         <div class="pet-action" id="pet-action"></div>
+      </div>
+      <div class="pet-shop" id="pet-shop">
+        <div class="pet-shop__h"><span>🎩 Магазин · <span id="pet-shop-coins">0</span> 🪙</span><button id="pet-shop-close">Готово</button></div>
+        <div class="pet-shop__grid" id="pet-shop-grid"></div>
       </div>
       <div class="pet-nav" id="pet-nav"></div>
       <div class="pet-play" id="pet-play"><div class="pet-play__card"><h3>Во что поиграем?</h3><div class="pet-play__g">
@@ -119,6 +168,9 @@
     ov.querySelector('#pet-g-feed').onclick = () => { hidePlay(); window.catFeedOpen?.(); afterPlay(); };
     ov.querySelector('#pet-g-catch').onclick = () => { hidePlay(); window.catGameOpen?.(); afterPlay(); };
     ov.querySelector('#pet-g-cancel').onclick = hidePlay;
+    // магазин
+    ov.querySelector('#pet-shop-btn').onclick = () => { renderShop(); ov.querySelector('#pet-shop').classList.add('on'); };
+    ov.querySelector('#pet-shop-close').onclick = () => ov.querySelector('#pet-shop').classList.remove('on');
     // needs skeleton
     ov.querySelector('#pet-needs').innerHTML = NEEDS.map(n => `
       <div class="pet-need"><span class="pet-need__i">${n.icon}</span><div class="pet-need__bar"><div class="pet-need__fill" id="need-${n.k}"></div></div></div>`).join('');
@@ -180,6 +232,29 @@
     }
   }
 
+  function renderShop() {
+    if (!state) return;
+    ov.querySelector('#pet-shop-coins').textContent = state.coins ?? 0;
+    const owned = (state.items && state.items.owned) || [];
+    const eq = (state.items && state.items.equipped) || null;
+    ov.querySelector('#pet-shop-grid').innerHTML = SHOP.map(h => {
+      const own = owned.includes(h.id), on = eq === h.id;
+      let btn;
+      if (!own) btn = `<button class="pet-item__b buy" data-buy="${h.id}" ${(state.coins ?? 0) < h.price ? 'disabled' : ''}>${h.price} 🪙</button>`;
+      else if (on) btn = `<button class="pet-item__b on" data-equip="">Снять</button>`;
+      else btn = `<button class="pet-item__b equip" data-equip="${h.id}">Надеть</button>`;
+      return `<div class="pet-item"><img src="${A(h.img)}"/><div class="pet-item__n">${h.name}</div>${btn}</div>`;
+    }).join('');
+    ov.querySelectorAll('#pet-shop-grid [data-buy]').forEach(b => b.onclick = () => buyItem(b.dataset.buy));
+    ov.querySelectorAll('#pet-shop-grid [data-equip]').forEach(b => b.onclick = () => equipItem(b.dataset.equip));
+  }
+  function renderHat() {
+    const hatEl = ov.querySelector('#pet-hat'); if (!hatEl) return;
+    const id = state && state.items && state.items.equipped;
+    if (!id || !HAT(id)) { hatEl.style.display = 'none'; return; }
+    hatEl.src = A(HAT(id).img); hatEl.style.display = ''; // позиция — в loop
+  }
+
   function showPlay() { ov.querySelector('#pet-play').classList.add('on'); }
   function hidePlay() { ov.querySelector('#pet-play').classList.remove('on'); }
   function afterPlay() {
@@ -215,6 +290,21 @@
     }
     const catW = catEl.offsetWidth;
     catEl.style.left = (cat.x * W - catW / 2) + 'px';
+    // шапка на голове — чисто на фронтальной позе; во время ходьбы (вид сбоку) прячем
+    const hatEl = ov.querySelector('#pet-hat');
+    if (hatEl && hatEl.style.display !== 'none') {
+      const id = state && state.items && state.items.equipped; const h = id && HAT(id);
+      const walking = cat.mode === 'walk' && !cat.busy;
+      hatEl.style.opacity = walking ? '0' : '1';
+      if (h && !walking) {
+        const cr = catEl.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+        const hw = cr.width * h.w; hatEl.style.width = hw + 'px';
+        const cx = (cr.left - sr.left) + cr.width * (0.5 + h.dx);
+        hatEl.style.left = (cx - hw / 2) + 'px';
+        hatEl.style.top = ((cr.top - sr.top) + cr.height * h.dy) + 'px';
+        hatEl.style.transform = 'none';
+      }
+    }
     raf = requestAnimationFrame(loop);
   }
 
@@ -225,7 +315,7 @@
     // префетч кадров ходьбы
     walkImgs = WALK.map(w => { const i = new Image(); i.src = A(w); return i; });
     try { await loadState(); } catch (_) { state = localGet(); }
-    renderNeeds(); renderLoc();
+    renderNeeds(); renderLoc(); renderHat();
     ov.querySelector('#pet-cat').src = A('idle.png');
     cat = { x: 0.5, dir: 1, vx: 0.04, mode: 'walk', frame: 0, t: 0, busy: false };
     lastTs = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);

@@ -15,7 +15,17 @@ export interface PetState {
   hunger: number; mood: number; energy: number; hygiene: number;
   level: number; xp: number; xpNext: number; coins: number;
   location: PetLocation;
+  items?: { owned: string[]; equipped: string | null };
 }
+
+/** Каталог магазина (источник правды по ценам). */
+export const SHOP: { id: string; name: string; price: number }[] = [
+  { id: "detective", name: "Шапка сыщика", price: 120 },
+  { id: "pirate",    name: "Пиратская шляпа", price: 180 },
+  { id: "wizard",    name: "Колпак волшебника", price: 250 },
+  { id: "crown",     name: "Корона", price: 400 },
+];
+const SHOP_IDS = new Set(SHOP.map((s) => s.id));
 
 // падение потребностей, очков/час
 const DECAY: Record<PetNeed, number> = { hunger: 12, mood: 8, energy: 6, hygiene: 5 };
@@ -67,6 +77,14 @@ function toState(r: any): PetState {
   };
 }
 
+async function getItems(chatId: number): Promise<{ owned: string[]; equipped: string | null }> {
+  const { rows } = await pool.query(`SELECT item, equipped FROM pet_items WHERE chat_id=$1`, [chatId]);
+  return {
+    owned: rows.map((r) => r.item),
+    equipped: (rows.find((r) => r.equipped) || {}).item ?? null,
+  };
+}
+
 /** Чтение состояния с применением decay (и его персистом). Создаёт питомца при первом обращении. */
 export async function getPet(chatId: number): Promise<PetState> {
   const client = await pool.connect();
@@ -93,13 +111,50 @@ export async function getPet(chatId: number): Promise<PetState> {
       );
     }
     await client.query("COMMIT");
-    return toState(r);
+    const state = toState(r);
+    state.items = await getItems(chatId);
+    return state;
   } catch (e) {
     await client.query("ROLLBACK").catch(() => {});
     throw e;
   } finally {
     client.release();
   }
+}
+
+/** Купить предмет за монеты. */
+export async function buyPetItem(chatId: number, id: string): Promise<{ ok: boolean; state?: PetState; reason?: string }> {
+  const shopItem = SHOP.find((s) => s.id === id);
+  if (!shopItem) return { ok: false, reason: "bad_item" };
+  await getPet(chatId);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows } = await client.query(`SELECT coins FROM pet_state WHERE chat_id=$1 FOR UPDATE`, [chatId]);
+    const owned = await client.query(`SELECT 1 FROM pet_items WHERE chat_id=$1 AND item=$2`, [chatId, id]);
+    if (owned.rows.length) { await client.query("ROLLBACK"); return { ok: false, reason: "already_owned" }; }
+    if ((rows[0]?.coins ?? 0) < shopItem.price) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
+    await client.query(`UPDATE pet_state SET coins = coins - $2, updated_at=NOW() WHERE chat_id=$1`, [chatId, shopItem.price]);
+    await client.query(`INSERT INTO pet_items (chat_id, item, equipped) VALUES ($1,$2,FALSE) ON CONFLICT DO NOTHING`, [chatId, id]);
+    await client.query("COMMIT");
+    return { ok: true, state: await getPet(chatId) };
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+/** Надеть/снять предмет (только один надет одновременно; передать "" чтобы снять). */
+export async function equipPetItem(chatId: number, id: string): Promise<{ ok: boolean; state?: PetState; reason?: string }> {
+  if (id && !SHOP_IDS.has(id)) return { ok: false, reason: "bad_item" };
+  if (id) {
+    const owned = await pool.query(`SELECT 1 FROM pet_items WHERE chat_id=$1 AND item=$2`, [chatId, id]);
+    if (!owned.rows.length) return { ok: false, reason: "not_owned" };
+  }
+  await pool.query(`UPDATE pet_items SET equipped = (item = $2) WHERE chat_id=$1`, [chatId, id || "__none__"]);
+  return { ok: true, state: await getPet(chatId) };
 }
 
 /** Действие ухода: поднимает потребности, начисляет опыт/монеты, считает уровень. */
