@@ -14,10 +14,10 @@ const MAX_TAPS_PER_REQ = 600;     // защита от абсурдных бат
 // Уровни: порог по total_earned, имя, монет за тап.
 export const LEVELS = [
   { level: 1, name: "Уличный котик", need: 0,      perTap: 1, energyMax: 1000 },
-  { level: 2, name: "Котик-сыщик",   need: 1500,   perTap: 2, energyMax: 1200 },
-  { level: 3, name: "Котик-пират",   need: 7000,   perTap: 3, energyMax: 1500 },
-  { level: 4, name: "Котик-волшебник", need: 25000, perTap: 5, energyMax: 2000 },
-  { level: 5, name: "Котик-король",  need: 80000,  perTap: 8, energyMax: 2500 },
+  { level: 2, name: "Котик-сыщик",   need: 300,    perTap: 2, energyMax: 1200 },
+  { level: 3, name: "Котик-пират",   need: 1500,   perTap: 3, energyMax: 1500 },
+  { level: 4, name: "Котик-волшебник", need: 6000, perTap: 5, energyMax: 2000 },
+  { level: 5, name: "Котик-король",  need: 20000,  perTap: 8, energyMax: 2500 },
 ];
 function levelFor(total: number) {
   let l = LEVELS[0];
