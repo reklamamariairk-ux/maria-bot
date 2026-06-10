@@ -21,7 +21,7 @@ const irkToday = () => new Date(Date.now() + 8 * 3600 * 1000).toISOString().slic
 export const TASKS = [
   { id: "site",     name: "Заглянуть на сайт «Мария»", icon: "🌐", reward: 1500, type: "link", link: "https://www.maria-irk.ru/" },
   { id: "invite1",  name: "Пригласить друга",          icon: "👥", reward: 10000, type: "ref",   target: 1 },
-  { id: "level3",   name: "Стать Котиком-пиратом (ур.3)", icon: "🏴‍☠️", reward: 3000, type: "level",  target: 3 },
+  { id: "level3",   name: "Стать шеф-кондитером (ур.3)", icon: "👨‍🍳", reward: 3000, type: "level",  target: 3 },
   { id: "balance10",name: "Накопить 10 000 монет",     icon: "💰", reward: 2500, type: "balance", target: 10000 },
   { id: "streak3",  name: "Заходить 3 дня подряд",      icon: "🔥", reward: 4000, type: "streak",  target: 3 },
 ];
@@ -30,10 +30,11 @@ const dailyReward = (streak: number) => 500 * Math.min(Math.max(1, streak), 10);
 
 export const LEAGUES = [
   { level: 1, name: "Уличный котик", need: 0 },
-  { level: 2, name: "Котик-сыщик", need: 300 },
-  { level: 3, name: "Котик-пират", need: 1500 },
-  { level: 4, name: "Котик-волшебник", need: 6000 },
-  { level: 5, name: "Котик-король", need: 20000 },
+  { level: 2, name: "Котик-поварёнок", need: 300 },
+  { level: 3, name: "Шеф-кондитер", need: 1500 },
+  { level: 4, name: "Бизнес-кот", need: 6000 },
+  { level: 5, name: "Супер-кот", need: 20000 },
+  { level: 6, name: "Котик-король", need: 60000 },
 ];
 function leagueFor(total: number) { let l = LEAGUES[0]; for (const x of LEAGUES) if (total >= x.need) l = x; return l; }
 function nextNeed(total: number): number | null { const n = LEAGUES.find((x) => x.need > total); return n ? n.need : null; }
