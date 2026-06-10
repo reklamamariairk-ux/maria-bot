@@ -15,11 +15,12 @@
     { id: 'franchise', name: 'Франшиза «Мария»', icon: '🏪', basePrice: 20000, baseProfit: 1500 },
   ];
   const LEAGUES = [
+    // hp: {w = доля ширины кота, sit = доля высоты кота от верха, где стоит НИЗ шапки}
     { level: 1, name: 'Уличный котик', need: 0, hat: null, hp: null },
-    { level: 2, name: 'Котик-сыщик', need: 300, hat: 'hat-detective.png', hp: { w: 0.66, dy: -0.02 } },
-    { level: 3, name: 'Котик-пират', need: 1500, hat: 'hat-pirate.png', hp: { w: 0.78, dy: 0.00 } },
-    { level: 4, name: 'Котик-волшебник', need: 6000, hat: 'hat-wizard.png', hp: { w: 0.60, dy: -0.16 } },
-    { level: 5, name: 'Котик-король', need: 20000, hat: 'hat-crown.png', hp: { w: 0.52, dy: 0.06 } },
+    { level: 2, name: 'Котик-сыщик', need: 300, hat: 'hat-detective.png', hp: { w: 0.46, sit: 0.20 } },
+    { level: 3, name: 'Котик-пират', need: 1500, hat: 'hat-pirate.png', hp: { w: 0.56, sit: 0.18 } },
+    { level: 4, name: 'Котик-волшебник', need: 6000, hat: 'hat-wizard.png', hp: { w: 0.42, sit: 0.16 } },
+    { level: 5, name: 'Котик-король', need: 20000, hat: 'hat-crown.png', hp: { w: 0.42, sit: 0.14 } },
   ];
   const REF_REFERRER = 5000, REF_INVITEE = 2500, BOT = 'mariatortik_bot';
   const TASKS = [
@@ -294,9 +295,14 @@
   }
   function positionHat(lg) {
     const cat = ov.querySelector('#ck-cat'), hat = ov.querySelector('#ck-hat'), wrap = ov.querySelector('#ck-catwrap');
-    if (!lg.hp || !cat.complete || !cat.width) { setTimeout(() => positionHat(lg), 120); return; }
-    const cr = cat.getBoundingClientRect(), wr = wrap.getBoundingClientRect(); const hw = cr.width * lg.hp.w; hat.style.width = hw + 'px';
-    hat.style.left = ((cr.left - wr.left) + cr.width * 0.5 - hw / 2) + 'px'; hat.style.top = ((cr.top - wr.top) + cr.height * lg.hp.dy) + 'px';
+    if (!lg.hp || !cat.complete || !cat.width || !hat.naturalWidth) { setTimeout(() => positionHat(lg), 120); return; }
+    const cr = cat.getBoundingClientRect(), wr = wrap.getBoundingClientRect();
+    const hw = cr.width * lg.hp.w;
+    const hh = hw * (hat.naturalHeight / hat.naturalWidth);   // высота шапки по её пропорции
+    hat.style.width = hw + 'px';
+    hat.style.left = ((cr.left - wr.left) + cr.width * 0.5 - hw / 2) + 'px';
+    // НИЗ шапки на темечке (sit*высота кота от верха) → шапка уходит ВВЕРХ, не закрывая морду
+    hat.style.top = ((cr.top - wr.top) + cr.height * lg.hp.sit - hh) + 'px';
   }
   function levelUp(lg) { chord([660, 880, 1175], 0.16); window.haptic && window.haptic('success'); coinShower(); const t = ov.querySelector('#ck-levelup-t'); t.textContent = '🎉 ' + lg.name + '!'; t.classList.remove('show'); void t.offsetWidth; t.classList.add('show'); }
 
