@@ -154,7 +154,7 @@
       .ck-prof{margin-top:3px;background:rgba(255,255,255,.1);padding:4px 12px;border-radius:20px;font-weight:800;font-size:12px;color:#7ed957}
       .ck-prog{width:78%;max-width:340px;margin-top:7px}.ck-prog__bar{height:7px;border-radius:6px;background:rgba(255,255,255,.16);overflow:hidden}.ck-prog__fill{height:100%;border-radius:6px;background:linear-gradient(90deg,#ffd23f,#ff9d33);transition:width .3s}.ck-prog__t{color:#cdbce8;font-size:10px;text-align:center;margin-top:3px}
       .ck-catwrap{position:relative;flex:1;width:100%;display:flex;align-items:center;justify-content:center}
-      .ck-cat{width:58%;max-width:280px;cursor:pointer;transition:transform .07s;filter:drop-shadow(0 18px 26px rgba(0,0,0,.5));transform-origin:bottom center;-webkit-tap-highlight-color:transparent}
+      .ck-cat{max-width:62%;max-height:94%;width:auto;height:auto;object-fit:contain;cursor:pointer;transition:transform .07s;filter:drop-shadow(0 16px 22px rgba(0,0,0,.5));transform-origin:bottom center;-webkit-tap-highlight-color:transparent}
       .ck-cat.tap{transform:scale(.92)}.ck-cat.turbo{filter:drop-shadow(0 0 30px #ffb13d) drop-shadow(0 18px 26px rgba(0,0,0,.5))}
       .ck-hat{position:absolute;pointer-events:none;filter:drop-shadow(0 4px 6px rgba(0,0,0,.3))}
       .ck-combo{position:absolute;top:18%;left:50%;transform:translateX(-50%);font-weight:900;color:#ff7a3d;text-shadow:0 2px 8px rgba(0,0,0,.5);pointer-events:none;opacity:0;font-size:22px}
