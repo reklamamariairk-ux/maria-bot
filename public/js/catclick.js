@@ -4,7 +4,7 @@
  * лидерборд. Сервер /api/clicker* для авторизованных, localStorage у гостей.
  * ───────────────────────────────────────────────────────────────────────────── */
 (function () {
-  const A = (s) => `/assets/images/cat/${s}`;
+  const A = (s) => `/assets/images/cat/${s}?v=19`;  // v19: новый арт 19 уровней — кеш-бастинг
   const LS = 'maria_click_v2';
   const REGEN = 3, PASSIVE_CAP_H = 3, TURBO_MULT = 5, TURBO_SEC = 20, DAILY_BOOSTS = 6;
   const CARDS = [
@@ -15,22 +15,27 @@
     { id: 'franchise', name: 'Франшиза «Мария»', icon: '🏪', basePrice: 20000, baseProfit: 1500 },
   ];
   const LEAGUES = [
-    // cat = картинка кота на уровне (эволюция «глоу-ап»: тощий → повелитель котов)
-    { level: 1,  name: 'Тощий котик',       need: 0,      cat: 'cat-stage1.png' },
-    { level: 2,  name: 'Обычный котик',     need: 200,    cat: 'cat-stage2.png' },
-    { level: 3,  name: 'Сытый котик',       need: 600,    cat: 'cat-stage3.png' },
-    { level: 4,  name: 'Толстый котик',     need: 1500,   cat: 'cat-stage4.png' },
-    { level: 5,  name: 'Котик на спорте',   need: 3500,   cat: 'cat-stage5.png' },
-    { level: 6,  name: 'Подкачанный котик', need: 7000,   cat: 'cat-stage6.png' },
-    { level: 7,  name: 'Котик в тонусе',    need: 13000,  cat: 'cat-stage7.png' },
-    { level: 8,  name: 'Котик-бодибилдер',  need: 24000,  cat: 'cat-stage8.png' },
-    { level: 9,  name: 'Котик-силач',       need: 42000,  cat: 'cat-stage9.png' },
-    { level: 10, name: 'Мега-кот',          need: 70000,  cat: 'cat-stage10.png' },
-    { level: 11, name: 'Котик-рэпер',       need: 115000, cat: 'cat-stage11.png' },
-    { level: 12, name: 'Богатый рэпер',     need: 185000, cat: 'cat-stage12.png' },
-    { level: 13, name: 'Котик-титан',       need: 300000, cat: 'cat-stage13.png' },
-    { level: 14, name: 'Котик-магнат',      need: 480000, cat: 'cat-stage14.png' },
-    { level: 15, name: 'Повелитель котов',  need: 750000, cat: 'cat-stage15.png' },
+    // cat = картинка кота на уровне (эволюция «глоу-ап»: тощий уличный → кот-император)
+    // 19 уровней под арт Маши. ⚠️ Лестница продублирована в src/clicker.ts — менять синхронно.
+    { level: 1,  name: 'Тощий котик',        need: 0,       cat: 'cat-stage1.png' },
+    { level: 2,  name: 'Обычный котик',      need: 200,     cat: 'cat-stage2.png' },
+    { level: 3,  name: 'Сытый котик',        need: 600,     cat: 'cat-stage3.png' },
+    { level: 4,  name: 'Толстый котик',      need: 1500,    cat: 'cat-stage4.png' },
+    { level: 5,  name: 'Котик на спорте',    need: 3500,    cat: 'cat-stage5.png' },
+    { level: 6,  name: 'Подкачанный котик',  need: 7000,    cat: 'cat-stage6.png' },
+    { level: 7,  name: 'Котик в тонусе',     need: 13000,   cat: 'cat-stage7.png' },
+    { level: 8,  name: 'Котик-бодибилдер',   need: 24000,   cat: 'cat-stage8.png' },
+    { level: 9,  name: 'Котик-силач',        need: 42000,   cat: 'cat-stage9.png' },
+    { level: 10, name: 'Котик-рэпер',        need: 70000,   cat: 'cat-stage10.png' },
+    { level: 11, name: 'Котик при деньгах',  need: 110000,  cat: 'cat-stage11.png' },
+    { level: 12, name: 'Котик-делец',        need: 170000,  cat: 'cat-stage12.png' },
+    { level: 13, name: 'Котик-бизнесмен',    need: 260000,  cat: 'cat-stage13.png' },
+    { level: 14, name: 'Котик-босс',         need: 400000,  cat: 'cat-stage14.png' },
+    { level: 15, name: 'Котик-магнат',       need: 600000,  cat: 'cat-stage15.png' },
+    { level: 16, name: 'Котик-воротила',     need: 880000,  cat: 'cat-stage16.png' },
+    { level: 17, name: 'Котик-олигарх',      need: 1250000, cat: 'cat-stage17.png' },
+    { level: 18, name: 'Котик-дон',          need: 1750000, cat: 'cat-stage18.png' },
+    { level: 19, name: 'Повелитель котов',   need: 2500000, cat: 'cat-stage19.png' },
   ];
   const REF_REFERRER = 5000, REF_INVITEE = 2500, BOT = 'mariatortik_bot';
   const TASKS = [

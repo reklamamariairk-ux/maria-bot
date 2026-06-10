@@ -28,22 +28,27 @@ export const TASKS = [
 const TASK_BY_ID = Object.fromEntries(TASKS.map((t) => [t.id, t]));
 const dailyReward = (streak: number) => 500 * Math.min(Math.max(1, streak), 10); // день1=500 … день10+=5000
 
+// ⚠️ Лестница продублирована во фронте public/js/catclick.js (там же поле cat) — менять синхронно.
 export const LEAGUES = [
-  { level: 1,  name: "Тощий котик",       need: 0 },
-  { level: 2,  name: "Обычный котик",     need: 200 },
-  { level: 3,  name: "Сытый котик",       need: 600 },
-  { level: 4,  name: "Толстый котик",     need: 1500 },
-  { level: 5,  name: "Котик на спорте",   need: 3500 },
-  { level: 6,  name: "Подкачанный котик", need: 7000 },
-  { level: 7,  name: "Котик в тонусе",    need: 13000 },
-  { level: 8,  name: "Котик-бодибилдер",  need: 24000 },
-  { level: 9,  name: "Котик-силач",       need: 42000 },
-  { level: 10, name: "Мега-кот",          need: 70000 },
-  { level: 11, name: "Котик-рэпер",       need: 115000 },
-  { level: 12, name: "Богатый рэпер",     need: 185000 },
-  { level: 13, name: "Котик-титан",       need: 300000 },
-  { level: 14, name: "Котик-магнат",      need: 480000 },
-  { level: 15, name: "Повелитель котов",  need: 750000 },
+  { level: 1,  name: "Тощий котик",        need: 0 },
+  { level: 2,  name: "Обычный котик",      need: 200 },
+  { level: 3,  name: "Сытый котик",        need: 600 },
+  { level: 4,  name: "Толстый котик",      need: 1500 },
+  { level: 5,  name: "Котик на спорте",    need: 3500 },
+  { level: 6,  name: "Подкачанный котик",  need: 7000 },
+  { level: 7,  name: "Котик в тонусе",     need: 13000 },
+  { level: 8,  name: "Котик-бодибилдер",   need: 24000 },
+  { level: 9,  name: "Котик-силач",        need: 42000 },
+  { level: 10, name: "Котик-рэпер",        need: 70000 },
+  { level: 11, name: "Котик при деньгах",  need: 110000 },
+  { level: 12, name: "Котик-делец",        need: 170000 },
+  { level: 13, name: "Котик-бизнесмен",    need: 260000 },
+  { level: 14, name: "Котик-босс",         need: 400000 },
+  { level: 15, name: "Котик-магнат",       need: 600000 },
+  { level: 16, name: "Котик-воротила",     need: 880000 },
+  { level: 17, name: "Котик-олигарх",      need: 1250000 },
+  { level: 18, name: "Котик-дон",          need: 1750000 },
+  { level: 19, name: "Повелитель котов",   need: 2500000 },
 ];
 function leagueFor(total: number) { let l = LEAGUES[0]; for (const x of LEAGUES) if (total >= x.need) l = x; return l; }
 function nextNeed(total: number): number | null { const n = LEAGUES.find((x) => x.need > total); return n ? n.need : null; }
