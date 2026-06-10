@@ -15,19 +15,28 @@
     { id: 'franchise', name: 'Франшиза «Мария»', icon: '🏪', basePrice: 20000, baseProfit: 1500 },
   ];
   const LEAGUES = [
-    // cat = картинка кота-в-костюме на уровне
-    { level: 1, name: 'Уличный котик', need: 0, cat: 'idle.png' },
-    { level: 2, name: 'Котик-поварёнок', need: 300, cat: 'cat-cook.png' },
-    { level: 3, name: 'Шеф-кондитер', need: 1500, cat: 'cat-chef.png' },
-    { level: 4, name: 'Бизнес-кот', need: 6000, cat: 'cat-business.png' },
-    { level: 5, name: 'Супер-кот', need: 20000, cat: 'cat-super.png' },
-    { level: 6, name: 'Котик-король', need: 60000, cat: 'cat-king.png' },
+    // cat = картинка кота на уровне (эволюция «глоу-ап»: тощий → повелитель котов)
+    { level: 1,  name: 'Тощий котик',       need: 0,      cat: 'cat-stage1.png' },
+    { level: 2,  name: 'Обычный котик',     need: 200,    cat: 'cat-stage2.png' },
+    { level: 3,  name: 'Сытый котик',       need: 600,    cat: 'cat-stage3.png' },
+    { level: 4,  name: 'Толстый котик',     need: 1500,   cat: 'cat-stage4.png' },
+    { level: 5,  name: 'Котик на спорте',   need: 3500,   cat: 'cat-stage5.png' },
+    { level: 6,  name: 'Подкачанный котик', need: 7000,   cat: 'cat-stage6.png' },
+    { level: 7,  name: 'Котик в тонусе',    need: 13000,  cat: 'cat-stage7.png' },
+    { level: 8,  name: 'Котик-бодибилдер',  need: 24000,  cat: 'cat-stage8.png' },
+    { level: 9,  name: 'Котик-силач',       need: 42000,  cat: 'cat-stage9.png' },
+    { level: 10, name: 'Мега-кот',          need: 70000,  cat: 'cat-stage10.png' },
+    { level: 11, name: 'Котик-рэпер',       need: 115000, cat: 'cat-stage11.png' },
+    { level: 12, name: 'Богатый рэпер',     need: 185000, cat: 'cat-stage12.png' },
+    { level: 13, name: 'Котик-титан',       need: 300000, cat: 'cat-stage13.png' },
+    { level: 14, name: 'Котик-магнат',      need: 480000, cat: 'cat-stage14.png' },
+    { level: 15, name: 'Повелитель котов',  need: 750000, cat: 'cat-stage15.png' },
   ];
   const REF_REFERRER = 5000, REF_INVITEE = 2500, BOT = 'mariatortik_bot';
   const TASKS = [
     { id: 'site', name: 'Заглянуть на сайт «Мария»', icon: '🌐', reward: 1500, type: 'link', link: 'https://www.maria-irk.ru/' },
     { id: 'invite1', name: 'Пригласить друга', icon: '👥', reward: 10000, type: 'ref', target: 1 },
-    { id: 'level3', name: 'Стать шеф-кондитером (ур.3)', icon: '👨‍🍳', reward: 3000, type: 'level', target: 3 },
+    { id: 'level3', name: 'Дойти до 3 уровня', icon: '⭐', reward: 3000, type: 'level', target: 3 },
     { id: 'balance10', name: 'Накопить 10 000 монет', icon: '💰', reward: 2500, type: 'balance', target: 10000 },
     { id: 'streak3', name: 'Заходить 3 дня подряд', icon: '🔥', reward: 4000, type: 'streak', target: 3 },
   ];
@@ -409,7 +418,7 @@
     if (!ov) build();
     ov.classList.add('on'); window.scrollLock && window.scrollLock(); ac();
     await load(); await maybeRegisterRef(); curLevel = leagueFor(st.totalEarned).level;
-    ov.querySelector('#ck-cat').src = A('idle.png');
+    ov.querySelector('#ck-cat').src = A(leagueFor(st.totalEarned).cat || 'idle.png');
     setTab('cat'); renderAll();
     if (st.passiveEarned > 0) passivePopup(st.passiveEarned);
     lastTs = 0; syncT = 0; combo = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
