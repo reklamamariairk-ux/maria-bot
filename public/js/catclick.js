@@ -21,6 +21,14 @@
     { level: 4, name: 'Котик-волшебник', need: 6000, hat: 'hat-wizard.png', hp: { w: 0.60, dy: -0.16 } },
     { level: 5, name: 'Котик-король', need: 20000, hat: 'hat-crown.png', hp: { w: 0.52, dy: 0.06 } },
   ];
+  const REF_REFERRER = 5000, REF_INVITEE = 2500, BOT = 'mariatortik_bot';
+  const TASKS = [
+    { id: 'site', name: 'Заглянуть на сайт «Мария»', icon: '🌐', reward: 1500, type: 'link', link: 'https://www.maria-irk.ru/' },
+    { id: 'invite1', name: 'Пригласить друга', icon: '👥', reward: 10000, type: 'ref', target: 1 },
+    { id: 'level3', name: 'Стать Котиком-пиратом (ур.3)', icon: '🏴‍☠️', reward: 3000, type: 'level', target: 3 },
+    { id: 'balance10', name: 'Накопить 10 000 монет', icon: '💰', reward: 2500, type: 'balance', target: 10000 },
+    { id: 'streak3', name: 'Заходить 3 дня подряд', icon: '🔥', reward: 4000, type: 'streak', target: 3 },
+  ];
   const leagueFor = (t) => { let l = LEAGUES[0]; for (const x of LEAGUES) if (t >= x.need) l = x; return l; };
   const nextNeed = (t) => { const n = LEAGUES.find(x => x.need > t); return n ? n.need : null; };
   const fmt = (n) => Math.floor(n).toLocaleString('ru-RU');
@@ -43,7 +51,7 @@
   function chord(arr, g) { arr.forEach((f, i) => setTimeout(() => beep(f, 'triangle', g || 0.14), i * 80)); }
 
   // ── Гость (localStorage) ─────────────────────────────────────────────────────
-  function rawDefault() { return { balance: 0, totalEarned: 0, energy: 1000, multitapLevel: 0, energyLevel: 0, cards: {}, dailyStreak: 0, dailyDate: null, bE: 0, bT: 0, bDate: null, turboUntil: 0, _ts: Date.now() }; }
+  function rawDefault() { return { balance: 0, totalEarned: 0, energy: 1000, multitapLevel: 0, energyLevel: 0, cards: {}, dailyStreak: 0, dailyDate: null, bE: 0, bT: 0, bDate: null, turboUntil: 0, tasksDone: {}, _ts: Date.now() }; }
   function rawGet() { let s; try { s = JSON.parse(localStorage.getItem(LS)); } catch (_) {} if (!s) s = rawDefault(); if (!s.cards) s.cards = {}; return s; }
   function rawSave(s) { s._ts = Date.now(); localStorage.setItem(LS, JSON.stringify(s)); }
   function profitOf(c) { let p = 0; for (const x of CARDS) p += cardProfit(x, c[x.id] || 0); return p; }
@@ -182,6 +190,7 @@
         <div class="ck-energy"><div class="ck-energy__row" id="ck-enrow">⚡ <span id="ck-en">0</span> / <span id="ck-enmax">1000</span></div><div class="ck-energy__bar"><div class="ck-energy__fill" id="ck-enfill"></div></div></div>
       </div>
       <div class="ck-screen" id="ck-scr-up"><div class="ck-uphd"><div class="ck-bal" style="justify-content:center;font-size:26px">🪙 <span id="ck-bal2">0</span></div><div class="p" id="ck-prof2">🏭 +0 / час</div></div><div class="ck-uplist" id="ck-uplist"></div></div>
+      <div class="ck-screen" id="ck-scr-tasks"><div class="ck-uphd"><div class="b">📋 Задания</div></div><div class="ck-uplist" id="ck-taskslist"></div></div>
       <div class="ck-screen" id="ck-scr-top"><div class="ck-uphd"><div class="b">🏆 Рейтинг</div><div class="p" id="ck-myrank"></div></div><div class="ck-uplist" id="ck-toplist"></div></div>
       <div class="ck-fx" id="ck-fx"></div>
       <div class="ck-levelup" id="ck-levelup"><span id="ck-levelup-t"></span></div>
@@ -189,6 +198,7 @@
       <div class="ck-nav">
         <button class="ck-nav__b on" data-tab="cat"><span class="i">🐱</span>Котик</button>
         <button class="ck-nav__b" data-tab="up"><span class="i">⚡</span>Прокачка</button>
+        <button class="ck-nav__b" data-tab="tasks"><span class="i">📋</span>Задания</button>
         <button class="ck-nav__b" data-tab="top"><span class="i">🏆</span>Рейтинг</button>
       </div>`;
     document.body.appendChild(ov);
@@ -204,9 +214,11 @@
     tab = t;
     ov.querySelector('#ck-scr-cat').classList.toggle('on', t === 'cat');
     ov.querySelector('#ck-scr-up').classList.toggle('on', t === 'up');
+    ov.querySelector('#ck-scr-tasks').classList.toggle('on', t === 'tasks');
     ov.querySelector('#ck-scr-top').classList.toggle('on', t === 'top');
     ov.querySelectorAll('.ck-nav__b').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
     if (t === 'up') renderUpgrades();
+    if (t === 'tasks') renderTasks();
     if (t === 'top') renderTop();
   }
 
@@ -309,6 +321,77 @@
     list.innerHTML = d.top.map((r, i) => `<div class="ck-row${r.me ? ' me' : ''}"><div class="r">${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</div><div class="n">${(r.name || '').replace(/</g, '&lt;')}</div><div class="v">🪙 ${fmt(r.total)}</div></div>`).join('');
   }
 
+  // ── Рефералы + Задания ───────────────────────────────────────────────────────
+  const linkOpened = {};
+  function refLink() { const code = st && st.refCode; return code ? `https://t.me/${BOT}?startapp=ckref_${code}` : `https://t.me/${BOT}`; }
+  function shareRef() {
+    const link = refLink();
+    const txt = `🐱 Играю в «Котик Комбат» от кондитерской «Мария» — тапай котика и качай уровни! Заходи по ссылке, нам обоим дадут монеты 🪙 ${link}`;
+    if (window.App && App.share) App.share(txt); else if (navigator.share) navigator.share({ text: txt }).catch(() => {}); else if (window.App && App.openExternal) App.openExternal(link);
+  }
+  async function maybeRegisterRef() {
+    if (!authed()) return;
+    try {
+      const sp = (window.App && App.startParam) || '';
+      const m = /^ckref_(\d+)$/.exec(sp);
+      if (!m) return;
+      if (localStorage.getItem('maria_ck_ref_done')) return;
+      localStorage.setItem('maria_ck_ref_done', '1');
+      const d = await api('/api/clicker/ref', { method: 'POST', body: JSON.stringify({ code: m[1] }) });
+      if (d && !d.error) { st = d; if (d.refReward) { dailyPopupRaw('🎉 Бонус за приглашение', d.refReward); } }
+    } catch (_) {}
+  }
+  function guestTaskList() {
+    const s = guestDerive(); const done = (rawGet().tasksDone) || {};
+    return TASKS.map(t => {
+      let claim = false;
+      if (t.type === 'link') claim = !!linkOpened[t.id];
+      else if (t.type === 'level') claim = s.level >= t.target;
+      else if (t.type === 'balance') claim = s.totalEarned >= t.target;
+      else if (t.type === 'streak') claim = s.dailyStreak >= t.target;
+      else if (t.type === 'ref') claim = false;
+      return { id: t.id, name: t.name, icon: t.icon, reward: t.reward, type: t.type, link: t.link || null, done: !!done[t.id], claimable: !done[t.id] && claim };
+    });
+  }
+  function guestClaimTask(id) {
+    const t = TASKS.find(x => x.id === id); if (!t) return 0;
+    guestDerive(); const s = rawGet(); if (s.tasksDone && s.tasksDone[id]) return 0;
+    const list = guestTaskList(); const item = list.find(x => x.id === id); if (!item || !item.claimable) return 0;
+    s.balance += t.reward; s.totalEarned += t.reward; s.tasksDone = s.tasksDone || {}; s.tasksDone[id] = 1; rawSave(s); return t.reward;
+  }
+  async function renderTasks() {
+    const list = ov.querySelector('#ck-taskslist');
+    const refCount = (st && st.referrals) || 0;
+    const refBlock = `<div class="ck-card" style="background:linear-gradient(90deg,rgba(255,138,61,.25),rgba(255,210,63,.15))">
+      <div class="ck-card__ic">👥</div><div class="ck-card__b"><div class="ck-card__n">Пригласи друзей</div>
+      <div class="ck-card__s">Друзей: ${refCount} · +${fmt(REF_REFERRER)} 🪙 тебе и +${fmt(REF_INVITEE)} другу</div></div>
+      <button class="ck-card__buy" id="ck-invite">Позвать</button></div>`;
+    let tasks;
+    if (authed()) { const d = await api('/api/clicker/tasks').catch(() => null); tasks = d && d.tasks; }
+    else tasks = guestTaskList();
+    if (!tasks) tasks = [];
+    const rows = tasks.map(t => {
+      let btn;
+      if (t.done) btn = `<button class="ck-card__buy" disabled>✓ Готово</button>`;
+      else if (t.type === 'link' && !(linkOpened[t.id])) btn = `<button class="ck-card__buy" data-open="${t.id}" data-link="${t.link || ''}">Открыть</button>`;
+      else if (t.claimable) btn = `<button class="ck-card__buy" data-claim="${t.id}">+${fmt(t.reward)} 🪙</button>`;
+      else btn = `<button class="ck-card__buy" disabled>🔒 +${fmt(t.reward)}</button>`;
+      return `<div class="ck-card"><div class="ck-card__ic">${t.icon}</div><div class="ck-card__b"><div class="ck-card__n">${t.name}</div><div class="ck-card__s">Награда +${fmt(t.reward)} 🪙</div></div>${btn}</div>`;
+    }).join('');
+    list.innerHTML = '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows;
+    ov.querySelector('#ck-invite').onclick = shareRef;
+    list.querySelectorAll('[data-open]').forEach(b => b.onclick = () => { const id = b.dataset.open, link = b.dataset.link; if (link) { if (window.App && App.openExternal) App.openExternal(link); else window.open(link, '_blank'); } linkOpened[id] = true; setTimeout(renderTasks, 400); });
+    list.querySelectorAll('[data-claim]').forEach(b => b.onclick = () => claimTask(b.dataset.claim));
+  }
+  async function claimTask(id) {
+    let reward = 0;
+    if (authed()) { const d = await api('/api/clicker/task', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null); if (d && !d.error) { st = d; reward = d.reward; } }
+    else { reward = guestClaimTask(id); if (reward) st = guestDerive(); }
+    if (reward) { chord([660, 880, 1320], 0.16); window.haptic && window.haptic('success'); dailyPopupRaw('✅ Задание выполнено', reward); renderAll(); renderTasks(); }
+    else flashMsg('Пока недоступно');
+  }
+  function dailyPopupRaw(title, amount) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${title}</h3><div class="v">+${fmt(amount)} 🪙</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
+
   function dailyPopup(amount, streak) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>🎁 Награда дня ${streak}</h3><div class="v">+${fmt(amount)} 🪙</div><div style="color:#b9a7dd;font-size:13px">Заходи каждый день — награда растёт!</div><button id="ck-pop-ok">Ура!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
   function passivePopup(amount) { if (!amount || amount <= 0) return; const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>Пока тебя не было 😺</h3><div class="v">+${fmt(amount)} 🪙</div><div style="color:#b9a7dd;font-size:13px">Котик работал за тебя!</div><button id="ck-pop-ok">Забрать</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
 
@@ -328,7 +411,7 @@
   async function open() {
     if (!ov) build();
     ov.classList.add('on'); window.scrollLock && window.scrollLock(); ac();
-    await load(); curLevel = leagueFor(st.totalEarned).level;
+    await load(); await maybeRegisterRef(); curLevel = leagueFor(st.totalEarned).level;
     ov.querySelector('#ck-cat').src = A('idle.png');
     setTab('cat'); renderAll();
     if (st.passiveEarned > 0) passivePopup(st.passiveEarned);

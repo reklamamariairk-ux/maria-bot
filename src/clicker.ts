@@ -13,7 +13,19 @@ const PASSIVE_CAP_HOURS = 3;
 const TURBO_MULT = 5;
 const TURBO_SEC = 20;
 const DAILY_BOOSTS = 6;           // бесплатных бустов каждого типа в день
+const REF_INVITEE = 2500;         // бонус приглашённому
+const REF_REFERRER = 5000;        // бонус пригласившему
 const irkToday = () => new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+
+// Задания. type: link (открыть ссылку → забрать) | level | balance | streak | ref (по достижению цели).
+export const TASKS = [
+  { id: "site",     name: "Заглянуть на сайт «Мария»", icon: "🌐", reward: 1500, type: "link", link: "https://www.maria-irk.ru/" },
+  { id: "invite1",  name: "Пригласить друга",          icon: "👥", reward: 10000, type: "ref",   target: 1 },
+  { id: "level3",   name: "Стать Котиком-пиратом (ур.3)", icon: "🏴‍☠️", reward: 3000, type: "level",  target: 3 },
+  { id: "balance10",name: "Накопить 10 000 монет",     icon: "💰", reward: 2500, type: "balance", target: 10000 },
+  { id: "streak3",  name: "Заходить 3 дня подряд",      icon: "🔥", reward: 4000, type: "streak",  target: 3 },
+];
+const TASK_BY_ID = Object.fromEntries(TASKS.map((t) => [t.id, t]));
 const dailyReward = (streak: number) => 500 * Math.min(Math.max(1, streak), 10); // день1=500 … день10+=5000
 
 export const LEAGUES = [
@@ -52,6 +64,7 @@ export interface ClickerState {
   // усиления
   dailyAvailable: boolean; dailyStreak: number; dailyNext: number;
   boostEnergyLeft: number; boostTurboLeft: number; turboMsLeft: number;
+  referrals: number; refCode: string;
 }
 
 export async function initClickerSchema(): Promise<void> {
@@ -74,9 +87,15 @@ export async function initClickerSchema(): Promise<void> {
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS boost_turbo_used INT NOT NULL DEFAULT 0;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS boost_date TEXT;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS turbo_until TIMESTAMPTZ;
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS referred_by BIGINT;
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS referrals INT NOT NULL DEFAULT 0;
     CREATE TABLE IF NOT EXISTS clicker_cards (
       chat_id BIGINT NOT NULL, card TEXT NOT NULL, level INT NOT NULL DEFAULT 0,
       PRIMARY KEY (chat_id, card)
+    );
+    CREATE TABLE IF NOT EXISTS clicker_tasks (
+      chat_id BIGINT NOT NULL, task TEXT NOT NULL, done_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (chat_id, task)
     );
     CREATE INDEX IF NOT EXISTS clicker_top_idx ON clicker_state (total_earned DESC);
   `);
@@ -103,6 +122,7 @@ function buildState(r: any, cl: Record<string, number>, passiveEarned: number): 
     cards: CARDS.map((c) => ({ id: c.id, name: c.name, icon: c.icon, level: cl[c.id] || 0, profit: cardProfit(c, (cl[c.id] || 0) + 1), price: cardPrice(c, cl[c.id] || 0) })),
     dailyAvailable: r.daily_date !== today, dailyStreak: r.daily_streak, dailyNext: dailyReward((r.daily_date === today ? r.daily_streak : r.daily_streak + 1)),
     boostEnergyLeft: DAILY_BOOSTS - bUsedE, boostTurboLeft: DAILY_BOOSTS - bUsedT, turboMsLeft: turboMs,
+    referrals: r.referrals || 0, refCode: String(r.chat_id),
   };
 }
 
@@ -218,4 +238,62 @@ export async function getTop(chatId: number, limit = 30): Promise<{ top: { name:
   const top = rows.map((r) => ({ name: (r.first_name || r.username || "Котовод").toString().slice(0, 24), total: Number(r.total_earned), me: Number(r.chat_id) === chatId }));
   const rank = await pool.query(`SELECT COUNT(*)::int AS n FROM clicker_state WHERE total_earned > (SELECT total_earned FROM clicker_state WHERE chat_id=$1)`, [chatId]);
   return { top, myRank: rows.length ? (rank.rows[0].n + 1) : null };
+}
+
+/** Регистрация реферала: code = chat_id пригласившего. Бонус обоим, один раз. */
+export async function registerRef(chatId: number, code: string): Promise<{ ok: boolean; reward?: number; state: ClickerState }> {
+  const refId = Number(code);
+  const noop = async () => ({ ok: false, state: await getClicker(chatId) });
+  if (!Number.isFinite(refId) || refId === chatId) return noop();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(`INSERT INTO clicker_state (chat_id) VALUES ($1) ON CONFLICT (chat_id) DO NOTHING`, [chatId]);
+    const { rows } = await client.query(`SELECT referred_by FROM clicker_state WHERE chat_id=$1 FOR UPDATE`, [chatId]);
+    if (rows[0].referred_by != null) { await client.query("ROLLBACK"); return noop(); }
+    await client.query(`UPDATE clicker_state SET referred_by=$2, balance=balance+$3, total_earned=total_earned+$3 WHERE chat_id=$1`, [chatId, refId, REF_INVITEE]);
+    await client.query(`INSERT INTO clicker_state (chat_id, balance, total_earned, referrals) VALUES ($1,$2,$2,1)
+                        ON CONFLICT (chat_id) DO UPDATE SET balance=clicker_state.balance+$2, total_earned=clicker_state.total_earned+$2, referrals=clicker_state.referrals+1`, [refId, REF_REFERRER]);
+    await client.query("COMMIT");
+    return { ok: true, reward: REF_INVITEE, state: await getClicker(chatId) };
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+}
+
+function taskClaimable(t: any, s: ClickerState): boolean {
+  if (t.type === "link") return true;
+  if (t.type === "level") return s.level >= t.target;
+  if (t.type === "balance") return s.totalEarned >= t.target;
+  if (t.type === "streak") return s.dailyStreak >= t.target;
+  if (t.type === "ref") return s.referrals >= t.target;
+  return false;
+}
+
+export async function getTasks(chatId: number): Promise<{ tasks: any[] }> {
+  const s = await getClicker(chatId);
+  const { rows } = await pool.query(`SELECT task FROM clicker_tasks WHERE chat_id=$1`, [chatId]);
+  const done = new Set(rows.map((r) => r.task));
+  return {
+    tasks: TASKS.map((t) => ({
+      id: t.id, name: t.name, icon: t.icon, reward: t.reward, type: t.type, link: (t as any).link || null,
+      done: done.has(t.id), claimable: !done.has(t.id) && taskClaimable(t, s),
+    })),
+  };
+}
+
+export async function claimTask(chatId: number, id: string): Promise<{ ok: boolean; reward?: number; state?: ClickerState; reason?: string }> {
+  const t = TASK_BY_ID[id]; if (!t) return { ok: false, reason: "bad_task" };
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { r, cl } = await refresh(client, chatId);
+    const exists = await client.query(`SELECT 1 FROM clicker_tasks WHERE chat_id=$1 AND task=$2`, [chatId, id]);
+    if (exists.rows.length) { await client.query("ROLLBACK"); return { ok: false, reason: "already" }; }
+    const s = buildState(r, cl, 0);
+    if (!taskClaimable(t, s)) { await client.query("ROLLBACK"); return { ok: false, reason: "not_ready" }; }
+    r.balance = Number(r.balance) + t.reward; r.total_earned = Number(r.total_earned) + t.reward;
+    await client.query(`INSERT INTO clicker_tasks (chat_id, task) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [chatId, id]);
+    await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, updated_at=NOW() WHERE chat_id=$1`, [chatId, r.balance, r.total_earned]);
+    await client.query("COMMIT");
+    return { ok: true, reward: t.reward, state: buildState(r, cl, 0) };
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }

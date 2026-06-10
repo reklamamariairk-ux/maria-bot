@@ -5,7 +5,7 @@
  * POST /api/clicker/boost {type:turbo|energy} · GET /api/clicker/top
  */
 import { Router } from "express";
-import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop } from "../clicker";
+import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask } from "../clicker";
 import { rateLimit } from "../middleware";
 import { requireTgUser, getTgUser } from "../auth";
 import { log } from "../logger";
@@ -43,6 +43,23 @@ router.post("/api/clicker/boost", requireTgUser, rateLimit(60), async (req, res)
 router.get("/api/clicker/top", requireTgUser, rateLimit(60), async (req, res) => {
   const u = getTgUser(req)!;
   try { res.json(await getTop(u.id, 30)); } catch (e) { log.error({ err: e, chatId: u.id }, "[top]"); res.status(500).json({ error: "internal" }); }
+});
+
+router.post("/api/clicker/ref", requireTgUser, rateLimit(20), async (req, res) => {
+  const u = getTgUser(req)!; const code = String((req.body as { code?: string }).code || "");
+  try { const r = await registerRef(u.id, code); res.json({ refReward: r.ok ? r.reward : 0, ...r.state }); }
+  catch (e) { log.error({ err: e, chatId: u.id }, "[ref]"); res.status(500).json({ error: "internal" }); }
+});
+
+router.get("/api/clicker/tasks", requireTgUser, rateLimit(60), async (req, res) => {
+  const u = getTgUser(req)!;
+  try { res.json(await getTasks(u.id)); } catch (e) { log.error({ err: e, chatId: u.id }, "[tasks]"); res.status(500).json({ error: "internal" }); }
+});
+
+router.post("/api/clicker/task", requireTgUser, rateLimit(40), async (req, res) => {
+  const u = getTgUser(req)!; const id = String((req.body as { id?: string }).id || "");
+  try { const r = await claimTask(u.id, id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ reward: r.reward, ...r.state }); }
+  catch (e) { log.error({ err: e, chatId: u.id }, "[task]"); res.status(500).json({ error: "internal" }); }
 });
 
 export default router;
