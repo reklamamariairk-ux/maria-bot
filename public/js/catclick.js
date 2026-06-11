@@ -159,7 +159,7 @@
       .ck-prof{margin-top:3px;background:rgba(255,255,255,.1);padding:4px 12px;border-radius:20px;font-weight:800;font-size:12px;color:#7ed957}
       .ck-prog{width:78%;max-width:340px;margin-top:7px}.ck-prog__bar{height:7px;border-radius:6px;background:rgba(255,255,255,.16);overflow:hidden}.ck-prog__fill{height:100%;border-radius:6px;background:linear-gradient(90deg,#ffd23f,#ff9d33);transition:width .3s}.ck-prog__t{color:#cdbce8;font-size:10px;text-align:center;margin-top:3px}
       .ck-catwrap{position:relative;flex:1;width:100%;display:flex;align-items:center;justify-content:center}
-      .ck-catwrap::before{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:76%;height:76%;background:radial-gradient(ellipse at center,rgba(255,205,90,.38) 0%,rgba(255,178,61,.20) 42%,rgba(255,178,61,0) 70%);filter:blur(9px);pointer-events:none;z-index:0}
+      .ck-catwrap::before{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:76%;height:76%;background:radial-gradient(ellipse at center,rgba(255,196,72,.54) 0%,rgba(255,170,48,.30) 42%,rgba(255,170,48,0) 70%);filter:blur(9px);pointer-events:none;z-index:0}
       .ck-cat{position:relative;z-index:1;max-width:62%;max-height:94%;width:auto;height:auto;object-fit:contain;cursor:pointer;transition:transform .07s;filter:drop-shadow(0 16px 22px rgba(0,0,0,.5));transform-origin:bottom center;-webkit-tap-highlight-color:transparent}
       .ck-cat.tap{transform:scale(.92)}.ck-cat.turbo{filter:drop-shadow(0 0 30px #ffb13d) drop-shadow(0 18px 26px rgba(0,0,0,.5))}
       .ck-hat{position:absolute;pointer-events:none;filter:drop-shadow(0 4px 6px rgba(0,0,0,.3))}
