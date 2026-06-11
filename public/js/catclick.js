@@ -408,6 +408,11 @@
       .ck-cipher-in{flex:1;min-width:0;background:rgba(0,0,0,.26);border:1px solid var(--line);border-radius:12px;padding:10px 12px;color:var(--ink);font-size:14px;font-weight:700;text-transform:uppercase;outline:none}
       .ck-cipher-in::placeholder{color:var(--muted);text-transform:none;font-weight:400}
       .ck-cipher-in:focus{border-color:rgba(238,191,82,.5)}
+      .ck-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin:12px 0}
+      .ck-cal-day{background:rgba(0,0,0,.22);border:1px solid var(--line);border-radius:9px;padding:7px 1px;text-align:center}
+      .ck-cal-day .d{font-weight:700;color:var(--cream);font-size:11px}.ck-cal-day .a{color:var(--gold-l);font-weight:700;font-variant-numeric:tabular-nums;font-size:9.5px;margin-top:3px}
+      .ck-cal-day.done{opacity:.5}.ck-cal-day.today{background:rgba(238,191,82,.16);border-color:rgba(238,191,82,.55)}
+      .ck-daily.done{background:var(--panel);color:var(--muted);border-color:var(--line);box-shadow:none}
       .ck-nav{display:flex;border-top:1px solid var(--line);background:rgba(18,8,11,.5);backdrop-filter:blur(8px)}
       .ck-nav__b{flex:1;border:none;background:transparent;color:var(--muted);padding:9px 0 12px;font-weight:600;font-size:11.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px}.ck-nav__b.on{color:var(--gold-l)}
       .ck-levelup{position:absolute;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;pointer-events:none}.ck-levelup span{font-family:'Playfair Display',serif;color:var(--gold-l);font-weight:700;font-size:26px;background:linear-gradient(180deg,rgba(46,17,25,.92),rgba(26,10,15,.92));border:1px solid var(--line);padding:14px 24px;border-radius:18px;opacity:0;box-shadow:0 12px 36px rgba(0,0,0,.5)}.ck-levelup span.show{animation:ckLU 1.6s ease-out}@keyframes ckLU{0%{opacity:0;transform:scale(.6)}20%{opacity:1;transform:scale(1.1)}80%{opacity:1}100%{opacity:0}}
@@ -451,7 +456,7 @@
     document.body.appendChild(ov);
     ov.querySelector('#ck-x').onclick = close;
     ov.querySelector('#ck-cat').addEventListener('pointerdown', onTap);
-    ov.querySelector('#ck-daily').onclick = claimDaily;
+    ov.querySelector('#ck-daily').onclick = dailyBtn;
     ov.querySelector('#ck-bt-turbo').onclick = () => boost('turbo');
     ov.querySelector('#ck-bt-energy').onclick = () => boost('energy');
     ov.querySelectorAll('.ck-nav__b').forEach(b => b.onclick = () => setTab(b.dataset.tab));
@@ -754,7 +759,9 @@
     else { prog.style.width = '100%'; progt.textContent = 'Максимальный уровень!'; }
     // ежедневка
     const daily = ov.querySelector('#ck-daily');
-    if (st.dailyAvailable) { daily.style.display = ''; daily.innerHTML = `${ICON.gift(16)} Награда дня +${fmt(st.dailyNext)}`; } else daily.style.display = 'none';
+    daily.style.display = '';
+    if (st.dailyAvailable) { daily.classList.remove('done'); daily.innerHTML = `${ICON.gift(16)} Награда дня · День ${st.dailyStreak + 1}`; }
+    else { daily.classList.add('done'); daily.innerHTML = `${ICON.gift(16)} Награда ✓ · день ${st.dailyStreak}`; }
     // бусты
     ov.querySelector('#ck-bt-turbo-n').textContent = '(' + st.boostTurboLeft + ')';
     ov.querySelector('#ck-bt-energy-n').textContent = '(' + st.boostEnergyLeft + ')';
@@ -981,7 +988,15 @@
   }
   function dailyPopupRaw(title, amount) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${title}</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
 
-  function dailyPopup(amount, streak) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Награда дня ${streak}</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><div style="color:var(--muted);font-size:13px">Заходи каждый день — награда растёт!</div><button id="ck-pop-ok">Ура!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
+  function dailyCalHtml() {
+    const streak = (st && st.dailyStreak) || 0, avail = !st || st.dailyAvailable, todayDay = avail ? streak + 1 : 0;
+    let h = '<div class="ck-cal">';
+    for (let i = 1; i <= 7; i++) { const done = i <= streak; const today = i === todayDay; h += `<div class="ck-cal-day ${done ? 'done' : ''} ${today ? 'today' : ''}"><div class="d">${done ? '✓' : i}</div><div class="a">${fmt(dailyReward(i))}</div></div>`; }
+    return h + '</div>';
+  }
+  function dailyBtn() { if (st && st.dailyAvailable) claimDaily(); else openDailyView(); }
+  function openDailyView() { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Награда дня</h3>${dailyCalHtml()}<div style="color:var(--muted);font-size:13px">Заходи каждый день — приз растёт. Пропустишь — стрик сгорит!</div><button id="ck-pop-ok">Закрыть</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
+  function dailyPopup(amount, streak) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} День ${streak} — награда!</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div>${dailyCalHtml()}<div style="color:var(--muted);font-size:13px">Заходи каждый день — приз растёт!</div><button id="ck-pop-ok">Ура!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
   function passivePopup(amount) { if (!amount || amount <= 0) return; const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>Пока тебя не было</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><div style="color:var(--muted);font-size:13px">Котик работал за тебя!</div><button id="ck-pop-ok">Забрать</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
 
   function loop(ts) {
