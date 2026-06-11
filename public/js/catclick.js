@@ -678,6 +678,41 @@
     s.balance += reward; s.totalEarned += reward; s.rainDate = today; rawSave(s); return reward;
   }
 
+  // ── Карточка-хвастовство (canvas → шеринг) ────────────────────────────────────
+  function drawCardCoin(ctx, x, y, r) {
+    const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.2, x, y, r);
+    g.addColorStop(0, '#fff3cf'); g.addColorStop(.5, '#f0c24e'); g.addColorStop(1, '#bd812a');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = '#9c6a1c'; ctx.stroke();
+    ctx.fillStyle = '#7a4a12'; ctx.font = `700 ${Math.round(r * 1.15)}px Georgia,serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('М', x, y + r * 0.06);
+  }
+  async function shareCard() {
+    const lg = leagueFor(st.totalEarned);
+    const cv = document.createElement('canvas'); cv.width = 720; cv.height = 900; const ctx = cv.getContext('2d');
+    const bg = ctx.createRadialGradient(360, -40, 80, 360, 520, 920); bg.addColorStop(0, '#4e1b26'); bg.addColorStop(.55, '#2c1017'); bg.addColorStop(1, '#180a0f'); ctx.fillStyle = bg; ctx.fillRect(0, 0, 720, 900);
+    const gl = ctx.createRadialGradient(360, 430, 40, 360, 430, 300); gl.addColorStop(0, 'rgba(255,196,72,.5)'); gl.addColorStop(.5, 'rgba(255,170,48,.16)'); gl.addColorStop(1, 'rgba(255,170,48,0)'); ctx.fillStyle = gl; ctx.fillRect(0, 130, 720, 640);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = '#ffe49c'; ctx.font = '700 48px Georgia,serif'; ctx.fillText('Котик Комбат', 360, 92);
+    await new Promise((res) => { const img = new Image(); img.onload = () => { let w = img.width, h = img.height; const sc = Math.min(380 / w, 430 / h); w *= sc; h *= sc; ctx.drawImage(img, 360 - w / 2, 500 - h, w, h); res(); }; img.onerror = res; img.src = A(lg.cat || 'idle.png'); });
+    ctx.fillStyle = '#f4ead7'; ctx.font = '700 42px Georgia,serif'; ctx.fillText(lg.name, 360, 590);
+    ctx.fillStyle = '#bb9d88'; ctx.font = '600 27px Georgia,serif'; ctx.fillText('Уровень ' + lg.level, 360, 628);
+    const bal = fmt(Math.floor(st.totalEarned)); ctx.font = '700 58px Georgia,serif'; const tw = ctx.measureText(bal).width; const total = 64 + tw, sx = 360 - total / 2;
+    drawCardCoin(ctx, sx + 26, 700, 28); ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.fillText(bal, sx + 64, 718); ctx.textAlign = 'center';
+    ctx.fillStyle = '#eebf52'; ctx.font = '600 26px Georgia,serif'; ctx.fillText('Кондитерская «Мария»', 360, 818);
+    ctx.fillStyle = '#bb9d88'; ctx.font = '400 21px Georgia,serif'; ctx.fillText('Тапай котика — от уличного до императора', 360, 854);
+    cardPopup(cv.toDataURL('image/png'));
+  }
+  function cardPopup(url) {
+    const pop = ov.querySelector('#ck-pop');
+    pop.innerHTML = `<h3>${ICON.trophy(18)} Твоя карточка</h3><img src="${url}" alt="" style="width:240px;max-width:72vw;border-radius:14px;display:block;margin:10px auto;border:1px solid var(--line)"/><div style="display:flex;gap:8px;justify-content:center"><a class="ck-card__buy" href="${url}" download="kotik-kombat.png" style="text-decoration:none;justify-content:center">Сохранить</a><button class="ck-card__buy" id="ck-card-share" style="justify-content:center">Поделиться</button></div><button id="ck-pop-ok" style="margin-top:10px">Закрыть</button>`;
+    pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
+    pop.querySelector('#ck-card-share').onclick = () => shareImg(url);
+  }
+  async function shareImg(url) {
+    try { const blob = await (await fetch(url)).blob(); const file = new File([blob], 'kotik-kombat.png', { type: 'image/png' }); if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], text: 'Мой котик в «Котик Комбат» от кондитерской «Мария»!' }); return; } } catch (_) {}
+    shareRef();
+  }
+
   function renderTop2() { // лёгкий рендер баланса при тапе (без полного)
     ov.querySelector('#ck-bal').textContent = fmt(st.balance);
     ov.querySelector('#ck-en').textContent = Math.floor(st.energy);
@@ -762,13 +797,16 @@
   async function renderTop() {
     const list = ov.querySelector('#ck-toplist'); const rank = ov.querySelector('#ck-myrank');
     const left = fmtDur(seasonEndsTs() - Date.now());
-    if (!authed()) { rank.textContent = `Сезон недели · до сброса ${left}`; list.innerHTML = '<div style="text-align:center;color:var(--muted);padding:30px 14px;line-height:1.5">Рейтинг сезона доступен при входе через приложение «Мария». Соревнуйся за топ недели!</div>'; return; }
-    list.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px">Загрузка…</div>';
+    const brag = `<button class="ck-card__buy" id="ck-brag" style="width:100%;justify-content:center;margin-bottom:12px">${ICON.trophy(15)} Похвастаться карточкой</button>`;
+    const wire = () => { const bb = ov.querySelector('#ck-brag'); if (bb) bb.onclick = shareCard; };
+    if (!authed()) { rank.textContent = `Сезон недели · до сброса ${left}`; list.innerHTML = brag + '<div style="text-align:center;color:var(--muted);padding:24px 14px;line-height:1.5">Рейтинг сезона доступен при входе через приложение «Мария». Соревнуйся за топ недели!</div>'; wire(); return; }
+    list.innerHTML = brag + '<div style="text-align:center;color:var(--muted);padding:20px">Загрузка…</div>'; wire();
     const d = await loadTop();
     const ends = d && d.seasonEndsTs ? fmtDur(d.seasonEndsTs - Date.now()) : left;
     rank.textContent = `Сезон недели · до сброса ${ends}` + (d && d.myRank ? ` · ты #${d.myRank}` : '');
-    if (!d || !d.top || !d.top.length) { list.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px">Сезон только начался — заработай монеты и будь первым!</div>'; return; }
-    list.innerHTML = d.top.map((r, i) => `<div class="ck-row${r.me ? ' me' : ''}"><div class="r">${i < 3 ? ICON.medal(20) : i + 1}</div><div class="n">${(r.name || '').replace(/</g, '&lt;')}</div><div class="v">${COIN(14)} ${fmt(r.total)}</div></div>`).join('');
+    if (!d || !d.top || !d.top.length) { list.innerHTML = brag + '<div style="text-align:center;color:var(--muted);padding:20px">Сезон только начался — заработай монеты и будь первым!</div>'; wire(); return; }
+    list.innerHTML = brag + d.top.map((r, i) => `<div class="ck-row${r.me ? ' me' : ''}"><div class="r">${i < 3 ? ICON.medal(20) : i + 1}</div><div class="n">${(r.name || '').replace(/</g, '&lt;')}</div><div class="v">${COIN(14)} ${fmt(r.total)}</div></div>`).join('');
+    wire();
   }
 
   // ── Рефералы + Задания ───────────────────────────────────────────────────────
