@@ -93,6 +93,16 @@
   const cardIcon = (id) => ({ bakery: ICON.cupcake, coffee: ICON.coffee, delivery: ICON.scooter, cakefactory: ICON.cake, franchise: ICON.shop }[id] || ICON.cupcake)(26);
   const taskIcon = (id) => ({ site: ICON.globe, invite1: ICON.users, level3: ICON.star, balance10: ICON.wallet, streak3: ICON.fire }[id] || ICON.star)(26);
 
+  // ── Бонусы дня (зеркало src/clicker.ts — алгоритм/слова/морзе менять синхронно) ──
+  const COMBO_REWARD = 50000, CIPHER_REWARD = 8000;
+  const CIPHER_WORDS = ['МАРИЯ', 'ТОРТ', 'КОТИК', 'КРЕМ', 'ЭКЛЕР', 'МУСС', 'БИСКВИТ', 'ВАНИЛЬ', 'ШОКОЛАД', 'КАРАМЕЛЬ', 'ДЕСЕРТ', 'ПЕКАРНЯ'];
+  const MORSE = { А: '.-', Б: '-...', В: '.--', Г: '--.', Д: '-..', Е: '.', Ж: '...-', З: '--..', И: '..', Й: '.---', К: '-.-', Л: '.-..', М: '--', Н: '-.', О: '---', П: '.--.', Р: '.-.', С: '...', Т: '-', У: '..-', Ф: '..-.', Х: '....', Ц: '-.-.', Ч: '---.', Ш: '----', Щ: '--.-', Ь: '-..-', Ы: '-.--', Э: '..-..', Ю: '..--', Я: '.-.-' };
+  function dateSeed(day, salt) { let h = 2166136261 >>> 0; const s = day + salt; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h >>> 0; }
+  function todaysCombo(day) { let h = dateSeed(day, 'combo'); const pool2 = CARDS.map(c => c.id); const pick = []; for (let i = 0; i < 3; i++) { h = (Math.imul(h, 1664525) + 1013904223) >>> 0; pick.push(pool2.splice(h % pool2.length, 1)[0]); } return pick; }
+  function todaysCipher(day) { return CIPHER_WORDS[dateSeed(day, 'cipher') % CIPHER_WORDS.length]; }
+  function toMorse(w) { return w.split('').map(c => MORSE[c] || '').join(' '); }
+  const cardName = (id) => (CARDS.find(c => c.id === id) || {}).name || id;
+
   let ov, audio, raf, lastTs = 0, pending = 0, syncT = 0, curLevel = 1, tab = 'cat';
   let st = null, turboUntil = 0, combo = 0, comboT = 0;
 
@@ -103,7 +113,7 @@
   function chord(arr, g) { arr.forEach((f, i) => setTimeout(() => beep(f, 'triangle', g || 0.14), i * 80)); }
 
   // ── Гость (localStorage) ─────────────────────────────────────────────────────
-  function rawDefault() { return { balance: 0, totalEarned: 0, energy: 1000, multitapLevel: 0, energyLevel: 0, cards: {}, dailyStreak: 0, dailyDate: null, bE: 0, bT: 0, bDate: null, turboUntil: 0, tasksDone: {}, _ts: Date.now() }; }
+  function rawDefault() { return { balance: 0, totalEarned: 0, energy: 1000, multitapLevel: 0, energyLevel: 0, cards: {}, dailyStreak: 0, dailyDate: null, bE: 0, bT: 0, bDate: null, turboUntil: 0, tasksDone: {}, comboDate: null, comboHits: [], comboClaimed: null, cipherDate: null, _ts: Date.now() }; }
   function rawGet() { let s; try { s = JSON.parse(localStorage.getItem(LS)); } catch (_) {} if (!s) s = rawDefault(); if (!s.cards) s.cards = {}; return s; }
   function rawSave(s) { s._ts = Date.now(); localStorage.setItem(LS, JSON.stringify(s)); }
   function profitOf(c) { let p = 0; for (const x of CARDS) p += cardProfit(x, c[x.id] || 0); return p; }
@@ -127,6 +137,8 @@
       cards: CARDS.map(c => ({ id: c.id, name: c.name, icon: c.icon, level: s.cards[c.id] || 0, profit: cardProfit(c, (s.cards[c.id] || 0) + 1), price: cardPrice(c, s.cards[c.id] || 0) })),
       dailyAvailable: s.dailyDate !== today, dailyStreak: s.dailyStreak, dailyNext: dailyReward(s.dailyDate === today ? s.dailyStreak : s.dailyStreak + 1),
       boostEnergyLeft: DAILY_BOOSTS - s.bE, boostTurboLeft: DAILY_BOOSTS - s.bT, turboMsLeft: Math.max(0, (s.turboUntil || 0) - Date.now()),
+      combo: (() => { const cards = todaysCombo(today); const hits = s.comboDate === today ? (s.comboHits || []) : []; return { cards, hits, complete: cards.every(c => hits.includes(c)), claimed: s.comboClaimed === today, reward: COMBO_REWARD }; })(),
+      cipher: { morse: toMorse(todaysCipher(today)), len: todaysCipher(today).length, claimed: s.cipherDate === today, reward: CIPHER_REWARD },
     };
   }
 
@@ -145,7 +157,11 @@
     if (type === 'multitap') cost = priceMultitap(s.multitapLevel); else if (type === 'energy') cost = priceEnergy(s.energyLevel);
     else { const c = CARDS.find(x => x.id === id); cost = cardPrice(c, s.cards[id] || 0); }
     if (s.balance < cost) return null; s.balance -= cost;
-    if (type === 'multitap') s.multitapLevel++; else if (type === 'energy') s.energyLevel++; else s.cards[id] = (s.cards[id] || 0) + 1;
+    if (type === 'multitap') s.multitapLevel++; else if (type === 'energy') s.energyLevel++; else {
+      s.cards[id] = (s.cards[id] || 0) + 1;
+      const today = irkToday();
+      if (todaysCombo(today).includes(id)) { if (s.comboDate !== today) { s.comboHits = []; s.comboDate = today; } if (!s.comboHits.includes(id)) s.comboHits.push(id); }
+    }
     rawSave(s); return s;
   }
   async function claimDaily() {
@@ -159,6 +175,32 @@
     const yest = new Date(Date.now() + 8 * 3600 * 1000 - 86400000).toISOString().slice(0, 10);
     s.dailyStreak = s.dailyDate === yest ? s.dailyStreak + 1 : 1; const rew = dailyReward(s.dailyStreak);
     s.balance += rew; s.totalEarned += rew; s.dailyDate = today; rawSave(s); return rew;
+  }
+  async function claimCombo() {
+    let r;
+    if (authed()) { r = await api('/api/clicker/combo', { method: 'POST', body: '{}' }).catch(() => null); if (r && !r.error) st = r; else r = null; }
+    else { const g = guestClaimComboRaw(); if (g) { r = { reward: COMBO_REWARD }; st = guestDerive(); } }
+    if (r && r.reward) { chord([660, 990, 1320, 1760], 0.18); window.haptic && window.haptic('success'); coinShower(); dailyPopupRaw(ICON.star(20) + ' Комбо дня собрано!', r.reward); renderAll(); renderTasks(); }
+    else flashMsg('Комбо ещё не собрано');
+  }
+  function guestClaimComboRaw() {
+    guestDerive(); const s = rawGet(); const today = irkToday();
+    if (s.comboClaimed === today) return false;
+    const combo = todaysCombo(today); const hits = s.comboDate === today ? (s.comboHits || []) : [];
+    if (!combo.every(c => hits.includes(c))) return false;
+    s.balance += COMBO_REWARD; s.totalEarned += COMBO_REWARD; s.comboClaimed = today; rawSave(s); return true;
+  }
+  async function claimCipher(guess) {
+    let r;
+    if (authed()) { r = await api('/api/clicker/cipher', { method: 'POST', body: JSON.stringify({ guess }) }).catch(() => null); if (r && !r.error) st = r; else { flashMsg(r && r.error === 'already' ? 'Уже разгадан сегодня' : 'Неверно, попробуй ещё'); return; } }
+    else { const g = guestClaimCipherRaw(guess); if (!g) { flashMsg('Неверно, попробуй ещё'); return; } st = guestDerive(); r = { reward: CIPHER_REWARD }; }
+    if (r && r.reward) { chord([880, 1175, 1568], 0.18); window.haptic && window.haptic('success'); dailyPopupRaw(ICON.bolt(20) + ' Шифр разгадан!', r.reward); renderAll(); renderTasks(); }
+  }
+  function guestClaimCipherRaw(guess) {
+    guestDerive(); const s = rawGet(); const today = irkToday();
+    if (s.cipherDate === today) return false;
+    if (String(guess || '').trim().toUpperCase().replace(/Ё/g, 'Е') !== todaysCipher(today)) return false;
+    s.balance += CIPHER_REWARD; s.totalEarned += CIPHER_REWARD; s.cipherDate = today; rawSave(s); return true;
   }
   async function boost(type) {
     let ok = false;
@@ -223,6 +265,16 @@
       .ck-card__buy{display:inline-flex;align-items:center;gap:5px;border:1px solid #ffe9b3;border-radius:12px;padding:9px 13px;font-weight:800;font-size:13px;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;cursor:pointer;white-space:nowrap;font-variant-numeric:tabular-nums;box-shadow:0 4px 11px rgba(165,112,28,.38),inset 0 1px 0 rgba(255,255,255,.5)}.ck-card__buy:disabled{background:rgba(255,255,255,.07);color:var(--muted);border-color:transparent;box-shadow:none;cursor:default}
       .ck-row{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:7px}
       .ck-row .r{width:28px;font-weight:800;color:var(--gold);text-align:center;font-variant-numeric:tabular-nums}.ck-row .n{flex:1;font-weight:600;color:var(--ink)}.ck-row .v{font-weight:700;color:var(--gold);font-size:13px;display:inline-flex;align-items:center;gap:5px;font-variant-numeric:tabular-nums}.ck-row.me{background:rgba(238,191,82,.14);border-color:rgba(238,191,82,.34)}
+      .ck-bonus{display:flex;flex-direction:column;align-items:stretch;gap:10px}
+      .ck-combo3{display:flex;gap:8px}
+      .ck-cmb{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 4px;border-radius:12px;background:rgba(0,0,0,.22);border:1px solid var(--line);color:var(--muted);font-size:10.5px;text-align:center;position:relative}
+      .ck-cmb svg{width:24px;height:24px;opacity:.45}
+      .ck-cmb.on{color:var(--gold-l);border-color:rgba(238,191,82,.5);background:rgba(238,191,82,.1)}.ck-cmb.on svg{opacity:1}
+      .ck-cmb.on::after{content:'✓';position:absolute;top:3px;right:6px;color:var(--gold-l);font-size:11px;font-weight:800}
+      .ck-morse{font-family:'JetBrains Mono',ui-monospace,monospace;letter-spacing:2px;word-spacing:12px;font-size:19px;color:var(--gold-l);text-align:center;padding:12px 8px;background:rgba(0,0,0,.26);border-radius:12px;border:1px solid var(--line)}
+      .ck-cipher-in{flex:1;min-width:0;background:rgba(0,0,0,.26);border:1px solid var(--line);border-radius:12px;padding:10px 12px;color:var(--ink);font-size:14px;font-weight:700;text-transform:uppercase;outline:none}
+      .ck-cipher-in::placeholder{color:var(--muted);text-transform:none;font-weight:400}
+      .ck-cipher-in:focus{border-color:rgba(238,191,82,.5)}
       .ck-nav{display:flex;border-top:1px solid var(--line);background:rgba(18,8,11,.5);backdrop-filter:blur(8px)}
       .ck-nav__b{flex:1;border:none;background:transparent;color:var(--muted);padding:9px 0 12px;font-weight:600;font-size:11.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px}.ck-nav__b.on{color:var(--gold-l)}
       .ck-levelup{position:absolute;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;pointer-events:none}.ck-levelup span{font-family:'Playfair Display',serif;color:var(--gold-l);font-weight:700;font-size:26px;background:linear-gradient(180deg,rgba(46,17,25,.92),rgba(26,10,15,.92));border:1px solid var(--line);padding:14px 24px;border-radius:18px;opacity:0;box-shadow:0 12px 36px rgba(0,0,0,.5)}.ck-levelup span.show{animation:ckLU 1.6s ease-out}@keyframes ckLU{0%{opacity:0;transform:scale(.6)}20%{opacity:1;transform:scale(1.1)}80%{opacity:1}100%{opacity:0}}
@@ -434,10 +486,35 @@
       else btn = `<button class="ck-card__buy" disabled>+${fmt(t.reward)}</button>`;
       return `<div class="ck-card"><div class="ck-card__ic">${taskIcon(t.id)}</div><div class="ck-card__b"><div class="ck-card__n">${t.name}</div><div class="ck-card__s">Награда +${fmt(t.reward)} ${COIN(13)}</div></div>${btn}</div>`;
     }).join('');
-    list.innerHTML = '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows;
+    list.innerHTML = bonusBlock() + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows;
     ov.querySelector('#ck-invite').onclick = shareRef;
     list.querySelectorAll('[data-open]').forEach(b => b.onclick = () => { const id = b.dataset.open, link = b.dataset.link; if (link) { if (window.App && App.openExternal) App.openExternal(link); else window.open(link, '_blank'); } linkOpened[id] = true; setTimeout(renderTasks, 400); });
     list.querySelectorAll('[data-claim]').forEach(b => b.onclick = () => claimTask(b.dataset.claim));
+    wireBonus();
+  }
+  function bonusBlock() {
+    const cmb = (st && st.combo) || { cards: [], hits: [], complete: false, claimed: false, reward: COMBO_REWARD };
+    const cph = (st && st.cipher) || { morse: '', len: 0, claimed: false, reward: CIPHER_REWARD };
+    const slots = cmb.cards.map(id => `<div class="ck-cmb ${cmb.hits.includes(id) ? 'on' : ''}">${cardIcon(id)}<span>${cardName(id)}</span></div>`).join('');
+    const comboBtn = cmb.claimed
+      ? `<button class="ck-card__buy" disabled style="width:100%;justify-content:center">✓ Забрано сегодня</button>`
+      : cmb.complete
+        ? `<button class="ck-card__buy" id="ck-combo-claim" style="width:100%;justify-content:center">Забрать +${fmt(cmb.reward)} ${COIN(14)}</button>`
+        : `<button class="ck-card__buy" disabled style="width:100%;justify-content:center">Собрано ${cmb.hits.length}/3 — прокачай их в «Прокачке»</button>`;
+    const comboCard = `<div class="ck-card ck-bonus">
+      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.star(26)}</div><div class="ck-card__b"><div class="ck-card__n">Комбо дня</div><div class="ck-card__s">Прокачай эти 3 бизнеса сегодня · +${fmt(cmb.reward)} ${COIN(13)}</div></div></div>
+      <div class="ck-combo3">${slots}</div>${comboBtn}</div>`;
+    const cipherCard = `<div class="ck-card ck-bonus">
+      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.bolt(26)}</div><div class="ck-card__b"><div class="ck-card__n">Шифр дня</div><div class="ck-card__s">Расшифруй морзе и впиши слово · +${fmt(cph.reward)} ${COIN(13)}</div></div></div>
+      ${cph.claimed
+        ? `<button class="ck-card__buy" disabled style="width:100%;justify-content:center">✓ Разгадан сегодня</button>`
+        : `<div class="ck-morse">${cph.morse}</div><div style="display:flex;gap:8px"><input class="ck-cipher-in" id="ck-cipher-in" maxlength="14" placeholder="${cph.len} букв" autocomplete="off" spellcheck="false"/><button class="ck-card__buy" id="ck-cipher-go" style="justify-content:center">Разгадать</button></div>`}</div>`;
+    return '<div class="ck-sect">Бонусы дня</div>' + comboCard + cipherCard;
+  }
+  function wireBonus() {
+    const cb = ov.querySelector('#ck-combo-claim'); if (cb) cb.onclick = claimCombo;
+    const go = ov.querySelector('#ck-cipher-go'), inp = ov.querySelector('#ck-cipher-in');
+    if (go && inp) { go.onclick = () => claimCipher(inp.value); inp.onkeydown = (e) => { if (e.key === 'Enter') claimCipher(inp.value); }; }
   }
   async function claimTask(id) {
     let reward = 0;

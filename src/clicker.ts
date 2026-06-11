@@ -69,6 +69,22 @@ const perTapFor = (lvl: number) => 1 + lvl;
 const cardPrice = (c: { basePrice: number }, lvl: number) => Math.round(c.basePrice * Math.pow(1.6, lvl));
 const cardProfit = (c: { baseProfit: number }, lvl: number) => c.baseProfit * lvl;
 
+// ── Бонусы дня: Комбо (3 карты) + Шифр (морзе) — детерминированы от даты ─────────
+// ⚠️ Алгоритм/слова/морзе продублированы во фронте public/js/catclick.js — менять синхронно.
+const COMBO_REWARD = 50000;
+const CIPHER_REWARD = 8000;
+const CIPHER_WORDS = ["МАРИЯ", "ТОРТ", "КОТИК", "КРЕМ", "ЭКЛЕР", "МУСС", "БИСКВИТ", "ВАНИЛЬ", "ШОКОЛАД", "КАРАМЕЛЬ", "ДЕСЕРТ", "ПЕКАРНЯ"];
+const MORSE: Record<string, string> = {
+  А: ".-", Б: "-...", В: ".--", Г: "--.", Д: "-..", Е: ".", Ж: "...-", З: "--..", И: "..", Й: ".---",
+  К: "-.-", Л: ".-..", М: "--", Н: "-.", О: "---", П: ".--.", Р: ".-.", С: "...", Т: "-", У: "..-",
+  Ф: "..-.", Х: "....", Ц: "-.-.", Ч: "---.", Ш: "----", Щ: "--.-", Ь: "-..-", Ы: "-.--", Э: "..-..", Ю: "..--", Я: ".-.-",
+};
+function dateSeed(day: string, salt: string): number { let h = 2166136261 >>> 0; const s = day + salt; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h >>> 0; }
+function todaysCombo(day: string): string[] { let h = dateSeed(day, "combo"); const pool2 = CARDS.map((c) => c.id); const pick: string[] = []; for (let i = 0; i < 3; i++) { h = (Math.imul(h, 1664525) + 1013904223) >>> 0; pick.push(pool2.splice(h % pool2.length, 1)[0]); } return pick; }
+function todaysCipher(day: string): string { return CIPHER_WORDS[dateSeed(day, "cipher") % CIPHER_WORDS.length]; }
+function toMorse(w: string): string { return w.split("").map((c) => MORSE[c] || "").join(" "); }
+function parseHits(s: string | null): string[] { return s ? s.split(",").filter(Boolean) : []; }
+
 export interface ClickerState {
   balance: number; totalEarned: number; energy: number; energyMax: number;
   perTap: number; profitPerHour: number; passiveEarned: number;
@@ -80,6 +96,8 @@ export interface ClickerState {
   dailyAvailable: boolean; dailyStreak: number; dailyNext: number;
   boostEnergyLeft: number; boostTurboLeft: number; turboMsLeft: number;
   referrals: number; refCode: string;
+  combo: { cards: string[]; hits: string[]; complete: boolean; claimed: boolean; reward: number };
+  cipher: { morse: string; len: number; claimed: boolean; reward: number };
 }
 
 export async function initClickerSchema(): Promise<void> {
@@ -104,6 +122,10 @@ export async function initClickerSchema(): Promise<void> {
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS turbo_until TIMESTAMPTZ;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS referred_by BIGINT;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS referrals INT NOT NULL DEFAULT 0;
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS combo_date TEXT;
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS combo_hits TEXT;
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS combo_claimed TEXT;
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS cipher_date TEXT;
     CREATE TABLE IF NOT EXISTS clicker_cards (
       chat_id BIGINT NOT NULL, card TEXT NOT NULL, level INT NOT NULL DEFAULT 0,
       PRIMARY KEY (chat_id, card)
@@ -138,6 +160,8 @@ function buildState(r: any, cl: Record<string, number>, passiveEarned: number): 
     dailyAvailable: r.daily_date !== today, dailyStreak: r.daily_streak, dailyNext: dailyReward((r.daily_date === today ? r.daily_streak : r.daily_streak + 1)),
     boostEnergyLeft: DAILY_BOOSTS - bUsedE, boostTurboLeft: DAILY_BOOSTS - bUsedT, turboMsLeft: turboMs,
     referrals: r.referrals || 0, refCode: String(r.chat_id),
+    combo: (() => { const cards = todaysCombo(today); const hits = r.combo_date === today ? parseHits(r.combo_hits) : []; return { cards, hits, complete: cards.every((c) => hits.includes(c)), claimed: r.combo_claimed === today, reward: COMBO_REWARD }; })(),
+    cipher: { morse: toMorse(todaysCipher(today)), len: todaysCipher(today).length, claimed: r.cipher_date === today, reward: CIPHER_REWARD },
   };
 }
 
@@ -196,9 +220,19 @@ export async function buyClicker(chatId: number, type: string, id?: string): Pro
     r.balance = Number(r.balance) - cost;
     if (type === "multitap") r.multitap_level += 1;
     else if (type === "energy") r.energy_limit_level += 1;
-    else { cl[id!] = (cl[id!] || 0) + 1; await client.query(`INSERT INTO clicker_cards (chat_id, card, level) VALUES ($1,$2,$3) ON CONFLICT (chat_id, card) DO UPDATE SET level=$3`, [chatId, id, cl[id!]]); }
-    await client.query(`UPDATE clicker_state SET balance=$2, multitap_level=$3, energy_limit_level=$4, updated_at=NOW() WHERE chat_id=$1`,
-      [chatId, r.balance, r.multitap_level, r.energy_limit_level]);
+    else {
+      cl[id!] = (cl[id!] || 0) + 1;
+      await client.query(`INSERT INTO clicker_cards (chat_id, card, level) VALUES ($1,$2,$3) ON CONFLICT (chat_id, card) DO UPDATE SET level=$3`, [chatId, id, cl[id!]]);
+      // учёт комбо дня: если купленная карта входит в сегодняшнее комбо — отметить
+      const today = irkToday();
+      if (todaysCombo(today).includes(id!)) {
+        const hits = r.combo_date === today ? parseHits(r.combo_hits) : [];
+        if (!hits.includes(id!)) hits.push(id!);
+        r.combo_date = today; r.combo_hits = hits.join(",");
+      }
+    }
+    await client.query(`UPDATE clicker_state SET balance=$2, multitap_level=$3, energy_limit_level=$4, combo_date=$5, combo_hits=$6, updated_at=NOW() WHERE chat_id=$1`,
+      [chatId, r.balance, r.multitap_level, r.energy_limit_level, r.combo_date, r.combo_hits]);
     await client.query("COMMIT");
     return { ok: true, state: buildState(r, cl, 0) };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
@@ -220,6 +254,40 @@ export async function claimDaily(chatId: number): Promise<{ ok: boolean; reward?
       [chatId, r.balance, r.total_earned, r.daily_streak, today]);
     await client.query("COMMIT");
     return { ok: true, reward, state: buildState(r, cl, 0) };
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+}
+
+/** Забрать награду за Комбо дня (если все 3 карты сегодня прокачаны). */
+export async function claimCombo(chatId: number): Promise<{ ok: boolean; reward?: number; state?: ClickerState; reason?: string }> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { r, cl } = await refresh(client, chatId);
+    const today = irkToday();
+    if (r.combo_claimed === today) { await client.query("ROLLBACK"); return { ok: false, reason: "already" }; }
+    const combo = todaysCombo(today);
+    const hits = r.combo_date === today ? parseHits(r.combo_hits) : [];
+    if (!combo.every((c) => hits.includes(c))) { await client.query("ROLLBACK"); return { ok: false, reason: "not_ready" }; }
+    r.balance = Number(r.balance) + COMBO_REWARD; r.total_earned = Number(r.total_earned) + COMBO_REWARD; r.combo_claimed = today;
+    await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, combo_claimed=$4, updated_at=NOW() WHERE chat_id=$1`, [chatId, r.balance, r.total_earned, today]);
+    await client.query("COMMIT");
+    return { ok: true, reward: COMBO_REWARD, state: buildState(r, cl, 0) };
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+}
+
+/** Забрать награду за Шифр дня (морзе → слово). */
+export async function claimCipher(chatId: number, guess: string): Promise<{ ok: boolean; reward?: number; state?: ClickerState; reason?: string }> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { r, cl } = await refresh(client, chatId);
+    const today = irkToday();
+    if (r.cipher_date === today) { await client.query("ROLLBACK"); return { ok: false, reason: "already" }; }
+    if (String(guess || "").trim().toUpperCase().replace(/Ё/g, "Е") !== todaysCipher(today)) { await client.query("ROLLBACK"); return { ok: false, reason: "wrong" }; }
+    r.balance = Number(r.balance) + CIPHER_REWARD; r.total_earned = Number(r.total_earned) + CIPHER_REWARD; r.cipher_date = today;
+    await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, cipher_date=$4, updated_at=NOW() WHERE chat_id=$1`, [chatId, r.balance, r.total_earned, today]);
+    await client.query("COMMIT");
+    return { ok: true, reward: CIPHER_REWARD, state: buildState(r, cl, 0) };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
