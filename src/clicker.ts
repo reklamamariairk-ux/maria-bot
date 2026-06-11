@@ -82,6 +82,19 @@ export const LEAGUES = [
 function leagueFor(total: number) { let l = LEAGUES[0]; for (const x of LEAGUES) if (total >= x.need) l = x; return l; }
 function nextNeed(total: number): number | null { const n = LEAGUES.find((x) => x.need > total); return n ? n.need : null; }
 
+// ── Реальные награды (обмен монет → скидка/бонусы). ⚠️ ВЫКЛ до согласования Маши ──
+// Когда Маша утвердит: курс монет, что выдаём (промокод/бонусы на карту), лимиты —
+// поставить REWARDS_ENABLED=true, заполнить реальные cost/выдачу, подключить выдачу кода/бонусов.
+export const REWARDS_ENABLED = false;
+export const REWARDS = [
+  { id: "promo5",   name: "Промокод −5%",        cost: 100000, kind: "promo",   note: "скидка на заказ" },
+  { id: "promo10",  name: "Промокод −10%",       cost: 250000, kind: "promo",   note: "скидка на заказ" },
+  { id: "bonus300", name: "300 бонусов на карту", cost: 200000, kind: "loyalty", note: "клуб «Мария»" },
+  { id: "dessert",  name: "Десерт в подарок",     cost: 500000, kind: "promo",   note: "при заказе" },
+];
+const REWARD_BY_ID = Object.fromEntries(REWARDS.map((r) => [r.id, r]));
+const REDEEM_PER_DAY = 1; // анти-абуз: не больше N обменов в день
+
 export const CARDS = [
   { id: "bakery", name: "Пекарня", icon: "🍞", basePrice: 300, baseProfit: 30 },
   { id: "coffee", name: "Кофемашина", icon: "☕", basePrice: 900, baseProfit: 85 },
@@ -167,6 +180,11 @@ export async function initClickerSchema(): Promise<void> {
       chat_id BIGINT NOT NULL, task TEXT NOT NULL, done_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (chat_id, task)
     );
+    CREATE TABLE IF NOT EXISTS clicker_redemptions (
+      id BIGSERIAL PRIMARY KEY, chat_id BIGINT NOT NULL, reward_id TEXT NOT NULL,
+      cost BIGINT NOT NULL, code TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS clicker_redeem_idx ON clicker_redemptions (chat_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS clicker_top_idx ON clicker_state (total_earned DESC);
   `);
 }
@@ -381,6 +399,37 @@ export async function registerRef(chatId: number, code: string): Promise<{ ok: b
                         ON CONFLICT (chat_id) DO UPDATE SET balance=clicker_state.balance+$2, total_earned=clicker_state.total_earned+$2, referrals=clicker_state.referrals+1`, [refId, REF_REFERRER]);
     await client.query("COMMIT");
     return { ok: true, reward: REF_INVITEE, state: await getClicker(chatId) };
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+}
+
+/** Витрина реальных наград (обмен монет). Пока enabled=false — только показ. */
+export async function getRewards(chatId: number): Promise<{ enabled: boolean; balance: number; rewards: any[]; history: any[] }> {
+  const s = await getClicker(chatId);
+  const { rows } = await pool.query(`SELECT reward_id, cost, code, created_at FROM clicker_redemptions WHERE chat_id=$1 ORDER BY created_at DESC LIMIT 10`, [chatId]);
+  return { enabled: REWARDS_ENABLED, balance: s.balance, rewards: REWARDS, history: rows };
+}
+
+/**
+ * Обмен монет на реальную награду. ⚠️ Пока REWARDS_ENABLED=false → всегда отказ.
+ * Когда включат: атомарно списывает монеты, пишет в clicker_redemptions, лимит REDEEM_PER_DAY/день.
+ * TODO выдача: промокод (генерация/Bitrix promo) или бонусы на карту (loyalty API) — по решению Маши.
+ */
+export async function redeemReward(chatId: number, id: string): Promise<{ ok: boolean; code?: string; state?: ClickerState; reason?: string }> {
+  if (!REWARDS_ENABLED) return { ok: false, reason: "disabled" };
+  const rw = REWARD_BY_ID[id]; if (!rw) return { ok: false, reason: "bad_reward" };
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { r, cl } = await refresh(client, chatId);
+    const used = await client.query(`SELECT COUNT(*)::int AS n FROM clicker_redemptions WHERE chat_id=$1 AND created_at > NOW() - INTERVAL '1 day'`, [chatId]);
+    if (used.rows[0].n >= REDEEM_PER_DAY) { await client.query("ROLLBACK"); return { ok: false, reason: "daily_limit" }; }
+    if (Number(r.balance) < rw.cost) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough" }; }
+    r.balance = Number(r.balance) - rw.cost; // total_earned НЕ трогаем (уровень/сезон сохраняются)
+    const code = "MARIA-" + String(Math.abs(chatId)).slice(-4) + "-" + id.toUpperCase(); // TODO: реальная генерация
+    await client.query(`INSERT INTO clicker_redemptions (chat_id, reward_id, cost, code) VALUES ($1,$2,$3,$4)`, [chatId, id, rw.cost, code]);
+    await client.query(`UPDATE clicker_state SET balance=$2, updated_at=NOW() WHERE chat_id=$1`, [chatId, r.balance]);
+    await client.query("COMMIT");
+    return { ok: true, code, state: buildState(r, cl, 0) };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 

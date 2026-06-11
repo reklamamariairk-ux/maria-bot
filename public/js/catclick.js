@@ -135,6 +135,15 @@
   }
   function fmtDur(ms) { const h = Math.max(0, Math.floor(ms / 3600e3)); const d = Math.floor(h / 24); return d > 0 ? `${d}д ${h % 24}ч` : `${h}ч`; }
 
+  // ── Реальные награды (витрина). ⚠️ redeem ВЫКЛ до согласования Маши (зеркало clicker.ts) ──
+  const REWARDS_ENABLED = false;
+  const REWARDS = [
+    { id: 'promo5', name: 'Промокод −5%', cost: 100000, note: 'скидка на заказ' },
+    { id: 'promo10', name: 'Промокод −10%', cost: 250000, note: 'скидка на заказ' },
+    { id: 'bonus300', name: '300 бонусов на карту', cost: 200000, note: 'клуб «Мария»' },
+    { id: 'dessert', name: 'Десерт в подарок', cost: 500000, note: 'при заказе' },
+  ];
+
   let ov, audio, raf, lastTs = 0, pending = 0, syncT = 0, curLevel = 1, tab = 'cat';
   let st = null, turboUntil = 0, combo = 0, comboT = 0;
 
@@ -445,14 +454,38 @@
   function renderUpgrades() {
     if (!ov || !st) return; const list = ov.querySelector('#ck-uplist');
     const row = (icon, name, sub, price, dis, act, id) => `<div class="ck-card"><div class="ck-card__ic">${icon}</div><div class="ck-card__b"><div class="ck-card__n">${name}</div><div class="ck-card__s">${sub}</div></div><button class="ck-card__buy" data-act="${act}" data-id="${id || ''}" ${dis ? 'disabled' : ''}>${COIN(15)} ${fmt(price)}</button></div>`;
-    let h = '<div class="ck-sect">Бусты</div>';
+    let h = rewardsBlock();
+    h += '<div class="ck-sect">Бусты</div>';
     h += row(ICON.tap(26), 'Мультитап', `+1 за тап · сейчас +${st.perTap}`, st.multitapPrice, st.balance < st.multitapPrice, 'multitap');
     h += row(ICON.battery(26), 'Запас энергии', `+500 · сейчас ${st.energyMax}`, st.energyPrice, st.balance < st.energyPrice, 'energy');
     h += '<div class="ck-sect">Бизнесы — пассивный доход</div>';
     for (const c of st.cards) h += row(cardIcon(c.id), c.name, `Ур. ${c.level} · +${fmt(c.profit)}/час`, c.price, st.balance < c.price, 'card', c.id);
     list.innerHTML = h;
-    list.querySelectorAll('.ck-card__buy').forEach(b => b.onclick = () => buy(b.dataset.act, b.dataset.id || undefined));
+    list.querySelectorAll('[data-act]').forEach(b => b.onclick = () => buy(b.dataset.act, b.dataset.id || undefined));
+    list.querySelectorAll('[data-redeem]').forEach(b => b.onclick = () => redeem(b.dataset.redeem));
   }
+  function rewardsBlock() {
+    const bal = (st && st.balance) || 0;
+    const banner = !REWARDS_ENABLED
+      ? `<div class="ck-card" style="background:linear-gradient(90deg,rgba(238,191,82,.18),rgba(238,191,82,.05))"><div class="ck-card__ic">${ICON.gift(26)}</div><div class="ck-card__b"><div class="ck-card__n">Обменивай монеты на реальное</div><div class="ck-card__s">Скидки и бонусы «Марии» — скоро открываем!</div></div></div>`
+      : '';
+    const cards = REWARDS.map(r => {
+      const btn = !REWARDS_ENABLED
+        ? `<button class="ck-card__buy" disabled>Скоро</button>`
+        : `<button class="ck-card__buy" data-redeem="${r.id}" ${bal >= r.cost ? '' : 'disabled'}>${COIN(14)} ${fmt(r.cost)}</button>`;
+      return `<div class="ck-card"${REWARDS_ENABLED ? '' : ' style="opacity:.7"'}><div class="ck-card__ic">${ICON.gift(26)}</div><div class="ck-card__b"><div class="ck-card__n">${r.name}</div><div class="ck-card__s">${r.note} · ${fmt(r.cost)} монет</div></div>${btn}</div>`;
+    }).join('');
+    return '<div class="ck-sect">Награды «Марии»</div>' + banner + cards;
+  }
+  function redeem(id) {
+    if (!REWARDS_ENABLED) { flashMsg('Скоро откроем'); return; }
+    if (!authed()) { flashMsg('Войди через приложение «Мария»'); return; }
+    api('/api/clicker/redeem', { method: 'POST', body: JSON.stringify({ id }) }).then(d => {
+      if (d && !d.error && d.code) { st = d; chord([660, 990, 1320], 0.18); window.haptic && window.haptic('success'); codePopup(d.code); renderAll(); renderUpgrades(); }
+      else flashMsg(d && d.error === 'daily_limit' ? 'Лимит на сегодня' : d && d.error === 'disabled' ? 'Скоро откроем' : 'Не хватает монет');
+    }).catch(() => flashMsg('Ошибка'));
+  }
+  function codePopup(code) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Награда твоя!</h3><div class="v" style="font-size:22px">${code}</div><div style="color:var(--muted);font-size:13px">Покажи код на кассе «Марии»</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
   async function renderTop() {
     const list = ov.querySelector('#ck-toplist'); const rank = ov.querySelector('#ck-myrank');
     const left = fmtDur(seasonEndsTs() - Date.now());
