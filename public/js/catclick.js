@@ -38,13 +38,18 @@
     { level: 19, name: 'Повелитель котов',   need: 2500000, cat: 'cat-stage19.png' },
   ];
   const REF_REFERRER = 5000, REF_INVITEE = 2500, BOT = 'mariatortik_bot';
+  // Соцссылки «Марии» — зеркало SOCIAL в src/clicker.ts (менять синхронно). Пустая = задание скрыто.
+  const SOCIAL = { review: 'https://yandex.ru/maps/?text=Мария кондитерская Иркутск', vk: '', tg: '' };
   const TASKS = [
     { id: 'site', name: 'Заглянуть на сайт «Мария»', icon: '🌐', reward: 1500, type: 'link', link: 'https://www.maria-irk.ru/' },
+    { id: 'review', name: 'Оставить отзыв о «Марии»', icon: '⭐', reward: 5000, type: 'link', link: SOCIAL.review },
+    { id: 'vk', name: 'Подписаться на ВК «Мария»', icon: '👍', reward: 4000, type: 'link', link: SOCIAL.vk },
+    { id: 'tg', name: 'Подписаться на Telegram «Мария»', icon: '📣', reward: 4000, type: 'link', link: SOCIAL.tg },
     { id: 'invite1', name: 'Пригласить друга', icon: '👥', reward: 10000, type: 'ref', target: 1 },
     { id: 'level3', name: 'Дойти до 3 уровня', icon: '⭐', reward: 3000, type: 'level', target: 3 },
     { id: 'balance10', name: 'Накопить 10 000 монет', icon: '💰', reward: 2500, type: 'balance', target: 10000 },
     { id: 'streak3', name: 'Заходить 3 дня подряд', icon: '🔥', reward: 4000, type: 'streak', target: 3 },
-  ];
+  ].filter(t => t.type !== 'link' || t.link);
   const leagueFor = (t) => { let l = LEAGUES[0]; for (const x of LEAGUES) if (t >= x.need) l = x; return l; };
   const nextNeed = (t) => { const n = LEAGUES.find(x => x.need > t); return n ? n.need : null; };
   const fmt = (n) => Math.floor(n).toLocaleString('ru-RU');
@@ -87,11 +92,12 @@
     fire: (s) => SVG('<path d="M12 3c1 2.9-1.4 4.4-1.4 6.8A2.4 2.4 0 0 0 13 11.6c.5-1.4 0-2 .5-2.9 1.9 1.5 2.9 3.7 2.9 5.8a6.3 6.3 0 0 1-12.6.5C3.2 11.2 8 9.8 8 6c1.4 1 1.9 2.4 1.9 3.8C10.8 8.4 11.3 6 12 3Z"/>', s),
     gift: (s) => SVG('<rect x="4.2" y="9.2" width="15.6" height="10.6" rx="1.6"/><path d="M4.2 12.4h15.6M12 9.2v10.6M12 9.2C10.2 9.2 8 8.7 8 6.6 8 5.4 8.9 5 9.8 5.3 11.2 5.8 12 9.2 12 9.2s.8-3.4 2.2-3.9c.9-.3 1.8.1 1.8 1.3 0 2.1-2.2 2.6-4 2.6Z"/>', s),
     medal: (s) => SVG('<circle cx="12" cy="14" r="5"/><path d="M8.5 9 6.5 3.5M15.5 9l2-5.5M10.3 14l1.7-1.6 1.7 1.6-.6 2.3h-2.2l-.6-2.3Z"/>', s),
+    send: (s) => SVG('<path d="M20.5 3.5 9.8 14.2M20.5 3.5 13.7 20.5l-3.9-6.3-6.3-3.9 17-6.8Z"/>', s),
     tap: (s) => SVG('<path d="M9 11V5.5a1.7 1.7 0 0 1 3.4 0V11M12.4 11V9.4a1.5 1.5 0 0 1 3 0V11M15.4 11v-.6a1.5 1.5 0 0 1 3 0V15a5 5 0 0 1-5 5h-1.6a4 4 0 0 1-3-1.4L6 15.4a1.6 1.6 0 0 1 2.4-2L9 14"/>', s),
     battery: (s) => SVG('<rect x="3" y="8" width="15" height="8" rx="2"/><path d="M20 11v2"/><path d="M9.5 9.5 7.5 12.4h2.6L8 15"/>', s),
   };
   const cardIcon = (id) => ({ bakery: ICON.cupcake, coffee: ICON.coffee, delivery: ICON.scooter, cakefactory: ICON.cake, franchise: ICON.shop }[id] || ICON.cupcake)(26);
-  const taskIcon = (id) => ({ site: ICON.globe, invite1: ICON.users, level3: ICON.star, balance10: ICON.wallet, streak3: ICON.fire }[id] || ICON.star)(26);
+  const taskIcon = (id) => ({ site: ICON.globe, review: ICON.star, vk: ICON.users, tg: ICON.send, invite1: ICON.users, level3: ICON.star, balance10: ICON.wallet, streak3: ICON.fire }[id] || ICON.star)(26);
 
   // ── Бонусы дня (зеркало src/clicker.ts — алгоритм/слова/морзе менять синхронно) ──
   const COMBO_REWARD = 50000, CIPHER_REWARD = 8000;

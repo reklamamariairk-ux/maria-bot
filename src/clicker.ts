@@ -17,14 +17,26 @@ const REF_INVITEE = 2500;         // бонус приглашённому
 const REF_REFERRER = 5000;        // бонус пригласившему
 const irkToday = () => new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
 
+// Соцссылки «Марии» для заданий-маркетинга. ⚠️ Продублировано во фронте catclick.js.
+// Пустая ссылка = задание скрыто (не отправляем людей в никуда). Заполнить реальными URL.
+export const SOCIAL = {
+  review: "https://yandex.ru/maps/?text=Мария кондитерская Иркутск",
+  vk: "",   // напр. https://vk.com/maria_irk — заполнить
+  tg: "",   // напр. https://t.me/maria_irk — заполнить
+};
+
 // Задания. type: link (открыть ссылку → забрать) | level | balance | streak | ref (по достижению цели).
+// Задания-маркетинг с пустой ссылкой автоматически отфильтровываются (скрыты до заполнения SOCIAL).
 export const TASKS = [
   { id: "site",     name: "Заглянуть на сайт «Мария»", icon: "🌐", reward: 1500, type: "link", link: "https://www.maria-irk.ru/" },
+  { id: "review",   name: "Оставить отзыв о «Марии»",   icon: "⭐", reward: 5000, type: "link", link: SOCIAL.review },
+  { id: "vk",       name: "Подписаться на ВК «Мария»",  icon: "👍", reward: 4000, type: "link", link: SOCIAL.vk },
+  { id: "tg",       name: "Подписаться на Telegram «Мария»", icon: "📣", reward: 4000, type: "link", link: SOCIAL.tg },
   { id: "invite1",  name: "Пригласить друга",          icon: "👥", reward: 10000, type: "ref",   target: 1 },
   { id: "level3",   name: "Дойти до 3 уровня", icon: "⭐", reward: 3000, type: "level",  target: 3 },
   { id: "balance10",name: "Накопить 10 000 монет",     icon: "💰", reward: 2500, type: "balance", target: 10000 },
   { id: "streak3",  name: "Заходить 3 дня подряд",      icon: "🔥", reward: 4000, type: "streak",  target: 3 },
-];
+].filter((t) => t.type !== "link" || (t as any).link);
 const TASK_BY_ID = Object.fromEntries(TASKS.map((t) => [t.id, t]));
 const dailyReward = (streak: number) => 500 * Math.min(Math.max(1, streak), 10); // день1=500 … день10+=5000
 
