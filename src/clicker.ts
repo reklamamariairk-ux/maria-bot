@@ -5,6 +5,8 @@
  * (стрик), лидерборд. Антинакрутка: энергия/пассив/турбо считаются на сервере.
  */
 import { pool } from "./db";
+import * as fs from "fs";
+import * as path from "path";
 
 const REGEN_PER_SEC = 1.5;
 const TAP_COST = 1;
@@ -209,6 +211,10 @@ export async function initClickerSchema(): Promise<void> {
       cost BIGINT NOT NULL, code TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS clicker_redeem_idx ON clicker_redemptions (chat_id, created_at DESC);
+    CREATE TABLE IF NOT EXISTS clicker_codes_used (
+      chat_id BIGINT NOT NULL, code TEXT NOT NULL, used_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (chat_id, code)
+    );
     CREATE INDEX IF NOT EXISTS clicker_top_idx ON clicker_state (total_earned DESC);
   `);
 }
@@ -370,6 +376,29 @@ export async function claimCipher(chatId: number, guess: string): Promise<{ ok: 
     await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, cipher_date=$4, updated_at=NOW() WHERE chat_id=$1`, [chatId, r.balance, r.total_earned, today]);
     await client.query("COMMIT");
     return { ok: true, reward: CIPHER_REWARD, state: buildState(r, cl, 0) };
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+}
+
+/** Промокоды: коды из data/clicker-codes.json (live-read), 1 раз на игрока. */
+function loadCodes(): { code: string; reward: number; active?: boolean }[] {
+  try { const raw = fs.readFileSync(path.resolve("data/clicker-codes.json"), "utf8"); const arr = JSON.parse(raw); return Array.isArray(arr) ? arr : []; } catch (_) { return []; }
+}
+export async function redeemCode(chatId: number, codeInput: string): Promise<{ ok: boolean; reward?: number; state?: ClickerState; reason?: string }> {
+  const code = String(codeInput || "").trim().toUpperCase().replace(/Ё/g, "Е"); if (!code) return { ok: false, reason: "empty" };
+  const def = loadCodes().find((c) => String(c.code || "").trim().toUpperCase().replace(/Ё/g, "Е") === code && c.active !== false);
+  if (!def) return { ok: false, reason: "invalid" };
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { r, cl } = await refresh(client, chatId);
+    const used = await client.query(`SELECT 1 FROM clicker_codes_used WHERE chat_id=$1 AND code=$2`, [chatId, code]);
+    if (used.rows.length) { await client.query("ROLLBACK"); return { ok: false, reason: "used" }; }
+    const reward = Math.max(0, Math.floor(Number(def.reward) || 0));
+    r.balance = Number(r.balance) + reward; r.total_earned = Number(r.total_earned) + reward;
+    await client.query(`INSERT INTO clicker_codes_used (chat_id, code) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [chatId, code]);
+    await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, updated_at=NOW() WHERE chat_id=$1`, [chatId, r.balance, r.total_earned]);
+    await client.query("COMMIT");
+    return { ok: true, reward, state: buildState(r, cl, 0) };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
