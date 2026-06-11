@@ -96,6 +96,7 @@
     tap: (s) => SVG('<path d="M9 11V5.5a1.7 1.7 0 0 1 3.4 0V11M12.4 11V9.4a1.5 1.5 0 0 1 3 0V11M15.4 11v-.6a1.5 1.5 0 0 1 3 0V15a5 5 0 0 1-5 5h-1.6a4 4 0 0 1-3-1.4L6 15.4a1.6 1.6 0 0 1 2.4-2L9 14"/>', s),
     battery: (s) => SVG('<rect x="3" y="8" width="15" height="8" rx="2"/><path d="M20 11v2"/><path d="M9.5 9.5 7.5 12.4h2.6L8 15"/>', s),
     chest: (s) => SVG('<path d="M4 10.5 6 6h12l2 4.5M4 10.5V19h16v-8.5M4 10.5h16M10 10.5v3h4v-3"/>', s),
+    rain: (s) => SVG('<path d="M7.5 13.5A3.5 3.5 0 0 1 8 6.6a5 5 0 0 1 9.4 1.3A3.3 3.3 0 0 1 16.8 13.5M8 17l-1 2.5M12 17l-1 2.5M16 17l-1 2.5"/>', s),
   };
   const cardIcon = (id) => ({ bakery: ICON.cupcake, coffee: ICON.coffee, delivery: ICON.scooter, cakefactory: ICON.cake, franchise: ICON.shop }[id] || ICON.cupcake)(26);
   const taskIcon = (id) => ({ site: ICON.globe, review: ICON.star, vk: ICON.users, tg: ICON.send, invite1: ICON.users, level3: ICON.star, balance10: ICON.wallet, streak3: ICON.fire }[id] || ICON.star)(26);
@@ -146,7 +147,7 @@
   ];
 
   let ov, audio, raf, lastTs = 0, pending = 0, syncT = 0, curLevel = 1, tab = 'cat';
-  let st = null, turboUntil = 0, combo = 0, comboT = 0, bonusTimer = 0;
+  let st = null, turboUntil = 0, combo = 0, comboT = 0, bonusTimer = 0, rainState = null, rainRAF = 0;
 
   function authed() { return !!(window.App && App.isAuthed && App.isAuthed()); }
   // ── Звук: мастер-шина с ревером + богатый синтез (без файлов) ─────────────────
@@ -187,7 +188,7 @@
   function coinSfx() { sfxTap(0); }
 
   // ── Гость (localStorage) ─────────────────────────────────────────────────────
-  function rawDefault() { return { balance: 0, totalEarned: 0, energy: 1000, multitapLevel: 0, energyLevel: 0, cards: {}, taps: 0, dailyStreak: 0, dailyDate: null, bE: 0, bT: 0, bDate: null, turboUntil: 0, tasksDone: {}, comboDate: null, comboHits: [], comboClaimed: null, cipherDate: null, bonusAt: 0, chestDate: null, _ts: Date.now() }; }
+  function rawDefault() { return { balance: 0, totalEarned: 0, energy: 1000, multitapLevel: 0, energyLevel: 0, cards: {}, taps: 0, dailyStreak: 0, dailyDate: null, bE: 0, bT: 0, bDate: null, turboUntil: 0, tasksDone: {}, comboDate: null, comboHits: [], comboClaimed: null, cipherDate: null, bonusAt: 0, chestDate: null, rainDate: null, _ts: Date.now() }; }
   function rawGet() { let s; try { s = JSON.parse(localStorage.getItem(LS)); } catch (_) {} if (!s) s = rawDefault(); if (!s.cards) s.cards = {}; return s; }
   function rawSave(s) { s._ts = Date.now(); localStorage.setItem(LS, JSON.stringify(s)); }
   function profitOf(c) { let p = 0; for (const x of CARDS) p += cardProfit(x, c[x.id] || 0); return p; }
@@ -211,6 +212,7 @@
       cards: CARDS.map(c => ({ id: c.id, name: c.name, icon: c.icon, level: s.cards[c.id] || 0, profit: cardProfit(c, (s.cards[c.id] || 0) + 1), price: cardPrice(c, s.cards[c.id] || 0) })),
       dailyAvailable: s.dailyDate !== today, dailyStreak: s.dailyStreak, dailyNext: dailyReward(s.dailyDate === today ? s.dailyStreak : s.dailyStreak + 1),
       chestAvailable: s.chestDate !== today,
+      rainAvailable: s.rainDate !== today,
       boostEnergyLeft: DAILY_BOOSTS - s.bE, boostTurboLeft: DAILY_BOOSTS - s.bT, turboMsLeft: Math.max(0, (s.turboUntil || 0) - Date.now()),
       combo: (() => { const cards = todaysCombo(today); const hits = s.comboDate === today ? (s.comboHits || []) : []; return { cards, hits, complete: cards.every(c => hits.includes(c)), claimed: s.comboClaimed === today, reward: COMBO_REWARD }; })(),
       cipher: { morse: toMorse(todaysCipher(today)), len: todaysCipher(today).length, claimed: s.cipherDate === today, reward: CIPHER_REWARD },
@@ -340,6 +342,13 @@
       .ck-conf{position:absolute;z-index:7;pointer-events:none;border-radius:1px;will-change:transform,opacity}
       .ck-greet{display:none;margin-top:8px;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);color:var(--gold-l);padding:4px 13px;border-radius:20px;font-weight:700;font-size:12px}
       .ck-greet.on{display:inline-flex}
+      .ck-rain{position:absolute;inset:0;z-index:11;display:none;flex-direction:column;background:radial-gradient(135% 100% at 50% -8%,#3a1018,#180a10);touch-action:none}
+      .ck-rain.on{display:flex}
+      .ck-rain__hud{display:flex;align-items:center;gap:14px;padding:14px 16px;font-weight:800;font-size:15px;color:var(--cream);font-variant-numeric:tabular-nums}
+      .ck-rain__hud .t{display:inline-flex;align-items:center;gap:6px}.ck-rain__hud .s{display:inline-flex;align-items:center;gap:6px;color:var(--gold-l)}.ck-rain__hud .sp{flex:1}
+      .ck-rain__hud .x{width:32px;height:32px;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.3);color:var(--cream);font-size:16px;cursor:pointer}
+      .ck-rain canvas{flex:1;width:100%;display:block;touch-action:none;cursor:pointer}
+      .ck-rain__hint{position:absolute;left:0;right:0;top:48%;text-align:center;color:var(--muted);font-size:13px;pointer-events:none}
       .ck-bonus-fly{position:absolute;z-index:8;pointer-events:auto;cursor:pointer;filter:drop-shadow(0 0 13px rgba(255,212,90,.95));animation:ckBonusSpin 1.1s linear infinite}
       @keyframes ckBonusSpin{to{transform:rotate(360deg)}}
       .ck-season{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
@@ -603,6 +612,72 @@
     pop.innerHTML = `<h3>${ICON.chest(20)} Сундук удачи</h3>${body}<button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
   }
 
+  // ── Мини-игра «Золотой дождь» (canvas, 20с лови монеты) ───────────────────────
+  function rainAvailable() { return !st || st.rainAvailable; }
+  function openRain() {
+    if (!rainAvailable()) { flashMsg('Игра будет завтра'); return; }
+    let el = ov.querySelector('#ck-rain');
+    if (!el) {
+      el = document.createElement('div'); el.id = 'ck-rain'; el.className = 'ck-rain';
+      el.innerHTML = `<div class="ck-rain__hud"><div class="t">${ICON.bolt(16)} <span id="ck-rain-t">20</span></div><div class="sp"></div><div class="s">${COIN(16)} <span id="ck-rain-s">0</span></div><button class="x" id="ck-rain-x">×</button></div><canvas id="ck-rain-cv"></canvas><div class="ck-rain__hint" id="ck-rain-hint">Лови падающие монеты! Золотые — ×3</div>`;
+      ov.appendChild(el); el.querySelector('#ck-rain-x').onclick = () => endRain(true);
+    }
+    el.querySelector('#ck-rain-s').textContent = '0'; el.querySelector('#ck-rain-t').textContent = '20'; el.querySelector('#ck-rain-hint').style.display = '';
+    el.classList.add('on'); startRain();
+  }
+  function startRain() {
+    const el = ov.querySelector('#ck-rain'), cv = el.querySelector('#ck-rain-cv');
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const elr = el.getBoundingClientRect(), hud = el.querySelector('.ck-rain__hud').getBoundingClientRect();
+    const W = elr.width, H = Math.max(200, elr.height - hud.height);
+    cv.width = W * dpr; cv.height = H * dpr; cv.style.height = H + 'px';
+    const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    rainState = { items: [], score: 0, tEnd: performance.now() + 20000, lastSpawn: 0, W, H, ctx, ended: false, lastTs: performance.now() };
+    cv.onpointerdown = (e) => { e.preventDefault(); const r = cv.getBoundingClientRect(); hitRain(e.clientX - r.left, e.clientY - r.top); };
+    cancelAnimationFrame(rainRAF); rainRAF = requestAnimationFrame(rainLoop);
+  }
+  function hitRain(x, y) {
+    const s = rainState; if (!s) return;
+    for (let i = s.items.length - 1; i >= 0; i--) { const it = s.items[i]; const dx = x - it.x, dy = y - it.y, rr = it.r + 10; if (dx * dx + dy * dy <= rr * rr) { s.items.splice(i, 1); s.score += it.gold ? 3 : 1; ov.querySelector('#ck-rain-s').textContent = s.score; ov.querySelector('#ck-rain-hint').style.display = 'none'; note(it.gold ? 1320 : 880, 0.11, 'triangle', 0.07, it.gold ? 1760 : 1400); window.haptic && window.haptic('light'); break; } }
+  }
+  function rainLoop(ts) {
+    const s = rainState; if (!s || s.ended) return;
+    const now = ts || performance.now(); const dt = Math.min(0.05, (now - s.lastTs) / 1000); s.lastTs = now;
+    const left = Math.max(0, (s.tEnd - now) / 1000); ov.querySelector('#ck-rain-t').textContent = Math.ceil(left);
+    if (left <= 0) { endRain(false); return; }
+    if (now - s.lastSpawn > Math.max(230, 420 - s.score * 3)) { s.lastSpawn = now; const gold = Math.random() < 0.15; const r = gold ? 21 : 16; s.items.push({ x: r + Math.random() * (s.W - 2 * r), y: -r, r, vy: 110 + Math.random() * 150, gold }); }
+    const ctx = s.ctx; ctx.clearRect(0, 0, s.W, s.H);
+    for (let i = s.items.length - 1; i >= 0; i--) { const it = s.items[i]; it.y += it.vy * dt; if (it.y - it.r > s.H) { s.items.splice(i, 1); continue; } drawRainCoin(ctx, it); }
+    rainRAF = requestAnimationFrame(rainLoop);
+  }
+  function drawRainCoin(ctx, it) {
+    ctx.save(); ctx.translate(it.x, it.y);
+    const g = ctx.createRadialGradient(-it.r * 0.3, -it.r * 0.3, it.r * 0.2, 0, 0, it.r);
+    g.addColorStop(0, '#fff3cf'); g.addColorStop(.5, '#f0c24e'); g.addColorStop(1, '#bd812a');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, it.r, 0, 7); ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = it.gold ? '#fff' : '#9c6a1c'; ctx.stroke();
+    if (it.gold) { ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.arc(0, 0, it.r + 2.5, 0, 7); ctx.stroke(); }
+    ctx.fillStyle = '#7a4a12'; ctx.font = `700 ${Math.round(it.r * 1.05)}px Georgia,serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('М', 0, it.r * 0.08);
+    ctx.restore();
+  }
+  function endRain(aborted) {
+    const s = rainState; if (!s || s.ended) return; s.ended = true; cancelAnimationFrame(rainRAF);
+    const el = ov.querySelector('#ck-rain'); el.classList.remove('on');
+    if (aborted) { rainState = null; return; }
+    submitRain(s.score); rainState = null;
+  }
+  async function submitRain(score) {
+    let reward = 0;
+    if (authed()) { const d = await api('/api/clicker/rain', { method: 'POST', body: JSON.stringify({ score }) }).catch(() => null); if (d && !d.error) { st = d; reward = d.reward; } }
+    else { const g = guestClaimRainRaw(score); if (g != null) { reward = g; st = guestDerive(); } }
+    sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); coinShower(); dailyPopupRaw(ICON.rain(20) + ` Золотой дождь · ${score} монет`, reward || 0); renderAll(); renderTasks(); bumpBalance();
+  }
+  function guestClaimRainRaw(score) {
+    guestDerive(); const s = rawGet(); const today = irkToday(); if (s.rainDate === today) return 0;
+    const sc = Math.max(0, Math.min(120, Math.floor(score))); const lvl = leagueFor(s.totalEarned).level; const reward = Math.min(80000, sc * (60 + lvl * 20));
+    s.balance += reward; s.totalEarned += reward; s.rainDate = today; rawSave(s); return reward;
+  }
+
   function renderTop2() { // лёгкий рендер баланса при тапе (без полного)
     ov.querySelector('#ck-bal').textContent = fmt(st.balance);
     ov.querySelector('#ck-en').textContent = Math.floor(st.energy);
@@ -795,11 +870,16 @@
     const chestCard = `<div class="ck-card ck-bonus" style="background:linear-gradient(90deg,rgba(238,191,82,.16),rgba(238,191,82,.04))">
       <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.chest(26)}</div><div class="ck-card__b"><div class="ck-card__n">Сундук удачи</div><div class="ck-card__s">${chestAvail ? 'Монеты, турбо или джекпот!' : 'Возвращайся завтра за новым'}</div></div>
       ${chestAvail ? `<button class="ck-card__buy" id="ck-chest-open">Открыть</button>` : `<button class="ck-card__buy" disabled>✓ Открыт</button>`}</div>`;
-    return '<div class="ck-sect">Бонусы дня</div>' + chestCard + comboCard + cipherCard;
+    const rainAvail = !st || st.rainAvailable;
+    const rainCard = `<div class="ck-card ck-bonus">
+      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.rain(26)}</div><div class="ck-card__b"><div class="ck-card__n">Золотой дождь</div><div class="ck-card__s">${rainAvail ? 'Лови монеты 20 секунд → бонус' : 'Сыграно — приходи завтра'}</div></div>
+      ${rainAvail ? `<button class="ck-card__buy" id="ck-rain-play">Играть</button>` : `<button class="ck-card__buy" disabled>✓ Сыграно</button>`}</div>`;
+    return '<div class="ck-sect">Бонусы дня</div>' + chestCard + rainCard + comboCard + cipherCard;
   }
   function wireBonus() {
     const cb = ov.querySelector('#ck-combo-claim'); if (cb) cb.onclick = claimCombo;
     const ch = ov.querySelector('#ck-chest-open'); if (ch) ch.onclick = openChestAct;
+    const rp = ov.querySelector('#ck-rain-play'); if (rp) rp.onclick = openRain;
     const go = ov.querySelector('#ck-cipher-go'), inp = ov.querySelector('#ck-cipher-in');
     if (go && inp) { go.onclick = () => claimCipher(inp.value); inp.onkeydown = (e) => { if (e.key === 'Enter') claimCipher(inp.value); }; }
   }
@@ -837,7 +917,7 @@
     if (st.passiveEarned > 0) passivePopup(st.passiveEarned);
     lastTs = 0; syncT = 0; combo = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
   }
-  function close() { cancelAnimationFrame(raf); clearTimeout(bonusTimer); flush(); if (ov) ov.classList.remove('on'); window.scrollUnlock && window.scrollUnlock(); }
+  function close() { cancelAnimationFrame(raf); clearTimeout(bonusTimer); if (rainState) endRain(true); flush(); if (ov) ov.classList.remove('on'); window.scrollUnlock && window.scrollUnlock(); }
   window.catClickOpen = open; window.catClickClose = close; window.catClickBonusNow = () => { if (ov && ov.classList.contains('on')) showFlyingBonus(); }; // превью/тест золотого бонуса
   window.addEventListener('resize', () => { if (ov && ov.classList.contains('on') && st) applyCostume(leagueFor(st.totalEarned)); });
 })();

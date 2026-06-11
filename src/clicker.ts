@@ -136,7 +136,7 @@ export interface ClickerState {
   cards: { id: string; name: string; icon: string; level: number; profit: number; price: number }[];
   // усиления
   dailyAvailable: boolean; dailyStreak: number; dailyNext: number;
-  chestAvailable: boolean;
+  chestAvailable: boolean; rainAvailable: boolean;
   boostEnergyLeft: number; boostTurboLeft: number; turboMsLeft: number;
   referrals: number; refCode: string;
   combo: { cards: string[]; hits: string[]; complete: boolean; claimed: boolean; reward: number };
@@ -175,6 +175,7 @@ export async function initClickerSchema(): Promise<void> {
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS week_base BIGINT NOT NULL DEFAULT 0;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS bonus_at TIMESTAMPTZ;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS chest_date TEXT;
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS rain_date TEXT;
     CREATE TABLE IF NOT EXISTS clicker_cards (
       chat_id BIGINT NOT NULL, card TEXT NOT NULL, level INT NOT NULL DEFAULT 0,
       PRIMARY KEY (chat_id, card)
@@ -213,6 +214,7 @@ function buildState(r: any, cl: Record<string, number>, passiveEarned: number): 
     cards: CARDS.map((c) => ({ id: c.id, name: c.name, icon: c.icon, level: cl[c.id] || 0, profit: cardProfit(c, (cl[c.id] || 0) + 1), price: cardPrice(c, cl[c.id] || 0) })),
     dailyAvailable: r.daily_date !== today, dailyStreak: r.daily_streak, dailyNext: dailyReward((r.daily_date === today ? r.daily_streak : r.daily_streak + 1)),
     chestAvailable: r.chest_date !== today,
+    rainAvailable: r.rain_date !== today,
     boostEnergyLeft: DAILY_BOOSTS - bUsedE, boostTurboLeft: DAILY_BOOSTS - bUsedT, turboMsLeft: turboMs,
     referrals: r.referrals || 0, refCode: String(r.chat_id),
     combo: (() => { const cards = todaysCombo(today); const hits = r.combo_date === today ? parseHits(r.combo_hits) : []; return { cards, hits, complete: cards.every((c) => hits.includes(c)), claimed: r.combo_claimed === today, reward: COMBO_REWARD }; })(),
@@ -348,6 +350,25 @@ export async function claimCipher(chatId: number, guess: string): Promise<{ ok: 
     await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, cipher_date=$4, updated_at=NOW() WHERE chat_id=$1`, [chatId, r.balance, r.total_earned, today]);
     await client.query("COMMIT");
     return { ok: true, reward: CIPHER_REWARD, state: buildState(r, cl, 0) };
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+}
+
+/** Мини-игра «Золотой дождь»: 1/день. Очки клиента клампятся (анти-чит) → монеты. */
+const RAIN_SCORE_CAP = 120;
+export async function claimRain(chatId: number, score: number): Promise<{ ok: boolean; reward?: number; state?: ClickerState; reason?: string }> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { r, cl } = await refresh(client, chatId);
+    const today = irkToday();
+    if (r.rain_date === today) { await client.query("ROLLBACK"); return { ok: false, reason: "already" }; }
+    const sc = Math.max(0, Math.min(RAIN_SCORE_CAP, Math.floor(Number(score) || 0)));
+    const lvl = leagueFor(Number(r.total_earned)).level;
+    const reward = Math.min(80000, sc * (60 + lvl * 20));
+    r.balance = Number(r.balance) + reward; r.total_earned = Number(r.total_earned) + reward; r.rain_date = today;
+    await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, rain_date=$4, updated_at=NOW() WHERE chat_id=$1`, [chatId, r.balance, r.total_earned, today]);
+    await client.query("COMMIT");
+    return { ok: true, reward, state: buildState(r, cl, 0) };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
