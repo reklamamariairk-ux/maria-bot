@@ -16,6 +16,10 @@ const DAILY_BOOSTS = 6;           // бесплатных бустов кажд�
 const REF_INVITEE = 2500;         // бонус приглашённому
 const REF_REFERRER = 5000;        // бонус пригласившему
 const irkToday = () => new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+// Сезон = неделя по Иркутску (сброс в понедельник 00:00). Ключ — индекс дня-понедельника.
+function weekMonday(): number { const d = Math.floor((Date.now() + 8 * 3600 * 1000) / 86400000); return d - ((d + 3) % 7); }
+const weekKey = () => String(weekMonday());
+const seasonEndsTs = () => (weekMonday() + 7) * 86400000 - 8 * 3600 * 1000; // ms UTC начала след. недели
 
 // Соцссылки «Марии» для заданий-маркетинга. ⚠️ Продублировано во фронте catclick.js.
 // Пустая ссылка = задание скрыто (не отправляем людей в никуда). Заполнить реальными URL.
@@ -37,7 +41,20 @@ export const TASKS = [
   { id: "balance10",name: "Накопить 10 000 монет",     icon: "💰", reward: 2500, type: "balance", target: 10000 },
   { id: "streak3",  name: "Заходить 3 дня подряд",      icon: "🔥", reward: 4000, type: "streak",  target: 3 },
 ].filter((t) => t.type !== "link" || (t as any).link);
+// Достижения (claimable, разовые). type: taps | balance | level | cards | streak | ref.
+// ⚠️ Продублировано во фронте catclick.js (список + иконки) — менять синхронно.
+export const ACHIEVEMENTS = [
+  { id: "ach_taps1k",  name: "Разминка лап",      icon: "tap",    reward: 2000,   type: "taps",    target: 1000 },
+  { id: "ach_taps10k", name: "Мастер тапа",       icon: "tap",    reward: 10000,  type: "taps",    target: 10000 },
+  { id: "ach_earn50k", name: "Первые полста",     icon: "wallet", reward: 5000,   type: "balance", target: 50000 },
+  { id: "ach_biz5",    name: "Бизнес-империя",    icon: "shop",   reward: 8000,   type: "cards",   target: 5 },
+  { id: "ach_lvl10",   name: "Высшая лига",       icon: "trophy", reward: 25000,  type: "level",   target: 10 },
+  { id: "ach_lvl19",   name: "Повелитель котов",  icon: "star",   reward: 100000, type: "level",   target: 19 },
+  { id: "ach_streak7", name: "Неделя верности",   icon: "fire",   reward: 7000,   type: "streak",  target: 7 },
+  { id: "ach_ref3",    name: "Душа компании",     icon: "users",  reward: 15000,  type: "ref",     target: 3 },
+];
 const TASK_BY_ID = Object.fromEntries(TASKS.map((t) => [t.id, t]));
+const ALL_BY_ID: Record<string, any> = Object.fromEntries([...TASKS, ...ACHIEVEMENTS].map((t) => [t.id, t]));
 const dailyReward = (streak: number) => 500 * Math.min(Math.max(1, streak), 10); // день1=500 … день10+=5000
 
 // ⚠️ Лестница продублирована во фронте public/js/catclick.js (там же поле cat) — менять синхронно.
@@ -110,6 +127,8 @@ export interface ClickerState {
   referrals: number; refCode: string;
   combo: { cards: string[]; hits: string[]; complete: boolean; claimed: boolean; reward: number };
   cipher: { morse: string; len: number; claimed: boolean; reward: number };
+  taps: number; cardsOwned: number;
+  season: { points: number; endsTs: number };
 }
 
 export async function initClickerSchema(): Promise<void> {
@@ -138,6 +157,8 @@ export async function initClickerSchema(): Promise<void> {
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS combo_hits TEXT;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS combo_claimed TEXT;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS cipher_date TEXT;
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS week_key TEXT;
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS week_base BIGINT NOT NULL DEFAULT 0;
     CREATE TABLE IF NOT EXISTS clicker_cards (
       chat_id BIGINT NOT NULL, card TEXT NOT NULL, level INT NOT NULL DEFAULT 0,
       PRIMARY KEY (chat_id, card)
@@ -174,6 +195,8 @@ function buildState(r: any, cl: Record<string, number>, passiveEarned: number): 
     referrals: r.referrals || 0, refCode: String(r.chat_id),
     combo: (() => { const cards = todaysCombo(today); const hits = r.combo_date === today ? parseHits(r.combo_hits) : []; return { cards, hits, complete: cards.every((c) => hits.includes(c)), claimed: r.combo_claimed === today, reward: COMBO_REWARD }; })(),
     cipher: { morse: toMorse(todaysCipher(today)), len: todaysCipher(today).length, claimed: r.cipher_date === today, reward: CIPHER_REWARD },
+    taps: Number(r.taps || 0), cardsOwned: CARDS.filter((c) => (cl[c.id] || 0) > 0).length,
+    season: { points: r.week_key === weekKey() ? Math.max(0, Number(r.total_earned) - Number(r.week_base || 0)) : 0, endsTs: seasonEndsTs() },
   };
 }
 
@@ -188,9 +211,12 @@ async function refresh(client: any, chatId: number): Promise<{ r: any; cl: Recor
   r.energy = Math.min(energyMaxFor(r.energy_limit_level), Math.round(r.energy + secs * REGEN_PER_SEC));
   const passive = Math.floor(profitPerHour(cl) * Math.min(secs / 3600, PASSIVE_CAP_HOURS));
   if (passive > 0) { r.balance = Number(r.balance) + passive; r.total_earned = Number(r.total_earned) + passive; }
+  // сезон: новая неделя → база = текущий total (очки сезона обнуляются)
+  const wk = weekKey();
+  if (r.week_key !== wk) { r.week_key = wk; r.week_base = Number(r.total_earned); }
   await client.query(
-    `UPDATE clicker_state SET balance=$2, total_earned=$3, energy=$4, boost_energy_used=$5, boost_turbo_used=$6, boost_date=$7, updated_at=NOW() WHERE chat_id=$1`,
-    [chatId, r.balance, r.total_earned, r.energy, r.boost_energy_used, r.boost_turbo_used, r.boost_date]
+    `UPDATE clicker_state SET balance=$2, total_earned=$3, energy=$4, boost_energy_used=$5, boost_turbo_used=$6, boost_date=$7, week_key=$8, week_base=$9, updated_at=NOW() WHERE chat_id=$1`,
+    [chatId, r.balance, r.total_earned, r.energy, r.boost_energy_used, r.boost_turbo_used, r.boost_date, r.week_key, r.week_base]
   );
   return { r, cl, passive };
 }
@@ -323,16 +349,20 @@ export async function boostClicker(chatId: number, type: string): Promise<{ ok: 
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
-/** Топ игроков по накоплению (имя из subscribers). */
-export async function getTop(chatId: number, limit = 30): Promise<{ top: { name: string; total: number; me: boolean }[]; myRank: number | null }> {
+/** Топ игроков за СЕЗОН (текущая неделя): очки = total_earned − week_base. Имя из subscribers. */
+export async function getTop(chatId: number, limit = 30): Promise<{ top: { name: string; total: number; me: boolean }[]; myRank: number | null; seasonEndsTs: number }> {
+  const cur = weekKey();
   const { rows } = await pool.query(
-    `SELECT c.chat_id, c.total_earned, s.first_name, s.username
+    `SELECT c.chat_id, (c.total_earned - c.week_base) AS pts, s.first_name, s.username
        FROM clicker_state c LEFT JOIN subscribers s ON s.chat_id = c.chat_id
-      WHERE c.total_earned > 0 ORDER BY c.total_earned DESC LIMIT $1`, [limit]
+      WHERE c.week_key = $2 AND (c.total_earned - c.week_base) > 0
+      ORDER BY pts DESC LIMIT $1`, [limit, cur]
   );
-  const top = rows.map((r) => ({ name: (r.first_name || r.username || "Котовод").toString().slice(0, 24), total: Number(r.total_earned), me: Number(r.chat_id) === chatId }));
-  const rank = await pool.query(`SELECT COUNT(*)::int AS n FROM clicker_state WHERE total_earned > (SELECT total_earned FROM clicker_state WHERE chat_id=$1)`, [chatId]);
-  return { top, myRank: rows.length ? (rank.rows[0].n + 1) : null };
+  const top = rows.map((r) => ({ name: (r.first_name || r.username || "Котовод").toString().slice(0, 24), total: Number(r.pts), me: Number(r.chat_id) === chatId }));
+  const me = await pool.query(`SELECT week_key, (total_earned - week_base) AS pts FROM clicker_state WHERE chat_id=$1`, [chatId]);
+  const myPts = me.rows.length && me.rows[0].week_key === cur ? Number(me.rows[0].pts) : 0;
+  const rank = await pool.query(`SELECT COUNT(*)::int AS n FROM clicker_state WHERE week_key=$2 AND (total_earned - week_base) > $1`, [myPts, cur]);
+  return { top, myRank: myPts > 0 ? rank.rows[0].n + 1 : null, seasonEndsTs: seasonEndsTs() };
 }
 
 /** Регистрация реферала: code = chat_id пригласившего. Бонус обоим, один раз. */
@@ -360,7 +390,21 @@ function taskClaimable(t: any, s: ClickerState): boolean {
   if (t.type === "balance") return s.totalEarned >= t.target;
   if (t.type === "streak") return s.dailyStreak >= t.target;
   if (t.type === "ref") return s.referrals >= t.target;
+  if (t.type === "taps") return s.taps >= t.target;
+  if (t.type === "cards") return s.cardsOwned >= t.target;
   return false;
+}
+
+export async function getAchievements(chatId: number): Promise<{ achievements: any[] }> {
+  const s = await getClicker(chatId);
+  const { rows } = await pool.query(`SELECT task FROM clicker_tasks WHERE chat_id=$1`, [chatId]);
+  const done = new Set(rows.map((r) => r.task));
+  return {
+    achievements: ACHIEVEMENTS.map((a) => ({
+      id: a.id, name: a.name, icon: a.icon, reward: a.reward, type: a.type, target: a.target,
+      done: done.has(a.id), claimable: !done.has(a.id) && taskClaimable(a, s),
+    })),
+  };
 }
 
 export async function getTasks(chatId: number): Promise<{ tasks: any[] }> {
@@ -376,7 +420,7 @@ export async function getTasks(chatId: number): Promise<{ tasks: any[] }> {
 }
 
 export async function claimTask(chatId: number, id: string): Promise<{ ok: boolean; reward?: number; state?: ClickerState; reason?: string }> {
-  const t = TASK_BY_ID[id]; if (!t) return { ok: false, reason: "bad_task" };
+  const t = ALL_BY_ID[id]; if (!t) return { ok: false, reason: "bad_task" };
   const client = await pool.connect();
   try {
     await client.query("BEGIN");

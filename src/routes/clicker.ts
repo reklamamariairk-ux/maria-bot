@@ -5,7 +5,7 @@
  * POST /api/clicker/boost {type:turbo|energy} · GET /api/clicker/top
  */
 import { Router } from "express";
-import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher } from "../clicker";
+import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements } from "../clicker";
 import { rateLimit } from "../middleware";
 import { requireTgUser, getTgUser } from "../auth";
 import { log } from "../logger";
@@ -66,6 +66,11 @@ router.post("/api/clicker/ref", requireTgUser, rateLimit(20), async (req, res) =
 router.get("/api/clicker/tasks", requireTgUser, rateLimit(60), async (req, res) => {
   const u = getTgUser(req)!;
   try { res.json(await getTasks(u.id)); } catch (e) { log.error({ err: e, chatId: u.id }, "[tasks]"); res.status(500).json({ error: "internal" }); }
+});
+
+router.get("/api/clicker/achievements", requireTgUser, rateLimit(60), async (req, res) => {
+  const u = getTgUser(req)!;
+  try { res.json(await getAchievements(u.id)); } catch (e) { log.error({ err: e, chatId: u.id }, "[achievements]"); res.status(500).json({ error: "internal" }); }
 });
 
 router.post("/api/clicker/task", requireTgUser, rateLimit(40), async (req, res) => {

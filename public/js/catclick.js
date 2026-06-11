@@ -109,6 +109,32 @@
   function toMorse(w) { return w.split('').map(c => MORSE[c] || '').join(' '); }
   const cardName = (id) => (CARDS.find(c => c.id === id) || {}).name || id;
 
+  // ── Сезон (неделя) + Достижения (зеркало src/clicker.ts — менять синхронно) ──────
+  const weekMonday = () => { const d = Math.floor((Date.now() + 8 * 3600e3) / 86400000); return d - ((d + 3) % 7); };
+  const seasonEndsTs = () => (weekMonday() + 7) * 86400000 - 8 * 3600e3;
+  const ACHIEVEMENTS = [
+    { id: 'ach_taps1k', name: 'Разминка лап', icon: 'tap', reward: 2000, type: 'taps', target: 1000 },
+    { id: 'ach_taps10k', name: 'Мастер тапа', icon: 'tap', reward: 10000, type: 'taps', target: 10000 },
+    { id: 'ach_earn50k', name: 'Первые полста', icon: 'wallet', reward: 5000, type: 'balance', target: 50000 },
+    { id: 'ach_biz5', name: 'Бизнес-империя', icon: 'shop', reward: 8000, type: 'cards', target: 5 },
+    { id: 'ach_lvl10', name: 'Высшая лига', icon: 'trophy', reward: 25000, type: 'level', target: 10 },
+    { id: 'ach_lvl19', name: 'Повелитель котов', icon: 'star', reward: 100000, type: 'level', target: 19 },
+    { id: 'ach_streak7', name: 'Неделя верности', icon: 'fire', reward: 7000, type: 'streak', target: 7 },
+    { id: 'ach_ref3', name: 'Душа компании', icon: 'users', reward: 15000, type: 'ref', target: 3 },
+  ];
+  const achIcon = (key) => ({ tap: ICON.tap, wallet: ICON.wallet, shop: ICON.shop, trophy: ICON.trophy, star: ICON.star, fire: ICON.fire, users: ICON.users }[key] || ICON.star)(26);
+  function condMet(t, s) {
+    if (t.type === 'link') return !!linkOpened[t.id];
+    if (t.type === 'level') return s.level >= t.target;
+    if (t.type === 'balance') return s.totalEarned >= t.target;
+    if (t.type === 'streak') return s.dailyStreak >= t.target;
+    if (t.type === 'ref') return (s.referrals || 0) >= t.target;
+    if (t.type === 'taps') return (s.taps || 0) >= t.target;
+    if (t.type === 'cards') return (s.cardsOwned || 0) >= t.target;
+    return false;
+  }
+  function fmtDur(ms) { const h = Math.max(0, Math.floor(ms / 3600e3)); const d = Math.floor(h / 24); return d > 0 ? `${d}д ${h % 24}ч` : `${h}ч`; }
+
   let ov, audio, raf, lastTs = 0, pending = 0, syncT = 0, curLevel = 1, tab = 'cat';
   let st = null, turboUntil = 0, combo = 0, comboT = 0;
 
@@ -119,7 +145,7 @@
   function chord(arr, g) { arr.forEach((f, i) => setTimeout(() => beep(f, 'triangle', g || 0.14), i * 80)); }
 
   // ── Гость (localStorage) ─────────────────────────────────────────────────────
-  function rawDefault() { return { balance: 0, totalEarned: 0, energy: 1000, multitapLevel: 0, energyLevel: 0, cards: {}, dailyStreak: 0, dailyDate: null, bE: 0, bT: 0, bDate: null, turboUntil: 0, tasksDone: {}, comboDate: null, comboHits: [], comboClaimed: null, cipherDate: null, _ts: Date.now() }; }
+  function rawDefault() { return { balance: 0, totalEarned: 0, energy: 1000, multitapLevel: 0, energyLevel: 0, cards: {}, taps: 0, dailyStreak: 0, dailyDate: null, bE: 0, bT: 0, bDate: null, turboUntil: 0, tasksDone: {}, comboDate: null, comboHits: [], comboClaimed: null, cipherDate: null, _ts: Date.now() }; }
   function rawGet() { let s; try { s = JSON.parse(localStorage.getItem(LS)); } catch (_) {} if (!s) s = rawDefault(); if (!s.cards) s.cards = {}; return s; }
   function rawSave(s) { s._ts = Date.now(); localStorage.setItem(LS, JSON.stringify(s)); }
   function profitOf(c) { let p = 0; for (const x of CARDS) p += cardProfit(x, c[x.id] || 0); return p; }
@@ -145,6 +171,8 @@
       boostEnergyLeft: DAILY_BOOSTS - s.bE, boostTurboLeft: DAILY_BOOSTS - s.bT, turboMsLeft: Math.max(0, (s.turboUntil || 0) - Date.now()),
       combo: (() => { const cards = todaysCombo(today); const hits = s.comboDate === today ? (s.comboHits || []) : []; return { cards, hits, complete: cards.every(c => hits.includes(c)), claimed: s.comboClaimed === today, reward: COMBO_REWARD }; })(),
       cipher: { morse: toMorse(todaysCipher(today)), len: todaysCipher(today).length, claimed: s.cipherDate === today, reward: CIPHER_REWARD },
+      taps: s.taps || 0, cardsOwned: CARDS.filter(c => (s.cards[c.id] || 0) > 0).length,
+      season: { points: 0, endsTs: seasonEndsTs() },
     };
   }
 
@@ -348,7 +376,7 @@
     const mult = turboOn() ? TURBO_MULT : 1;
     const gain = st.perTap * mult;
     st.energy -= 1; st.balance += gain; st.totalEarned += gain; pending++;
-    if (!authed()) { const s = rawGet(); s.energy -= 1; s.balance += gain; s.totalEarned += gain; rawSave(s); }
+    if (!authed()) { const s = rawGet(); s.energy -= 1; s.balance += gain; s.totalEarned += gain; s.taps = (s.taps || 0) + 1; rawSave(s); }
     // комбо
     const now = performance.now(); combo = (now - comboT < 450) ? combo + 1 : 1; comboT = now;
     const cat = ov.querySelector('#ck-cat'); cat.classList.remove('tap'); void cat.offsetWidth; cat.classList.add('tap'); setTimeout(() => cat.classList.remove('tap'), 80);
@@ -427,11 +455,13 @@
   }
   async function renderTop() {
     const list = ov.querySelector('#ck-toplist'); const rank = ov.querySelector('#ck-myrank');
-    if (!authed()) { list.innerHTML = '<div style="text-align:center;color:var(--muted);padding:30px 14px;line-height:1.5">Рейтинг доступен при входе через приложение «Мария»</div>'; rank.textContent = ''; return; }
+    const left = fmtDur(seasonEndsTs() - Date.now());
+    if (!authed()) { rank.textContent = `Сезон недели · до сброса ${left}`; list.innerHTML = '<div style="text-align:center;color:var(--muted);padding:30px 14px;line-height:1.5">Рейтинг сезона доступен при входе через приложение «Мария». Соревнуйся за топ недели!</div>'; return; }
     list.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px">Загрузка…</div>';
     const d = await loadTop();
-    if (!d || !d.top) { list.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px">Пока пусто — будь первым!</div>'; return; }
-    rank.textContent = d.myRank ? `Твоё место: #${d.myRank}` : '';
+    const ends = d && d.seasonEndsTs ? fmtDur(d.seasonEndsTs - Date.now()) : left;
+    rank.textContent = `Сезон недели · до сброса ${ends}` + (d && d.myRank ? ` · ты #${d.myRank}` : '');
+    if (!d || !d.top || !d.top.length) { list.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px">Сезон только начался — заработай монеты и будь первым!</div>'; return; }
     list.innerHTML = d.top.map((r, i) => `<div class="ck-row${r.me ? ' me' : ''}"><div class="r">${i < 3 ? ICON.medal(20) : i + 1}</div><div class="n">${(r.name || '').replace(/</g, '&lt;')}</div><div class="v">${COIN(14)} ${fmt(r.total)}</div></div>`).join('');
   }
 
@@ -468,10 +498,14 @@
     });
   }
   function guestClaimTask(id) {
-    const t = TASKS.find(x => x.id === id); if (!t) return 0;
-    guestDerive(); const s = rawGet(); if (s.tasksDone && s.tasksDone[id]) return 0;
-    const list = guestTaskList(); const item = list.find(x => x.id === id); if (!item || !item.claimable) return 0;
+    const t = TASKS.find(x => x.id === id) || ACHIEVEMENTS.find(x => x.id === id); if (!t) return 0;
+    const ds = guestDerive(); const s = rawGet(); if (s.tasksDone && s.tasksDone[id]) return 0;
+    if (!condMet(t, ds)) return 0;
     s.balance += t.reward; s.totalEarned += t.reward; s.tasksDone = s.tasksDone || {}; s.tasksDone[id] = 1; rawSave(s); return t.reward;
+  }
+  function guestAchList() {
+    const ds = guestDerive(); const done = (rawGet().tasksDone) || {};
+    return ACHIEVEMENTS.map(a => ({ ...a, done: !!done[a.id], claimable: !done[a.id] && condMet(a, ds) }));
   }
   async function renderTasks() {
     const list = ov.querySelector('#ck-taskslist');
@@ -492,12 +526,23 @@
       else btn = `<button class="ck-card__buy" disabled>+${fmt(t.reward)}</button>`;
       return `<div class="ck-card"><div class="ck-card__ic">${taskIcon(t.id)}</div><div class="ck-card__b"><div class="ck-card__n">${t.name}</div><div class="ck-card__s">Награда +${fmt(t.reward)} ${COIN(13)}</div></div>${btn}</div>`;
     }).join('');
-    list.innerHTML = bonusBlock() + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows;
+    let achs;
+    if (authed()) { const d = await api('/api/clicker/achievements').catch(() => null); achs = d && d.achievements; }
+    else achs = guestAchList();
+    if (!achs) achs = [];
+    const achRows = achs.map(a => {
+      const btn = a.done ? `<button class="ck-card__buy" disabled style="justify-content:center">✓ Получено</button>`
+        : a.claimable ? `<button class="ck-card__buy" data-claim="${a.id}">+${fmt(a.reward)} ${COIN(14)}</button>`
+          : `<button class="ck-card__buy" disabled>+${fmt(a.reward)}</button>`;
+      return `<div class="ck-card"${a.done ? ' style="opacity:.6"' : ''}><div class="ck-card__ic">${achIcon(a.icon)}</div><div class="ck-card__b"><div class="ck-card__n">${a.name}</div><div class="ck-card__s">${achDesc(a)}</div></div>${btn}</div>`;
+    }).join('');
+    list.innerHTML = bonusBlock() + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows + '<div class="ck-sect">Достижения</div>' + achRows;
     ov.querySelector('#ck-invite').onclick = shareRef;
     list.querySelectorAll('[data-open]').forEach(b => b.onclick = () => { const id = b.dataset.open, link = b.dataset.link; if (link) { if (window.App && App.openExternal) App.openExternal(link); else window.open(link, '_blank'); } linkOpened[id] = true; setTimeout(renderTasks, 400); });
     list.querySelectorAll('[data-claim]').forEach(b => b.onclick = () => claimTask(b.dataset.claim));
     wireBonus();
   }
+  function achDesc(a) { const m = { taps: `${fmt(a.target)} тапов`, balance: `Накопить ${fmt(a.target)}`, level: `Уровень ${a.target}`, cards: `Все ${a.target} бизнеса`, streak: `${a.target} дней подряд`, ref: `${a.target} друга` }; return m[a.type] || ''; }
   function bonusBlock() {
     const cmb = (st && st.combo) || { cards: [], hits: [], complete: false, claimed: false, reward: COMBO_REWARD };
     const cph = (st && st.cipher) || { morse: '', len: 0, claimed: false, reward: CIPHER_REWARD };
