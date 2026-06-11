@@ -148,10 +148,42 @@
   let st = null, turboUntil = 0, combo = 0, comboT = 0;
 
   function authed() { return !!(window.App && App.isAuthed && App.isAuthed()); }
-  function ac() { if (!audio) { try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) {} } return audio; }
-  function beep(f, t, g, slide) { const a = ac(); if (!a) return; const o = a.createOscillator(), gn = a.createGain(); o.type = t || 'square'; o.frequency.value = f; if (slide) o.frequency.exponentialRampToValueAtTime(slide, a.currentTime + 0.07); gn.gain.value = g || 0.05; gn.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + 0.09); o.connect(gn); gn.connect(a.destination); o.start(); o.stop(a.currentTime + 0.1); }
-  function coinSfx() { beep(880, 'square', 0.05, 1400); }
-  function chord(arr, g) { arr.forEach((f, i) => setTimeout(() => beep(f, 'triangle', g || 0.14), i * 80)); }
+  // ── Звук: мастер-шина с ревером + богатый синтез (без файлов) ─────────────────
+  let bus, comboFx;
+  function ac() {
+    if (!audio) { try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) {} if (audio) buildBus(); }
+    if (audio && audio.state === 'suspended') audio.resume().catch(() => {});
+    return audio;
+  }
+  function buildBus() {
+    const a = audio; bus = a.createGain(); bus.gain.value = 0.85;
+    const comp = a.createDynamicsCompressor(); comp.threshold.value = -18; comp.ratio.value = 3;
+    const rev = a.createConvolver(); const len = Math.floor(a.sampleRate * 0.8); const imp = a.createBuffer(2, len, a.sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const d = imp.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6); }
+    rev.buffer = imp; const wet = a.createGain(); wet.gain.value = 0.16; const dry = a.createGain(); dry.gain.value = 1;
+    bus.connect(dry); dry.connect(comp); bus.connect(rev); rev.connect(wet); wet.connect(comp); comp.connect(a.destination);
+  }
+  // одна нота → мастер-шина (ADSR-конверт, опц. глайд)
+  function note(f, dur, type, gain, slideTo, when) {
+    const a = ac(); if (!a || !bus) return; const t = a.currentTime + (when || 0);
+    const o = a.createOscillator(), g = a.createGain(); o.type = type || 'triangle'; o.frequency.setValueAtTime(f, t);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur * 0.9);
+    const pk = gain || 0.12; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(pk, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(bus); o.start(t); o.stop(t + dur + 0.02);
+  }
+  function beep(f, t, g, slide) { note(f, 0.12, t === 'square' ? 'square' : 'triangle', g || 0.08, slide); }
+  function chord(arr, g) { arr.forEach((f, i) => note(f, 0.3, 'triangle', g || 0.1, null, i * 0.08)); }
+  // монета-«колокольчик»: основной тон + октава + искра; питч растёт с комбо
+  function sfxTap(combo) {
+    const k = 1 + Math.min(combo || 0, 24) * 0.014; const base = 740 * k;
+    note(base, 0.16, 'triangle', 0.09, base * 1.5); note(base * 2, 0.12, 'sine', 0.05); note(base * 3.01, 0.06, 'sine', 0.03, null, 0.005);
+  }
+  function sfxBuy() { note(523, 0.14, 'triangle', 0.11, 660); note(784, 0.18, 'triangle', 0.1, null, 0.08); note(1318, 0.1, 'sine', 0.05, null, 0.12); }
+  function sfxLevel() { [523, 659, 784, 1047, 1319].forEach((f, i) => note(f, 0.5, 'triangle', 0.12, null, i * 0.09)); note(2093, 0.5, 'sine', 0.04, null, 0.4); }
+  function sfxTurbo() { note(180, 0.45, 'sawtooth', 0.1, 920); note(360, 0.4, 'triangle', 0.06, 1400, 0.04); note(1568, 0.18, 'sine', 0.05, null, 0.3); }
+  function sfxReward() { [1568, 1318, 1047, 1568].forEach((f, i) => note(f, 0.22, 'triangle', 0.1, null, i * 0.07)); }
+  function sfxError() { note(220, 0.18, 'sine', 0.08, 160); }
+  function coinSfx() { sfxTap(0); }
 
   // ── Гость (localStorage) ─────────────────────────────────────────────────────
   function rawDefault() { return { balance: 0, totalEarned: 0, energy: 1000, multitapLevel: 0, energyLevel: 0, cards: {}, taps: 0, dailyStreak: 0, dailyDate: null, bE: 0, bT: 0, bDate: null, turboUntil: 0, tasksDone: {}, comboDate: null, comboHits: [], comboClaimed: null, cipherDate: null, _ts: Date.now() }; }
@@ -193,7 +225,7 @@
     let ok = false;
     if (authed()) { try { const d = await api('/api/clicker/buy', { method: 'POST', body: JSON.stringify({ type, id }) }); if (!d.error) { st = d; ok = true; } } catch (_) {} }
     else { const s = guestBuyRaw(type, id); if (s) { st = guestDerive(); ok = true; } }
-    if (ok) { chord([700, 1050]); window.haptic && window.haptic('medium'); renderAll(); renderUpgrades(); } else flashMsg('Не хватает монет');
+    if (ok) { sfxBuy(); window.haptic && window.haptic('medium'); renderAll(); renderUpgrades(); } else { sfxError(); flashMsg('Не хватает монет'); }
   }
   function guestBuyRaw(type, id) {
     guestDerive(); const s = rawGet(); let cost = 0;
@@ -211,7 +243,7 @@
     let r;
     if (authed()) { r = await api('/api/clicker/daily', { method: 'POST', body: '{}' }).catch(() => null); if (r && !r.error) st = r; }
     else { const g = guestClaimDaily(); if (g) { r = { reward: g }; st = guestDerive(); } }
-    if (r && r.reward) { chord([660, 880, 1320], 0.16); window.haptic && window.haptic('success'); dailyPopup(r.reward, st.dailyStreak); renderAll(); bumpBalance(); }
+    if (r && r.reward) { sfxReward(); window.haptic && window.haptic('success'); dailyPopup(r.reward, st.dailyStreak); renderAll(); bumpBalance(); }
   }
   function guestClaimDaily() {
     guestDerive(); const s = rawGet(); const today = irkToday(); if (s.dailyDate === today) return 0;
@@ -223,7 +255,7 @@
     let r;
     if (authed()) { r = await api('/api/clicker/combo', { method: 'POST', body: '{}' }).catch(() => null); if (r && !r.error) st = r; else r = null; }
     else { const g = guestClaimComboRaw(); if (g) { r = { reward: COMBO_REWARD }; st = guestDerive(); } }
-    if (r && r.reward) { chord([660, 990, 1320, 1760], 0.18); window.haptic && window.haptic('success'); coinShower(); confettiBurst(); dailyPopupRaw(ICON.star(20) + ' Комбо дня собрано!', r.reward); renderAll(); renderTasks(); bumpBalance(); }
+    if (r && r.reward) { sfxLevel(); window.haptic && window.haptic('success'); coinShower(); confettiBurst(); dailyPopupRaw(ICON.star(20) + ' Комбо дня собрано!', r.reward); renderAll(); renderTasks(); bumpBalance(); }
     else flashMsg('Комбо ещё не собрано');
   }
   function guestClaimComboRaw() {
@@ -237,7 +269,7 @@
     let r;
     if (authed()) { r = await api('/api/clicker/cipher', { method: 'POST', body: JSON.stringify({ guess }) }).catch(() => null); if (r && !r.error) st = r; else { flashMsg(r && r.error === 'already' ? 'Уже разгадан сегодня' : 'Неверно, попробуй ещё'); return; } }
     else { const g = guestClaimCipherRaw(guess); if (!g) { flashMsg('Неверно, попробуй ещё'); return; } st = guestDerive(); r = { reward: CIPHER_REWARD }; }
-    if (r && r.reward) { chord([880, 1175, 1568], 0.18); window.haptic && window.haptic('success'); coinShower(); dailyPopupRaw(ICON.bolt(20) + ' Шифр разгадан!', r.reward); renderAll(); renderTasks(); bumpBalance(); }
+    if (r && r.reward) { sfxReward(); window.haptic && window.haptic('success'); coinShower(); dailyPopupRaw(ICON.bolt(20) + ' Шифр разгадан!', r.reward); renderAll(); renderTasks(); bumpBalance(); }
   }
   function guestClaimCipherRaw(guess) {
     guestDerive(); const s = rawGet(); const today = irkToday();
@@ -250,7 +282,7 @@
     if (authed()) { try { const d = await api('/api/clicker/boost', { method: 'POST', body: JSON.stringify({ type }) }); if (!d.error) { st = d; ok = true; } } catch (_) {} }
     else { ok = guestBoost(type); if (ok) st = guestDerive(); }
     if (!ok) { flashMsg('Бусты на сегодня кончились'); return; }
-    if (type === 'turbo') { turboUntil = Date.now() + TURBO_SEC * 1000; chord([880, 1320, 1760], 0.16); }
+    if (type === 'turbo') { turboUntil = Date.now() + TURBO_SEC * 1000; sfxTurbo(); }
     else { chord([520, 780], 0.14); }
     window.haptic && window.haptic('medium'); renderAll();
   }
@@ -304,7 +336,15 @@
       @keyframes ckFlash{0%{opacity:0;transform:scale(.5)}28%{opacity:1}100%{opacity:0;transform:scale(1.5)}}
       .ck-ghost{position:absolute;pointer-events:none;z-index:3;object-fit:contain;transition:opacity .6s ease-out,transform .6s ease-out}
       .ck-conf{position:absolute;z-index:7;pointer-events:none;border-radius:1px;will-change:transform,opacity}
-      @media (prefers-reduced-motion:reduce){.ck-cat,.ck-cat.tap,.ck-catwrap::before,.ck-catwrap::after,.ck-spark{animation:none}}
+      .ck-greet{display:none;margin-top:8px;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);color:var(--gold-l);padding:4px 13px;border-radius:20px;font-weight:700;font-size:12px}
+      .ck-greet.on{display:inline-flex}
+      .ck-season{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+      .ck-fl{position:absolute;top:-24px;will-change:transform,opacity;animation:ckFall linear infinite}
+      .ck-snow{width:7px;height:7px;border-radius:50%;background:radial-gradient(circle,#fff,rgba(255,255,255,.35) 70%);box-shadow:0 0 5px rgba(255,255,255,.55)}
+      @keyframes ckFall{0%{transform:translateY(-24px) translateX(0) rotate(0);opacity:0}12%{opacity:.92}100%{transform:translateY(112vh) translateX(var(--sx,20px)) rotate(var(--rz,180deg));opacity:.3}}
+      .ck-ov[data-season="ny"] .ck-catwrap::before{background:radial-gradient(ellipse at center,rgba(150,205,255,.42) 0%,rgba(120,175,245,.22) 42%,transparent 70%)}
+      .ck-ov[data-season="spring"] .ck-catwrap::before,.ck-ov[data-season="love"] .ck-catwrap::before{background:radial-gradient(ellipse at center,rgba(255,165,205,.44) 0%,rgba(255,120,170,.22) 42%,transparent 70%)}
+      @media (prefers-reduced-motion:reduce){.ck-cat,.ck-cat.tap,.ck-catwrap::before,.ck-catwrap::after,.ck-spark,.ck-fl{animation:none}.ck-season{display:none}}
       .ck-hat{position:absolute;pointer-events:none;filter:drop-shadow(0 4px 6px rgba(0,0,0,.3))}
       .ck-combo{position:absolute;top:17%;left:50%;transform:translateX(-50%);font-family:'Playfair Display',serif;font-weight:800;color:var(--gold-l);text-shadow:0 2px 10px rgba(0,0,0,.6);pointer-events:none;opacity:0;font-size:24px}
       .ck-combo.show{opacity:1}
@@ -351,6 +391,7 @@
       <div class="ck-screen on" id="ck-scr-cat">
         <button class="ck-daily" id="ck-daily" style="display:none"></button>
         <div class="ck-lvl" id="ck-lvl"></div>
+        <div class="ck-greet" id="ck-greet"></div>
         <div class="ck-bal">${COIN(32)} <span id="ck-bal">0</span></div>
         <div class="ck-prof" id="ck-prof">${COIN(14)} +0 / час</div>
         <div class="ck-prog"><div class="ck-prog__bar"><div class="ck-prog__fill" id="ck-prog"></div></div><div class="ck-prog__t" id="ck-progt"></div></div>
@@ -405,7 +446,7 @@
     // комбо
     const now = performance.now(); combo = (now - comboT < 450) ? combo + 1 : 1; comboT = now;
     const cat = ov.querySelector('#ck-cat'); cat.classList.remove('tap'); void cat.offsetWidth; cat.classList.add('tap'); setTimeout(() => cat.classList.remove('tap'), 80);
-    coinSfx(); window.haptic && window.haptic('light');
+    sfxTap(combo); window.haptic && window.haptic('light');
     flyUp(e.clientX, e.clientY, '+' + gain, Math.min(40, 22 + combo));
     ripple(e.clientX, e.clientY); flyCoin(e.clientX, e.clientY);
     if (combo >= 5) showCombo();
@@ -457,6 +498,46 @@
     wrap.appendChild(g); requestAnimationFrame(() => { g.style.opacity = '0'; g.style.transform = 'scale(1.16)'; }); setTimeout(() => g.remove(), 660);
   }
 
+  // ── Сезонные темы (авто по дате Иркутска + тест-override) ─────────────────────
+  function seasonTheme() {
+    let id = (window.catClickSeason) || ''; // тест: window.catClickSeason='ny'|'spring'|'love'
+    try { id = id || new URLSearchParams(location.search).get('season') || localStorage.getItem('ck_season') || ''; } catch (_) {}
+    if (!id) {
+      const dd = new Date(Date.now() + 8 * 3600e3), m = dd.getUTCMonth() + 1, day = dd.getUTCDate();
+      if ((m === 12 && day >= 15) || (m === 1 && day <= 10)) id = 'ny';
+      else if (m === 2 && day >= 10 && day <= 16) id = 'love';
+      else if ((m === 2 && day >= 25) || (m === 3 && day <= 9)) id = 'spring';
+    }
+    const T = { ny: { greet: 'С Новым годом!', kind: 'snow' }, spring: { greet: 'С 8 Марта!', kind: 'petal' }, love: { greet: 'С Днём влюблённых!', kind: 'heart' } };
+    return T[id] ? { id, greet: T[id].greet, kind: T[id].kind } : null;
+  }
+  function seasonChipIcon(id) {
+    if (id === 'ny') return SVG('<path d="M12 3v18M3 12h18M5.6 5.6 18.4 18.4M18.4 5.6 5.6 18.4"/>', 14);
+    if (id === 'spring') return SVG('<path d="M12 21v-8M12 13c-2.4 0-4-1.8-4-4 0-2.4 4-5 4-5s4 2.6 4 5c0 2.2-1.6 4-4 4Z"/>', 14);
+    return SVG('<path d="M12 20s-6.5-4.2-6.5-9A3.3 3.3 0 0 1 12 8a3.3 3.3 0 0 1 6.5 3c0 4.8-6.5 9-6.5 9Z"/>', 14);
+  }
+  function spawnSeason(th) {
+    const old = ov.querySelector('.ck-season'); if (old) old.remove();
+    if (!th) return;
+    const layer = document.createElement('div'); layer.className = 'ck-season';
+    for (let i = 0; i < 16; i++) {
+      const p = document.createElement('div'); p.className = 'ck-fl'; p.style.left = (Math.random() * 100).toFixed(1) + '%';
+      const dur = 6 + Math.random() * 6; p.style.animationDuration = dur.toFixed(1) + 's'; p.style.animationDelay = (-Math.random() * dur).toFixed(1) + 's';
+      p.style.setProperty('--sx', ((Math.random() * 2 - 1) * 40).toFixed(0) + 'px'); p.style.setProperty('--rz', (Math.random() * 360).toFixed(0) + 'deg');
+      const sz = Math.round((10 + Math.random() * 8));
+      if (th.kind === 'snow') p.innerHTML = '<div class="ck-snow"></div>';
+      else { const col = th.kind === 'heart' ? '#ff7aa8' : '#ff9ec4'; const path = th.kind === 'heart' ? '<path d="M12 21s-7-4.6-7-10A3.6 3.6 0 0 1 12 8a3.6 3.6 0 0 1 7 3c0 5.4-7 10-7 10Z"/>' : '<path d="M12 3c1.3 2.6.6 5-1.3 6.4M12 3c-1.3 2.6-.6 5 1.3 6.4M12 3v9M5 8c-.3 2.4 1.2 4.3 3.6 4.6M19 8c.3 2.4-1.2 4.3-3.6 4.6"/>'; p.innerHTML = `<svg width="${sz}" height="${sz}" viewBox="0 0 24 24" fill="${th.kind === 'heart' ? col : 'none'}" stroke="${col}" stroke-width="1.6">${path}</svg>`; }
+      layer.appendChild(p);
+    }
+    ov.appendChild(layer);
+  }
+  function applySeason() {
+    if (!ov) return; const th = seasonTheme(); const g = ov.querySelector('#ck-greet');
+    if (th) { ov.dataset.season = th.id; if (g) { g.innerHTML = seasonChipIcon(th.id) + ' ' + th.greet; g.classList.add('on'); } }
+    else { delete ov.dataset.season; if (g) g.classList.remove('on'); }
+    spawnSeason(th);
+  }
+
   function renderTop2() { // лёгкий рендер баланса при тапе (без полного)
     ov.querySelector('#ck-bal').textContent = fmt(st.balance);
     ov.querySelector('#ck-en').textContent = Math.floor(st.energy);
@@ -497,7 +578,7 @@
     if (cat.getAttribute('src') !== src) cat.src = src;
   }
   function levelUp(lg) {
-    chord([660, 990, 1320, 1760], 0.18); window.haptic && window.haptic('success');
+    sfxLevel(); window.haptic && window.haptic('success');
     const oldSrc = (ov.querySelector('#ck-cat') || {}).src; // костюм сменится в applyCostume — кросс-фейд
     flash(); confettiBurst(); coinShower(); evolveCat(oldSrc);
     const t = ov.querySelector('#ck-levelup-t'); t.innerHTML = ICON.star(22) + ' ' + lg.name; t.classList.remove('show'); void t.offsetWidth; t.classList.add('show');
@@ -533,7 +614,7 @@
     if (!REWARDS_ENABLED) { flashMsg('Скоро откроем'); return; }
     if (!authed()) { flashMsg('Войди через приложение «Мария»'); return; }
     api('/api/clicker/redeem', { method: 'POST', body: JSON.stringify({ id }) }).then(d => {
-      if (d && !d.error && d.code) { st = d; chord([660, 990, 1320], 0.18); window.haptic && window.haptic('success'); codePopup(d.code); renderAll(); renderUpgrades(); }
+      if (d && !d.error && d.code) { st = d; sfxLevel(); window.haptic && window.haptic('success'); codePopup(d.code); renderAll(); renderUpgrades(); }
       else flashMsg(d && d.error === 'daily_limit' ? 'Лимит на сегодня' : d && d.error === 'disabled' ? 'Скоро откроем' : 'Не хватает монет');
     }).catch(() => flashMsg('Ошибка'));
   }
@@ -656,7 +737,7 @@
     let reward = 0;
     if (authed()) { const d = await api('/api/clicker/task', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null); if (d && !d.error) { st = d; reward = d.reward; } }
     else { reward = guestClaimTask(id); if (reward) st = guestDerive(); }
-    if (reward) { chord([660, 880, 1320], 0.16); window.haptic && window.haptic('success'); dailyPopupRaw('✅ Задание выполнено', reward); renderAll(); renderTasks(); bumpBalance(); }
+    if (reward) { sfxReward(); window.haptic && window.haptic('success'); dailyPopupRaw('✅ Задание выполнено', reward); renderAll(); renderTasks(); bumpBalance(); }
     else flashMsg('Пока недоступно');
   }
   function dailyPopupRaw(title, amount) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${title}</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
@@ -682,7 +763,7 @@
     ov.classList.add('on'); window.scrollLock && window.scrollLock(); ac();
     await load(); await maybeRegisterRef(); curLevel = leagueFor(st.totalEarned).level;
     ov.querySelector('#ck-cat').src = A(leagueFor(st.totalEarned).cat || 'idle.png');
-    setTab('cat'); renderAll(); spawnSparks();
+    setTab('cat'); renderAll(); spawnSparks(); applySeason();
     if (st.passiveEarned > 0) passivePopup(st.passiveEarned);
     lastTs = 0; syncT = 0; combo = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
   }
