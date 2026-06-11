@@ -7,12 +7,25 @@
   const A = (s) => `/assets/images/cat/${s}?v=20`;  // v20: чистый вырез без светлого ободка
   const LS = 'maria_click_v2';
   const REGEN = 1.5, PASSIVE_CAP_H = 3, TURBO_MULT = 5, TURBO_SEC = 20, DAILY_BOOSTS = 6;
+  // ⚠️ Зеркало CARDS/CARD_CATS из src/clicker.ts — менять синхронно (+ cardIcon по id).
+  const CARD_CATS = [{ id: 'prod', name: 'Производство' }, { id: 'mkt', name: 'Маркетинг' }, { id: 'staff', name: 'Персонал' }, { id: 'net', name: 'Сеть' }];
   const CARDS = [
-    { id: 'bakery', name: 'Пекарня', icon: '🍞', basePrice: 300, baseProfit: 30 },
-    { id: 'coffee', name: 'Кофемашина', icon: '☕', basePrice: 900, baseProfit: 85 },
-    { id: 'delivery', name: 'Доставка', icon: '🛵', basePrice: 2500, baseProfit: 200 },
-    { id: 'cakefactory', name: 'Фабрика тортов', icon: '🎂', basePrice: 7000, baseProfit: 520 },
-    { id: 'franchise', name: 'Франшиза «Мария»', icon: '🏪', basePrice: 20000, baseProfit: 1500 },
+    { id: 'bakery', name: 'Пекарня', cat: 'prod', basePrice: 300, baseProfit: 30 },
+    { id: 'coffee', name: 'Кофемашина', cat: 'prod', basePrice: 900, baseProfit: 85 },
+    { id: 'oven', name: 'Конвекционная печь', cat: 'prod', basePrice: 2600, baseProfit: 210, req: 3 },
+    { id: 'cakefactory', name: 'Цех тортов', cat: 'prod', basePrice: 7000, baseProfit: 520, req: 4 },
+    { id: 'ads', name: 'Наружная реклама', cat: 'mkt', basePrice: 1500, baseProfit: 120 },
+    { id: 'smm', name: 'SMM-специалист', cat: 'mkt', basePrice: 4200, baseProfit: 320, req: 3 },
+    { id: 'tasting', name: 'Дегустации', cat: 'mkt', basePrice: 12000, baseProfit: 780, req: 5 },
+    { id: 'loyalty', name: 'Карта лояльности', cat: 'mkt', basePrice: 30000, baseProfit: 1900, req: 7 },
+    { id: 'barista', name: 'Бариста', cat: 'staff', basePrice: 1100, baseProfit: 95 },
+    { id: 'baker', name: 'Пекарь', cat: 'staff', basePrice: 3400, baseProfit: 270, req: 3 },
+    { id: 'confectioner', name: 'Кондитер', cat: 'staff', basePrice: 9000, baseProfit: 640, req: 5 },
+    { id: 'manager', name: 'Управляющий', cat: 'staff', basePrice: 24000, baseProfit: 1550, req: 6 },
+    { id: 'delivery', name: 'Доставка', cat: 'net', basePrice: 2500, baseProfit: 200 },
+    { id: 'newshop', name: 'Новая точка', cat: 'net', basePrice: 8000, baseProfit: 560, req: 4 },
+    { id: 'franchise', name: 'Франшиза «Мария»', cat: 'net', basePrice: 20000, baseProfit: 1500, req: 6 },
+    { id: 'region', name: 'Выход в регион', cat: 'net', basePrice: 38000, baseProfit: 2300, req: 8 },
   ];
   const LEAGUES = [
     // cat = картинка кота на уровне (эволюция «глоу-ап»: тощий уличный → кот-император)
@@ -97,8 +110,12 @@
     battery: (s) => SVG('<rect x="3" y="8" width="15" height="8" rx="2"/><path d="M20 11v2"/><path d="M9.5 9.5 7.5 12.4h2.6L8 15"/>', s),
     chest: (s) => SVG('<path d="M4 10.5 6 6h12l2 4.5M4 10.5V19h16v-8.5M4 10.5h16M10 10.5v3h4v-3"/>', s),
     rain: (s) => SVG('<path d="M7.5 13.5A3.5 3.5 0 0 1 8 6.6a5 5 0 0 1 9.4 1.3A3.3 3.3 0 0 1 16.8 13.5M8 17l-1 2.5M12 17l-1 2.5M16 17l-1 2.5"/>', s),
+    oven: (s) => SVG('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 9h16M7 6.6h.01M10 6.6h.01M7.5 13a4.5 4.5 0 0 1 9 0"/>', s),
+    megaphone: (s) => SVG('<path d="M4 10v4l10 4.5V5.5L4 10ZM4 10H3.2A1.2 1.2 0 0 0 2 11.2v1.6A1.2 1.2 0 0 0 3.2 14H4M14 8.5a3.5 3.5 0 0 1 0 7M7 15v3.5"/>', s),
+    chef: (s) => SVG('<path d="M7 13.5h10V19a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1v-5.5ZM7 13.5a3.6 3.6 0 0 1-.8-7A3.4 3.4 0 0 1 12 4.6a3.4 3.4 0 0 1 5.8 1.9 3.6 3.6 0 0 1-.8 7M7 16.5h10"/>', s),
+    lock: (s) => SVG('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>', s),
   };
-  const cardIcon = (id) => ({ bakery: ICON.cupcake, coffee: ICON.coffee, delivery: ICON.scooter, cakefactory: ICON.cake, franchise: ICON.shop }[id] || ICON.cupcake)(26);
+  const cardIcon = (id) => ({ bakery: ICON.cupcake, coffee: ICON.coffee, oven: ICON.oven, cakefactory: ICON.cake, ads: ICON.megaphone, smm: ICON.send, tasting: ICON.star, loyalty: ICON.wallet, barista: ICON.coffee, baker: ICON.chef, confectioner: ICON.cupcake, manager: ICON.users, delivery: ICON.scooter, newshop: ICON.shop, franchise: ICON.gift, region: ICON.globe }[id] || ICON.cupcake)(26);
   const taskIcon = (id) => ({ site: ICON.globe, review: ICON.star, vk: ICON.users, tg: ICON.send, invite1: ICON.users, level3: ICON.star, balance10: ICON.wallet, streak3: ICON.fire }[id] || ICON.star)(26);
 
   // ── Бонусы дня (зеркало src/clicker.ts — алгоритм/слова/морзе менять синхронно) ──
@@ -147,7 +164,7 @@
   ];
 
   let ov, audio, raf, lastTs = 0, pending = 0, syncT = 0, curLevel = 1, tab = 'cat';
-  let st = null, turboUntil = 0, combo = 0, comboT = 0, bonusTimer = 0, rainState = null, rainRAF = 0;
+  let st = null, turboUntil = 0, combo = 0, comboT = 0, bonusTimer = 0, rainState = null, rainRAF = 0, upCat = 'prod';
 
   function authed() { return !!(window.App && App.isAuthed && App.isAuthed()); }
   // ── Звук: мастер-шина с ревером + богатый синтез (без файлов) ─────────────────
@@ -209,7 +226,7 @@
       level: leagueFor(s.totalEarned).level, levelName: leagueFor(s.totalEarned).name, nextNeed: nextNeed(s.totalEarned),
       multitapLevel: s.multitapLevel, multitapPrice: priceMultitap(s.multitapLevel),
       energyLevel: s.energyLevel, energyPrice: priceEnergy(s.energyLevel),
-      cards: CARDS.map(c => ({ id: c.id, name: c.name, icon: c.icon, level: s.cards[c.id] || 0, profit: cardProfit(c, (s.cards[c.id] || 0) + 1), price: cardPrice(c, s.cards[c.id] || 0) })),
+      cards: CARDS.map(c => { const lv = s.cards[c.id] || 0; const locked = lv === 0 && !!c.req && leagueFor(s.totalEarned).level < c.req; return { id: c.id, name: c.name, cat: c.cat, level: lv, profit: cardProfit(c, lv + 1), price: cardPrice(c, lv), req: c.req || 0, locked }; }),
       dailyAvailable: s.dailyDate !== today, dailyStreak: s.dailyStreak, dailyNext: dailyReward(s.dailyDate === today ? s.dailyStreak : s.dailyStreak + 1),
       chestAvailable: s.chestDate !== today,
       rainAvailable: s.rainDate !== today,
@@ -234,7 +251,7 @@
   function guestBuyRaw(type, id) {
     guestDerive(); const s = rawGet(); let cost = 0;
     if (type === 'multitap') cost = priceMultitap(s.multitapLevel); else if (type === 'energy') cost = priceEnergy(s.energyLevel);
-    else { const c = CARDS.find(x => x.id === id); cost = cardPrice(c, s.cards[id] || 0); }
+    else { const c = CARDS.find(x => x.id === id); const lv = s.cards[id] || 0; if (lv === 0 && c.req && leagueFor(s.totalEarned).level < c.req) return null; cost = cardPrice(c, lv); }
     if (s.balance < cost) return null; s.balance -= cost;
     if (type === 'multitap') s.multitapLevel++; else if (type === 'energy') s.energyLevel++; else {
       s.cards[id] = (s.cards[id] || 0) + 1;
@@ -371,6 +388,9 @@
       .ck-uphd{padding:16px 16px 6px;text-align:center;width:100%;box-sizing:border-box}.ck-uphd .b{font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:24px;display:inline-flex;align-items:center;gap:8px;color:var(--cream)}.ck-uphd .b .ck-i{color:var(--gold)}.ck-uphd .p{color:var(--gold);font-weight:700;font-size:13px;margin-top:3px;display:inline-flex;align-items:center;gap:5px;font-variant-numeric:tabular-nums}
       .ck-uplist{flex:1;overflow:auto;padding:6px 12px 16px;width:100%;box-sizing:border-box}
       .ck-sect{color:var(--muted);font-weight:700;font-size:11px;margin:12px 4px 7px;text-transform:uppercase;letter-spacing:.7px}
+      .ck-cats{display:flex;gap:7px;margin:0 0 10px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}.ck-cats::-webkit-scrollbar{display:none}
+      .ck-cat-chip{flex:none;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:18px;padding:7px 14px;font-weight:700;font-size:12.5px;cursor:pointer;white-space:nowrap}
+      .ck-cat-chip.on{background:linear-gradient(180deg,#ffe7a6,#eebf52 58%,#cf9a36);color:#5a2028;border-color:#ffe9b3}
       .ck-card{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:11px 12px;margin-bottom:9px}
       .ck-card__ic{width:46px;height:46px;flex:none;border-radius:13px;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,rgba(238,191,82,.2),rgba(238,191,82,.04));border:1px solid var(--line);color:var(--gold-l)}
       .ck-card__b{flex:1;min-width:0}.ck-card__n{font-weight:700;font-size:15px;color:var(--ink)}.ck-card__s{color:var(--muted);font-size:12px;margin-top:2px;font-variant-numeric:tabular-nums}
@@ -761,14 +781,16 @@
 
   function renderUpgrades() {
     if (!ov || !st) return; const list = ov.querySelector('#ck-uplist');
-    const row = (icon, name, sub, price, dis, act, id) => `<div class="ck-card"><div class="ck-card__ic">${icon}</div><div class="ck-card__b"><div class="ck-card__n">${name}</div><div class="ck-card__s">${sub}</div></div><button class="ck-card__buy" data-act="${act}" data-id="${id || ''}" ${dis ? 'disabled' : ''}>${COIN(15)} ${fmt(price)}</button></div>`;
+    const row = (icon, name, sub, price, dis, act, id, locked) => `<div class="ck-card"${locked ? ' style="opacity:.55"' : ''}><div class="ck-card__ic">${icon}</div><div class="ck-card__b"><div class="ck-card__n">${name}</div><div class="ck-card__s">${sub}</div></div>${locked ? `<button class="ck-card__buy" disabled>${ICON.lock(14)} ур.${id}</button>` : `<button class="ck-card__buy" data-act="${act}" data-id="${id || ''}" ${dis ? 'disabled' : ''}>${COIN(15)} ${fmt(price)}</button>`}</div>`;
     let h = rewardsBlock();
     h += '<div class="ck-sect">Бусты</div>';
     h += row(ICON.tap(26), 'Мультитап', `+1 за тап · сейчас +${st.perTap}`, st.multitapPrice, st.balance < st.multitapPrice, 'multitap');
     h += row(ICON.battery(26), 'Запас энергии', `+500 · сейчас ${st.energyMax}`, st.energyPrice, st.balance < st.energyPrice, 'energy');
     h += '<div class="ck-sect">Бизнесы — пассивный доход</div>';
-    for (const c of st.cards) h += row(cardIcon(c.id), c.name, `Ур. ${c.level} · +${fmt(c.profit)}/час`, c.price, st.balance < c.price, 'card', c.id);
+    h += '<div class="ck-cats">' + CARD_CATS.map(ct => `<button class="ck-cat-chip${ct.id === upCat ? ' on' : ''}" data-cat="${ct.id}">${ct.name}</button>`).join('') + '</div>';
+    for (const c of st.cards) { if (c.cat !== upCat) continue; const sub = c.locked ? `Откроется на уровне ${c.req}` : `Ур. ${c.level} · +${fmt(c.profit)}/час`; h += row(cardIcon(c.id), c.name, sub, c.price, st.balance < c.price, 'card', c.locked ? c.req : c.id, c.locked); }
     list.innerHTML = h;
+    list.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { upCat = b.dataset.cat; renderUpgrades(); });
     list.querySelectorAll('[data-act]').forEach(b => b.onclick = () => buy(b.dataset.act, b.dataset.id || undefined));
     list.querySelectorAll('[data-redeem]').forEach(b => b.onclick = () => redeem(b.dataset.redeem));
   }

@@ -95,12 +95,32 @@ export const REWARDS = [
 const REWARD_BY_ID = Object.fromEntries(REWARDS.map((r) => [r.id, r]));
 const REDEEM_PER_DAY = 1; // анти-абуз: не больше N обменов в день
 
-export const CARDS = [
-  { id: "bakery", name: "Пекарня", icon: "🍞", basePrice: 300, baseProfit: 30 },
-  { id: "coffee", name: "Кофемашина", icon: "☕", basePrice: 900, baseProfit: 85 },
-  { id: "delivery", name: "Доставка", icon: "🛵", basePrice: 2500, baseProfit: 200 },
-  { id: "cakefactory", name: "Фабрика тортов", icon: "🎂", basePrice: 7000, baseProfit: 520 },
-  { id: "franchise", name: "Франшиза «Мария»", icon: "🏪", basePrice: 20000, baseProfit: 1500 },
+// Категории Mine. ⚠️ CARDS продублированы во фронте catclick.js (+ cardIcon по id) — синхронно.
+export const CARD_CATS = [
+  { id: "prod", name: "Производство" }, { id: "mkt", name: "Маркетинг" }, { id: "staff", name: "Персонал" }, { id: "net", name: "Сеть" },
+];
+// req = требуемый уровень лиги (карта заблокирована, пока level==0 и лига < req). Старые id сохранены.
+export const CARDS: { id: string; name: string; cat: string; basePrice: number; baseProfit: number; req?: number }[] = [
+  // Производство
+  { id: "bakery",      name: "Пекарня",            cat: "prod", basePrice: 300,   baseProfit: 30 },
+  { id: "coffee",      name: "Кофемашина",         cat: "prod", basePrice: 900,   baseProfit: 85 },
+  { id: "oven",        name: "Конвекционная печь", cat: "prod", basePrice: 2600,  baseProfit: 210, req: 3 },
+  { id: "cakefactory", name: "Цех тортов",         cat: "prod", basePrice: 7000,  baseProfit: 520, req: 4 },
+  // Маркетинг
+  { id: "ads",         name: "Наружная реклама",   cat: "mkt",  basePrice: 1500,  baseProfit: 120 },
+  { id: "smm",         name: "SMM-специалист",     cat: "mkt",  basePrice: 4200,  baseProfit: 320, req: 3 },
+  { id: "tasting",     name: "Дегустации",         cat: "mkt",  basePrice: 12000, baseProfit: 780, req: 5 },
+  { id: "loyalty",     name: "Карта лояльности",   cat: "mkt",  basePrice: 30000, baseProfit: 1900, req: 7 },
+  // Персонал
+  { id: "barista",     name: "Бариста",            cat: "staff", basePrice: 1100, baseProfit: 95 },
+  { id: "baker",       name: "Пекарь",             cat: "staff", basePrice: 3400, baseProfit: 270, req: 3 },
+  { id: "confectioner",name: "Кондитер",           cat: "staff", basePrice: 9000, baseProfit: 640, req: 5 },
+  { id: "manager",     name: "Управляющий",        cat: "staff", basePrice: 24000, baseProfit: 1550, req: 6 },
+  // Сеть
+  { id: "delivery",    name: "Доставка",           cat: "net",  basePrice: 2500,  baseProfit: 200 },
+  { id: "newshop",     name: "Новая точка",        cat: "net",  basePrice: 8000,  baseProfit: 560, req: 4 },
+  { id: "franchise",   name: "Франшиза «Мария»",   cat: "net",  basePrice: 20000, baseProfit: 1500, req: 6 },
+  { id: "region",      name: "Выход в регион",     cat: "net",  basePrice: 38000, baseProfit: 2300, req: 8 },
 ];
 const CARD_BY_ID = Object.fromEntries(CARDS.map((c) => [c.id, c]));
 
@@ -133,7 +153,7 @@ export interface ClickerState {
   level: number; levelName: string; nextNeed: number | null;
   multitapLevel: number; multitapPrice: number;
   energyLevel: number; energyPrice: number;
-  cards: { id: string; name: string; icon: string; level: number; profit: number; price: number }[];
+  cards: { id: string; name: string; cat: string; level: number; profit: number; price: number; req: number; locked: boolean }[];
   // усиления
   dailyAvailable: boolean; dailyStreak: number; dailyNext: number;
   chestAvailable: boolean; rainAvailable: boolean;
@@ -211,7 +231,7 @@ function buildState(r: any, cl: Record<string, number>, passiveEarned: number): 
     level: lg.level, levelName: lg.name, nextNeed: nextNeed(Number(r.total_earned)),
     multitapLevel: r.multitap_level, multitapPrice: priceMultitap(r.multitap_level),
     energyLevel: r.energy_limit_level, energyPrice: priceEnergy(r.energy_limit_level),
-    cards: CARDS.map((c) => ({ id: c.id, name: c.name, icon: c.icon, level: cl[c.id] || 0, profit: cardProfit(c, (cl[c.id] || 0) + 1), price: cardPrice(c, cl[c.id] || 0) })),
+    cards: CARDS.map((c) => { const lv = cl[c.id] || 0; const locked = lv === 0 && !!c.req && lg.level < c.req; return { id: c.id, name: c.name, cat: c.cat, level: lv, profit: cardProfit(c, lv + 1), price: cardPrice(c, lv), req: c.req || 0, locked }; }),
     dailyAvailable: r.daily_date !== today, dailyStreak: r.daily_streak, dailyNext: dailyReward((r.daily_date === today ? r.daily_streak : r.daily_streak + 1)),
     chestAvailable: r.chest_date !== today,
     rainAvailable: r.rain_date !== today,
@@ -276,7 +296,7 @@ export async function buyClicker(chatId: number, type: string, id?: string): Pro
     let cost = 0;
     if (type === "multitap") cost = priceMultitap(r.multitap_level);
     else if (type === "energy") cost = priceEnergy(r.energy_limit_level);
-    else if (type === "card") { const c = id && CARD_BY_ID[id]; if (!c) { await client.query("ROLLBACK"); return { ok: false, reason: "bad_card" }; } cost = cardPrice(c, cl[id!] || 0); }
+    else if (type === "card") { const c = id && CARD_BY_ID[id]; if (!c) { await client.query("ROLLBACK"); return { ok: false, reason: "bad_card" }; } const lv = cl[id!] || 0; if (lv === 0 && c.req && leagueFor(Number(r.total_earned)).level < c.req) { await client.query("ROLLBACK"); return { ok: false, reason: "locked" }; } cost = cardPrice(c, lv); }
     else { await client.query("ROLLBACK"); return { ok: false, reason: "bad_type" }; }
     if (Number(r.balance) < cost) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough" }; }
     r.balance = Number(r.balance) - cost;
