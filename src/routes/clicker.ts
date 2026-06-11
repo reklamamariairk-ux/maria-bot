@@ -5,7 +5,7 @@
  * POST /api/clicker/boost {type:turbo|energy} · GET /api/clicker/top
  */
 import { Router } from "express";
-import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements, getRewards, redeemReward, claimBonus, openChest, claimRain, redeemCode } from "../clicker";
+import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements, getRewards, redeemReward, claimBonus, openChest, claimRain, redeemCode, getSquads, joinSquad } from "../clicker";
 import { rateLimit } from "../middleware";
 import { requireTgUser, getTgUser } from "../auth";
 import { log } from "../logger";
@@ -74,6 +74,17 @@ router.post("/api/clicker/cipher", requireTgUser, rateLimit(30), async (req, res
   const u = getTgUser(req)!; const guess = String((req.body as { guess?: string }).guess || "");
   try { const r = await claimCipher(u.id, guess); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ reward: r.reward, ...r.state }); }
   catch (e) { log.error({ err: e, chatId: u.id }, "[cipher]"); res.status(500).json({ error: "internal" }); }
+});
+
+router.get("/api/clicker/squads", requireTgUser, rateLimit(60), async (req, res) => {
+  const u = getTgUser(req)!;
+  try { res.json(await getSquads(u.id)); } catch (e) { log.error({ err: e, chatId: u.id }, "[squads]"); res.status(500).json({ error: "internal" }); }
+});
+
+router.post("/api/clicker/squad", requireTgUser, rateLimit(20), async (req, res) => {
+  const u = getTgUser(req)!; const id = String((req.body as { id?: string }).id || "");
+  try { const r = await joinSquad(u.id, id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json(r.state); }
+  catch (e) { log.error({ err: e, chatId: u.id }, "[squad]"); res.status(500).json({ error: "internal" }); }
 });
 
 router.get("/api/clicker/top", requireTgUser, rateLimit(60), async (req, res) => {

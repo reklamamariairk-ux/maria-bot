@@ -9,6 +9,7 @@
   const REGEN = 1.5, PASSIVE_CAP_H = 3, TURBO_MULT = 5, TURBO_SEC = 20, DAILY_BOOSTS = 6;
   // ⚠️ Зеркало CARDS/CARD_CATS из src/clicker.ts — менять синхронно (+ cardIcon по id).
   const CARD_CATS = [{ id: 'prod', name: 'Производство' }, { id: 'mkt', name: 'Маркетинг' }, { id: 'staff', name: 'Персонал' }, { id: 'net', name: 'Сеть' }];
+  const SQUADS = [{ id: 'choco', name: 'Шоколадные' }, { id: 'vanilla', name: 'Ванильные' }, { id: 'caramel', name: 'Карамельные' }, { id: 'berry', name: 'Ягодные' }];
   const CARDS = [
     { id: 'bakery', name: 'Пекарня', cat: 'prod', basePrice: 300, baseProfit: 30 },
     { id: 'coffee', name: 'Кофемашина', cat: 'prod', basePrice: 900, baseProfit: 85 },
@@ -820,15 +821,33 @@
     const list = ov.querySelector('#ck-toplist'); const rank = ov.querySelector('#ck-myrank');
     const left = fmtDur(seasonEndsTs() - Date.now());
     const brag = `<button class="ck-card__buy" id="ck-brag" style="width:100%;justify-content:center;margin-bottom:12px">${ICON.trophy(15)} Похвастаться карточкой</button>`;
-    const wire = () => { const bb = ov.querySelector('#ck-brag'); if (bb) bb.onclick = shareCard; };
-    if (!authed()) { rank.textContent = `Сезон недели · до сброса ${left}`; list.innerHTML = brag + '<div style="text-align:center;color:var(--muted);padding:24px 14px;line-height:1.5">Рейтинг сезона доступен при входе через приложение «Мария». Соревнуйся за топ недели!</div>'; wire(); return; }
-    list.innerHTML = brag + '<div style="text-align:center;color:var(--muted);padding:20px">Загрузка…</div>'; wire();
+    const sq = await squadBlock();
+    const wire = () => { const bb = ov.querySelector('#ck-brag'); if (bb) bb.onclick = shareCard; sq.wire(); };
+    if (!authed()) { rank.textContent = `Сезон недели · до сброса ${left}`; list.innerHTML = brag + sq.html + '<div class="ck-sect">Топ недели</div><div style="text-align:center;color:var(--muted);padding:24px 14px;line-height:1.5">Личный рейтинг — при входе через приложение «Мария».</div>'; wire(); return; }
+    list.innerHTML = brag + sq.html + '<div style="text-align:center;color:var(--muted);padding:20px">Загрузка…</div>'; wire();
     const d = await loadTop();
     const ends = d && d.seasonEndsTs ? fmtDur(d.seasonEndsTs - Date.now()) : left;
     rank.textContent = `Сезон недели · до сброса ${ends}` + (d && d.myRank ? ` · ты #${d.myRank}` : '');
-    if (!d || !d.top || !d.top.length) { list.innerHTML = brag + '<div style="text-align:center;color:var(--muted);padding:20px">Сезон только начался — заработай монеты и будь первым!</div>'; wire(); return; }
-    list.innerHTML = brag + d.top.map((r, i) => `<div class="ck-row${r.me ? ' me' : ''}"><div class="r">${i < 3 ? ICON.medal(20) : i + 1}</div><div class="n">${(r.name || '').replace(/</g, '&lt;')}</div><div class="v">${COIN(14)} ${fmt(r.total)}</div></div>`).join('');
+    const head = '<div class="ck-sect">Топ недели</div>';
+    if (!d || !d.top || !d.top.length) { list.innerHTML = brag + sq.html + head + '<div style="text-align:center;color:var(--muted);padding:20px">Сезон только начался — заработай монеты и будь первым!</div>'; wire(); return; }
+    list.innerHTML = brag + sq.html + head + d.top.map((r, i) => `<div class="ck-row${r.me ? ' me' : ''}"><div class="r">${i < 3 ? ICON.medal(20) : i + 1}</div><div class="n">${(r.name || '').replace(/</g, '&lt;')}</div><div class="v">${COIN(14)} ${fmt(r.total)}</div></div>`).join('');
     wire();
+  }
+  async function squadBlock() {
+    if (!authed()) {
+      const chips = SQUADS.map(s => `<button class="ck-cat-chip" disabled>${s.name}</button>`).join('');
+      return { html: `<div class="ck-sect">Команды</div><div class="ck-cats">${chips}</div><div style="color:var(--muted);font-size:12px;text-align:center;margin:2px 0 6px">Войди через «Марию» — вступай в команду и тащи её в топ</div>`, wire: () => {} };
+    }
+    const d = await api('/api/clicker/squads').catch(() => null);
+    if (!d || !d.squads) return { html: '', wire: () => {} };
+    const my = d.mySquad;
+    const rows = d.squads.map((s, i) => `<div class="ck-row${s.id === my ? ' me' : ''}"><div class="r">${i < 3 ? ICON.medal(18) : i + 1}</div><div class="n">${s.name} <span style="color:var(--muted);font-size:11px">· ${s.members}</span></div><div class="v">${COIN(13)} ${fmt(s.points)}</div></div>`).join('');
+    const chips = SQUADS.map(s => `<button class="ck-cat-chip${s.id === my ? ' on' : ''}" data-squad="${s.id}">${s.name}</button>`).join('');
+    return { html: `<div class="ck-sect">Команды</div>${rows}<div style="color:var(--muted);font-size:12px;text-align:center;margin:6px 0 4px">${my ? 'Сменить команду:' : 'Выбери команду:'}</div><div class="ck-cats">${chips}</div>`, wire: () => { ov.querySelectorAll('[data-squad]').forEach(b => b.onclick = () => joinSquadAct(b.dataset.squad)); } };
+  }
+  async function joinSquadAct(id) {
+    const d = await api('/api/clicker/squad', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null);
+    if (d && !d.error) { st = d; sfxBuy(); window.haptic && window.haptic('medium'); renderTop(); } else flashMsg('Не получилось');
   }
 
   // ── Рефералы + Задания ───────────────────────────────────────────────────────

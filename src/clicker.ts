@@ -126,6 +126,12 @@ export const CARDS: { id: string; name: string; cat: string; basePrice: number; 
 ];
 const CARD_BY_ID = Object.fromEntries(CARDS.map((c) => [c.id, c]));
 
+// Команды (кланы). ⚠️ Продублировано во фронте catclick.js.
+export const SQUADS = [
+  { id: "choco", name: "Шоколадные" }, { id: "vanilla", name: "Ванильные" }, { id: "caramel", name: "Карамельные" }, { id: "berry", name: "Ягодные" },
+];
+const SQUAD_IDS = new Set(SQUADS.map((s) => s.id));
+
 const priceMultitap = (lvl: number) => Math.round(200 * Math.pow(2, lvl));
 const priceEnergy = (lvl: number) => Math.round(300 * Math.pow(2, lvl));
 const energyMaxFor = (lvl: number) => 1000 + 500 * lvl;
@@ -158,7 +164,7 @@ export interface ClickerState {
   cards: { id: string; name: string; cat: string; level: number; profit: number; price: number; req: number; locked: boolean }[];
   // усиления
   dailyAvailable: boolean; dailyStreak: number; dailyNext: number;
-  chestAvailable: boolean; rainAvailable: boolean;
+  chestAvailable: boolean; rainAvailable: boolean; squad: string | null;
   boostEnergyLeft: number; boostTurboLeft: number; turboMsLeft: number;
   referrals: number; refCode: string;
   combo: { cards: string[]; hits: string[]; complete: boolean; claimed: boolean; reward: number };
@@ -198,6 +204,8 @@ export async function initClickerSchema(): Promise<void> {
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS bonus_at TIMESTAMPTZ;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS chest_date TEXT;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS rain_date TEXT;
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS squad TEXT;
+    CREATE INDEX IF NOT EXISTS clicker_squad_idx ON clicker_state (squad);
     CREATE TABLE IF NOT EXISTS clicker_cards (
       chat_id BIGINT NOT NULL, card TEXT NOT NULL, level INT NOT NULL DEFAULT 0,
       PRIMARY KEY (chat_id, card)
@@ -241,6 +249,7 @@ function buildState(r: any, cl: Record<string, number>, passiveEarned: number): 
     dailyAvailable: r.daily_date !== today, dailyStreak: r.daily_streak, dailyNext: dailyReward((r.daily_date === today ? r.daily_streak : r.daily_streak + 1)),
     chestAvailable: r.chest_date !== today,
     rainAvailable: r.rain_date !== today,
+    squad: r.squad || null,
     boostEnergyLeft: DAILY_BOOSTS - bUsedE, boostTurboLeft: DAILY_BOOSTS - bUsedT, turboMsLeft: turboMs,
     referrals: r.referrals || 0, refCode: String(r.chat_id),
     combo: (() => { const cards = todaysCombo(today); const hits = r.combo_date === today ? parseHits(r.combo_hits) : []; return { cards, hits, complete: cards.every((c) => hits.includes(c)), claimed: r.combo_claimed === today, reward: COMBO_REWARD }; })(),
@@ -500,6 +509,20 @@ export async function getTop(chatId: number, limit = 30): Promise<{ top: { name:
   const myPts = me.rows.length && me.rows[0].week_key === cur ? Number(me.rows[0].pts) : 0;
   const rank = await pool.query(`SELECT COUNT(*)::int AS n FROM clicker_state WHERE week_key=$2 AND (total_earned - week_base) > $1`, [myPts, cur]);
   return { top, myRank: myPts > 0 ? rank.rows[0].n + 1 : null, seasonEndsTs: seasonEndsTs() };
+}
+
+/** Команды: рейтинг по сумме намолоченного, выбор/смена команды. */
+export async function getSquads(chatId: number): Promise<{ squads: { id: string; name: string; points: number; members: number }[]; mySquad: string | null }> {
+  const { rows } = await pool.query(`SELECT squad, SUM(total_earned)::bigint AS pts, COUNT(*)::int AS n FROM clicker_state WHERE squad IS NOT NULL GROUP BY squad`);
+  const agg: Record<string, { pts: number; n: number }> = {}; for (const r of rows) agg[r.squad] = { pts: Number(r.pts), n: r.n };
+  const me = await pool.query(`SELECT squad FROM clicker_state WHERE chat_id=$1`, [chatId]);
+  const squads = SQUADS.map((s) => ({ id: s.id, name: s.name, points: agg[s.id]?.pts || 0, members: agg[s.id]?.n || 0 })).sort((a, b) => b.points - a.points);
+  return { squads, mySquad: (me.rows[0] && me.rows[0].squad) || null };
+}
+export async function joinSquad(chatId: number, squadId: string): Promise<{ ok: boolean; state?: ClickerState; reason?: string }> {
+  if (!SQUAD_IDS.has(squadId)) return { ok: false, reason: "bad_squad" };
+  await pool.query(`INSERT INTO clicker_state (chat_id, squad) VALUES ($1,$2) ON CONFLICT (chat_id) DO UPDATE SET squad=$2`, [chatId, squadId]);
+  return { ok: true, state: await getClicker(chatId) };
 }
 
 /** Регистрация реферала: code = chat_id пригласившего. Бонус обоим, один раз. */
