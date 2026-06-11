@@ -116,7 +116,10 @@
     chef: (s) => SVG('<path d="M7 13.5h10V19a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1v-5.5ZM7 13.5a3.6 3.6 0 0 1-.8-7A3.4 3.4 0 0 1 12 4.6a3.4 3.4 0 0 1 5.8 1.9 3.6 3.6 0 0 1-.8 7M7 16.5h10"/>', s),
     lock: (s) => SVG('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>', s),
   };
-  const cardIcon = (id) => ({ bakery: ICON.cupcake, coffee: ICON.coffee, oven: ICON.oven, cakefactory: ICON.cake, ads: ICON.megaphone, smm: ICON.send, tasting: ICON.star, loyalty: ICON.wallet, barista: ICON.coffee, baker: ICON.chef, confectioner: ICON.cupcake, manager: ICON.users, delivery: ICON.scooter, newshop: ICON.shop, franchise: ICON.gift, region: ICON.globe }[id] || ICON.cupcake)(26);
+  const cardIcon = (id, s = 26) => ({ bakery: ICON.cupcake, coffee: ICON.coffee, oven: ICON.oven, cakefactory: ICON.cake, ads: ICON.megaphone, smm: ICON.send, tasting: ICON.star, loyalty: ICON.wallet, barista: ICON.coffee, baker: ICON.chef, confectioner: ICON.cupcake, manager: ICON.users, delivery: ICON.scooter, newshop: ICON.shop, franchise: ICON.gift, region: ICON.globe }[id] || ICON.cupcake)(s);
+  // арт-плитка бизнеса: иллюстрация-PNG если есть (BIZ_ART_V>0), иначе SVG-иконка
+  const BIZ_ART_V = 0; // станет >0 когда сгенерим картинки /assets/images/biz/<id>.png
+  const cardArt = (id) => BIZ_ART_V ? `<img src="/assets/images/biz/${id}.png?v=${BIZ_ART_V}" alt="" loading="lazy">` : cardIcon(id, 30);
   const taskIcon = (id) => ({ site: ICON.globe, review: ICON.star, vk: ICON.users, tg: ICON.send, invite1: ICON.users, level3: ICON.star, balance10: ICON.wallet, streak3: ICON.fire }[id] || ICON.star)(26);
 
   // ── Бонусы дня (зеркало src/clicker.ts — алгоритм/слова/морзе менять синхронно) ──
@@ -165,7 +168,7 @@
   ];
 
   let ov, audio, raf, lastTs = 0, pending = 0, syncT = 0, curLevel = 1, tab = 'cat';
-  let st = null, turboUntil = 0, combo = 0, comboT = 0, bonusTimer = 0, rainState = null, rainRAF = 0, upCat = 'prod';
+  let st = null, turboUntil = 0, combo = 0, comboT = 0, bonusTimer = 0, rainState = null, rainRAF = 0, upCat = 'prod', lastBought = null;
 
   function authed() { return !!(window.App && App.isAuthed && App.isAuthed()); }
   // ── Звук: мастер-шина с ревером + богатый синтез (без файлов) ─────────────────
@@ -247,7 +250,7 @@
     let ok = false;
     if (authed()) { try { const d = await api('/api/clicker/buy', { method: 'POST', body: JSON.stringify({ type, id }) }); if (!d.error) { st = d; ok = true; } } catch (_) {} }
     else { const s = guestBuyRaw(type, id); if (s) { st = guestDerive(); ok = true; } }
-    if (ok) { sfxBuy(); window.haptic && window.haptic('medium'); renderAll(); renderUpgrades(); } else { sfxError(); flashMsg('Не хватает монет'); }
+    if (ok) { lastBought = type === 'card' ? id : null; sfxBuy(); window.haptic && window.haptic('medium'); renderAll(); renderUpgrades(); } else { sfxError(); flashMsg('Не хватает монет'); }
   }
   function guestBuyRaw(type, id) {
     guestDerive(); const s = rawGet(); let cost = 0;
@@ -392,6 +395,26 @@
       .ck-cats{display:flex;gap:7px;margin:0 0 10px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}.ck-cats::-webkit-scrollbar{display:none}
       .ck-cat-chip{flex:none;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:18px;padding:7px 14px;font-weight:700;font-size:12.5px;cursor:pointer;white-space:nowrap}
       .ck-cat-chip.on{background:linear-gradient(180deg,#ffe7a6,#eebf52 58%,#cf9a36);color:#5a2028;border-color:#ffe9b3}
+      .ck-biz{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:10px 12px;margin-bottom:9px;position:relative;opacity:0;animation:ckBizIn .34s ease-out forwards}
+      @keyframes ckBizIn{0%{opacity:0;transform:translateY(9px)}100%{opacity:1;transform:none}}
+      .ck-biz.locked{filter:saturate(.35) brightness(.82)}
+      .ck-biz.bump{animation:ckBizBump .32s ease-out}@keyframes ckBizBump{0%{transform:scale(1)}40%{transform:scale(1.03)}100%{transform:scale(1)}}
+      .ck-biz__art{width:58px;height:58px;flex:none;border-radius:14px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 3px 8px rgba(0,0,0,.3)}
+      .ck-biz__art::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 32% 24%,rgba(255,255,255,.3),transparent 58%);pointer-events:none}
+      .ck-biz__art img{width:100%;height:100%;object-fit:cover;position:relative;z-index:1}
+      .ck-biz__art svg{width:30px;height:30px;color:#fff8ec;position:relative;z-index:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
+      .cat-boost .ck-biz__art{background:linear-gradient(150deg,#f0c24e,#9c6a1c)}
+      .cat-prod .ck-biz__art{background:linear-gradient(150deg,#d6a64c,#7c4a18)}
+      .cat-mkt .ck-biz__art{background:linear-gradient(150deg,#cc5e72,#7a2030)}
+      .cat-staff .ck-biz__art{background:linear-gradient(150deg,#4fa0ad,#1f4a55)}
+      .cat-net .ck-biz__art{background:linear-gradient(150deg,#9070c2,#3f2a66)}
+      .ck-biz__b{flex:1;min-width:0}.ck-biz__n{font-weight:700;font-size:15px;color:var(--ink)}
+      .ck-biz__meta{display:flex;align-items:center;gap:7px;margin-top:5px;flex-wrap:wrap}
+      .ck-biz__lvl{font-size:10.5px;font-weight:700;color:var(--muted);background:rgba(0,0,0,.26);padding:2px 8px;border-radius:9px;white-space:nowrap}
+      .ck-biz__prof{font-size:11.5px;font-weight:700;color:var(--gold-l);font-variant-numeric:tabular-nums;white-space:nowrap}
+      .ck-biz__lock{font-size:11px;font-weight:700;color:var(--muted);display:inline-flex;align-items:center;gap:4px}
+      .ck-biz__buy{display:inline-flex;align-items:center;gap:5px;flex:none;border:1px solid #ffe9b3;border-radius:12px;padding:9px 13px;font-weight:800;font-size:13px;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;cursor:pointer;white-space:nowrap;font-variant-numeric:tabular-nums;box-shadow:0 4px 11px rgba(165,112,28,.38),inset 0 1px 0 rgba(255,255,255,.5)}
+      .ck-biz__buy:disabled{background:rgba(255,255,255,.07);color:var(--muted);border-color:transparent;box-shadow:none;cursor:default}
       .ck-card{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:11px 12px;margin-bottom:9px}
       .ck-card__ic{width:46px;height:46px;flex:none;border-radius:13px;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,rgba(238,191,82,.2),rgba(238,191,82,.04));border:1px solid var(--line);color:var(--gold-l)}
       .ck-card__b{flex:1;min-width:0}.ck-card__n{font-weight:700;font-size:15px;color:var(--ink)}.ck-card__s{color:var(--muted);font-size:12px;margin-top:2px;font-variant-numeric:tabular-nums}
@@ -789,15 +812,22 @@
 
   function renderUpgrades() {
     if (!ov || !st) return; const list = ov.querySelector('#ck-uplist');
-    const row = (icon, name, sub, price, dis, act, id, locked) => `<div class="ck-card"${locked ? ' style="opacity:.55"' : ''}><div class="ck-card__ic">${icon}</div><div class="ck-card__b"><div class="ck-card__n">${name}</div><div class="ck-card__s">${sub}</div></div>${locked ? `<button class="ck-card__buy" disabled>${ICON.lock(14)} ур.${id}</button>` : `<button class="ck-card__buy" data-act="${act}" data-id="${id || ''}" ${dis ? 'disabled' : ''}>${COIN(15)} ${fmt(price)}</button>`}</div>`;
+    const biz = (cat, art, name, metaHtml, buyHtml, idx) => `<div class="ck-biz cat-${cat.replace(' locked', '')}${cat.includes('locked') ? ' locked' : ''}" style="animation-delay:${(idx * 0.035).toFixed(2)}s"><div class="ck-biz__art">${art}</div><div class="ck-biz__b"><div class="ck-biz__n">${name}</div><div class="ck-biz__meta">${metaHtml}</div></div>${buyHtml}</div>`;
+    const buyBtn = (price, dis, act, id) => `<button class="ck-biz__buy" data-act="${act}" data-id="${id || ''}" ${dis ? 'disabled' : ''}>${COIN(15)} ${fmt(price)}</button>`;
     let h = rewardsBlock();
     h += '<div class="ck-sect">Бусты</div>';
-    h += row(ICON.tap(26), 'Мультитап', `+1 за тап · сейчас +${st.perTap}`, st.multitapPrice, st.balance < st.multitapPrice, 'multitap');
-    h += row(ICON.battery(26), 'Запас энергии', `+500 · сейчас ${st.energyMax}`, st.energyPrice, st.balance < st.energyPrice, 'energy');
+    h += biz('boost', ICON.tap(30), 'Мультитап', `<span class="ck-biz__lvl">+1 за тап</span><span class="ck-biz__prof">сейчас +${st.perTap}</span>`, buyBtn(st.multitapPrice, st.balance < st.multitapPrice, 'multitap'), 0);
+    h += biz('boost', ICON.battery(30), 'Запас энергии', `<span class="ck-biz__lvl">+500 энергии</span><span class="ck-biz__prof">сейчас ${st.energyMax}</span>`, buyBtn(st.energyPrice, st.balance < st.energyPrice, 'energy'), 1);
     h += '<div class="ck-sect">Бизнесы — пассивный доход</div>';
     h += '<div class="ck-cats">' + CARD_CATS.map(ct => `<button class="ck-cat-chip${ct.id === upCat ? ' on' : ''}" data-cat="${ct.id}">${ct.name}</button>`).join('') + '</div>';
-    for (const c of st.cards) { if (c.cat !== upCat) continue; const sub = c.locked ? `Откроется на уровне ${c.req}` : `Ур. ${c.level} · +${fmt(c.profit)}/час`; h += row(cardIcon(c.id), c.name, sub, c.price, st.balance < c.price, 'card', c.locked ? c.req : c.id, c.locked); }
+    let i = 0;
+    for (const c of st.cards) {
+      if (c.cat !== upCat) continue;
+      if (c.locked) h += biz(c.cat + ' locked', cardArt(c.id), c.name, `<span class="ck-biz__lock">${ICON.lock(12)} с уровня ${c.req}</span>`, `<button class="ck-biz__buy" disabled>${ICON.lock(15)}</button>`, i++);
+      else h += biz(c.cat, cardArt(c.id), c.name, `<span class="ck-biz__lvl">Ур. ${c.level}</span><span class="ck-biz__prof">+${fmt(c.profit)}/час</span>`, buyBtn(c.price, st.balance < c.price, 'card', c.id), i++);
+    }
     list.innerHTML = h;
+    if (lastBought) { const el = list.querySelector(`[data-id="${lastBought}"]`); const card = el && el.closest('.ck-biz'); if (card) { card.classList.add('bump'); } lastBought = null; }
     list.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { upCat = b.dataset.cat; renderUpgrades(); });
     list.querySelectorAll('[data-act]').forEach(b => b.onclick = () => buy(b.dataset.act, b.dataset.id || undefined));
     list.querySelectorAll('[data-redeem]').forEach(b => b.onclick = () => redeem(b.dataset.redeem));
