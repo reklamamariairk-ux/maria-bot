@@ -57,6 +57,42 @@
   const cardProfit = (c, l) => c.baseProfit * l;
   const dailyReward = (streak) => 500 * Math.min(Math.max(1, streak), 10);
 
+  // ── Иконки: единый набор (золото/крем) + брендовая монета ─────────────────────
+  const COIN_SPRITE = `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <radialGradient id="ckCoinGr" cx="36%" cy="30%" r="82%">
+      <stop offset="0" stop-color="#fff3cf"/><stop offset=".5" stop-color="#f0c24e"/><stop offset="1" stop-color="#bd812a"/>
+    </radialGradient>
+    <symbol id="ckSymCoin" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="11" fill="url(#ckCoinGr)" stroke="#9c6a1c" stroke-width="1"/>
+      <circle cx="12" cy="12" r="8.4" fill="none" stroke="#fde9b0" stroke-width="1" opacity=".5"/>
+      <path d="M8 16.2V7.8l4 4.7 4-4.7v8.4" fill="none" stroke="#7a4a12" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+    </symbol></defs></svg>`;
+  const COIN = (s) => `<svg class="ck-coin-i" width="${s}" height="${s}" viewBox="0 0 24 24"><use href="#ckSymCoin"/></svg>`;
+  const SVG = (p, s) => `<svg class="ck-i" width="${s || 24}" height="${s || 24}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+  const ICON = {
+    cupcake: (s) => SVG('<path d="M5 11h14l-1.4 8.2a1 1 0 0 1-1 .8H7.4a1 1 0 0 1-1-.8L5 11Z"/><path d="M7.2 11a3 3 0 0 1 .2-5.7A3.2 3.2 0 0 1 12 3.4a3.2 3.2 0 0 1 4.6 1.9 3 3 0 0 1-.2 5.7"/>', s),
+    coffee: (s) => SVG('<path d="M4 9h12v4.5a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V9Z"/><path d="M16 10.2h2.2a2.2 2.2 0 0 1 0 4.4H16"/><path d="M7.5 5.2c.5.5.5 1.1 0 1.8M10.5 5.2c.5.5.5 1.1 0 1.8"/>', s),
+    scooter: (s) => SVG('<circle cx="6" cy="17" r="2.3"/><circle cx="18" cy="17" r="2.3"/><path d="M8.3 17h7.4M18 14.7V8.5h-2.4M3.5 8h2.7l3.3 7.2"/><path d="M12.5 8H16l1.6 6.2"/>', s),
+    cake: (s) => SVG('<path d="M4 20h16M5.5 20v-6.5h13V20M6.5 13.5c0-1.8 11-1.8 11 0M12 4v3.2M9.6 5.2v2M14.4 5.2v2"/>', s),
+    shop: (s) => SVG('<path d="M4.5 9.5 5.5 5h13l1 4.5M5 9.5V19h14V9.5M9.5 19v-4.5h5V19"/><path d="M4.5 9.5a1.9 1.9 0 0 0 3.7 0 1.9 1.9 0 0 0 3.8 0 1.9 1.9 0 0 0 3.8 0 1.9 1.9 0 0 0 3.7 0"/>', s),
+    rocket: (s) => SVG('<path d="M12 3.2c2.9 1.6 4.8 5 4.8 9L14.4 14.6h-4.8L7.2 12.2c0-4 1.9-7.4 4.8-9Z"/><circle cx="12" cy="9.6" r="1.5"/><path d="M9.6 14.6c-1.6.4-2.6 2.3-2.6 4.2 1.6 0 3.4-.7 4-2.2M14.4 14.6c1.6.4 2.6 2.3 2.6 4.2-1.6 0-3.4-.7-4-2.2"/>', s),
+    bolt: (s) => SVG('<path d="M13 2.5 5.5 13H10l-1 8.5L18 11h-5l1-8.5Z"/>', s),
+    paw: (s) => SVG('<ellipse cx="12" cy="15.6" rx="4.2" ry="3.3"/><ellipse cx="6.6" cy="11.2" rx="1.7" ry="2"/><ellipse cx="17.4" cy="11.2" rx="1.7" ry="2"/><ellipse cx="9.6" cy="7.6" rx="1.6" ry="1.9"/><ellipse cx="14.4" cy="7.6" rx="1.6" ry="1.9"/>', s),
+    list: (s) => SVG('<rect x="5" y="4" width="14" height="17" rx="2.2"/><path d="M8.2 4v-.4A1.6 1.6 0 0 1 9.8 2h4.4a1.6 1.6 0 0 1 1.6 1.6V4M8.5 11l1.4 1.4 2.8-2.8M8.5 16.4l1.4 1.4 2.8-2.8"/>', s),
+    trophy: (s) => SVG('<path d="M7 4h10v3.5a5 5 0 0 1-10 0V4Z"/><path d="M7 5.8H4.6a2.4 2.4 0 0 0 2.5 3M17 5.8h2.4a2.4 2.4 0 0 1-2.5 3M10.2 13h3.6l-.5 3.4h-2.6L10.2 13ZM8.2 21h7.6M9.6 17h4.8"/>', s),
+    globe: (s) => SVG('<circle cx="12" cy="12" r="8.4"/><path d="M3.6 12h16.8M12 3.6c2.3 2.2 2.3 14.6 0 16.8M12 3.6c-2.3 2.2-2.3 14.6 0 16.8"/>', s),
+    users: (s) => SVG('<circle cx="9" cy="8" r="2.9"/><path d="M3.6 19a5.4 5.4 0 0 1 10.8 0M16 5.3a3 3 0 0 1 0 5.9M16.6 14.4a5.4 5.4 0 0 1 3.8 4.6"/>', s),
+    star: (s) => SVG('<path d="m12 3.2 2.6 5.2 5.8.9-4.2 4 1 5.7L12 16.6 6 18.2l1-5.7-4.2-4 5.8-.9L12 3.2Z"/>', s),
+    wallet: (s) => SVG('<path d="M4 7.2a2 2 0 0 1 2-2h10.5v3.6M4 7.2V17a2 2 0 0 0 2 2h13V8.8H6a2 2 0 0 1-2-1.6Z"/><circle cx="16.5" cy="13.9" r="1.2" fill="currentColor" stroke="none"/>', s),
+    fire: (s) => SVG('<path d="M12 3c1 2.9-1.4 4.4-1.4 6.8A2.4 2.4 0 0 0 13 11.6c.5-1.4 0-2 .5-2.9 1.9 1.5 2.9 3.7 2.9 5.8a6.3 6.3 0 0 1-12.6.5C3.2 11.2 8 9.8 8 6c1.4 1 1.9 2.4 1.9 3.8C10.8 8.4 11.3 6 12 3Z"/>', s),
+    gift: (s) => SVG('<rect x="4.2" y="9.2" width="15.6" height="10.6" rx="1.6"/><path d="M4.2 12.4h15.6M12 9.2v10.6M12 9.2C10.2 9.2 8 8.7 8 6.6 8 5.4 8.9 5 9.8 5.3 11.2 5.8 12 9.2 12 9.2s.8-3.4 2.2-3.9c.9-.3 1.8.1 1.8 1.3 0 2.1-2.2 2.6-4 2.6Z"/>', s),
+    medal: (s) => SVG('<circle cx="12" cy="14" r="5"/><path d="M8.5 9 6.5 3.5M15.5 9l2-5.5M10.3 14l1.7-1.6 1.7 1.6-.6 2.3h-2.2l-.6-2.3Z"/>', s),
+    tap: (s) => SVG('<path d="M9 11V5.5a1.7 1.7 0 0 1 3.4 0V11M12.4 11V9.4a1.5 1.5 0 0 1 3 0V11M15.4 11v-.6a1.5 1.5 0 0 1 3 0V15a5 5 0 0 1-5 5h-1.6a4 4 0 0 1-3-1.4L6 15.4a1.6 1.6 0 0 1 2.4-2L9 14"/>', s),
+    battery: (s) => SVG('<rect x="3" y="8" width="15" height="8" rx="2"/><path d="M20 11v2"/><path d="M9.5 9.5 7.5 12.4h2.6L8 15"/>', s),
+  };
+  const cardIcon = (id) => ({ bakery: ICON.cupcake, coffee: ICON.coffee, delivery: ICON.scooter, cakefactory: ICON.cake, franchise: ICON.shop }[id] || ICON.cupcake)(26);
+  const taskIcon = (id) => ({ site: ICON.globe, invite1: ICON.users, level3: ICON.star, balance10: ICON.wallet, streak3: ICON.fire }[id] || ICON.star)(26);
+
   let ov, audio, raf, lastTs = 0, pending = 0, syncT = 0, curLevel = 1, tab = 'cat';
   let st = null, turboUntil = 0, combo = 0, comboT = 0;
 
@@ -149,41 +185,48 @@
     if (document.getElementById('catclick-css')) return;
     const s = document.createElement('style'); s.id = 'catclick-css';
     s.textContent = `
-      .ck-ov{position:fixed;inset:0;z-index:9999;display:none;flex-direction:column;background:radial-gradient(120% 90% at 50% 0%,#3a2150,#160c28 72%);overflow:hidden;touch-action:manipulation;user-select:none;-webkit-user-select:none;color:#fff}
-      .ck-ov.on{display:flex}.ck-ov.turbo{background:radial-gradient(120% 90% at 50% 0%,#5a2a2a,#2a0c1a 72%)}
-      .ck-x{position:absolute;top:10px;right:10px;z-index:9;width:34px;height:34px;border:none;border-radius:50%;background:rgba(255,255,255,.15);color:#fff;font-size:18px;cursor:pointer}
-      .ck-screen{flex:1;display:none;flex-direction:column;align-items:center;overflow:hidden}.ck-screen.on{display:flex}
-      .ck-daily{margin-top:10px;background:linear-gradient(90deg,#ff8a3d,#ffd23f);color:#3a2150;font-weight:900;border:none;border-radius:16px;padding:9px 18px;font-size:13px;cursor:pointer;box-shadow:0 6px 16px rgba(255,160,40,.4)}
-      .ck-lvl{margin-top:10px;color:#ffd23f;font-weight:900;font-size:14px}
-      .ck-bal{display:flex;align-items:center;gap:8px;margin-top:2px;font-weight:900;font-size:34px;text-shadow:0 2px 8px rgba(0,0,0,.4)}
-      .ck-prof{margin-top:3px;background:rgba(255,255,255,.1);padding:4px 12px;border-radius:20px;font-weight:800;font-size:12px;color:#7ed957}
-      .ck-prog{width:78%;max-width:340px;margin-top:7px}.ck-prog__bar{height:7px;border-radius:6px;background:rgba(255,255,255,.16);overflow:hidden}.ck-prog__fill{height:100%;border-radius:6px;background:linear-gradient(90deg,#ffd23f,#ff9d33);transition:width .3s}.ck-prog__t{color:#cdbce8;font-size:10px;text-align:center;margin-top:3px}
+      .ck-ov{--gold:#eebf52;--gold-l:#ffe49c;--gold-d:#c2882a;--cream:#f4ead7;--ink:#efe2cf;--muted:#bb9d88;--panel:rgba(255,238,214,.055);--line:rgba(238,191,82,.16);
+        position:fixed;inset:0;z-index:9999;display:none;flex-direction:column;
+        background:radial-gradient(135% 105% at 50% -8%,#4e1b26 0%,#2c1017 52%,#180a0f 100%);
+        overflow:hidden;touch-action:manipulation;user-select:none;-webkit-user-select:none;color:var(--ink);font-family:'Inter',system-ui,sans-serif}
+      .ck-ov::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:0;background:radial-gradient(125% 75% at 50% 118%,rgba(0,0,0,.55),transparent 58%)}
+      .ck-ov.on{display:flex}.ck-ov.turbo{background:radial-gradient(135% 105% at 50% -8%,#6e2026 0%,#3a0f15 58%,#1c080f 100%)}
+      .ck-screen{position:relative;z-index:1;flex:1;display:none;flex-direction:column;align-items:center;overflow:hidden}.ck-screen.on{display:flex}
+      .ck-x{position:absolute;top:12px;right:12px;z-index:9;width:34px;height:34px;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.28);color:var(--cream);font-size:17px;cursor:pointer}
+      .ck-i{display:inline-block;vertical-align:-.16em}.ck-coin-i{display:inline-block;vertical-align:-.18em;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4))}
+      .ck-daily{margin-top:13px;display:inline-flex;align-items:center;gap:7px;background:linear-gradient(180deg,#ffe7a6,#eebf52 58%,#cf9a36);color:#5a2028;font-weight:800;border:1px solid #ffe9b3;border-radius:14px;padding:9px 18px;font-size:13px;cursor:pointer;box-shadow:0 7px 18px rgba(170,115,30,.4),inset 0 1px 0 rgba(255,255,255,.55)}
+      .ck-lvl{margin-top:13px;color:var(--gold-l);font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:17px;letter-spacing:.2px}
+      .ck-bal{display:flex;align-items:center;justify-content:center;gap:9px;margin-top:4px;font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:40px;font-variant-numeric:tabular-nums;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.45)}
+      .ck-prof{margin-top:6px;display:inline-flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);padding:4px 13px;border-radius:20px;font-weight:700;font-size:12px;color:var(--gold);font-variant-numeric:tabular-nums}
+      .ck-prog{width:80%;max-width:330px;margin-top:10px}.ck-prog__bar{height:8px;border-radius:6px;background:rgba(0,0,0,.34);box-shadow:inset 0 1px 2px rgba(0,0,0,.45);overflow:hidden}.ck-prog__fill{height:100%;border-radius:6px;background:linear-gradient(90deg,#cf9a36,#ffe49c);box-shadow:0 0 8px rgba(238,191,82,.55);transition:width .3s}.ck-prog__t{color:var(--muted);font-size:10.5px;text-align:center;margin-top:4px;font-weight:600;font-variant-numeric:tabular-nums}
       .ck-catwrap{position:relative;flex:1;width:100%;display:flex;align-items:center;justify-content:center}
       .ck-catwrap::before{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:76%;height:76%;background:radial-gradient(ellipse at center,rgba(255,196,72,.54) 0%,rgba(255,170,48,.30) 42%,rgba(255,170,48,0) 70%);filter:blur(9px);pointer-events:none;z-index:0}
-      .ck-cat{position:relative;z-index:1;max-width:62%;max-height:94%;width:auto;height:auto;object-fit:contain;cursor:pointer;transition:transform .07s;filter:drop-shadow(0 16px 22px rgba(0,0,0,.5));transform-origin:bottom center;-webkit-tap-highlight-color:transparent}
-      .ck-cat.tap{transform:scale(.92)}.ck-cat.turbo{filter:drop-shadow(0 0 30px #ffb13d) drop-shadow(0 18px 26px rgba(0,0,0,.5))}
+      .ck-catwrap::after{content:'';position:absolute;left:50%;bottom:5%;transform:translateX(-50%);width:44%;height:22px;border-radius:50%;background:radial-gradient(ellipse at center,rgba(0,0,0,.5),transparent 72%);filter:blur(3px);pointer-events:none;z-index:0}
+      .ck-cat{position:relative;z-index:1;max-width:62%;max-height:94%;width:auto;height:auto;object-fit:contain;cursor:pointer;transition:transform .07s;filter:drop-shadow(0 14px 18px rgba(40,8,12,.5));transform-origin:bottom center;-webkit-tap-highlight-color:transparent}
+      .ck-cat.tap{transform:scale(.92)}.ck-cat.turbo{filter:drop-shadow(0 0 30px #ffb13d) drop-shadow(0 16px 22px rgba(40,8,12,.5))}
       .ck-hat{position:absolute;pointer-events:none;filter:drop-shadow(0 4px 6px rgba(0,0,0,.3))}
-      .ck-combo{position:absolute;top:18%;left:50%;transform:translateX(-50%);font-weight:900;color:#ff7a3d;text-shadow:0 2px 8px rgba(0,0,0,.5);pointer-events:none;opacity:0;font-size:22px}
+      .ck-combo{position:absolute;top:17%;left:50%;transform:translateX(-50%);font-family:'Playfair Display',serif;font-weight:800;color:var(--gold-l);text-shadow:0 2px 10px rgba(0,0,0,.6);pointer-events:none;opacity:0;font-size:24px}
       .ck-combo.show{opacity:1}
       .ck-fx{position:absolute;inset:0;pointer-events:none;z-index:6;overflow:hidden}
-      .ck-boosts{display:flex;gap:10px;margin:2px 0 8px}
-      .ck-boost{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.1);border:none;border-radius:14px;padding:8px 14px;color:#fff;font-weight:800;font-size:13px;cursor:pointer}
-      .ck-boost:disabled{opacity:.4;cursor:default}
-      .ck-energy{width:84%;max-width:360px;margin:0 0 14px}.ck-energy__row{display:flex;align-items:center;gap:8px;font-weight:800;font-size:13px;margin-bottom:5px}.ck-energy__bar{height:11px;border-radius:8px;background:rgba(255,255,255,.16);overflow:hidden}.ck-energy__fill{height:100%;border-radius:8px;background:linear-gradient(90deg,#4fd1ff,#7ed957);transition:width .25s}
-      .ck-up{position:absolute;color:#ffd23f;font-weight:900;pointer-events:none;text-shadow:0 2px 5px rgba(0,0,0,.5);z-index:7}
-      .ck-coin{position:absolute;z-index:7;pointer-events:none;font-size:22px}
-      .ck-uphd{padding:14px 16px 6px;text-align:center;width:100%;box-sizing:border-box}.ck-uphd .b{font-weight:900;font-size:26px}.ck-uphd .p{color:#7ed957;font-weight:800;font-size:13px;margin-top:2px}
-      .ck-uplist{flex:1;overflow:auto;padding:6px 12px 14px;width:100%;box-sizing:border-box}
-      .ck-sect{color:#b9a7dd;font-weight:800;font-size:12px;margin:10px 4px 6px;text-transform:uppercase;letter-spacing:.4px}
-      .ck-card{display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.07);border-radius:16px;padding:12px;margin-bottom:9px}
-      .ck-card__ic{font-size:28px;width:40px;text-align:center}.ck-card__b{flex:1;min-width:0}.ck-card__n{font-weight:800;font-size:15px}.ck-card__s{color:#b9a7dd;font-size:12px;margin-top:2px}
-      .ck-card__buy{border:none;border-radius:12px;padding:10px 14px;font-weight:800;font-size:13px;background:#ffcf3f;color:#3a2150;cursor:pointer;white-space:nowrap}.ck-card__buy:disabled{background:rgba(255,255,255,.12);color:#8d7fae;cursor:default}
-      .ck-row{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.06);border-radius:14px;padding:10px 12px;margin-bottom:7px}
-      .ck-row .r{width:30px;font-weight:900;color:#ffd23f;text-align:center}.ck-row .n{flex:1;font-weight:700}.ck-row .v{font-weight:800;color:#7ed957;font-size:13px}.ck-row.me{background:rgba(255,210,63,.18)}
-      .ck-nav{display:flex;border-top:1px solid rgba(255,255,255,.1)}
-      .ck-nav__b{flex:1;border:none;background:transparent;color:#b9a7dd;padding:10px 0 13px;font-weight:800;font-size:12px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px}.ck-nav__b .i{font-size:19px}.ck-nav__b.on{color:#ffd23f}
-      .ck-levelup{position:absolute;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;pointer-events:none}.ck-levelup span{color:#fff;font-weight:900;font-size:28px;background:rgba(0,0,0,.45);padding:14px 22px;border-radius:18px;opacity:0}.ck-levelup span.show{animation:ckLU 1.6s ease-out}@keyframes ckLU{0%{opacity:0;transform:scale(.6)}20%{opacity:1;transform:scale(1.1)}80%{opacity:1}100%{opacity:0}}
-      .ck-pop{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9;background:#2a1a44;border-radius:20px;padding:22px 24px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.5);display:none;max-width:80%}.ck-pop.on{display:block}.ck-pop h3{margin:0 0 6px;font-size:20px}.ck-pop .v{font-size:30px;font-weight:900;color:#ffd23f;margin:8px 0}.ck-pop button{margin-top:8px;border:none;border-radius:14px;padding:12px 28px;font-weight:800;background:#ffcf3f;color:#3a2150;cursor:pointer}
+      .ck-boosts{display:flex;gap:10px;margin:2px 0 9px}
+      .ck-boost{display:inline-flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:8px 15px;color:var(--cream);font-weight:700;font-size:13px;cursor:pointer}
+      .ck-boost .ck-i{color:var(--gold)}.ck-boost:disabled{opacity:.4;cursor:default}
+      .ck-energy{width:84%;max-width:360px;margin:0 0 16px}.ck-energy__row{display:flex;align-items:center;gap:7px;font-weight:700;font-size:13px;margin-bottom:6px;color:var(--cream);font-variant-numeric:tabular-nums}.ck-energy__row .ck-i{color:var(--gold)}.ck-energy__bar{height:11px;border-radius:8px;background:rgba(0,0,0,.34);box-shadow:inset 0 1px 2px rgba(0,0,0,.45);overflow:hidden}.ck-energy__fill{height:100%;border-radius:8px;background:linear-gradient(90deg,#c2882a,#ffe49c);box-shadow:0 0 7px rgba(238,191,82,.5);transition:width .25s}
+      .ck-up{position:absolute;color:var(--gold-l);font-weight:800;pointer-events:none;text-shadow:0 2px 5px rgba(0,0,0,.5);z-index:7;font-variant-numeric:tabular-nums}
+      .ck-coin{position:absolute;z-index:7;pointer-events:none}
+      .ck-uphd{padding:16px 16px 6px;text-align:center;width:100%;box-sizing:border-box}.ck-uphd .b{font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:24px;display:inline-flex;align-items:center;gap:8px;color:var(--cream)}.ck-uphd .b .ck-i{color:var(--gold)}.ck-uphd .p{color:var(--gold);font-weight:700;font-size:13px;margin-top:3px;display:inline-flex;align-items:center;gap:5px;font-variant-numeric:tabular-nums}
+      .ck-uplist{flex:1;overflow:auto;padding:6px 12px 16px;width:100%;box-sizing:border-box}
+      .ck-sect{color:var(--muted);font-weight:700;font-size:11px;margin:12px 4px 7px;text-transform:uppercase;letter-spacing:.7px}
+      .ck-card{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:11px 12px;margin-bottom:9px}
+      .ck-card__ic{width:46px;height:46px;flex:none;border-radius:13px;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,rgba(238,191,82,.2),rgba(238,191,82,.04));border:1px solid var(--line);color:var(--gold-l)}
+      .ck-card__b{flex:1;min-width:0}.ck-card__n{font-weight:700;font-size:15px;color:var(--ink)}.ck-card__s{color:var(--muted);font-size:12px;margin-top:2px;font-variant-numeric:tabular-nums}
+      .ck-card__buy{display:inline-flex;align-items:center;gap:5px;border:1px solid #ffe9b3;border-radius:12px;padding:9px 13px;font-weight:800;font-size:13px;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;cursor:pointer;white-space:nowrap;font-variant-numeric:tabular-nums;box-shadow:0 4px 11px rgba(165,112,28,.38),inset 0 1px 0 rgba(255,255,255,.5)}.ck-card__buy:disabled{background:rgba(255,255,255,.07);color:var(--muted);border-color:transparent;box-shadow:none;cursor:default}
+      .ck-row{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:7px}
+      .ck-row .r{width:28px;font-weight:800;color:var(--gold);text-align:center;font-variant-numeric:tabular-nums}.ck-row .n{flex:1;font-weight:600;color:var(--ink)}.ck-row .v{font-weight:700;color:var(--gold);font-size:13px;display:inline-flex;align-items:center;gap:5px;font-variant-numeric:tabular-nums}.ck-row.me{background:rgba(238,191,82,.14);border-color:rgba(238,191,82,.34)}
+      .ck-nav{display:flex;border-top:1px solid var(--line);background:rgba(18,8,11,.5);backdrop-filter:blur(8px)}
+      .ck-nav__b{flex:1;border:none;background:transparent;color:var(--muted);padding:9px 0 12px;font-weight:600;font-size:11.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px}.ck-nav__b.on{color:var(--gold-l)}
+      .ck-levelup{position:absolute;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;pointer-events:none}.ck-levelup span{font-family:'Playfair Display',serif;color:var(--gold-l);font-weight:700;font-size:26px;background:linear-gradient(180deg,rgba(46,17,25,.92),rgba(26,10,15,.92));border:1px solid var(--line);padding:14px 24px;border-radius:18px;opacity:0;box-shadow:0 12px 36px rgba(0,0,0,.5)}.ck-levelup span.show{animation:ckLU 1.6s ease-out}@keyframes ckLU{0%{opacity:0;transform:scale(.6)}20%{opacity:1;transform:scale(1.1)}80%{opacity:1}100%{opacity:0}}
+      .ck-pop{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9;background:linear-gradient(180deg,#2e1119,#1d0a11);border:1px solid var(--line);border-radius:20px;padding:24px;text-align:center;box-shadow:0 18px 50px rgba(0,0,0,.6);display:none;max-width:80%}.ck-pop.on{display:block}.ck-pop h3{margin:0 0 6px;font-family:'Playfair Display',serif;font-weight:700;font-size:20px;color:var(--cream)}.ck-pop .v{font-family:'Playfair Display',serif;font-size:32px;font-weight:700;color:var(--gold-l);margin:10px 0;display:inline-flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums}.ck-pop button{margin-top:10px;border:1px solid #ffe9b3;border-radius:14px;padding:12px 28px;font-weight:800;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;cursor:pointer}
     `;
     document.head.appendChild(s);
   }
@@ -192,31 +235,32 @@
     styles();
     ov = document.createElement('div'); ov.className = 'ck-ov';
     ov.innerHTML = `
+      ${COIN_SPRITE}
       <button class="ck-x" id="ck-x">×</button>
       <div class="ck-screen on" id="ck-scr-cat">
         <button class="ck-daily" id="ck-daily" style="display:none"></button>
         <div class="ck-lvl" id="ck-lvl"></div>
-        <div class="ck-bal">🪙 <span id="ck-bal">0</span></div>
-        <div class="ck-prof" id="ck-prof">🏭 +0 / час</div>
+        <div class="ck-bal">${COIN(32)} <span id="ck-bal">0</span></div>
+        <div class="ck-prof" id="ck-prof">${COIN(14)} +0 / час</div>
         <div class="ck-prog"><div class="ck-prog__bar"><div class="ck-prog__fill" id="ck-prog"></div></div><div class="ck-prog__t" id="ck-progt"></div></div>
         <div class="ck-catwrap" id="ck-catwrap"><img class="ck-cat" id="ck-cat" draggable="false"/><img class="ck-hat" id="ck-hat" draggable="false" style="display:none"/><div class="ck-combo" id="ck-combo"></div></div>
         <div class="ck-boosts">
-          <button class="ck-boost" id="ck-bt-turbo">🚀 Турбо <span id="ck-bt-turbo-n"></span></button>
-          <button class="ck-boost" id="ck-bt-energy">⚡ Энергия <span id="ck-bt-energy-n"></span></button>
+          <button class="ck-boost" id="ck-bt-turbo">${ICON.rocket(16)} Турбо <span id="ck-bt-turbo-n"></span></button>
+          <button class="ck-boost" id="ck-bt-energy">${ICON.bolt(16)} Энергия <span id="ck-bt-energy-n"></span></button>
         </div>
-        <div class="ck-energy"><div class="ck-energy__row" id="ck-enrow">⚡ <span id="ck-en">0</span> / <span id="ck-enmax">1000</span></div><div class="ck-energy__bar"><div class="ck-energy__fill" id="ck-enfill"></div></div></div>
+        <div class="ck-energy"><div class="ck-energy__row" id="ck-enrow"><span id="ck-enpre">${ICON.bolt(15)}</span> <span id="ck-en">0</span> / <span id="ck-enmax">1000</span></div><div class="ck-energy__bar"><div class="ck-energy__fill" id="ck-enfill"></div></div></div>
       </div>
-      <div class="ck-screen" id="ck-scr-up"><div class="ck-uphd"><div class="ck-bal" style="justify-content:center;font-size:26px">🪙 <span id="ck-bal2">0</span></div><div class="p" id="ck-prof2">🏭 +0 / час</div></div><div class="ck-uplist" id="ck-uplist"></div></div>
-      <div class="ck-screen" id="ck-scr-tasks"><div class="ck-uphd"><div class="b">📋 Задания</div></div><div class="ck-uplist" id="ck-taskslist"></div></div>
-      <div class="ck-screen" id="ck-scr-top"><div class="ck-uphd"><div class="b">🏆 Рейтинг</div><div class="p" id="ck-myrank"></div></div><div class="ck-uplist" id="ck-toplist"></div></div>
+      <div class="ck-screen" id="ck-scr-up"><div class="ck-uphd"><div class="ck-bal" style="justify-content:center;font-size:30px">${COIN(26)} <span id="ck-bal2">0</span></div><div class="p" id="ck-prof2">${COIN(13)} +0 / час</div></div><div class="ck-uplist" id="ck-uplist"></div></div>
+      <div class="ck-screen" id="ck-scr-tasks"><div class="ck-uphd"><div class="b">${ICON.list(22)} Задания</div></div><div class="ck-uplist" id="ck-taskslist"></div></div>
+      <div class="ck-screen" id="ck-scr-top"><div class="ck-uphd"><div class="b">${ICON.trophy(22)} Рейтинг</div><div class="p" id="ck-myrank"></div></div><div class="ck-uplist" id="ck-toplist"></div></div>
       <div class="ck-fx" id="ck-fx"></div>
       <div class="ck-levelup" id="ck-levelup"><span id="ck-levelup-t"></span></div>
       <div class="ck-pop" id="ck-pop"></div>
       <div class="ck-nav">
-        <button class="ck-nav__b on" data-tab="cat"><span class="i">🐱</span>Котик</button>
-        <button class="ck-nav__b" data-tab="up"><span class="i">⚡</span>Прокачка</button>
-        <button class="ck-nav__b" data-tab="tasks"><span class="i">📋</span>Задания</button>
-        <button class="ck-nav__b" data-tab="top"><span class="i">🏆</span>Рейтинг</button>
+        <button class="ck-nav__b on" data-tab="cat">${ICON.paw(21)}Котик</button>
+        <button class="ck-nav__b" data-tab="up">${ICON.bolt(21)}Прокачка</button>
+        <button class="ck-nav__b" data-tab="tasks">${ICON.list(21)}Задания</button>
+        <button class="ck-nav__b" data-tab="top">${ICON.trophy(21)}Рейтинг</button>
       </div>`;
     document.body.appendChild(ov);
     ov.querySelector('#ck-x').onclick = close;
@@ -256,7 +300,7 @@
     if (combo >= 12 && combo % 3 === 0) coinShower();
     renderTop2();
   }
-  function showCombo() { const el = ov.querySelector('#ck-combo'); el.textContent = '🔥 x' + combo; el.classList.add('show'); el.style.fontSize = Math.min(40, 20 + combo) + 'px'; }
+  function showCombo() { const el = ov.querySelector('#ck-combo'); el.innerHTML = ICON.fire(20) + ' x' + combo; el.classList.add('show'); el.style.fontSize = Math.min(40, 20 + combo) + 'px'; }
   function flyUp(x, y, txt, size) {
     const fx = ov.querySelector('#ck-fx'); const r = fx.getBoundingClientRect();
     const el = document.createElement('div'); el.className = 'ck-up'; el.textContent = txt; el.style.fontSize = (size || 24) + 'px';
@@ -267,7 +311,7 @@
   }
   function coinShower() {
     const fx = ov.querySelector('#ck-fx'); const w = fx.clientWidth;
-    for (let i = 0; i < 8; i++) { const c = document.createElement('div'); c.className = 'ck-coin'; c.textContent = '🪙'; c.style.left = (Math.random() * w) + 'px'; c.style.top = '-30px'; c.style.transition = 'transform 1s ease-in, opacity 1s'; fx.appendChild(c); requestAnimationFrame(() => { c.style.transform = `translateY(${fx.clientHeight + 40}px) rotate(${(Math.random() - .5) * 360}deg)`; c.style.opacity = '0.2'; }); setTimeout(() => c.remove(), 1000); }
+    for (let i = 0; i < 8; i++) { const c = document.createElement('div'); c.className = 'ck-coin'; c.innerHTML = COIN(22); c.style.left = (Math.random() * w) + 'px'; c.style.top = '-30px'; c.style.transition = 'transform 1s ease-in, opacity 1s'; fx.appendChild(c); requestAnimationFrame(() => { c.style.transform = `translateY(${fx.clientHeight + 40}px) rotate(${(Math.random() - .5) * 360}deg)`; c.style.opacity = '0.2'; }); setTimeout(() => c.remove(), 1000); }
   }
   function flashMsg(text) { const fx = ov.querySelector('#ck-fx'); const el = document.createElement('div'); el.className = 'ck-up'; el.style.color = '#ff8a8a'; el.style.fontSize = '20px'; el.textContent = text; el.style.left = '50%'; el.style.top = '56%'; el.style.transform = 'translateX(-50%)'; el.style.transition = 'opacity .9s'; fx.appendChild(el); requestAnimationFrame(() => el.style.opacity = '0'); setTimeout(() => el.remove(), 900); }
 
@@ -283,15 +327,15 @@
     ov.querySelector('#ck-bal').textContent = fmt(st.balance);
     ov.querySelector('#ck-bal2').textContent = fmt(st.balance);
     ov.querySelector('#ck-lvl').textContent = `Уровень ${lg.level} · ${lg.name}`;
-    const prof = `🏭 +${fmt(st.profitPerHour)} / час`; ov.querySelector('#ck-prof').textContent = prof; ov.querySelector('#ck-prof2').textContent = prof;
+    const prof = `${COIN(13)} +${fmt(st.profitPerHour)} / час`; ov.querySelector('#ck-prof').innerHTML = prof; ov.querySelector('#ck-prof2').innerHTML = prof;
     ov.querySelector('#ck-en').textContent = Math.floor(st.energy); ov.querySelector('#ck-enmax').textContent = st.energyMax;
     ov.querySelector('#ck-enfill').style.width = Math.min(100, st.energy / st.energyMax * 100) + '%';
     const nn = nextNeed(st.totalEarned), prog = ov.querySelector('#ck-prog'), progt = ov.querySelector('#ck-progt');
-    if (nn) { const pct = Math.min(100, (st.totalEarned - lg.need) / (nn - lg.need) * 100); prog.style.width = pct + '%'; progt.textContent = `${fmt(st.totalEarned)} / ${fmt(nn)} 🪙 до ур. ${lg.level + 1}`; }
-    else { prog.style.width = '100%'; progt.textContent = 'Максимальный уровень! 👑'; }
+    if (nn) { const pct = Math.min(100, (st.totalEarned - lg.need) / (nn - lg.need) * 100); prog.style.width = pct + '%'; progt.innerHTML = `${fmt(st.totalEarned)} / ${fmt(nn)} ${COIN(12)} до ур. ${lg.level + 1}`; }
+    else { prog.style.width = '100%'; progt.textContent = 'Максимальный уровень!'; }
     // ежедневка
     const daily = ov.querySelector('#ck-daily');
-    if (st.dailyAvailable) { daily.style.display = ''; daily.textContent = `🎁 Награда дня +${fmt(st.dailyNext)}`; } else daily.style.display = 'none';
+    if (st.dailyAvailable) { daily.style.display = ''; daily.innerHTML = `${ICON.gift(16)} Награда дня +${fmt(st.dailyNext)}`; } else daily.style.display = 'none';
     // бусты
     ov.querySelector('#ck-bt-turbo-n').textContent = '(' + st.boostTurboLeft + ')';
     ov.querySelector('#ck-bt-energy-n').textContent = '(' + st.boostEnergyLeft + ')';
@@ -299,8 +343,8 @@
     ov.querySelector('#ck-bt-energy').disabled = st.boostEnergyLeft <= 0 || st.energy >= st.energyMax;
     // турбо-вид
     const on = turboOn(); ov.classList.toggle('turbo', on); ov.querySelector('#ck-cat').classList.toggle('turbo', on);
-    if (on) ov.querySelector('#ck-enrow').firstChild.textContent = '🚀 ТУРБО ×5! · ';
-    else ov.querySelector('#ck-enrow').firstChild.textContent = '⚡ ';
+    if (on) ov.querySelector('#ck-enpre').innerHTML = ICON.rocket(15) + ' ТУРБО ×5! ·';
+    else ov.querySelector('#ck-enpre').innerHTML = ICON.bolt(15);
     if (lg.level !== curLevel) { if (lg.level > curLevel) levelUp(lg); curLevel = lg.level; }
     applyCostume(lg);
   }
@@ -310,27 +354,27 @@
     const src = A(lg.cat || 'idle.png');
     if (cat.getAttribute('src') !== src) cat.src = src;
   }
-  function levelUp(lg) { chord([660, 880, 1175], 0.16); window.haptic && window.haptic('success'); coinShower(); const t = ov.querySelector('#ck-levelup-t'); t.textContent = '🎉 ' + lg.name + '!'; t.classList.remove('show'); void t.offsetWidth; t.classList.add('show'); }
+  function levelUp(lg) { chord([660, 880, 1175], 0.16); window.haptic && window.haptic('success'); coinShower(); const t = ov.querySelector('#ck-levelup-t'); t.innerHTML = ICON.star(22) + ' ' + lg.name; t.classList.remove('show'); void t.offsetWidth; t.classList.add('show'); }
 
   function renderUpgrades() {
     if (!ov || !st) return; const list = ov.querySelector('#ck-uplist');
-    const row = (icon, name, sub, price, dis, act, id) => `<div class="ck-card"><div class="ck-card__ic">${icon}</div><div class="ck-card__b"><div class="ck-card__n">${name}</div><div class="ck-card__s">${sub}</div></div><button class="ck-card__buy" data-act="${act}" data-id="${id || ''}" ${dis ? 'disabled' : ''}>🪙 ${fmt(price)}</button></div>`;
+    const row = (icon, name, sub, price, dis, act, id) => `<div class="ck-card"><div class="ck-card__ic">${icon}</div><div class="ck-card__b"><div class="ck-card__n">${name}</div><div class="ck-card__s">${sub}</div></div><button class="ck-card__buy" data-act="${act}" data-id="${id || ''}" ${dis ? 'disabled' : ''}>${COIN(15)} ${fmt(price)}</button></div>`;
     let h = '<div class="ck-sect">Бусты</div>';
-    h += row('👆', 'Мультитап', `+1 за тап · сейчас +${st.perTap}`, st.multitapPrice, st.balance < st.multitapPrice, 'multitap');
-    h += row('🔋', 'Запас энергии', `+500 · сейчас ${st.energyMax}`, st.energyPrice, st.balance < st.energyPrice, 'energy');
+    h += row(ICON.tap(26), 'Мультитап', `+1 за тап · сейчас +${st.perTap}`, st.multitapPrice, st.balance < st.multitapPrice, 'multitap');
+    h += row(ICON.battery(26), 'Запас энергии', `+500 · сейчас ${st.energyMax}`, st.energyPrice, st.balance < st.energyPrice, 'energy');
     h += '<div class="ck-sect">Бизнесы — пассивный доход</div>';
-    for (const c of st.cards) h += row(c.icon, c.name, `Ур. ${c.level} · +${fmt(c.profit)}/час`, c.price, st.balance < c.price, 'card', c.id);
+    for (const c of st.cards) h += row(cardIcon(c.id), c.name, `Ур. ${c.level} · +${fmt(c.profit)}/час`, c.price, st.balance < c.price, 'card', c.id);
     list.innerHTML = h;
     list.querySelectorAll('.ck-card__buy').forEach(b => b.onclick = () => buy(b.dataset.act, b.dataset.id || undefined));
   }
   async function renderTop() {
     const list = ov.querySelector('#ck-toplist'); const rank = ov.querySelector('#ck-myrank');
-    if (!authed()) { list.innerHTML = '<div style="text-align:center;color:#b9a7dd;padding:30px 10px">Рейтинг доступен при входе через приложение «Мария» 🐱</div>'; rank.textContent = ''; return; }
-    list.innerHTML = '<div style="text-align:center;color:#b9a7dd;padding:20px">Загрузка…</div>';
+    if (!authed()) { list.innerHTML = '<div style="text-align:center;color:var(--muted);padding:30px 14px;line-height:1.5">Рейтинг доступен при входе через приложение «Мария»</div>'; rank.textContent = ''; return; }
+    list.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px">Загрузка…</div>';
     const d = await loadTop();
-    if (!d || !d.top) { list.innerHTML = '<div style="text-align:center;color:#b9a7dd;padding:20px">Пока пусто — будь первым!</div>'; return; }
+    if (!d || !d.top) { list.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px">Пока пусто — будь первым!</div>'; return; }
     rank.textContent = d.myRank ? `Твоё место: #${d.myRank}` : '';
-    list.innerHTML = d.top.map((r, i) => `<div class="ck-row${r.me ? ' me' : ''}"><div class="r">${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</div><div class="n">${(r.name || '').replace(/</g, '&lt;')}</div><div class="v">🪙 ${fmt(r.total)}</div></div>`).join('');
+    list.innerHTML = d.top.map((r, i) => `<div class="ck-row${r.me ? ' me' : ''}"><div class="r">${i < 3 ? ICON.medal(20) : i + 1}</div><div class="n">${(r.name || '').replace(/</g, '&lt;')}</div><div class="v">${COIN(14)} ${fmt(r.total)}</div></div>`).join('');
   }
 
   // ── Рефералы + Задания ───────────────────────────────────────────────────────
@@ -350,7 +394,7 @@
       if (localStorage.getItem('maria_ck_ref_done')) return;
       localStorage.setItem('maria_ck_ref_done', '1');
       const d = await api('/api/clicker/ref', { method: 'POST', body: JSON.stringify({ code: m[1] }) });
-      if (d && !d.error) { st = d; if (d.refReward) { dailyPopupRaw('🎉 Бонус за приглашение', d.refReward); } }
+      if (d && !d.error) { st = d; if (d.refReward) { dailyPopupRaw(ICON.gift(20) + ' Бонус за приглашение', d.refReward); } }
     } catch (_) {}
   }
   function guestTaskList() {
@@ -374,9 +418,9 @@
   async function renderTasks() {
     const list = ov.querySelector('#ck-taskslist');
     const refCount = (st && st.referrals) || 0;
-    const refBlock = `<div class="ck-card" style="background:linear-gradient(90deg,rgba(255,138,61,.25),rgba(255,210,63,.15))">
-      <div class="ck-card__ic">👥</div><div class="ck-card__b"><div class="ck-card__n">Пригласи друзей</div>
-      <div class="ck-card__s">Друзей: ${refCount} · +${fmt(REF_REFERRER)} 🪙 тебе и +${fmt(REF_INVITEE)} другу</div></div>
+    const refBlock = `<div class="ck-card" style="background:linear-gradient(90deg,rgba(238,191,82,.18),rgba(238,191,82,.05))">
+      <div class="ck-card__ic">${ICON.users(26)}</div><div class="ck-card__b"><div class="ck-card__n">Пригласи друзей</div>
+      <div class="ck-card__s">Друзей: ${refCount} · +${fmt(REF_REFERRER)} ${COIN(13)} тебе и +${fmt(REF_INVITEE)} другу</div></div>
       <button class="ck-card__buy" id="ck-invite">Позвать</button></div>`;
     let tasks;
     if (authed()) { const d = await api('/api/clicker/tasks').catch(() => null); tasks = d && d.tasks; }
@@ -386,9 +430,9 @@
       let btn;
       if (t.done) btn = `<button class="ck-card__buy" disabled>✓ Готово</button>`;
       else if (t.type === 'link' && !(linkOpened[t.id])) btn = `<button class="ck-card__buy" data-open="${t.id}" data-link="${t.link || ''}">Открыть</button>`;
-      else if (t.claimable) btn = `<button class="ck-card__buy" data-claim="${t.id}">+${fmt(t.reward)} 🪙</button>`;
-      else btn = `<button class="ck-card__buy" disabled>🔒 +${fmt(t.reward)}</button>`;
-      return `<div class="ck-card"><div class="ck-card__ic">${t.icon}</div><div class="ck-card__b"><div class="ck-card__n">${t.name}</div><div class="ck-card__s">Награда +${fmt(t.reward)} 🪙</div></div>${btn}</div>`;
+      else if (t.claimable) btn = `<button class="ck-card__buy" data-claim="${t.id}">+${fmt(t.reward)} ${COIN(14)}</button>`;
+      else btn = `<button class="ck-card__buy" disabled>+${fmt(t.reward)}</button>`;
+      return `<div class="ck-card"><div class="ck-card__ic">${taskIcon(t.id)}</div><div class="ck-card__b"><div class="ck-card__n">${t.name}</div><div class="ck-card__s">Награда +${fmt(t.reward)} ${COIN(13)}</div></div>${btn}</div>`;
     }).join('');
     list.innerHTML = '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows;
     ov.querySelector('#ck-invite').onclick = shareRef;
@@ -402,10 +446,10 @@
     if (reward) { chord([660, 880, 1320], 0.16); window.haptic && window.haptic('success'); dailyPopupRaw('✅ Задание выполнено', reward); renderAll(); renderTasks(); }
     else flashMsg('Пока недоступно');
   }
-  function dailyPopupRaw(title, amount) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${title}</h3><div class="v">+${fmt(amount)} 🪙</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
+  function dailyPopupRaw(title, amount) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${title}</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
 
-  function dailyPopup(amount, streak) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>🎁 Награда дня ${streak}</h3><div class="v">+${fmt(amount)} 🪙</div><div style="color:#b9a7dd;font-size:13px">Заходи каждый день — награда растёт!</div><button id="ck-pop-ok">Ура!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
-  function passivePopup(amount) { if (!amount || amount <= 0) return; const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>Пока тебя не было 😺</h3><div class="v">+${fmt(amount)} 🪙</div><div style="color:#b9a7dd;font-size:13px">Котик работал за тебя!</div><button id="ck-pop-ok">Забрать</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
+  function dailyPopup(amount, streak) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Награда дня ${streak}</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><div style="color:var(--muted);font-size:13px">Заходи каждый день — награда растёт!</div><button id="ck-pop-ok">Ура!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
+  function passivePopup(amount) { if (!amount || amount <= 0) return; const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>Пока тебя не было</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><div style="color:var(--muted);font-size:13px">Котик работал за тебя!</div><button id="ck-pop-ok">Забрать</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
 
   function loop(ts) {
     if (!ov || !ov.classList.contains('on')) return;
