@@ -145,7 +145,7 @@
   ];
 
   let ov, audio, raf, lastTs = 0, pending = 0, syncT = 0, curLevel = 1, tab = 'cat';
-  let st = null, turboUntil = 0, combo = 0, comboT = 0;
+  let st = null, turboUntil = 0, combo = 0, comboT = 0, bonusTimer = 0;
 
   function authed() { return !!(window.App && App.isAuthed && App.isAuthed()); }
   // ── Звук: мастер-шина с ревером + богатый синтез (без файлов) ─────────────────
@@ -186,7 +186,7 @@
   function coinSfx() { sfxTap(0); }
 
   // ── Гость (localStorage) ─────────────────────────────────────────────────────
-  function rawDefault() { return { balance: 0, totalEarned: 0, energy: 1000, multitapLevel: 0, energyLevel: 0, cards: {}, taps: 0, dailyStreak: 0, dailyDate: null, bE: 0, bT: 0, bDate: null, turboUntil: 0, tasksDone: {}, comboDate: null, comboHits: [], comboClaimed: null, cipherDate: null, _ts: Date.now() }; }
+  function rawDefault() { return { balance: 0, totalEarned: 0, energy: 1000, multitapLevel: 0, energyLevel: 0, cards: {}, taps: 0, dailyStreak: 0, dailyDate: null, bE: 0, bT: 0, bDate: null, turboUntil: 0, tasksDone: {}, comboDate: null, comboHits: [], comboClaimed: null, cipherDate: null, bonusAt: 0, _ts: Date.now() }; }
   function rawGet() { let s; try { s = JSON.parse(localStorage.getItem(LS)); } catch (_) {} if (!s) s = rawDefault(); if (!s.cards) s.cards = {}; return s; }
   function rawSave(s) { s._ts = Date.now(); localStorage.setItem(LS, JSON.stringify(s)); }
   function profitOf(c) { let p = 0; for (const x of CARDS) p += cardProfit(x, c[x.id] || 0); return p; }
@@ -338,6 +338,8 @@
       .ck-conf{position:absolute;z-index:7;pointer-events:none;border-radius:1px;will-change:transform,opacity}
       .ck-greet{display:none;margin-top:8px;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);color:var(--gold-l);padding:4px 13px;border-radius:20px;font-weight:700;font-size:12px}
       .ck-greet.on{display:inline-flex}
+      .ck-bonus-fly{position:absolute;z-index:8;pointer-events:auto;cursor:pointer;filter:drop-shadow(0 0 13px rgba(255,212,90,.95));animation:ckBonusSpin 1.1s linear infinite}
+      @keyframes ckBonusSpin{to{transform:rotate(360deg)}}
       .ck-season{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
       .ck-fl{position:absolute;top:-24px;will-change:transform,opacity;animation:ckFall linear infinite}
       .ck-snow{width:7px;height:7px;border-radius:50%;background:radial-gradient(circle,#fff,rgba(255,255,255,.35) 70%);box-shadow:0 0 5px rgba(255,255,255,.55)}
@@ -536,6 +538,35 @@
     if (th) { ov.dataset.season = th.id; if (g) { g.innerHTML = seasonChipIcon(th.id) + ' ' + th.greet; g.classList.add('on'); } }
     else { delete ov.dataset.season; if (g) g.classList.remove('on'); }
     spawnSeason(th);
+  }
+
+  // ── «Золотой котик»: случайный летящий бонус ──────────────────────────────────
+  function scheduleBonus() { clearTimeout(bonusTimer); bonusTimer = setTimeout(showFlyingBonus, 60000 + Math.random() * 65000); }
+  function showFlyingBonus() {
+    if (!ov || !ov.classList.contains('on') || tab !== 'cat') { scheduleBonus(); return; }
+    const fx = ov.querySelector('#ck-fx'); const w = fx.clientWidth, h = fx.clientHeight;
+    const el = document.createElement('div'); el.className = 'ck-bonus-fly'; el.innerHTML = COIN(50);
+    const y0 = h * (0.18 + Math.random() * 0.3); const fromLeft = Math.random() < 0.5;
+    el.style.top = y0 + 'px'; el.style.left = (fromLeft ? -64 : w + 64) + 'px'; el.style.transition = 'left 5.2s linear, top 5.2s ease-in';
+    const grab = (e) => { e.preventDefault(); e.stopPropagation(); if (el._done) return; el._done = true; clearTimeout(el._t); grabBonus(el); };
+    el.addEventListener('pointerdown', grab);
+    fx.appendChild(el);
+    requestAnimationFrame(() => { el.style.left = (fromLeft ? w + 64 : -64) + 'px'; el.style.top = (y0 + h * 0.34) + 'px'; });
+    el._t = setTimeout(() => el.remove(), 5300);
+    scheduleBonus();
+  }
+  async function grabBonus(el) {
+    const r = el.getBoundingClientRect(), fr = ov.querySelector('#ck-fx').getBoundingClientRect();
+    el.remove(); confettiBurst();
+    let amount = 0;
+    if (authed()) { const d = await api('/api/clicker/bonus', { method: 'POST', body: '{}' }).catch(() => null); if (d && !d.error) { st = d; amount = d.amount; } }
+    else { amount = guestBonusRaw(); if (amount) st = guestDerive(); }
+    if (amount) { sfxReward(); window.haptic && window.haptic('success'); coinShower(); dailyPopupRaw(ICON.star(20) + ' Золотой бонус!', amount); renderAll(); bumpBalance(); }
+  }
+  function guestBonusRaw() {
+    guestDerive(); const s = rawGet(); if (s.bonusAt && Date.now() - s.bonusAt < 45000) return 0;
+    const lvl = leagueFor(s.totalEarned).level; const amount = Math.min(60000, Math.round(300 + Math.random() * (700 + lvl * 600)));
+    s.balance += amount; s.totalEarned += amount; s.bonusAt = Date.now(); rawSave(s); return amount;
   }
 
   function renderTop2() { // лёгкий рендер баланса при тапе (без полного)
@@ -763,11 +794,11 @@
     ov.classList.add('on'); window.scrollLock && window.scrollLock(); ac();
     await load(); await maybeRegisterRef(); curLevel = leagueFor(st.totalEarned).level;
     ov.querySelector('#ck-cat').src = A(leagueFor(st.totalEarned).cat || 'idle.png');
-    setTab('cat'); renderAll(); spawnSparks(); applySeason();
+    setTab('cat'); renderAll(); spawnSparks(); applySeason(); scheduleBonus();
     if (st.passiveEarned > 0) passivePopup(st.passiveEarned);
     lastTs = 0; syncT = 0; combo = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
   }
-  function close() { cancelAnimationFrame(raf); flush(); if (ov) ov.classList.remove('on'); window.scrollUnlock && window.scrollUnlock(); }
-  window.catClickOpen = open; window.catClickClose = close;
+  function close() { cancelAnimationFrame(raf); clearTimeout(bonusTimer); flush(); if (ov) ov.classList.remove('on'); window.scrollUnlock && window.scrollUnlock(); }
+  window.catClickOpen = open; window.catClickClose = close; window.catClickBonusNow = () => { if (ov && ov.classList.contains('on')) showFlyingBonus(); }; // превью/тест золотого бонуса
   window.addEventListener('resize', () => { if (ov && ov.classList.contains('on') && st) applyCostume(leagueFor(st.totalEarned)); });
 })();

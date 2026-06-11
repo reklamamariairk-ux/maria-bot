@@ -5,7 +5,7 @@
  * POST /api/clicker/boost {type:turbo|energy} · GET /api/clicker/top
  */
 import { Router } from "express";
-import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements, getRewards, redeemReward } from "../clicker";
+import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements, getRewards, redeemReward, claimBonus } from "../clicker";
 import { rateLimit } from "../middleware";
 import { requireTgUser, getTgUser } from "../auth";
 import { log } from "../logger";
@@ -32,6 +32,12 @@ router.post("/api/clicker/daily", requireTgUser, rateLimit(30), async (req, res)
   const u = getTgUser(req)!;
   try { const r = await claimDaily(u.id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ reward: r.reward, ...r.state }); }
   catch (e) { log.error({ err: e, chatId: u.id }, "[daily]"); res.status(500).json({ error: "internal" }); }
+});
+
+router.post("/api/clicker/bonus", requireTgUser, rateLimit(60), async (req, res) => {
+  const u = getTgUser(req)!;
+  try { const r = await claimBonus(u.id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ amount: r.amount, ...r.state }); }
+  catch (e) { log.error({ err: e, chatId: u.id }, "[bonus]"); res.status(500).json({ error: "internal" }); }
 });
 
 router.post("/api/clicker/boost", requireTgUser, rateLimit(60), async (req, res) => {

@@ -172,6 +172,7 @@ export async function initClickerSchema(): Promise<void> {
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS cipher_date TEXT;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS week_key TEXT;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS week_base BIGINT NOT NULL DEFAULT 0;
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS bonus_at TIMESTAMPTZ;
     CREATE TABLE IF NOT EXISTS clicker_cards (
       chat_id BIGINT NOT NULL, card TEXT NOT NULL, level INT NOT NULL DEFAULT 0,
       PRIMARY KEY (chat_id, card)
@@ -344,6 +345,23 @@ export async function claimCipher(chatId: number, guess: string): Promise<{ ok: 
     await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, cipher_date=$4, updated_at=NOW() WHERE chat_id=$1`, [chatId, r.balance, r.total_earned, today]);
     await client.query("COMMIT");
     return { ok: true, reward: CIPHER_REWARD, state: buildState(r, cl, 0) };
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+}
+
+/** «Золотой котик»: случайный летящий бонус. Кулдаун 45с (анти-чит), сумма по уровню. */
+const BONUS_COOLDOWN_MS = 45000;
+export async function claimBonus(chatId: number): Promise<{ ok: boolean; amount?: number; state?: ClickerState; reason?: string }> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { r, cl } = await refresh(client, chatId);
+    if (r.bonus_at && Date.now() - new Date(r.bonus_at).getTime() < BONUS_COOLDOWN_MS) { await client.query("ROLLBACK"); return { ok: false, reason: "cooldown" }; }
+    const lvl = leagueFor(Number(r.total_earned)).level;
+    const amount = Math.min(60000, Math.round(300 + Math.random() * (700 + lvl * 600)));
+    r.balance = Number(r.balance) + amount; r.total_earned = Number(r.total_earned) + amount;
+    await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, bonus_at=NOW(), updated_at=NOW() WHERE chat_id=$1`, [chatId, r.balance, r.total_earned]);
+    await client.query("COMMIT");
+    return { ok: true, amount, state: buildState(r, cl, 0) };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
