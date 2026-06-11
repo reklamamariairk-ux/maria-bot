@@ -4,7 +4,7 @@
  * лидерборд. Сервер /api/clicker* для авторизованных, localStorage у гостей.
  * ───────────────────────────────────────────────────────────────────────────── */
 (function () {
-  const A = (s) => `/assets/images/cat/${s}?v=19`;  // v19: новый арт 19 уровней — кеш-бастинг
+  const A = (s) => `/assets/images/cat/${s}?v=20`;  // v20: чистый вырез без светлого ободка
   const LS = 'maria_click_v2';
   const REGEN = 3, PASSIVE_CAP_H = 3, TURBO_MULT = 5, TURBO_SEC = 20, DAILY_BOOSTS = 6;
   const CARDS = [
