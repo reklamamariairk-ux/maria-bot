@@ -118,7 +118,7 @@
   };
   const cardIcon = (id, s = 26) => ({ bakery: ICON.cupcake, coffee: ICON.coffee, oven: ICON.oven, cakefactory: ICON.cake, ads: ICON.megaphone, smm: ICON.send, tasting: ICON.star, loyalty: ICON.wallet, barista: ICON.coffee, baker: ICON.chef, confectioner: ICON.cupcake, manager: ICON.users, delivery: ICON.scooter, newshop: ICON.shop, franchise: ICON.gift, region: ICON.globe }[id] || ICON.cupcake)(s);
   // арт-плитка бизнеса: иллюстрация-PNG если есть (BIZ_ART_V>0), иначе SVG-иконка
-  const BIZ_ART_V = 0; // станет >0 когда сгенерим картинки /assets/images/biz/<id>.png
+  const BIZ_ART_V = 1; // голуби-помощники /assets/images/biz/<id>.png
   const cardArt = (id) => BIZ_ART_V ? `<img src="/assets/images/biz/${id}.png?v=${BIZ_ART_V}" alt="" loading="lazy">` : cardIcon(id, 30);
   const taskIcon = (id) => ({ site: ICON.globe, review: ICON.star, vk: ICON.users, tg: ICON.send, invite1: ICON.users, level3: ICON.star, balance10: ICON.wallet, streak3: ICON.fire }[id] || ICON.star)(26);
 
@@ -399,9 +399,9 @@
       @keyframes ckBizIn{0%{opacity:0;transform:translateY(9px)}100%{opacity:1;transform:none}}
       .ck-biz.locked{filter:saturate(.35) brightness(.82)}
       .ck-biz.bump{animation:ckBizBump .32s ease-out}@keyframes ckBizBump{0%{transform:scale(1)}40%{transform:scale(1.03)}100%{transform:scale(1)}}
-      .ck-biz__art{width:58px;height:58px;flex:none;border-radius:14px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 3px 8px rgba(0,0,0,.3)}
-      .ck-biz__art::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 32% 24%,rgba(255,255,255,.3),transparent 58%);pointer-events:none}
-      .ck-biz__art img{width:100%;height:100%;object-fit:cover;position:relative;z-index:1}
+      .ck-biz__art{width:64px;height:64px;flex:none;border-radius:14px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 3px 8px rgba(0,0,0,.3)}
+      .ck-biz__art::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 32% 22%,rgba(255,255,255,.18),transparent 60%);pointer-events:none;z-index:2}
+      .ck-biz__art img{width:100%;height:100%;object-fit:contain;position:relative;z-index:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
       .ck-biz__art svg{width:30px;height:30px;color:#fff8ec;position:relative;z-index:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
       .cat-boost .ck-biz__art{background:linear-gradient(150deg,#f0c24e,#9c6a1c)}
       .cat-prod .ck-biz__art{background:linear-gradient(150deg,#d6a64c,#7c4a18)}
