@@ -6,7 +6,7 @@
  */
 import { pool } from "./db";
 
-const REGEN_PER_SEC = 3;
+const REGEN_PER_SEC = 1.5;
 const TAP_COST = 1;
 const MAX_TAPS_PER_REQ = 600;
 const PASSIVE_CAP_HOURS = 3;
@@ -108,7 +108,7 @@ const priceMultitap = (lvl: number) => Math.round(200 * Math.pow(2, lvl));
 const priceEnergy = (lvl: number) => Math.round(300 * Math.pow(2, lvl));
 const energyMaxFor = (lvl: number) => 1000 + 500 * lvl;
 const perTapFor = (lvl: number) => 1 + lvl;
-const cardPrice = (c: { basePrice: number }, lvl: number) => Math.round(c.basePrice * Math.pow(1.6, lvl));
+const cardPrice = (c: { basePrice: number }, lvl: number) => Math.round(c.basePrice * Math.pow(1.7, lvl));
 const cardProfit = (c: { baseProfit: number }, lvl: number) => c.baseProfit * lvl;
 
 // ── Бонусы дня: Комбо (3 карты) + Шифр (морзе) — детерминированы от даты ─────────
@@ -136,6 +136,7 @@ export interface ClickerState {
   cards: { id: string; name: string; icon: string; level: number; profit: number; price: number }[];
   // усиления
   dailyAvailable: boolean; dailyStreak: number; dailyNext: number;
+  chestAvailable: boolean;
   boostEnergyLeft: number; boostTurboLeft: number; turboMsLeft: number;
   referrals: number; refCode: string;
   combo: { cards: string[]; hits: string[]; complete: boolean; claimed: boolean; reward: number };
@@ -173,6 +174,7 @@ export async function initClickerSchema(): Promise<void> {
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS week_key TEXT;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS week_base BIGINT NOT NULL DEFAULT 0;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS bonus_at TIMESTAMPTZ;
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS chest_date TEXT;
     CREATE TABLE IF NOT EXISTS clicker_cards (
       chat_id BIGINT NOT NULL, card TEXT NOT NULL, level INT NOT NULL DEFAULT 0,
       PRIMARY KEY (chat_id, card)
@@ -210,6 +212,7 @@ function buildState(r: any, cl: Record<string, number>, passiveEarned: number): 
     energyLevel: r.energy_limit_level, energyPrice: priceEnergy(r.energy_limit_level),
     cards: CARDS.map((c) => ({ id: c.id, name: c.name, icon: c.icon, level: cl[c.id] || 0, profit: cardProfit(c, (cl[c.id] || 0) + 1), price: cardPrice(c, cl[c.id] || 0) })),
     dailyAvailable: r.daily_date !== today, dailyStreak: r.daily_streak, dailyNext: dailyReward((r.daily_date === today ? r.daily_streak : r.daily_streak + 1)),
+    chestAvailable: r.chest_date !== today,
     boostEnergyLeft: DAILY_BOOSTS - bUsedE, boostTurboLeft: DAILY_BOOSTS - bUsedT, turboMsLeft: turboMs,
     referrals: r.referrals || 0, refCode: String(r.chat_id),
     combo: (() => { const cards = todaysCombo(today); const hits = r.combo_date === today ? parseHits(r.combo_hits) : []; return { cards, hits, complete: cards.every((c) => hits.includes(c)), claimed: r.combo_claimed === today, reward: COMBO_REWARD }; })(),
@@ -345,6 +348,34 @@ export async function claimCipher(chatId: number, guess: string): Promise<{ ok: 
     await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, cipher_date=$4, updated_at=NOW() WHERE chat_id=$1`, [chatId, r.balance, r.total_earned, today]);
     await client.query("COMMIT");
     return { ok: true, reward: CIPHER_REWARD, state: buildState(r, cl, 0) };
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+}
+
+/** Сундук удачи: 1 открытие в день, взвешенный приз (решается на сервере). */
+function rollChest(level: number): { type: string; amount?: number } {
+  const r = Math.random(); const sc = 1 + level * 0.25;
+  if (r < 0.42) return { type: "coins", amount: Math.round((500 + Math.random() * 1800) * sc) };
+  if (r < 0.68) return { type: "coins", amount: Math.round((2000 + Math.random() * 4000) * sc) };
+  if (r < 0.82) return { type: "turbo" };
+  if (r < 0.95) return { type: "energy" };
+  return { type: "jackpot", amount: Math.round(15000 + Math.random() * 35000) };
+}
+export async function openChest(chatId: number): Promise<{ ok: boolean; prize?: { type: string; amount?: number }; state?: ClickerState; reason?: string }> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { r, cl } = await refresh(client, chatId);
+    const today = irkToday();
+    if (r.chest_date === today) { await client.query("ROLLBACK"); return { ok: false, reason: "already" }; }
+    const prize = rollChest(leagueFor(Number(r.total_earned)).level);
+    if (prize.type === "coins" || prize.type === "jackpot") { r.balance = Number(r.balance) + (prize.amount || 0); r.total_earned = Number(r.total_earned) + (prize.amount || 0); }
+    else if (prize.type === "turbo") { r.turbo_until = new Date(Date.now() + TURBO_SEC * 1000); }
+    else if (prize.type === "energy") { r.energy = energyMaxFor(r.energy_limit_level); }
+    r.chest_date = today;
+    await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, energy=$4, turbo_until=$5, chest_date=$6, updated_at=NOW() WHERE chat_id=$1`,
+      [chatId, r.balance, r.total_earned, r.energy, r.turbo_until || null, today]);
+    await client.query("COMMIT");
+    return { ok: true, prize, state: buildState(r, cl, 0) };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 

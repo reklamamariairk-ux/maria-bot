@@ -6,7 +6,7 @@
 (function () {
   const A = (s) => `/assets/images/cat/${s}?v=20`;  // v20: чистый вырез без светлого ободка
   const LS = 'maria_click_v2';
-  const REGEN = 3, PASSIVE_CAP_H = 3, TURBO_MULT = 5, TURBO_SEC = 20, DAILY_BOOSTS = 6;
+  const REGEN = 1.5, PASSIVE_CAP_H = 3, TURBO_MULT = 5, TURBO_SEC = 20, DAILY_BOOSTS = 6;
   const CARDS = [
     { id: 'bakery', name: 'Пекарня', icon: '🍞', basePrice: 300, baseProfit: 30 },
     { id: 'coffee', name: 'Кофемашина', icon: '☕', basePrice: 900, baseProfit: 85 },
@@ -58,7 +58,7 @@
   const priceEnergy = (l) => Math.round(300 * Math.pow(2, l));
   const energyMaxFor = (l) => 1000 + 500 * l;
   const perTapFor = (l) => 1 + l;
-  const cardPrice = (c, l) => Math.round(c.basePrice * Math.pow(1.6, l));
+  const cardPrice = (c, l) => Math.round(c.basePrice * Math.pow(1.7, l));
   const cardProfit = (c, l) => c.baseProfit * l;
   const dailyReward = (streak) => 500 * Math.min(Math.max(1, streak), 10);
 
@@ -95,6 +95,7 @@
     send: (s) => SVG('<path d="M20.5 3.5 9.8 14.2M20.5 3.5 13.7 20.5l-3.9-6.3-6.3-3.9 17-6.8Z"/>', s),
     tap: (s) => SVG('<path d="M9 11V5.5a1.7 1.7 0 0 1 3.4 0V11M12.4 11V9.4a1.5 1.5 0 0 1 3 0V11M15.4 11v-.6a1.5 1.5 0 0 1 3 0V15a5 5 0 0 1-5 5h-1.6a4 4 0 0 1-3-1.4L6 15.4a1.6 1.6 0 0 1 2.4-2L9 14"/>', s),
     battery: (s) => SVG('<rect x="3" y="8" width="15" height="8" rx="2"/><path d="M20 11v2"/><path d="M9.5 9.5 7.5 12.4h2.6L8 15"/>', s),
+    chest: (s) => SVG('<path d="M4 10.5 6 6h12l2 4.5M4 10.5V19h16v-8.5M4 10.5h16M10 10.5v3h4v-3"/>', s),
   };
   const cardIcon = (id) => ({ bakery: ICON.cupcake, coffee: ICON.coffee, delivery: ICON.scooter, cakefactory: ICON.cake, franchise: ICON.shop }[id] || ICON.cupcake)(26);
   const taskIcon = (id) => ({ site: ICON.globe, review: ICON.star, vk: ICON.users, tg: ICON.send, invite1: ICON.users, level3: ICON.star, balance10: ICON.wallet, streak3: ICON.fire }[id] || ICON.star)(26);
@@ -186,7 +187,7 @@
   function coinSfx() { sfxTap(0); }
 
   // ── Гость (localStorage) ─────────────────────────────────────────────────────
-  function rawDefault() { return { balance: 0, totalEarned: 0, energy: 1000, multitapLevel: 0, energyLevel: 0, cards: {}, taps: 0, dailyStreak: 0, dailyDate: null, bE: 0, bT: 0, bDate: null, turboUntil: 0, tasksDone: {}, comboDate: null, comboHits: [], comboClaimed: null, cipherDate: null, bonusAt: 0, _ts: Date.now() }; }
+  function rawDefault() { return { balance: 0, totalEarned: 0, energy: 1000, multitapLevel: 0, energyLevel: 0, cards: {}, taps: 0, dailyStreak: 0, dailyDate: null, bE: 0, bT: 0, bDate: null, turboUntil: 0, tasksDone: {}, comboDate: null, comboHits: [], comboClaimed: null, cipherDate: null, bonusAt: 0, chestDate: null, _ts: Date.now() }; }
   function rawGet() { let s; try { s = JSON.parse(localStorage.getItem(LS)); } catch (_) {} if (!s) s = rawDefault(); if (!s.cards) s.cards = {}; return s; }
   function rawSave(s) { s._ts = Date.now(); localStorage.setItem(LS, JSON.stringify(s)); }
   function profitOf(c) { let p = 0; for (const x of CARDS) p += cardProfit(x, c[x.id] || 0); return p; }
@@ -209,6 +210,7 @@
       energyLevel: s.energyLevel, energyPrice: priceEnergy(s.energyLevel),
       cards: CARDS.map(c => ({ id: c.id, name: c.name, icon: c.icon, level: s.cards[c.id] || 0, profit: cardProfit(c, (s.cards[c.id] || 0) + 1), price: cardPrice(c, s.cards[c.id] || 0) })),
       dailyAvailable: s.dailyDate !== today, dailyStreak: s.dailyStreak, dailyNext: dailyReward(s.dailyDate === today ? s.dailyStreak : s.dailyStreak + 1),
+      chestAvailable: s.chestDate !== today,
       boostEnergyLeft: DAILY_BOOSTS - s.bE, boostTurboLeft: DAILY_BOOSTS - s.bT, turboMsLeft: Math.max(0, (s.turboUntil || 0) - Date.now()),
       combo: (() => { const cards = todaysCombo(today); const hits = s.comboDate === today ? (s.comboHits || []) : []; return { cards, hits, complete: cards.every(c => hits.includes(c)), claimed: s.comboClaimed === today, reward: COMBO_REWARD }; })(),
       cipher: { morse: toMorse(todaysCipher(today)), len: todaysCipher(today).length, claimed: s.cipherDate === today, reward: CIPHER_REWARD },
@@ -569,6 +571,38 @@
     s.balance += amount; s.totalEarned += amount; s.bonusAt = Date.now(); rawSave(s); return amount;
   }
 
+  // ── Сундук удачи ──────────────────────────────────────────────────────────────
+  function rollChestGuest(level) {
+    const r = Math.random(), sc = 1 + level * 0.25;
+    if (r < 0.42) return { type: 'coins', amount: Math.round((500 + Math.random() * 1800) * sc) };
+    if (r < 0.68) return { type: 'coins', amount: Math.round((2000 + Math.random() * 4000) * sc) };
+    if (r < 0.82) return { type: 'turbo' };
+    if (r < 0.95) return { type: 'energy' };
+    return { type: 'jackpot', amount: Math.round(15000 + Math.random() * 35000) };
+  }
+  function guestOpenChestRaw() {
+    guestDerive(); const s = rawGet(); const today = irkToday(); if (s.chestDate === today) return null;
+    const prize = rollChestGuest(leagueFor(s.totalEarned).level);
+    if (prize.type === 'coins' || prize.type === 'jackpot') { s.balance += prize.amount; s.totalEarned += prize.amount; }
+    else if (prize.type === 'turbo') { s.turboUntil = Date.now() + TURBO_SEC * 1000; }
+    else if (prize.type === 'energy') { s.energy = energyMaxFor(s.energyLevel); }
+    s.chestDate = today; rawSave(s); return prize;
+  }
+  async function openChestAct() {
+    let prize = null;
+    if (authed()) { const d = await api('/api/clicker/chest', { method: 'POST', body: '{}' }).catch(() => null); if (d && !d.error) { st = d; prize = d.prize; } else { flashMsg('Сундук уже открыт'); return; } }
+    else { prize = guestOpenChestRaw(); if (!prize) { flashMsg('Сундук уже открыт'); return; } st = guestDerive(); }
+    turboUntil = Date.now() + (st.turboMsLeft || 0);
+    sfxLevel(); window.haptic && window.haptic('success'); confettiBurst(); coinShower(); chestPopup(prize); renderAll(); renderTasks(); bumpBalance();
+  }
+  function chestPopup(prize) {
+    const pop = ov.querySelector('#ck-pop'); let body;
+    if (prize.type === 'turbo') body = `<div class="v">${ICON.rocket(22)} Турбо ×5</div><div style="color:var(--muted);font-size:13px">20 секунд множитель за тап!</div>`;
+    else if (prize.type === 'energy') body = `<div class="v">${ICON.bolt(22)} Полная энергия</div>`;
+    else body = `<div class="v">+${fmt(prize.amount)} ${COIN(24)}</div>${prize.type === 'jackpot' ? '<div style="color:var(--gold-l);font-size:14px;font-weight:800;letter-spacing:1px">ДЖЕКПОТ!</div>' : ''}`;
+    pop.innerHTML = `<h3>${ICON.chest(20)} Сундук удачи</h3>${body}<button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
+  }
+
   function renderTop2() { // лёгкий рендер баланса при тапе (без полного)
     ov.querySelector('#ck-bal').textContent = fmt(st.balance);
     ov.querySelector('#ck-en').textContent = Math.floor(st.energy);
@@ -757,10 +791,15 @@
       ${cph.claimed
         ? `<button class="ck-card__buy" disabled style="width:100%;justify-content:center">✓ Разгадан сегодня</button>`
         : `<div class="ck-morse">${cph.morse}</div><div style="display:flex;gap:8px"><input class="ck-cipher-in" id="ck-cipher-in" maxlength="14" placeholder="${cph.len} букв" autocomplete="off" spellcheck="false"/><button class="ck-card__buy" id="ck-cipher-go" style="justify-content:center">Разгадать</button></div>`}</div>`;
-    return '<div class="ck-sect">Бонусы дня</div>' + comboCard + cipherCard;
+    const chestAvail = !st || st.chestAvailable;
+    const chestCard = `<div class="ck-card ck-bonus" style="background:linear-gradient(90deg,rgba(238,191,82,.16),rgba(238,191,82,.04))">
+      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.chest(26)}</div><div class="ck-card__b"><div class="ck-card__n">Сундук удачи</div><div class="ck-card__s">${chestAvail ? 'Монеты, турбо или джекпот!' : 'Возвращайся завтра за новым'}</div></div>
+      ${chestAvail ? `<button class="ck-card__buy" id="ck-chest-open">Открыть</button>` : `<button class="ck-card__buy" disabled>✓ Открыт</button>`}</div>`;
+    return '<div class="ck-sect">Бонусы дня</div>' + chestCard + comboCard + cipherCard;
   }
   function wireBonus() {
     const cb = ov.querySelector('#ck-combo-claim'); if (cb) cb.onclick = claimCombo;
+    const ch = ov.querySelector('#ck-chest-open'); if (ch) ch.onclick = openChestAct;
     const go = ov.querySelector('#ck-cipher-go'), inp = ov.querySelector('#ck-cipher-in');
     if (go && inp) { go.onclick = () => claimCipher(inp.value); inp.onkeydown = (e) => { if (e.key === 'Enter') claimCipher(inp.value); }; }
   }
