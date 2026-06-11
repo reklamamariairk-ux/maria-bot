@@ -211,7 +211,7 @@
     let r;
     if (authed()) { r = await api('/api/clicker/daily', { method: 'POST', body: '{}' }).catch(() => null); if (r && !r.error) st = r; }
     else { const g = guestClaimDaily(); if (g) { r = { reward: g }; st = guestDerive(); } }
-    if (r && r.reward) { chord([660, 880, 1320], 0.16); window.haptic && window.haptic('success'); dailyPopup(r.reward, st.dailyStreak); renderAll(); }
+    if (r && r.reward) { chord([660, 880, 1320], 0.16); window.haptic && window.haptic('success'); dailyPopup(r.reward, st.dailyStreak); renderAll(); bumpBalance(); }
   }
   function guestClaimDaily() {
     guestDerive(); const s = rawGet(); const today = irkToday(); if (s.dailyDate === today) return 0;
@@ -223,7 +223,7 @@
     let r;
     if (authed()) { r = await api('/api/clicker/combo', { method: 'POST', body: '{}' }).catch(() => null); if (r && !r.error) st = r; else r = null; }
     else { const g = guestClaimComboRaw(); if (g) { r = { reward: COMBO_REWARD }; st = guestDerive(); } }
-    if (r && r.reward) { chord([660, 990, 1320, 1760], 0.18); window.haptic && window.haptic('success'); coinShower(); dailyPopupRaw(ICON.star(20) + ' Комбо дня собрано!', r.reward); renderAll(); renderTasks(); }
+    if (r && r.reward) { chord([660, 990, 1320, 1760], 0.18); window.haptic && window.haptic('success'); coinShower(); confettiBurst(); dailyPopupRaw(ICON.star(20) + ' Комбо дня собрано!', r.reward); renderAll(); renderTasks(); bumpBalance(); }
     else flashMsg('Комбо ещё не собрано');
   }
   function guestClaimComboRaw() {
@@ -237,7 +237,7 @@
     let r;
     if (authed()) { r = await api('/api/clicker/cipher', { method: 'POST', body: JSON.stringify({ guess }) }).catch(() => null); if (r && !r.error) st = r; else { flashMsg(r && r.error === 'already' ? 'Уже разгадан сегодня' : 'Неверно, попробуй ещё'); return; } }
     else { const g = guestClaimCipherRaw(guess); if (!g) { flashMsg('Неверно, попробуй ещё'); return; } st = guestDerive(); r = { reward: CIPHER_REWARD }; }
-    if (r && r.reward) { chord([880, 1175, 1568], 0.18); window.haptic && window.haptic('success'); dailyPopupRaw(ICON.bolt(20) + ' Шифр разгадан!', r.reward); renderAll(); renderTasks(); }
+    if (r && r.reward) { chord([880, 1175, 1568], 0.18); window.haptic && window.haptic('success'); coinShower(); dailyPopupRaw(ICON.bolt(20) + ' Шифр разгадан!', r.reward); renderAll(); renderTasks(); bumpBalance(); }
   }
   function guestClaimCipherRaw(guess) {
     guestDerive(); const s = rawGet(); const today = irkToday();
@@ -285,10 +285,26 @@
       .ck-prof{margin-top:6px;display:inline-flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);padding:4px 13px;border-radius:20px;font-weight:700;font-size:12px;color:var(--gold);font-variant-numeric:tabular-nums}
       .ck-prog{width:80%;max-width:330px;margin-top:10px}.ck-prog__bar{height:8px;border-radius:6px;background:rgba(0,0,0,.34);box-shadow:inset 0 1px 2px rgba(0,0,0,.45);overflow:hidden}.ck-prog__fill{height:100%;border-radius:6px;background:linear-gradient(90deg,#cf9a36,#ffe49c);box-shadow:0 0 8px rgba(238,191,82,.55);transition:width .3s}.ck-prog__t{color:var(--muted);font-size:10.5px;text-align:center;margin-top:4px;font-weight:600;font-variant-numeric:tabular-nums}
       .ck-catwrap{position:relative;flex:1;width:100%;display:flex;align-items:center;justify-content:center}
-      .ck-catwrap::before{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:76%;height:76%;background:radial-gradient(ellipse at center,rgba(255,196,72,.54) 0%,rgba(255,170,48,.30) 42%,rgba(255,170,48,0) 70%);filter:blur(9px);pointer-events:none;z-index:0}
-      .ck-catwrap::after{content:'';position:absolute;left:50%;bottom:5%;transform:translateX(-50%);width:44%;height:22px;border-radius:50%;background:radial-gradient(ellipse at center,rgba(0,0,0,.5),transparent 72%);filter:blur(3px);pointer-events:none;z-index:0}
-      .ck-cat{position:relative;z-index:1;max-width:62%;max-height:94%;width:auto;height:auto;object-fit:contain;cursor:pointer;transition:transform .07s;filter:drop-shadow(0 14px 18px rgba(40,8,12,.5));transform-origin:bottom center;-webkit-tap-highlight-color:transparent}
-      .ck-cat.tap{transform:scale(.92)}.ck-cat.turbo{filter:drop-shadow(0 0 30px #ffb13d) drop-shadow(0 16px 22px rgba(40,8,12,.5))}
+      .ck-catwrap::before{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:76%;height:76%;background:radial-gradient(ellipse at center,rgba(255,196,72,.54) 0%,rgba(255,170,48,.30) 42%,rgba(255,170,48,0) 70%);filter:blur(9px);pointer-events:none;z-index:0;animation:ckGlowPulse 4.2s ease-in-out infinite}
+      .ck-catwrap::after{content:'';position:absolute;left:50%;bottom:5%;transform:translateX(-50%);width:44%;height:22px;border-radius:50%;background:radial-gradient(ellipse at center,rgba(0,0,0,.5),transparent 72%);filter:blur(3px);pointer-events:none;z-index:0;animation:ckShadowPulse 3.6s ease-in-out infinite}
+      .ck-cat{position:relative;z-index:1;max-width:62%;max-height:94%;width:auto;height:auto;object-fit:contain;cursor:pointer;filter:drop-shadow(0 14px 18px rgba(40,8,12,.5));transform-origin:bottom center;-webkit-tap-highlight-color:transparent;animation:ckBreathe 3.8s ease-in-out infinite}
+      .ck-cat.tap{animation:ckBreathe 3.8s ease-in-out infinite,ckTapSq .26s ease-out}.ck-cat.turbo{filter:drop-shadow(0 0 30px #ffb13d) drop-shadow(0 16px 22px rgba(40,8,12,.5))}
+      @keyframes ckBreathe{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-5px) scale(1.016)}}
+      @keyframes ckTapSq{0%{transform:scale(1,1)}30%{transform:scale(1.07,.9)}62%{transform:scale(.97,1.05)}100%{transform:scale(1,1)}}
+      @keyframes ckGlowPulse{0%,100%{opacity:.82;transform:translate(-50%,-50%) scale(1)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.07)}}
+      @keyframes ckShadowPulse{0%,100%{opacity:1;width:44%}50%{opacity:.8;width:40%}}
+      .ck-ripple{position:absolute;width:0;height:0;border:2px solid var(--gold-l);border-radius:50%;pointer-events:none;z-index:6;transform:translate(-50%,-50%);animation:ckRip .5s ease-out forwards}
+      @keyframes ckRip{0%{width:8px;height:8px;opacity:.7}100%{width:130px;height:130px;opacity:0}}
+      .ck-flyc{position:absolute;z-index:7;pointer-events:none;transition:left .5s cubic-bezier(.5,0,.6,1),top .5s cubic-bezier(.5,0,.6,1),opacity .5s,transform .5s}
+      .ck-balpop{display:inline-block;animation:ckBalPop .24s ease-out}
+      @keyframes ckBalPop{0%{transform:scale(1)}45%{transform:scale(1.08)}100%{transform:scale(1)}}
+      .ck-spark{position:absolute;width:7px;height:7px;border-radius:50%;background:radial-gradient(circle,rgba(255,232,160,.95),transparent 70%);pointer-events:none;z-index:0;opacity:0;animation:ckSpark linear infinite}
+      @keyframes ckSpark{0%{transform:translateY(20px) scale(.6);opacity:0}25%{opacity:.7}100%{transform:translateY(-130px) scale(1);opacity:0}}
+      .ck-flash{position:absolute;inset:0;z-index:7;pointer-events:none;background:radial-gradient(circle at 50% 46%,rgba(255,242,205,.9),rgba(255,200,90,.35) 30%,transparent 62%);opacity:0;animation:ckFlash .7s ease-out forwards}
+      @keyframes ckFlash{0%{opacity:0;transform:scale(.5)}28%{opacity:1}100%{opacity:0;transform:scale(1.5)}}
+      .ck-ghost{position:absolute;pointer-events:none;z-index:3;object-fit:contain;transition:opacity .6s ease-out,transform .6s ease-out}
+      .ck-conf{position:absolute;z-index:7;pointer-events:none;border-radius:1px;will-change:transform,opacity}
+      @media (prefers-reduced-motion:reduce){.ck-cat,.ck-cat.tap,.ck-catwrap::before,.ck-catwrap::after,.ck-spark{animation:none}}
       .ck-hat{position:absolute;pointer-events:none;filter:drop-shadow(0 4px 6px rgba(0,0,0,.3))}
       .ck-combo{position:absolute;top:17%;left:50%;transform:translateX(-50%);font-family:'Playfair Display',serif;font-weight:800;color:var(--gold-l);text-shadow:0 2px 10px rgba(0,0,0,.6);pointer-events:none;opacity:0;font-size:24px}
       .ck-combo.show{opacity:1}
@@ -391,6 +407,7 @@
     const cat = ov.querySelector('#ck-cat'); cat.classList.remove('tap'); void cat.offsetWidth; cat.classList.add('tap'); setTimeout(() => cat.classList.remove('tap'), 80);
     coinSfx(); window.haptic && window.haptic('light');
     flyUp(e.clientX, e.clientY, '+' + gain, Math.min(40, 22 + combo));
+    ripple(e.clientX, e.clientY); flyCoin(e.clientX, e.clientY);
     if (combo >= 5) showCombo();
     if (combo >= 12 && combo % 3 === 0) coinShower();
     renderTop2();
@@ -409,6 +426,36 @@
     for (let i = 0; i < 8; i++) { const c = document.createElement('div'); c.className = 'ck-coin'; c.innerHTML = COIN(22); c.style.left = (Math.random() * w) + 'px'; c.style.top = '-30px'; c.style.transition = 'transform 1s ease-in, opacity 1s'; fx.appendChild(c); requestAnimationFrame(() => { c.style.transform = `translateY(${fx.clientHeight + 40}px) rotate(${(Math.random() - .5) * 360}deg)`; c.style.opacity = '0.2'; }); setTimeout(() => c.remove(), 1000); }
   }
   function flashMsg(text) { const fx = ov.querySelector('#ck-fx'); const el = document.createElement('div'); el.className = 'ck-up'; el.style.color = '#ff8a8a'; el.style.fontSize = '20px'; el.textContent = text; el.style.left = '50%'; el.style.top = '56%'; el.style.transform = 'translateX(-50%)'; el.style.transition = 'opacity .9s'; fx.appendChild(el); requestAnimationFrame(() => el.style.opacity = '0'); setTimeout(() => el.remove(), 900); }
+
+  // ── Анимации (juice) ─────────────────────────────────────────────────────────
+  let lastFly = 0;
+  function spawnSparks() {
+    const wrap = ov && ov.querySelector('#ck-catwrap'); if (!wrap || wrap.querySelector('.ck-spark')) return;
+    for (let i = 0; i < 6; i++) { const s = document.createElement('div'); s.className = 'ck-spark'; s.style.left = (14 + Math.random() * 72) + '%'; s.style.top = (55 + Math.random() * 28) + '%'; s.style.animationDuration = (4 + Math.random() * 3).toFixed(1) + 's'; s.style.animationDelay = (-Math.random() * 6).toFixed(1) + 's'; wrap.appendChild(s); }
+  }
+  function ripple(x, y) { const fx = ov.querySelector('#ck-fx'); const r = fx.getBoundingClientRect(); const el = document.createElement('div'); el.className = 'ck-ripple'; el.style.left = (x - r.left) + 'px'; el.style.top = (y - r.top) + 'px'; fx.appendChild(el); setTimeout(() => el.remove(), 520); }
+  function bumpBalance() { const b = ov && ov.querySelector('#ck-bal'); if (!b) return; b.classList.remove('ck-balpop'); void b.offsetWidth; b.classList.add('ck-balpop'); }
+  function flyCoin(x, y) {
+    const now = performance.now(); if (now - lastFly < 80) return; lastFly = now;
+    const fx = ov.querySelector('#ck-fx'); const r = fx.getBoundingClientRect(); const bal = ov.querySelector('#ck-bal'); if (!bal) return; const br = bal.getBoundingClientRect();
+    const el = document.createElement('div'); el.className = 'ck-flyc'; el.innerHTML = COIN(20);
+    el.style.left = (x - r.left - 10) + 'px'; el.style.top = (y - r.top - 10) + 'px'; fx.appendChild(el);
+    requestAnimationFrame(() => { el.style.left = (br.left + br.width / 2 - r.left - 10) + 'px'; el.style.top = (br.top + br.height / 2 - r.top - 10) + 'px'; el.style.transform = 'scale(.45)'; el.style.opacity = '0'; });
+    setTimeout(() => { el.remove(); bumpBalance(); }, 510);
+  }
+  function flash() { const fx = ov.querySelector('#ck-fx'); const el = document.createElement('div'); el.className = 'ck-flash'; fx.appendChild(el); setTimeout(() => el.remove(), 720); }
+  function confettiBurst() {
+    const fx = ov.querySelector('#ck-fx'); const cx = fx.clientWidth / 2, cy = fx.clientHeight * 0.42;
+    const cols = ['#ffe49c', '#eebf52', '#cf9a36', '#ffffff', '#ffd86b'];
+    for (let i = 0; i < 26; i++) { const c = document.createElement('div'); c.className = 'ck-conf'; const sz = 5 + Math.random() * 5; c.style.width = sz + 'px'; c.style.height = (sz * 0.6) + 'px'; c.style.background = cols[i % cols.length]; c.style.left = cx + 'px'; c.style.top = cy + 'px'; c.style.transition = 'transform .9s cubic-bezier(.2,.6,.4,1),opacity .9s'; fx.appendChild(c); const ang = Math.random() * Math.PI * 2, dist = 60 + Math.random() * 120; requestAnimationFrame(() => { c.style.transform = `translate(${Math.cos(ang) * dist}px,${Math.sin(ang) * dist + 80}px) rotate(${Math.random() * 540}deg)`; c.style.opacity = '0'; }); setTimeout(() => c.remove(), 950); }
+  }
+  function evolveCat(oldSrc) {
+    const wrap = ov.querySelector('#ck-catwrap'), cat = ov.querySelector('#ck-cat'); if (!wrap || !cat || !oldSrc) return;
+    const cr = cat.getBoundingClientRect(), wr = wrap.getBoundingClientRect();
+    const g = document.createElement('img'); g.className = 'ck-ghost'; g.src = oldSrc;
+    g.style.left = (cr.left - wr.left) + 'px'; g.style.top = (cr.top - wr.top) + 'px'; g.style.width = cr.width + 'px'; g.style.height = cr.height + 'px';
+    wrap.appendChild(g); requestAnimationFrame(() => { g.style.opacity = '0'; g.style.transform = 'scale(1.16)'; }); setTimeout(() => g.remove(), 660);
+  }
 
   function renderTop2() { // лёгкий рендер баланса при тапе (без полного)
     ov.querySelector('#ck-bal').textContent = fmt(st.balance);
@@ -449,7 +496,12 @@
     const src = A(lg.cat || 'idle.png');
     if (cat.getAttribute('src') !== src) cat.src = src;
   }
-  function levelUp(lg) { chord([660, 880, 1175], 0.16); window.haptic && window.haptic('success'); coinShower(); const t = ov.querySelector('#ck-levelup-t'); t.innerHTML = ICON.star(22) + ' ' + lg.name; t.classList.remove('show'); void t.offsetWidth; t.classList.add('show'); }
+  function levelUp(lg) {
+    chord([660, 990, 1320, 1760], 0.18); window.haptic && window.haptic('success');
+    const oldSrc = (ov.querySelector('#ck-cat') || {}).src; // костюм сменится в applyCostume — кросс-фейд
+    flash(); confettiBurst(); coinShower(); evolveCat(oldSrc);
+    const t = ov.querySelector('#ck-levelup-t'); t.innerHTML = ICON.star(22) + ' ' + lg.name; t.classList.remove('show'); void t.offsetWidth; t.classList.add('show');
+  }
 
   function renderUpgrades() {
     if (!ov || !st) return; const list = ov.querySelector('#ck-uplist');
@@ -604,7 +656,7 @@
     let reward = 0;
     if (authed()) { const d = await api('/api/clicker/task', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null); if (d && !d.error) { st = d; reward = d.reward; } }
     else { reward = guestClaimTask(id); if (reward) st = guestDerive(); }
-    if (reward) { chord([660, 880, 1320], 0.16); window.haptic && window.haptic('success'); dailyPopupRaw('✅ Задание выполнено', reward); renderAll(); renderTasks(); }
+    if (reward) { chord([660, 880, 1320], 0.16); window.haptic && window.haptic('success'); dailyPopupRaw('✅ Задание выполнено', reward); renderAll(); renderTasks(); bumpBalance(); }
     else flashMsg('Пока недоступно');
   }
   function dailyPopupRaw(title, amount) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${title}</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
@@ -630,7 +682,7 @@
     ov.classList.add('on'); window.scrollLock && window.scrollLock(); ac();
     await load(); await maybeRegisterRef(); curLevel = leagueFor(st.totalEarned).level;
     ov.querySelector('#ck-cat').src = A(leagueFor(st.totalEarned).cat || 'idle.png');
-    setTab('cat'); renderAll();
+    setTab('cat'); renderAll(); spawnSparks();
     if (st.passiveEarned > 0) passivePopup(st.passiveEarned);
     lastTs = 0; syncT = 0; combo = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
   }
