@@ -585,7 +585,13 @@ app.use(requestLogger());
 // rateLimit и requireAdminToken вынесены в `./middleware`
 // (см. волну рефакторинга #5). Импортируются ниже.
 
-app.use(express.static(path.join(__dirname, "..", "public")));
+app.use(express.static(path.join(__dirname, "..", "public"), {
+  setHeaders(res, filePath) {
+    // HTML не кэшируем — иначе Telegram/браузер держат старый index с прежним ?v=
+    // (JS/CSS версионируются через ?v= и могут кэшироваться). Свежесть кода после деплоя.
+    if (filePath.endsWith(".html")) res.setHeader("Cache-Control", "no-cache");
+  },
+}));
 
 // Прокси логотипа
 function proxyAsset(url: string, contentType: string) {

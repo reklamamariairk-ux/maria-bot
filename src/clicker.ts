@@ -5,6 +5,7 @@
  * (стрик), лидерборд. Антинакрутка: энергия/пассив/турбо считаются на сервере.
  */
 import { pool } from "./db";
+import { clickerReferralLink } from "./links";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -172,7 +173,7 @@ export interface ClickerState {
   dailyAvailable: boolean; dailyStreak: number; dailyNext: number;
   chestAvailable: boolean; rainAvailable: boolean; squad: string | null;
   boostEnergyLeft: number; boostTurboLeft: number; turboMsLeft: number;
-  referrals: number; refCode: string;
+  referrals: number; refCode: string; refLink: string;
   combo: { cards: string[]; hits: string[]; complete: boolean; claimed: boolean; reward: number };
   cipher: { morse: string; len: number; claimed: boolean; reward: number };
   taps: number; cardsOwned: number;
@@ -262,7 +263,7 @@ function buildState(r: any, cl: Record<string, number>, passiveEarned: number): 
     rainAvailable: r.rain_date !== today,
     squad: r.squad || null,
     boostEnergyLeft: DAILY_BOOSTS - bUsedE, boostTurboLeft: DAILY_BOOSTS - bUsedT, turboMsLeft: turboMs,
-    referrals: r.referrals || 0, refCode: String(r.chat_id),
+    referrals: r.referrals || 0, refCode: String(r.chat_id), refLink: clickerReferralLink(Number(r.chat_id)),
     combo: (() => { const cards = todaysCombo(today); const hits = r.combo_date === today ? parseHits(r.combo_hits) : []; return { cards, hits, complete: cards.every((c) => hits.includes(c)), claimed: r.combo_claimed === today, reward: COMBO_REWARD }; })(),
     cipher: { morse: toMorse(todaysCipher(today)), len: todaysCipher(today).length, claimed: r.cipher_date === today, reward: CIPHER_REWARD },
     taps: Number(r.taps || 0), cardsOwned: CARDS.filter((c) => (cl[c.id] || 0) > 0).length,
@@ -594,6 +595,41 @@ export async function registerRef(chatId: number, code: string): Promise<{ ok: b
                         ON CONFLICT (chat_id) DO UPDATE SET balance=clicker_state.balance+$2, total_earned=clicker_state.total_earned+$2, referrals=clicker_state.referrals+1`, [refId, REF_REFERRER]);
     await client.query("COMMIT");
     return { ok: true, reward: REF_INVITEE, state: await getClicker(chatId) };
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+}
+
+/**
+ * Перенос прогресса гостя (localStorage) на серверный аккаунт при первом входе.
+ * ТОЛЬКО в свежий аккаунт (total=0, нет карт, нет тапов) — чтобы не затереть
+ * реальный прогресс. Данные гостя самозаявленные → анти-чит кэпы (MIGRATE_CAP,
+ * лимиты уровней). Идемпотентно: на не-свежий аккаунт вернёт not_fresh.
+ */
+const MIGRATE_CAP = 300000;          // потолок переносимых монет (хватает на ранний гейм)
+const MIGRATE_CARD_MAX = 10;         // потолок уровня бизнеса
+const MIGRATE_UP_MAX = 20;           // потолок уровня мультитапа/энергии
+export async function migrateGuest(chatId: number, snap: any): Promise<{ ok: boolean; migrated?: number; state?: ClickerState; reason?: string }> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { r, cl } = await refresh(client, chatId);
+    if (Number(r.total_earned) > 0 || Object.keys(cl).length > 0 || Number(r.taps) > 0) { await client.query("ROLLBACK"); return { ok: false, reason: "not_fresh" }; }
+    const capCoins = (v: any) => Math.max(0, Math.min(MIGRATE_CAP, Math.floor(Number(v) || 0)));
+    const total = capCoins(snap && snap.totalEarned);
+    const bal = Math.min(total, capCoins(snap && snap.balance));
+    const mt = Math.max(0, Math.min(MIGRATE_UP_MAX, Math.floor(Number(snap && snap.multitapLevel) || 0)));
+    const en = Math.max(0, Math.min(MIGRATE_UP_MAX, Math.floor(Number(snap && snap.energyLevel) || 0)));
+    const taps = Math.max(0, Math.min(100000, Math.floor(Number(snap && snap.taps) || 0)));
+    r.balance = bal; r.total_earned = total; r.multitap_level = mt; r.energy_limit_level = en;
+    await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, multitap_level=$4, energy_limit_level=$5, taps=$6, updated_at=NOW() WHERE chat_id=$1`, [chatId, bal, total, mt, en, taps]);
+    if (snap && snap.cards && typeof snap.cards === "object") {
+      for (const c of CARDS) {
+        const lv = Math.max(0, Math.min(MIGRATE_CARD_MAX, Math.floor(Number(snap.cards[c.id]) || 0)));
+        if (lv > 0) { cl[c.id] = lv; await client.query(`INSERT INTO clicker_cards (chat_id, card, level) VALUES ($1,$2,$3) ON CONFLICT (chat_id, card) DO UPDATE SET level=$3`, [chatId, c.id, lv]); }
+      }
+    }
+    const st = buildState(r, cl, 0); st.gamesDone = await gamesDoneToday(client, chatId);
+    await client.query("COMMIT");
+    return { ok: true, migrated: total, state: st };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 

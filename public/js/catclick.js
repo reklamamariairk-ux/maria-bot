@@ -1049,22 +1049,44 @@
 
   // ── Рефералы + Задания ───────────────────────────────────────────────────────
   const linkOpened = {};
-  function refLink() { const code = st && st.refCode; return code ? `https://t.me/${BOT}?startapp=ckref_${code}` : `https://t.me/${BOT}`; }
+  // refLink: серверная платформо-зависимая ссылка (st.refLink), иначе фолбэк t.me
+  function refLink() { if (st && st.refLink) return st.refLink; const code = st && st.refCode; return code ? `https://t.me/${BOT}?startapp=ckref_${code}` : `https://t.me/${BOT}`; }
   function shareRef() {
     const link = refLink();
     const txt = `🐱 Играю в «Котик Комбат» от кондитерской «Мария» — тапай котика и качай уровни! Заходи по ссылке, нам обоим дадут монеты 🪙 ${link}`;
     if (window.App && App.share) App.share(txt); else if (navigator.share) navigator.share({ text: txt }).catch(() => {}); else if (window.App && App.openExternal) App.openExternal(link);
   }
-  async function maybeRegisterRef() {
-    if (!authed()) return;
+  // Надёжная регистрация реферала: ловим код из startParam → сохраняем; флаг
+  // «выполнено» ставим ТОЛЬКО после успеха сервера → при сбое повтор на след. заходе.
+  // Запускается и при открытии игры, и фоном при загрузке приложения (см. низ файла).
+  async function ensureRefRegistered() {
     try {
+      if (!authed()) return;                                  // гость — реф невозможен, ждём авторизации
+      if (localStorage.getItem('maria_ck_ref_done')) { try { localStorage.removeItem('ck_pending_ref'); } catch (_) {} return; }
+      let code = '';
       const sp = (window.App && App.startParam && App.startParam()) || '';
       const m = /^ckref_(\d+)$/.exec(sp);
-      if (!m) return;
-      if (localStorage.getItem('maria_ck_ref_done')) return;
-      localStorage.setItem('maria_ck_ref_done', '1');
-      const d = await api('/api/clicker/ref', { method: 'POST', body: JSON.stringify({ code: m[1] }) });
-      if (d && !d.error) { st = d; if (d.refReward) { dailyPopupRaw(ICON.gift(20) + ' Бонус за приглашение', d.refReward); } }
+      if (m) { code = m[1]; try { localStorage.setItem('ck_pending_ref', code); } catch (_) {} }
+      if (!code) { try { code = localStorage.getItem('ck_pending_ref') || ''; } catch (_) {} }
+      if (!code) return;
+      const d = await api('/api/clicker/ref', { method: 'POST', body: JSON.stringify({ code }) }).catch(() => null);
+      if (d && !d.error) {                                    // успех → фиксируем, чистим pending
+        st = d;
+        try { localStorage.setItem('maria_ck_ref_done', '1'); localStorage.removeItem('ck_pending_ref'); } catch (_) {}
+        if (d.refReward && ov && ov.classList.contains('on')) dailyPopupRaw(ICON.gift(20) + ' Бонус за приглашение', d.refReward);
+      }                                                       // сбой → pending остаётся, повтор позже
+    } catch (_) {}
+  }
+  // Перенос прогресса гостя на серверный аккаунт при первом входе (одна попытка).
+  async function maybeMigrateGuest() {
+    try {
+      if (!authed()) return;
+      if (localStorage.getItem('ck_migrated')) return;
+      const g = rawGet();
+      if (!g || (g.totalEarned || 0) < 1000) { try { localStorage.setItem('ck_migrated', '1'); } catch (_) {} return; }
+      const snap = { balance: g.balance, totalEarned: g.totalEarned, cards: g.cards, multitapLevel: g.multitapLevel, energyLevel: g.energyLevel, taps: g.taps };
+      const d = await api('/api/clicker/migrate', { method: 'POST', body: JSON.stringify(snap) }).catch(() => null);
+      if (d) { try { localStorage.setItem('ck_migrated', '1'); } catch (_) {} if (!d.error) { st = d; if (d.migrated) dailyPopupRaw(ICON.gift(20) + ' Прогресс перенесён', d.migrated); } }
     } catch (_) {}
   }
   function guestTaskList() {
@@ -1205,7 +1227,7 @@
   async function open() {
     if (!ov) build();
     ov.classList.add('on'); window.scrollLock && window.scrollLock(); ac();
-    await load(); await maybeRegisterRef(); curLevel = leagueFor(st.totalEarned).level;
+    await load(); await maybeMigrateGuest(); await ensureRefRegistered(); curLevel = leagueFor(st.totalEarned).level;
     ov.querySelector('#ck-cat').src = A(leagueFor(st.totalEarned).cat || 'idle.png');
     setTab('cat'); renderAll(); spawnSparks(); applySeason(); scheduleBonus();
     if (st.passiveEarned > 0) passivePopup(st.passiveEarned);
@@ -1422,4 +1444,8 @@
   function close() { cancelAnimationFrame(raf); clearTimeout(bonusTimer); if (rainState) endRain(true); if (quizState) closeQuiz(); if (memState) closeMemory(); if (sliceState) closeSlice(); if (gemsState) closeGems(); flush(); if (ov) ov.classList.remove('on'); window.scrollUnlock && window.scrollUnlock(); }
   window.catClickOpen = open; window.catClickClose = close; window.catClickBonusNow = () => { if (ov && ov.classList.contains('on')) showFlyingBonus(); }; // превью/тест золотого бонуса
   window.addEventListener('resize', () => { if (ov && ov.classList.contains('on') && st) applyCostume(leagueFor(st.totalEarned)); });
+  // Реф регистрируем фоном уже при загрузке приложения (не дожидаясь открытия игры):
+  // друг перешёл по ckref-ссылке → бонус начислится, даже если в игру он не зайдёт.
+  function refBootstrap() { try { if (window.App && App.ready && App.ready.then) App.ready.then(() => ensureRefRegistered()); else ensureRefRegistered(); } catch (_) { ensureRefRegistered(); } }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(refBootstrap, 1500)); else setTimeout(refBootstrap, 1500);
 })();
