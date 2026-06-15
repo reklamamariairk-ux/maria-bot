@@ -119,7 +119,7 @@
   };
   const cardIcon = (id, s = 26) => ({ bakery: ICON.cupcake, coffee: ICON.coffee, oven: ICON.oven, cakefactory: ICON.cake, ads: ICON.megaphone, smm: ICON.send, tasting: ICON.star, loyalty: ICON.wallet, barista: ICON.coffee, baker: ICON.chef, confectioner: ICON.cupcake, manager: ICON.users, delivery: ICON.scooter, newshop: ICON.shop, franchise: ICON.gift, region: ICON.globe }[id] || ICON.cupcake)(s);
   // арт-плитка бизнеса: иллюстрация-PNG если есть (BIZ_ART_V>0), иначе SVG-иконка
-  const BIZ_ART_V = 1; // голуби-помощники /assets/images/biz/<id>.png
+  const BIZ_ART_V = 2; // голуби-помощники /assets/images/biz/<id>.png (v2 — Pixar-релд + бусты)
   const cardArt = (id) => BIZ_ART_V ? `<img src="/assets/images/biz/${id}.png?v=${BIZ_ART_V}" alt="" loading="lazy">` : cardIcon(id, 30);
   const taskIcon = (id) => ({ site: ICON.globe, review: ICON.star, vk: ICON.users, tg: ICON.send, invite1: ICON.users, level3: ICON.star, balance10: ICON.wallet, streak3: ICON.fire }[id] || ICON.star)(26);
 
@@ -836,8 +836,8 @@
     const buyBtn = (price, dis, act, id) => `<button class="ck-biz__buy" data-act="${act}" data-id="${id || ''}" ${dis ? 'disabled' : ''}>${COIN(15)} ${fmt(price)}</button>`;
     let h = rewardsBlock();
     h += '<div class="ck-sect">Бусты</div>';
-    h += biz('boost', ICON.tap(30), 'Мультитап', `<span class="ck-biz__lvl">+1 за тап</span><span class="ck-biz__prof">сейчас +${st.perTap}</span>`, buyBtn(st.multitapPrice, st.balance < st.multitapPrice, 'multitap'), 0);
-    h += biz('boost', ICON.battery(30), 'Запас энергии', `<span class="ck-biz__lvl">+500 энергии</span><span class="ck-biz__prof">сейчас ${st.energyMax}</span>`, buyBtn(st.energyPrice, st.balance < st.energyPrice, 'energy'), 1);
+    h += biz('boost', cardArt('multitap'), 'Мультитап', `<span class="ck-biz__lvl">+1 за тап</span><span class="ck-biz__prof">сейчас +${st.perTap}</span>`, buyBtn(st.multitapPrice, st.balance < st.multitapPrice, 'multitap'), 0);
+    h += biz('boost', cardArt('energy'), 'Запас энергии', `<span class="ck-biz__lvl">+500 энергии</span><span class="ck-biz__prof">сейчас ${st.energyMax}</span>`, buyBtn(st.energyPrice, st.balance < st.energyPrice, 'energy'), 1);
     h += '<div class="ck-sect">Бизнесы — пассивный доход</div>';
     h += '<div class="ck-cats">' + CARD_CATS.map(ct => `<button class="ck-cat-chip${ct.id === upCat ? ' on' : ''}" data-cat="${ct.id}">${ct.name}</button>`).join('') + '</div>';
     let i = 0;
