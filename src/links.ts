@@ -44,7 +44,9 @@ export function clickerReferralLink(internalId: number): string {
   if (platformOf(internalId) === "vk" && VK_APP_ID) {
     return `https://vk.com/app${VK_APP_ID}#ckref_${code}`;
   }
-  return `https://t.me/${BOT_USERNAME}?startapp=ckref_${code}`;
+  // /app — именованный Mini App (короткое имя «app»). Форма t.me/bot/app?startapp=
+  // несёт start_param в named-app; без /app нужен «Main Mini App» (часто не включён).
+  return `https://t.me/${BOT_USERNAME}/app?startapp=ckref_${code}`;
 }
 
 /**

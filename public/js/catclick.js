@@ -1055,7 +1055,7 @@
   // ── Рефералы + Задания ───────────────────────────────────────────────────────
   const linkOpened = {};
   // refLink: серверная платформо-зависимая ссылка (st.refLink), иначе фолбэк t.me
-  function refLink() { if (st && st.refLink) return st.refLink; const code = st && st.refCode; return code ? `https://t.me/${BOT}?startapp=ckref_${code}` : `https://t.me/${BOT}`; }
+  function refLink() { if (st && st.refLink) return st.refLink; const code = st && st.refCode; return code ? `https://t.me/${BOT}/app?startapp=ckref_${code}` : `https://t.me/${BOT}/app`; }
   function shareRef() {
     const link = refLink();
     const txt = `🐱 Играю в «Котик Комбат» от кондитерской «Мария» — тапай котика и качай уровни! Заходи по ссылке, нам обоим дадут монеты 🪙 ${link}`;
