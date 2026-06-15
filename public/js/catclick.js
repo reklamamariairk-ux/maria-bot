@@ -45,11 +45,11 @@
     { level: 12, name: 'Котик-делец',        need: 170000,  cat: 'cat-stage12.png' },
     { level: 13, name: 'Котик-бизнесмен',    need: 260000,  cat: 'cat-stage13.png' },
     { level: 14, name: 'Котик-босс',         need: 400000,  cat: 'cat-stage14.png' },
-    { level: 15, name: 'Котик-магнат',       need: 600000,  cat: 'cat-stage15.png' },
-    { level: 16, name: 'Котик-воротила',     need: 880000,  cat: 'cat-stage16.png' },
-    { level: 17, name: 'Котик-олигарх',      need: 1250000, cat: 'cat-stage17.png' },
-    { level: 18, name: 'Котик-дон',          need: 1750000, cat: 'cat-stage18.png' },
-    { level: 19, name: 'Повелитель котов',   need: 2500000, cat: 'cat-stage19.png' },
+    { level: 15, name: 'Котик-магнат',       need: 1200000,  cat: 'cat-stage15.png' },
+    { level: 16, name: 'Котик-воротила',     need: 5000000,  cat: 'cat-stage16.png' },
+    { level: 17, name: 'Котик-олигарх',      need: 25000000, cat: 'cat-stage17.png' },
+    { level: 18, name: 'Котик-дон',          need: 150000000, cat: 'cat-stage18.png' },
+    { level: 19, name: 'Повелитель котов',   need: 1200000000, cat: 'cat-stage19.png' },
   ];
   const REF_REFERRER = 5000, REF_INVITEE = 2500, BOT = 'mariatortik_bot';
   // Соцссылки «Марии» — зеркало SOCIAL в src/clicker.ts (менять синхронно). Пустая = задание скрыто.

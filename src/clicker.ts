@@ -81,11 +81,11 @@ export const LEAGUES = [
   { level: 12, name: "Котик-делец",        need: 170000 },
   { level: 13, name: "Котик-бизнесмен",    need: 260000 },
   { level: 14, name: "Котик-босс",         need: 400000 },
-  { level: 15, name: "Котик-магнат",       need: 600000 },
-  { level: 16, name: "Котик-воротила",     need: 880000 },
-  { level: 17, name: "Котик-олигарх",      need: 1250000 },
-  { level: 18, name: "Котик-дон",          need: 1750000 },
-  { level: 19, name: "Повелитель котов",   need: 2500000 },
+  { level: 15, name: "Котик-магнат",       need: 1200000 },
+  { level: 16, name: "Котик-воротила",     need: 5000000 },
+  { level: 17, name: "Котик-олигарх",      need: 25000000 },
+  { level: 18, name: "Котик-дон",          need: 150000000 },
+  { level: 19, name: "Повелитель котов",   need: 1200000000 },
 ];
 function leagueFor(total: number) { let l = LEAGUES[0]; for (const x of LEAGUES) if (total >= x.need) l = x; return l; }
 function nextNeed(total: number): number | null { const n = LEAGUES.find((x) => x.need > total); return n ? n.need : null; }
