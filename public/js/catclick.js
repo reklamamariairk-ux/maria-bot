@@ -240,15 +240,15 @@
     { id: 'ach_taps10k', name: 'Мастер тапа', icon: 'tap', reward: 10000, type: 'taps', target: 10000 },
     { id: 'ach_earn50k', name: 'Первые полста', icon: 'wallet', reward: 5000, type: 'balance', target: 50000 },
     { id: 'ach_biz5', name: 'Бизнес-империя', icon: 'shop', reward: 8000, type: 'cards', target: 5 },
-    { id: 'ach_lvl10', name: 'Высшая лига', icon: 'trophy', reward: 25000, type: 'level', target: 10 },
-    { id: 'ach_lvl19', name: 'Повелитель котов', icon: 'star', reward: 100000, type: 'level', target: 19 },
-    { id: 'ach_streak7', name: 'Неделя верности', icon: 'fire', reward: 7000, type: 'streak', target: 7 },
-    { id: 'ach_ref3', name: 'Душа компании', icon: 'users', reward: 15000, type: 'ref', target: 3 },
+    { id: 'ach_lvl10', name: 'Высшая лига', icon: 'trophy', reward: 25000, type: 'level', target: 10, gift: 100 },
+    { id: 'ach_lvl19', name: 'Повелитель котов', icon: 'star', reward: 100000, type: 'level', target: 19, gift: 500 },
+    { id: 'ach_streak7', name: 'Неделя верности', icon: 'fire', reward: 7000, type: 'streak', target: 7, gift: 150 },
+    { id: 'ach_ref3', name: 'Душа компании', icon: 'users', reward: 15000, type: 'ref', target: 3, gift: 200 },
     { id: 'col_prod', name: 'Цех в сборе', icon: 'dove', reward: 10000, type: 'collect', target: 'prod' },
     { id: 'col_mkt', name: 'Маркетинг в сборе', icon: 'dove', reward: 10000, type: 'collect', target: 'mkt' },
     { id: 'col_staff', name: 'Команда в сборе', icon: 'dove', reward: 10000, type: 'collect', target: 'staff' },
     { id: 'col_net', name: 'Сеть в сборе', icon: 'dove', reward: 10000, type: 'collect', target: 'net' },
-    { id: 'col_all', name: 'Повелитель голубей', icon: 'trophy', reward: 60000, type: 'collect', target: 'all' },
+    { id: 'col_all', name: 'Повелитель голубей', icon: 'trophy', reward: 60000, type: 'collect', target: 'all', gift: 250 },
   ];
   const achIcon = (key) => ({ tap: ICON.tap, wallet: ICON.wallet, shop: ICON.shop, trophy: ICON.trophy, star: ICON.star, fire: ICON.fire, users: ICON.users, dove: ICON.dove }[key] || ICON.star)(26);
   function condMet(t, s) {
@@ -537,6 +537,9 @@
       .ck-uplist{flex:1;overflow:auto;padding:6px 12px 16px;width:100%;box-sizing:border-box}
       .ck-sect{color:var(--muted);font-weight:700;font-size:11px;margin:12px 4px 7px;text-transform:uppercase;letter-spacing:.7px}
       .ck-games-hd{margin:10px 2px 2px;padding:11px 14px;border-radius:14px;background:linear-gradient(90deg,rgba(238,191,82,.16),rgba(238,191,82,.04));border:1px solid var(--line);color:var(--cream);font-size:13.5px;font-weight:700;text-align:center}.ck-games-hd b{color:var(--gold-l);font-size:16px}
+      .ck-gift{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--gold-l);background:rgba(238,191,82,.1);border:1px solid var(--line);border-radius:11px;padding:8px 11px;font-weight:600;margin-top:2px}
+      .ck-gift.ok{color:#9be7a8;background:rgba(72,187,120,.1)}
+      .ck-gift.earned{justify-content:space-between}.ck-gift.earned span{display:flex;align-items:center;gap:7px;flex:1;min-width:0}.ck-gift.earned .ck-card__buy{flex:none}
       .ck-cats{display:flex;gap:7px;margin:0 0 10px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}.ck-cats::-webkit-scrollbar{display:none}
       .ck-cat-chip{flex:none;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:18px;padding:7px 14px;font-weight:700;font-size:12.5px;cursor:pointer;white-space:nowrap}
       .ck-cat-chip.on{background:linear-gradient(180deg,#ffe7a6,#eebf52 58%,#cf9a36);color:#5a2028;border-color:#ffe9b3}
@@ -1170,24 +1173,45 @@
       else btn = `<button class="ck-card__buy" disabled>+${fmt(t.reward)}</button>`;
       return `<div class="ck-card"><div class="ck-card__ic">${taskIcon(t.id)}</div><div class="ck-card__b"><div class="ck-card__n">${t.name}</div><div class="ck-card__s">Награда +${fmt(t.reward)} ${COIN(13)}</div></div>${btn}</div>`;
     }).join('');
-    let achs;
-    if (authed()) { const d = await api('/api/clicker/achievements').catch(() => null); achs = d && d.achievements; }
+    let achs, achPV = false;
+    if (authed()) { const d = await api('/api/clicker/achievements').catch(() => null); achs = d && d.achievements; achPV = !!(d && d.phoneVerified); }
     else achs = guestAchList();
     if (!achs) achs = [];
     const achRows = achs.map(a => {
       const btn = a.done ? `<button class="ck-card__buy" disabled style="justify-content:center">✓ Получено</button>`
         : a.claimable ? `<button class="ck-card__buy" data-claim="${a.id}">+${fmt(a.reward)} ${COIN(14)}</button>`
           : `<button class="ck-card__buy" disabled>+${fmt(a.reward)}</button>`;
-      return `<div class="ck-card"${a.done ? ' style="opacity:.6"' : ''}><div class="ck-card__ic">${achIcon(a.icon)}</div><div class="ck-card__b"><div class="ck-card__n">${a.name}</div><div class="ck-card__s">${achDesc(a)}</div></div>${btn}</div>`;
+      const body = `<div class="ck-card__ic">${achIcon(a.icon)}</div><div class="ck-card__b"><div class="ck-card__n">${a.name}</div><div class="ck-card__s">${achDesc(a)}</div></div>${btn}`;
+      if (!a.gift) return `<div class="ck-card"${a.done ? ' style="opacity:.6"' : ''}>${body}</div>`;
+      const head = `<div style="display:flex;align-items:center;gap:11px">${body}</div>`;
+      // достижение с подарком (баллы на карту «Мария»)
+      let giftRow;
+      if (a.giftGranted) giftRow = `<div class="ck-gift ok">${ICON.gift(15)} Подарок на карте: +${a.gift} баллов «Мария» ✓</div>`;
+      else if (!authed()) giftRow = `<div class="ck-gift">${ICON.gift(15)} Подарок: +${a.gift} баллов на карту · войди через Telegram</div>`;
+      else if (!a.earned) giftRow = `<div class="ck-gift">${ICON.gift(15)} Подарок: +${a.gift} баллов на карту «Мария»</div>`;
+      else giftRow = `<div class="ck-gift earned"><span>${ICON.gift(15)} +${a.gift} баллов на карту</span>${achPV ? `<button class="ck-card__buy" data-gift="${a.id}">Забрать</button>` : `<button class="ck-card__buy" data-gift="phone">Подтвердить телефон</button>`}</div>`;
+      return `<div class="ck-card ck-bonus"${a.done ? ' style="opacity:.85"' : ''}>${head}${giftRow}</div>`;
     }).join('');
     const promoCard = `<div class="ck-sect">Промокод</div><div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.gift(26)}</div><div class="ck-card__b"><div class="ck-card__n">Есть промокод?</div><div class="ck-card__s">Лови коды в соцсетях «Марии» → монеты</div></div></div><div style="display:flex;gap:8px"><input class="ck-cipher-in" id="ck-code-in" maxlength="24" placeholder="ВВЕДИ КОД" autocomplete="off" spellcheck="false"/><button class="ck-card__buy" id="ck-code-go" style="justify-content:center">Применить</button></div></div>`;
     list.innerHTML = bonusBlock() + promoCard + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows + '<div class="ck-sect">Достижения</div>' + achRows;
     ov.querySelector('#ck-invite').onclick = shareRef;
     list.querySelectorAll('[data-open]').forEach(b => b.onclick = () => { const id = b.dataset.open, link = b.dataset.link; if (link) { if (window.App && App.openExternal) App.openExternal(link); else window.open(link, '_blank'); } linkOpened[id] = true; setTimeout(renderTasks, 400); });
     list.querySelectorAll('[data-claim]').forEach(b => b.onclick = () => claimTask(b.dataset.claim));
+    list.querySelectorAll('[data-gift]').forEach(b => b.onclick = () => { const g = b.dataset.gift; if (g === 'phone') requestPhone(); else claimGiftAct(g); });
     const cg = ov.querySelector('#ck-code-go'), ci = ov.querySelector('#ck-code-in');
     if (cg && ci) { cg.onclick = () => redeemCodeAct(ci.value); ci.onkeydown = (e) => { if (e.key === 'Enter') redeemCodeAct(ci.value); }; }
     wireBonus();
+  }
+  async function claimGiftAct(id) {
+    if (!authed()) { flashMsg('Войди через приложение «Мария»'); return; }
+    const d = await api('/api/clicker/gift', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null);
+    if (d && !d.error) { sfxLevel(); window.haptic && window.haptic('success'); confettiBurst(); giftPopup(d.points); renderTasks(); }
+    else flashMsg(d && d.error === 'need_phone' ? 'Сначала подтверди телефон' : d && d.error === 'already' ? 'Подарок уже на карте' : d && d.error === 'not_ready' ? 'Достижение ещё не получено' : 'Не получилось, попробуй позже');
+  }
+  function giftPopup(points) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Подарок на карту!</h3><div class="v">+${points} баллов</div><div style="color:var(--muted);font-size:13px">Баллы «Мария» зачислены на твою карту клуба — трать при заказе тортов 🎂</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
+  function requestPhone() {
+    try { const tg = window.Telegram && window.Telegram.WebApp; if (tg && typeof tg.requestContact === 'function') { tg.requestContact((ok) => { if (ok) { flashMsg('Спасибо! Проверяем номер…'); setTimeout(renderTasks, 1500); } }); return; } } catch (_) {}
+    flashMsg('Открой бота «Мария» → кнопка «Поделиться телефоном»');
   }
   async function redeemCodeAct(code) {
     if (!code || !code.trim()) return;

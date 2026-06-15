@@ -6,8 +6,14 @@
  */
 import { pool } from "./db";
 import { clickerReferralLink } from "./links";
+import { earnPoints, isPhoneVerified } from "./club";
 import * as fs from "fs";
 import * as path from "path";
+
+// Подарки за достижения → реальные баллы на карту клуба «Мария» (earnPoints).
+// Выдаются ОДИН раз, только игроку с подтверждённым телефоном. Суммы — в gift у
+// достижения ниже. ⚠️ Реальная ценность (баллы клуба) — согласовать суммы с Машей.
+export const GIFTS_ENABLED = true;
 
 const REGEN_PER_SEC = 1.5;
 const TAP_COST = 1;
@@ -51,16 +57,16 @@ export const ACHIEVEMENTS = [
   { id: "ach_taps10k", name: "Мастер тапа",       icon: "tap",    reward: 10000,  type: "taps",    target: 10000 },
   { id: "ach_earn50k", name: "Первые полста",     icon: "wallet", reward: 5000,   type: "balance", target: 50000 },
   { id: "ach_biz5",    name: "Бизнес-империя",    icon: "shop",   reward: 8000,   type: "cards",   target: 5 },
-  { id: "ach_lvl10",   name: "Высшая лига",       icon: "trophy", reward: 25000,  type: "level",   target: 10 },
-  { id: "ach_lvl19",   name: "Повелитель котов",  icon: "star",   reward: 100000, type: "level",   target: 19 },
-  { id: "ach_streak7", name: "Неделя верности",   icon: "fire",   reward: 7000,   type: "streak",  target: 7 },
-  { id: "ach_ref3",    name: "Душа компании",     icon: "users",  reward: 15000,  type: "ref",     target: 3 },
+  { id: "ach_lvl10",   name: "Высшая лига",       icon: "trophy", reward: 25000,  type: "level",   target: 10, gift: 100 },
+  { id: "ach_lvl19",   name: "Повелитель котов",  icon: "star",   reward: 100000, type: "level",   target: 19, gift: 500 },
+  { id: "ach_streak7", name: "Неделя верности",   icon: "fire",   reward: 7000,   type: "streak",  target: 7,  gift: 150 },
+  { id: "ach_ref3",    name: "Душа компании",     icon: "users",  reward: 15000,  type: "ref",     target: 3,  gift: 200 },
   // Коллекция голубей: собрать всех в категории / всех вообще (level>0 у бизнесов категории)
   { id: "col_prod",  name: "Цех в сборе",       icon: "dove",   reward: 10000,  type: "collect", target: "prod" },
   { id: "col_mkt",   name: "Маркетинг в сборе", icon: "dove",   reward: 10000,  type: "collect", target: "mkt" },
   { id: "col_staff", name: "Команда в сборе",   icon: "dove",   reward: 10000,  type: "collect", target: "staff" },
   { id: "col_net",   name: "Сеть в сборе",      icon: "dove",   reward: 10000,  type: "collect", target: "net" },
-  { id: "col_all",   name: "Повелитель голубей", icon: "trophy", reward: 60000,  type: "collect", target: "all" },
+  { id: "col_all",   name: "Повелитель голубей", icon: "trophy", reward: 60000,  type: "collect", target: "all", gift: 250 },
 ];
 const TASK_BY_ID = Object.fromEntries(TASKS.map((t) => [t.id, t]));
 const ALL_BY_ID: Record<string, any> = Object.fromEntries([...TASKS, ...ACHIEVEMENTS].map((t) => [t.id, t]));
@@ -234,6 +240,11 @@ export async function initClickerSchema(): Promise<void> {
     CREATE TABLE IF NOT EXISTS clicker_daily (
       chat_id BIGINT NOT NULL, game TEXT NOT NULL, day TEXT NOT NULL,
       PRIMARY KEY (chat_id, game)
+    );
+    CREATE TABLE IF NOT EXISTS clicker_gifts (
+      chat_id BIGINT NOT NULL, achievement TEXT NOT NULL, points INT NOT NULL,
+      granted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (chat_id, achievement)
     );
     CREATE INDEX IF NOT EXISTS clicker_top_idx ON clicker_state (total_earned DESC);
   `);
@@ -680,15 +691,23 @@ function taskClaimable(t: any, s: ClickerState): boolean {
   return false;
 }
 
-export async function getAchievements(chatId: number): Promise<{ achievements: any[] }> {
+export async function getAchievements(chatId: number): Promise<{ achievements: any[]; phoneVerified: boolean }> {
   const s = await getClicker(chatId);
   const { rows } = await pool.query(`SELECT task FROM clicker_tasks WHERE chat_id=$1`, [chatId]);
   const done = new Set(rows.map((r) => r.task));
+  const gr = await pool.query(`SELECT achievement FROM clicker_gifts WHERE chat_id=$1`, [chatId]);
+  const granted = new Set(gr.rows.map((r) => r.achievement));
+  const phoneVerified = await isPhoneVerified(chatId).catch(() => false);
   return {
-    achievements: ACHIEVEMENTS.map((a) => ({
-      id: a.id, name: a.name, icon: a.icon, reward: a.reward, type: a.type, target: a.target,
-      done: done.has(a.id), claimable: !done.has(a.id) && taskClaimable(a, s),
-    })),
+    phoneVerified,
+    achievements: ACHIEVEMENTS.map((a) => {
+      const isDone = done.has(a.id), claim = !isDone && taskClaimable(a, s);
+      return {
+        id: a.id, name: a.name, icon: a.icon, reward: a.reward, type: a.type, target: a.target,
+        done: isDone, claimable: claim, earned: isDone || claim,
+        gift: (a as any).gift || 0, giftGranted: granted.has(a.id),
+      };
+    }),
   };
 }
 
@@ -720,4 +739,34 @@ export async function claimTask(chatId: number, id: string): Promise<{ ok: boole
     await client.query("COMMIT");
     return { ok: true, reward: t.reward, state: buildState(r, cl, 0) };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+}
+
+/**
+ * Подарок за достижение → реальные баллы на карту клуба. Условия: достижение
+ * получено (или доступно к получению), телефон подтверждён, ещё не выдавалось.
+ * Идемпотентно через PK clicker_gifts; earnPoints — каноническое начисление.
+ */
+export async function claimGift(chatId: number, id: string): Promise<{ ok: boolean; points?: number; reason?: string }> {
+  if (!GIFTS_ENABLED) return { ok: false, reason: "disabled" };
+  const a: any = ALL_BY_ID[id]; const gift = a && a.gift;
+  if (!a || !gift) return { ok: false, reason: "no_gift" };
+  const s = await getClicker(chatId);
+  const { rows: tr } = await pool.query(`SELECT 1 FROM clicker_tasks WHERE chat_id=$1 AND task=$2`, [chatId, id]);
+  const earned = tr.length > 0 || taskClaimable(a, s);
+  if (!earned) return { ok: false, reason: "not_ready" };
+  if (!(await isPhoneVerified(chatId).catch(() => false))) return { ok: false, reason: "need_phone" };
+  // Бронируем выдачу (PK не даст выдать дважды); затем начисляем баллы.
+  const ins = await pool.query(
+    `INSERT INTO clicker_gifts (chat_id, achievement, points) VALUES ($1,$2,$3)
+     ON CONFLICT (chat_id, achievement) DO NOTHING RETURNING achievement`,
+    [chatId, id, gift]
+  );
+  if (!ins.rows.length) return { ok: false, reason: "already" };
+  try {
+    await earnPoints(chatId, gift, "clicker_gift", { achievement: id });
+  } catch (e) {
+    await pool.query(`DELETE FROM clicker_gifts WHERE chat_id=$1 AND achievement=$2`, [chatId, id]).catch(() => {});
+    throw e;
+  }
+  return { ok: true, points: gift };
 }
