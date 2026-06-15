@@ -1,4 +1,6 @@
 import { pool } from "./db";
+import { log } from "./logger";
+import { enqueueAccrual, bonusSyncEnabled } from "./bonus1c";
 
 // Иркутск = UTC+8. Все «сутки» (daily login, daily star cap) считаем
 // относительно иркутского дня — иначе на границе UTC-полуночи юзер
@@ -172,6 +174,7 @@ export async function earnPoints(
   // в node-postgres — каждый pool.query берёт новый коннект, и BEGIN/COMMIT
   // не группируют операции в одну транзакцию.
   const client = await pool.connect();
+  let ptId: number | null = null;
   try {
     await client.query("BEGIN");
     await client.query(
@@ -183,17 +186,32 @@ export async function earnPoints(
              updated_at = NOW()`,
       [chatId, amount]
     );
-    await client.query(
+    const ptr = await client.query(
       `INSERT INTO point_transactions (chat_id, amount, kind, source, meta, expires_at)
-       VALUES ($1, $2, 'earn', $3, $4, ${expires})`,
+       VALUES ($1, $2, 'earn', $3, $4, ${expires}) RETURNING id`,
       [chatId, amount, source, JSON.stringify(meta)]
     );
+    ptId = ptr.rows[0].id;
     await client.query("COMMIT");
   } catch (e) {
     await client.query("ROLLBACK").catch(() => {});
     throw e;
   } finally {
     client.release();
+  }
+  // Зеркалим начисление на реальную карту в 1С (по подтверждённому телефону).
+  // idem_key = pt:<id> уникален → не задвоится. no-op, если интеграция не настроена.
+  if (ptId != null && bonusSyncEnabled()) {
+    try {
+      const { rows } = await pool.query(
+        `SELECT phone FROM subscribers WHERE chat_id = $1 AND phone_verified_at IS NOT NULL`,
+        [chatId]
+      );
+      const phone = rows[0]?.phone;
+      if (phone) await enqueueAccrual(phone, amount, source, `pt:${ptId}`);
+    } catch (e) {
+      log.error({ err: e, chatId }, "[bonus] mirror to 1C");
+    }
   }
 }
 

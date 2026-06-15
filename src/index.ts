@@ -37,6 +37,7 @@ import petRouter from "./routes/pet";
 import { initPetSchema } from "./pet";
 import clickerRouter from "./routes/clicker";
 import { initClickerSchema, registerRef } from "./clicker";
+import { initBonusSchema, startBonusWorker } from "./bonus1c";
 import cartRouter from "./routes/cart";
 import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, fetchProductById, reloadDietaryOverrides, detectDietary, Product } from "./scraper";
 import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind, getNotificationPrefs, setNotificationPrefs, saveCartSnapshot, clearCartSnapshot, getAbandonedCarts, markCartAbandonedPushed, getSpinStatus, recordSpin, WHEEL_PRIZES, touchVisitStreak, setSecretOfDay, getSecretOfDay, getUnusedRewards, consumeRewards, hasHolidayPushSent, markHolidayPushSent, getReviewsForProduct, getReviewStats, getReviewStatsBatch, getMyReview, upsertReview, deleteMyReview, setReviewHidden, countReviewsLast24h, createWishlistShare, getWishlistShare, incrementWishlistShareOpens, countWishlistSharesLast24h, getOrderRating, upsertOrderRating, hasRatingPromptSent, markRatingPromptSent, countPromoUses, hasUserUsedPromo, recordPromoUse } from "./db";
@@ -1898,6 +1899,8 @@ async function main() {
   await initClubSchema();
   await initPetSchema();
   await initClickerSchema();
+  await initBonusSchema();
+  startBonusWorker();
 
   // Sentry error handler — после всех routes, до listen
   app.use(sentryExpressErrorHandler());
