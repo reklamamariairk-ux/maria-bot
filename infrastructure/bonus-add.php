@@ -17,7 +17,9 @@
  *    если он ждёт другие (напр. "Телефон"/"Сумма"/"Комментарий").
  */
 
-const BONUS_TOKEN = 'ЗАМЕНИ_НА_ТОКЕН';                       // == BONUS_ADD_TOKEN в env приложения
+// Вставь сюда тот же shared-token, что в lk.php (тогда и в app env BONUS_ADD_TOKEN
+// будет то же значение). Либо сгенерируй свой — главное, чтобы совпадал с env.
+const BONUS_TOKEN = 'PASTE_LK_TOKEN_HERE';
 const ONEC_HOST   = 'http://89.108.119.147';
 const ONEC_AUTH   = 'web:web';
 const ONEC_PATH   = '/f_base_2023/hs/Website/BonusAdd';
@@ -42,12 +44,16 @@ if ($phone === '' || $amount <= 0) {
     exit;
 }
 
-// ⚠️ Имена полей подгони под метод BonusAdd в 1С.
+// Точные имена полей BonusAdd неизвестны (в доках только read) — поэтому шлём
+// значение СРАЗУ под распространёнными именами. 1С прочитает то, что знает, лишнее
+// проигнорит. Если метод строгий и ругается на лишние поля — оставь только нужные.
+$reason = (string)($in['reason'] ?? 'Mini App «Мария»');
+$key    = (string)($in['key'] ?? '');
 $payload = json_encode([
-    'phone'   => $phone,
-    'amount'  => $amount,
-    'comment' => (string)($in['reason'] ?? 'Mini App «Мария»'),
-    'key'     => (string)($in['key'] ?? ''),   // ключ операции — для дедупликации на стороне 1С
+    'phone'   => $phone,  'Phone'   => $phone,  'Телефон'     => $phone,
+    'amount'  => $amount, 'Amount'  => $amount, 'Сумма'       => $amount, 'Bonus' => $amount, 'Балл' => $amount, 'Баллы' => $amount,
+    'comment' => $reason, 'Comment' => $reason, 'Комментарий' => $reason,
+    'key'     => $key,    'Key'     => $key,    'Ключ'        => $key,    'operation_id' => $key,
 ], JSON_UNESCAPED_UNICODE);
 
 $ch = curl_init();
