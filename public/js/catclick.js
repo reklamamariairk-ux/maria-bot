@@ -442,14 +442,24 @@
       .ck-rain__hud .x{width:32px;height:32px;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.3);color:var(--cream);font-size:16px;cursor:pointer}
       .ck-rain canvas{flex:1;width:100%;display:block;touch-action:none;cursor:pointer}
       .ck-rain__hint{position:absolute;left:0;right:0;top:48%;text-align:center;color:var(--muted);font-size:13px;pointer-events:none}
-      .ck-quiz,.ck-mem,.ck-slice,.ck-gems{position:absolute;inset:0;z-index:12;display:none;flex-direction:column;background:radial-gradient(135% 100% at 50% -8%,#241318,#0e0a0d);padding:0 16px 26px;overflow-y:auto;-webkit-overflow-scrolling:touch}
-      .ck-quiz.on,.ck-mem.on,.ck-slice.on,.ck-gems.on{display:flex}
-      .ck-gems__grid{display:grid;gap:4px;max-width:362px;width:100%;margin:8px auto 0}
-      .ck-gems__c{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:23px;border:1.5px solid var(--line);border-radius:11px;background:var(--panel);cursor:pointer;padding:0;transition:transform .1s,box-shadow .15s,border-color .15s}
-      .ck-gems__c:active{transform:scale(.92)}
-      .ck-gems__c.sel{border-color:var(--gold);box-shadow:0 0 12px var(--gold);transform:scale(1.06)}
-      .ck-gems__c.clr{animation:ckGemPop .22s ease-out forwards}
-      @keyframes ckGemPop{0%{transform:scale(1)}45%{transform:scale(1.4);filter:brightness(1.7)}100%{transform:scale(.2);opacity:0}}
+      .ck-quiz,.ck-mem,.ck-tower,.ck-gems{position:absolute;inset:0;z-index:12;display:none;flex-direction:column;background:radial-gradient(135% 100% at 50% -8%,#241318,#0e0a0d);padding:0 16px 26px;overflow:hidden;-webkit-overflow-scrolling:touch}
+      .ck-quiz,.ck-mem,.ck-gems{overflow-y:auto}
+      .ck-quiz.on,.ck-mem.on,.ck-tower.on,.ck-gems.on{display:flex}
+      .ck-gems__grid{display:grid;gap:5px;max-width:360px;width:100%;margin:10px auto 0;padding:8px;background:rgba(0,0,0,.22);border:1px solid var(--line);border-radius:18px;box-shadow:inset 0 2px 14px rgba(0,0,0,.4)}
+      .ck-gems__c{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border:none;border-radius:12px;background:rgba(255,255,255,.03);cursor:pointer;padding:0;transition:transform .1s,box-shadow .15s}
+      .ck-gems__c:active{transform:scale(.9)}
+      .ck-gems__c.sel{background:rgba(238,191,82,.16);box-shadow:0 0 0 2px var(--gold),0 0 14px var(--gold);transform:scale(1.04)}
+      .ck-gems__c .cd{width:80%;height:80%;border-radius:46% 46% 50% 50%/50%;position:relative;box-shadow:inset 0 -4px 7px rgba(0,0,0,.32),inset 0 3px 5px rgba(255,255,255,.25),0 2px 4px rgba(0,0,0,.35)}
+      .ck-gems__c .cd::after{content:'';position:absolute;top:13%;left:20%;width:32%;height:24%;border-radius:50%;background:rgba(255,255,255,.6);filter:blur(.5px)}
+      .cd0{background:radial-gradient(circle at 38% 30%,#ff9db4,#d11d54)}
+      .cd1{background:radial-gradient(circle at 38% 30%,#ffe39a,#cf9320)}
+      .cd2{background:radial-gradient(circle at 38% 30%,#c79877,#5e3a25)}
+      .cd3{background:radial-gradient(circle at 38% 30%,#bdee9f,#4f9b3e)}
+      .cd4{background:radial-gradient(circle at 38% 30%,#aeb8ff,#4350c0)}
+      .ck-gems__c.clr{animation:ckGemPop .24s ease-out forwards}
+      @keyframes ckGemPop{0%{transform:scale(1)}45%{transform:scale(1.35);filter:brightness(1.8)}100%{transform:scale(.15);opacity:0}}
+      .ck-tower__score{position:absolute;left:0;right:0;top:84px;z-index:2;text-align:center;font-size:40px;font-weight:900;color:var(--gold-l);text-shadow:0 2px 14px rgba(0,0,0,.6);pointer-events:none;font-variant-numeric:tabular-nums}
+      #ck-tower-cv{flex:1;width:100%;display:block;touch-action:none;cursor:pointer}
       .ck-quiz__hd{display:flex;align-items:center;gap:10px;padding:16px 0 6px;font-weight:800;font-size:16px;color:var(--cream)}
       .ck-quiz__hd .t{flex:1;display:flex;align-items:center;gap:8px;color:var(--gold-l)}
       .ck-quiz__hd .x{width:34px;height:34px;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.3);color:var(--cream);font-size:18px;cursor:pointer;flex:none}
@@ -470,11 +480,6 @@
       .ck-mem__c .b{background:var(--panel);border:1.5px solid var(--gold);transform:rotateY(180deg)}
       .ck-mem__c.show .f{transform:rotateY(180deg)}.ck-mem__c.show .b{transform:rotateY(0)}
       .ck-mem__c.match .b{border-color:#48bb78;box-shadow:0 0 12px rgba(72,187,120,.5)}
-      .ck-slice__wrap{max-width:440px;width:100%;margin:34px auto 0;padding:0 6px}
-      .ck-slice__track{position:relative;height:48px;border-radius:24px;background:rgba(0,0,0,.32);border:1.5px solid var(--line);overflow:hidden}
-      .ck-slice__zone{position:absolute;top:0;bottom:0;left:42%;width:16%;background:linear-gradient(180deg,rgba(72,187,120,.42),rgba(72,187,120,.16));border-left:2px solid #48bb78;border-right:2px solid #48bb78}
-      .ck-slice__mark{position:absolute;top:-3px;bottom:-3px;left:0;width:6px;border-radius:3px;background:var(--gold-l);box-shadow:0 0 12px var(--gold);transform:translateX(-50%)}
-      .ck-slice__mark.good{background:#48bb78;box-shadow:0 0 14px #48bb78}.ck-slice__mark.ok{background:var(--gold)}.ck-slice__mark.bad{background:#e53e3e}
       .ck-bonus-fly{position:absolute;z-index:8;pointer-events:auto;cursor:pointer;filter:drop-shadow(0 0 13px rgba(255,212,90,.95));animation:ckBonusSpin 1.1s linear infinite}
       @keyframes ckBonusSpin{to{transform:rotate(360deg)}}
       .ck-season{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
@@ -844,7 +849,7 @@
     sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); coinShower(); dailyPopupRaw(ICON.rain(20) + ` Золотой дождь · ${score} монет`, reward || 0); renderAll(); renderTasks(); bumpBalance();
   }
   // ── Хаб «Игры»: единый claim (clamp+гейт 1/день; для гостя — localStorage) ────
-  const GAME_CAP = { quiz_kids: { cap: 5, per: 1000 }, quiz_riddle: { cap: 4, per: 1200 }, count: { cap: 6, per: 400 }, memory: { cap: 100, per: 60 }, slice: { cap: 100, per: 70 }, gems: { cap: 200, per: 45 } };
+  const GAME_CAP = { quiz_kids: { cap: 5, per: 1000 }, quiz_riddle: { cap: 4, per: 1200 }, count: { cap: 6, per: 400 }, memory: { cap: 100, per: 60 }, gems: { cap: 200, per: 45 }, tower: { cap: 200, per: 60 } };
   // gamesDone приходит только в getClicker/claimGame; tap/buy его не несут → кэшируем
   let gdCache = [];
   function gamesDoneNow() { if (authed()) { if (st && Array.isArray(st.gamesDone)) gdCache = st.gamesDone; return gdCache; } return guestGamesDoneList(); }
@@ -1234,7 +1239,7 @@
     lastTs = 0; syncT = 0; combo = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
   }
   // ── Хаб «Игры»: рендер + квизы + «Собери торт» + «Ровный крем» ───────────────
-  let quizState = null, memState = null, sliceState = null;
+  let quizState = null, memState = null, towerState = null;
   const MEM_ICONS = ['🍰', '🧁', '🍮', '🍪', '🍩', '🍫'];
 
   function renderGames() {
@@ -1253,12 +1258,12 @@
       card('memory', ICON.cake(26), 'Собери торт', 'Найди пары на память · +до 6000 ' + COIN(13)) +
       '<div class="ck-sect">Казуальные · всем</div>' +
       card('gems', ICON.gem(26), 'Сладкий ряд', 'Match-3: собирай 3+ конфеты в ряд · +до 9000 ' + COIN(13)) +
-      card('slice', ICON.cake(26), 'Ровный крем', 'Останови полоску в центре · +до 7000 ' + COIN(13)) +
+      card('tower', ICON.cake(26), 'Башня тортов', 'Ставь коржи ровно, строй башню · +до 12000 ' + COIN(13)) +
       rainCard;
     box.querySelectorAll('.ck-card__buy[data-game]').forEach(b => b.onclick = () => startGame(b.dataset.game));
     const rb = box.querySelector('#ck-games-rain'); if (rb) rb.onclick = openRain;
   }
-  function startGame(g) { if (g === 'memory') openMemory(); else if (g === 'slice') openSlice(); else if (g === 'gems') openGems(); else openQuiz(g); }
+  function startGame(g) { if (g === 'memory') openMemory(); else if (g === 'tower') openTower(); else if (g === 'gems') openGems(); else openQuiz(g); }
   function resultPopup(title, amount, sub) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${title}</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><div style="color:var(--muted);font-size:13px">${sub || ''}</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
 
   // — Квизы (Котовикторина / Загадки / Счёт конфет) —
@@ -1325,48 +1330,73 @@
   }
   function closeMemory() { const el = ov.querySelector('#ck-mem'); if (el) el.classList.remove('on'); memState = null; }
 
-  // — «Ровный крем» (тайминг, взрослым) —
-  function openSlice() {
-    if (gameDone('slice')) { flashMsg('Сыграно — приходи завтра'); return; }
-    let el = ov.querySelector('#ck-slice'); if (!el) { el = document.createElement('div'); el.id = 'ck-slice'; el.className = 'ck-slice'; ov.appendChild(el); }
-    sliceState = { round: 0, rounds: 5, score: 0, pos: 0, dir: 1, speed: 0.8, running: false, raf: 0, last: 0 };
-    el.classList.add('on'); renderSliceUI(); nextSliceRound();
+  // — «Башня тортов» (стопка коржей, на канвасе). Тап → поставить корж ровно —
+  const TOWER_COLORS = ['#7a2d3a', '#c98a3c', '#e7c98f', '#9d5a3c', '#d98fb0', '#8c4a6b'];
+  function towerRoundRect(ctx, x, y, w, h, r) { r = Math.min(r, w / 2, h / 2); ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+  function towerLayer(ctx, x, y, w, h, color, glow) {
+    ctx.save(); if (glow) { ctx.shadowColor = 'rgba(255,210,110,.55)'; ctx.shadowBlur = 16; }
+    ctx.fillStyle = color; towerRoundRect(ctx, x, y, w, h, 6); ctx.fill(); ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,255,255,.20)'; towerRoundRect(ctx, x, y, w, Math.min(7, h / 2), 6); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,.16)'; ctx.fillRect(x, y + h - 4, w, 4);
+    ctx.restore();
   }
-  function renderSliceUI() {
-    const el = ov.querySelector('#ck-slice');
-    el.innerHTML = `<div class="ck-quiz__hd"><div class="t">${ICON.cake(20)} Ровный крем</div><button class="x" id="ck-slice-x">×</button></div><div class="ck-mem__sub">Останови полоску в зелёном центре · раунд <span id="ck-slice-r">1</span>/5 · очки <span id="ck-slice-s">0</span></div><div class="ck-slice__wrap"><div class="ck-slice__track"><div class="ck-slice__zone"></div><div class="ck-slice__mark" id="ck-slice-mark"></div></div></div><button class="ck-card__buy" id="ck-slice-stop" style="margin:22px auto 0;justify-content:center;min-width:170px;font-size:17px">СТОП</button>`;
-    el.querySelector('#ck-slice-x').onclick = closeSlice;
-    el.querySelector('#ck-slice-stop').onclick = stopSlice;
+  function openTower() {
+    if (gameDone('tower')) { flashMsg('Сыграно — приходи завтра'); return; }
+    let el = ov.querySelector('#ck-tower'); if (!el) { el = document.createElement('div'); el.id = 'ck-tower'; el.className = 'ck-tower'; ov.appendChild(el); }
+    el.innerHTML = `<div class="ck-quiz__hd"><div class="t">${ICON.cake(20)} Башня тортов</div><button class="x" id="ck-tower-x">×</button></div><div class="ck-mem__sub">Тапни по экрану, чтобы поставить корж ровно. Чем выше башня — тем больше монет!</div><div class="ck-tower__score" id="ck-tower-score">0</div><canvas id="ck-tower-cv"></canvas>`;
+    el.classList.add('on');
+    el.querySelector('#ck-tower-x').onclick = closeTower;
+    startTower();
   }
-  function nextSliceRound() {
-    const s = sliceState; if (!s) return; if (s.round >= s.rounds) { finishSlice(); return; }
-    const r = ov.querySelector('#ck-slice-r'); if (r) r.textContent = s.round + 1;
-    s.pos = 0; s.dir = 1; s.speed = 0.8 + s.round * 0.18; s.running = true; s.last = performance.now();
-    cancelAnimationFrame(s.raf); s.raf = requestAnimationFrame(sliceLoop);
+  function startTower() {
+    const el = ov.querySelector('#ck-tower'), cv = el.querySelector('#ck-tower-cv');
+    const rect = cv.getBoundingClientRect();
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const W = Math.max(240, Math.floor(rect.width)), H = Math.max(320, Math.floor(rect.height));
+    cv.width = W * dpr; cv.height = H * dpr; const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+    const baseW = Math.floor(W * 0.5), LH = 28;
+    const base = { x: (W - baseW) / 2, w: baseW, color: TOWER_COLORS[0] };
+    towerState = { ctx, W, H, LH, stack: [base], score: 0, cam: 0, ended: false, raf: 0, last: performance.now(),
+      cur: { x: 0, w: baseW, dir: 1, speed: 150, color: TOWER_COLORS[1] } };
+    cv.onpointerdown = (e) => { e.preventDefault(); towerDrop(); };
+    towerState.raf = requestAnimationFrame(towerLoop);
   }
-  function sliceLoop(ts) {
-    const s = sliceState; if (!s || !s.running) return;
-    const dt = Math.min(0.05, (ts - s.last) / 1000); s.last = ts; s.pos += s.dir * s.speed * dt;
-    if (s.pos >= 1) { s.pos = 1; s.dir = -1; } if (s.pos <= 0) { s.pos = 0; s.dir = 1; }
-    const m = ov.querySelector('#ck-slice-mark'); if (m) m.style.left = (s.pos * 100) + '%';
-    s.raf = requestAnimationFrame(sliceLoop);
+  function towerLoop(ts) {
+    const s = towerState; if (!s || s.ended) return;
+    const dt = Math.min(0.05, (ts - s.last) / 1000); s.last = ts; const c = s.cur;
+    c.x += c.dir * c.speed * dt;
+    if (c.x <= 0) { c.x = 0; c.dir = 1; } if (c.x + c.w >= s.W) { c.x = s.W - c.w; c.dir = -1; }
+    drawTower(); s.raf = requestAnimationFrame(towerLoop);
   }
-  function stopSlice() {
-    const s = sliceState; if (!s || !s.running) return; s.running = false; cancelAnimationFrame(s.raf);
-    const dist = Math.abs(s.pos - 0.5); const pts = Math.max(0, Math.round(20 * (1 - dist / 0.5))); s.score += pts;
-    const ss = ov.querySelector('#ck-slice-s'); if (ss) ss.textContent = s.score;
-    const m = ov.querySelector('#ck-slice-mark'); if (m) m.classList.add(pts >= 16 ? 'good' : pts >= 8 ? 'ok' : 'bad');
-    if (pts >= 16) { note(1046, 0.14, 'triangle', 0.09, 1568); window.haptic && window.haptic('light'); } else sfxError();
-    s.round++; setTimeout(() => { const mk = ov.querySelector('#ck-slice-mark'); if (mk) mk.className = 'ck-slice__mark'; nextSliceRound(); }, 640);
+  function drawTower() {
+    const s = towerState, ctx = s.ctx; ctx.clearRect(0, 0, s.W, s.H);
+    const towerTop = s.stack.length * s.LH;
+    s.cam += ((Math.max(0, towerTop - (s.H - 150))) - s.cam) * 0.16;
+    for (let i = 0; i < s.stack.length; i++) { const L = s.stack[i]; towerLayer(ctx, L.x, s.H - 44 - i * s.LH + s.cam, L.w, s.LH, L.color); }
+    const cy = s.H - 44 - s.stack.length * s.LH + s.cam; towerLayer(ctx, s.cur.x, cy, s.cur.w, s.LH, s.cur.color, true);
   }
-  async function finishSlice() {
-    const s = sliceState; if (!s) return; const score = Math.min(100, s.score); closeSlice();
-    const reward = await submitGame('slice', score);
+  function towerDrop() {
+    const s = towerState; if (!s || s.ended) return;
+    const prev = s.stack[s.stack.length - 1], c = s.cur;
+    const l = Math.max(c.x, prev.x), r = Math.min(c.x + c.w, prev.x + prev.w), over = r - l;
+    if (over <= 4) { finishTower(); return; }
+    let nx = l, nw = over;
+    if (Math.abs(c.x - prev.x) < 7) { nx = prev.x; nw = prev.w; note(1318, 0.14, 'triangle', 0.1, 1760); window.haptic && window.haptic('medium'); }
+    else { note(820, 0.1, 'triangle', 0.08, 1150); window.haptic && window.haptic('light'); }
+    s.stack.push({ x: nx, w: nw, color: c.color });
+    s.score++; const se = ov.querySelector('#ck-tower-score'); if (se) se.textContent = s.score;
+    const ci = s.stack.length % TOWER_COLORS.length;
+    s.cur = { x: c.dir > 0 ? 0 : s.W - nw, w: nw, dir: c.dir > 0 ? 1 : -1, speed: 150 + s.score * 8, color: TOWER_COLORS[ci] };
+  }
+  async function finishTower() {
+    const s = towerState; if (!s || s.ended) return; s.ended = true; cancelAnimationFrame(s.raf);
+    const score = s.score; closeTower();
+    const reward = await submitGame('tower', score);
     sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
-    resultPopup(`${ICON.cake(22)} Крем готов!`, reward || 0, `Точность ${score}/100`);
+    resultPopup(`${ICON.cake(22)} Башня из ${score} коржей!`, reward || 0, score >= 20 ? 'Высоченная! 🎂' : 'Неплохо — завтра выше!');
     renderAll(); renderGames(); bumpBalance();
   }
-  function closeSlice() { if (sliceState) cancelAnimationFrame(sliceState.raf); const el = ov.querySelector('#ck-slice'); if (el) el.classList.remove('on'); sliceState = null; }
+  function closeTower() { if (towerState) cancelAnimationFrame(towerState.raf); const el = ov.querySelector('#ck-tower'); if (el) el.classList.remove('on'); towerState = null; }
 
   // — «Сладкий ряд» (match-3 на конфетах). Модель проверена юнит-тестом —
   const GEMS = ['🍬', '🍭', '🍫', '🍓', '🫐'], GN = 7, GT = 5, GEM_SEC = 50;
@@ -1397,7 +1427,7 @@
   }
   function renderGemsGrid() {
     const grid = ov.querySelector('#ck-gems-grid'), s = gemsState; if (!grid || !s) return;
-    grid.innerHTML = s.g.map((t, i) => `<button class="ck-gems__c ${i === s.sel ? 'sel' : ''}" data-i="${i}">${t < 0 ? '' : GEMS[t]}</button>`).join('');
+    grid.innerHTML = s.g.map((t, i) => `<button class="ck-gems__c ${i === s.sel ? 'sel' : ''}" data-i="${i}">${t < 0 ? '' : `<span class="cd cd${t}"></span>`}</button>`).join('');
     grid.querySelectorAll('.ck-gems__c').forEach(b => b.onclick = () => tapGem(parseInt(b.dataset.i, 10)));
   }
   async function tapGem(i) {
@@ -1441,7 +1471,7 @@
   }
   function closeGems() { if (gemsState) cancelAnimationFrame(gemsState.raf); const el = ov.querySelector('#ck-gems'); if (el) el.classList.remove('on'); gemsState = null; }
 
-  function close() { cancelAnimationFrame(raf); clearTimeout(bonusTimer); if (rainState) endRain(true); if (quizState) closeQuiz(); if (memState) closeMemory(); if (sliceState) closeSlice(); if (gemsState) closeGems(); flush(); if (ov) ov.classList.remove('on'); window.scrollUnlock && window.scrollUnlock(); }
+  function close() { cancelAnimationFrame(raf); clearTimeout(bonusTimer); if (rainState) endRain(true); if (quizState) closeQuiz(); if (memState) closeMemory(); if (towerState) closeTower(); if (gemsState) closeGems(); flush(); if (ov) ov.classList.remove('on'); window.scrollUnlock && window.scrollUnlock(); }
   window.catClickOpen = open; window.catClickClose = close; window.catClickBonusNow = () => { if (ov && ov.classList.contains('on')) showFlyingBonus(); }; // превью/тест золотого бонуса
   window.addEventListener('resize', () => { if (ov && ov.classList.contains('on') && st) applyCostume(leagueFor(st.totalEarned)); });
   // Реф регистрируем фоном уже при загрузке приложения (не дожидаясь открытия игры):
