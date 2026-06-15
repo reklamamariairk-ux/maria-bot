@@ -461,6 +461,7 @@ const GAME_CFG: Record<string, { cap: number; per: number }> = {
   count:       { cap: 6,   per: 400  }, // Счёт конфет: 6 × 400
   memory:      { cap: 100, per: 60   }, // «Собери торт»: очки 0..100
   slice:       { cap: 100, per: 70   }, // «Ровный крем» (взрослым): точность 0..100
+  gems:        { cap: 200, per: 45   }, // «Сладкий ряд» (match-3): собрано конфет
 };
 export async function claimGame(chatId: number, game: string, score: number): Promise<{ ok: boolean; reward?: number; game?: string; state?: ClickerState; reason?: string }> {
   const cfg = GAME_CFG[game]; if (!cfg) return { ok: false, reason: "bad_game" };
