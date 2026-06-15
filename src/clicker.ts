@@ -6,7 +6,7 @@
  */
 import { pool } from "./db";
 import { clickerReferralLink } from "./links";
-import { earnPoints, isPhoneVerified } from "./club";
+import { earnPoints, isPhoneVerified, grantRewardByCode } from "./club";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -57,16 +57,16 @@ export const ACHIEVEMENTS = [
   { id: "ach_taps10k", name: "Мастер тапа",       icon: "tap",    reward: 10000,  type: "taps",    target: 10000 },
   { id: "ach_earn50k", name: "Первые полста",     icon: "wallet", reward: 5000,   type: "balance", target: 50000 },
   { id: "ach_biz5",    name: "Бизнес-империя",    icon: "shop",   reward: 8000,   type: "cards",   target: 5 },
-  { id: "ach_lvl10",   name: "Высшая лига",       icon: "trophy", reward: 25000,  type: "level",   target: 10, gift: 100 },
-  { id: "ach_lvl19",   name: "Повелитель котов",  icon: "star",   reward: 100000, type: "level",   target: 19, gift: 500 },
-  { id: "ach_streak7", name: "Неделя верности",   icon: "fire",   reward: 7000,   type: "streak",  target: 7,  gift: 150 },
-  { id: "ach_ref3",    name: "Душа компании",     icon: "users",  reward: 15000,  type: "ref",     target: 3,  gift: 200 },
+  { id: "ach_lvl10",   name: "Высшая лига",       icon: "trophy", reward: 25000,  type: "level",   target: 10 },
+  { id: "ach_lvl19",   name: "Повелитель котов",  icon: "star",   reward: 100000, type: "level",   target: 19 },
+  { id: "ach_streak7", name: "Неделя верности",   icon: "fire",   reward: 7000,   type: "streak",  target: 7 },
+  { id: "ach_ref3",    name: "Душа компании",     icon: "users",  reward: 15000,  type: "ref",     target: 3 },
   // Коллекция голубей: собрать всех в категории / всех вообще (level>0 у бизнесов категории)
   { id: "col_prod",  name: "Цех в сборе",       icon: "dove",   reward: 10000,  type: "collect", target: "prod" },
   { id: "col_mkt",   name: "Маркетинг в сборе", icon: "dove",   reward: 10000,  type: "collect", target: "mkt" },
   { id: "col_staff", name: "Команда в сборе",   icon: "dove",   reward: 10000,  type: "collect", target: "staff" },
   { id: "col_net",   name: "Сеть в сборе",      icon: "dove",   reward: 10000,  type: "collect", target: "net" },
-  { id: "col_all",   name: "Повелитель голубей", icon: "trophy", reward: 60000,  type: "collect", target: "all", gift: 250 },
+  { id: "col_all",   name: "Повелитель голубей", icon: "trophy", reward: 60000,  type: "collect", target: "all" },
 ];
 const TASK_BY_ID = Object.fromEntries(TASKS.map((t) => [t.id, t]));
 const ALL_BY_ID: Record<string, any> = Object.fromEntries([...TASKS, ...ACHIEVEMENTS].map((t) => [t.id, t]));
@@ -691,23 +691,15 @@ function taskClaimable(t: any, s: ClickerState): boolean {
   return false;
 }
 
-export async function getAchievements(chatId: number): Promise<{ achievements: any[]; phoneVerified: boolean }> {
+export async function getAchievements(chatId: number): Promise<{ achievements: any[] }> {
   const s = await getClicker(chatId);
   const { rows } = await pool.query(`SELECT task FROM clicker_tasks WHERE chat_id=$1`, [chatId]);
   const done = new Set(rows.map((r) => r.task));
-  const gr = await pool.query(`SELECT achievement FROM clicker_gifts WHERE chat_id=$1`, [chatId]);
-  const granted = new Set(gr.rows.map((r) => r.achievement));
-  const phoneVerified = await isPhoneVerified(chatId).catch(() => false);
   return {
-    phoneVerified,
-    achievements: ACHIEVEMENTS.map((a) => {
-      const isDone = done.has(a.id), claim = !isDone && taskClaimable(a, s);
-      return {
-        id: a.id, name: a.name, icon: a.icon, reward: a.reward, type: a.type, target: a.target,
-        done: isDone, claimable: claim, earned: isDone || claim,
-        gift: (a as any).gift || 0, giftGranted: granted.has(a.id),
-      };
-    }),
+    achievements: ACHIEVEMENTS.map((a) => ({
+      id: a.id, name: a.name, icon: a.icon, reward: a.reward, type: a.type, target: a.target,
+      done: done.has(a.id), claimable: !done.has(a.id) && taskClaimable(a, s),
+    })),
   };
 }
 
@@ -741,32 +733,67 @@ export async function claimTask(chatId: number, id: string): Promise<{ ok: boole
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
-/**
- * Подарок за достижение → реальные баллы на карту клуба. Условия: достижение
- * получено (или доступно к получению), телефон подтверждён, ещё не выдавалось.
- * Идемпотентно через PK clicker_gifts; earnPoints — каноническое начисление.
- */
-export async function claimGift(chatId: number, id: string): Promise<{ ok: boolean; points?: number; reason?: string }> {
-  if (!GIFTS_ENABLED) return { ok: false, reason: "disabled" };
-  const a: any = ALL_BY_ID[id]; const gift = a && a.gift;
-  if (!a || !gift) return { ok: false, reason: "no_gift" };
+// ── Награды за прогресс: лестница вех. Каждая веха = реальный подарок ОДИН раз ──
+// points → баллы на карту клуба (earnPoints); perk → купон с условием min_order
+// (grantRewardByCode, корзина применяет промокод). Только подтверждённый телефон.
+// ⚠️ Суммы/перки — согласовать с Машей (реальная ценность лояльности).
+export const MILESTONES: { id: string; title: string; cond: { type: string; target: any }; points?: number; perk?: string; perkText?: string }[] = [
+  { id: "ms_lvl5",     title: "Уровень 5",                cond: { type: "level", target: 5 },     points: 200 },
+  { id: "ms_lvl10",    title: "Уровень 10",               cond: { type: "level", target: 10 },    points: 500 },
+  { id: "ms_lvl13",    title: "Уровень 13",               cond: { type: "level", target: 13 },    perk: "discount_5",   perkText: "Промокод −5% (от 500₽)" },
+  { id: "ms_lvl15",    title: "Уровень 15",               cond: { type: "level", target: 15 },    points: 1000 },
+  { id: "ms_lvl17",    title: "Уровень 17",               cond: { type: "level", target: 17 },    perk: "free_dessert", perkText: "Десерт в подарок (от 2000₽)" },
+  { id: "ms_lvl19",    title: "Последний уровень — Повелитель котов", cond: { type: "level", target: 19 }, points: 20000 },
+  { id: "ms_col_prod", title: "Все голуби «Производство»", cond: { type: "collect", target: "prod" },  points: 300 },
+  { id: "ms_col_mkt",  title: "Все голуби «Маркетинг»",    cond: { type: "collect", target: "mkt" },   points: 300 },
+  { id: "ms_col_staff",title: "Все голуби «Персонал»",     cond: { type: "collect", target: "staff" }, points: 300 },
+  { id: "ms_col_net",  title: "Все голуби «Сеть»",         cond: { type: "collect", target: "net" },   points: 300 },
+  { id: "ms_col_all",  title: "Вся коллекция голубей",     cond: { type: "collect", target: "all" },   perk: "free_bento",  perkText: "Бенто-торт в подарок (от 2000₽)" },
+  { id: "ms_ref3",     title: "Пригласил 3 друзей",        cond: { type: "ref", target: 3 },       points: 500 },
+  { id: "ms_ref10",    title: "Пригласил 10 друзей",       cond: { type: "ref", target: 10 },      perk: "discount_10", perkText: "Промокод −10% (от 1000₽)" },
+];
+const MS_BY_ID = Object.fromEntries(MILESTONES.map((m) => [m.id, m]));
+const msReached = (m: any, s: ClickerState) => taskClaimable({ type: m.cond.type, target: m.cond.target } as any, s);
+
+export async function getMilestones(chatId: number): Promise<{ milestones: any[]; phoneVerified: boolean }> {
   const s = await getClicker(chatId);
-  const { rows: tr } = await pool.query(`SELECT 1 FROM clicker_tasks WHERE chat_id=$1 AND task=$2`, [chatId, id]);
-  const earned = tr.length > 0 || taskClaimable(a, s);
-  if (!earned) return { ok: false, reason: "not_ready" };
+  const gr = await pool.query(`SELECT achievement FROM clicker_gifts WHERE chat_id=$1`, [chatId]);
+  const granted = new Set(gr.rows.map((r) => r.achievement));
+  const phoneVerified = await isPhoneVerified(chatId).catch(() => false);
+  return {
+    phoneVerified,
+    milestones: MILESTONES.map((m) => ({
+      id: m.id, title: m.title, kind: m.perk ? "perk" : "points",
+      points: m.points || 0, perkText: m.perkText || "",
+      reached: msReached(m, s), granted: granted.has(m.id),
+    })),
+  };
+}
+
+/** Забрать награду за веху: баллы на карту или перк-купон. 1 раз, телефон обязателен. */
+export async function claimMilestone(chatId: number, id: string): Promise<{ ok: boolean; kind?: string; points?: number; promoCode?: string; perkTitle?: string; minOrder?: number; reason?: string }> {
+  if (!GIFTS_ENABLED) return { ok: false, reason: "disabled" };
+  const m: any = MS_BY_ID[id]; if (!m) return { ok: false, reason: "no_milestone" };
+  const s = await getClicker(chatId);
+  if (!msReached(m, s)) return { ok: false, reason: "not_ready" };
   if (!(await isPhoneVerified(chatId).catch(() => false))) return { ok: false, reason: "need_phone" };
-  // Бронируем выдачу (PK не даст выдать дважды); затем начисляем баллы.
+  // Бронируем выдачу (PK clicker_gifts) — защита от двойной выдачи.
   const ins = await pool.query(
     `INSERT INTO clicker_gifts (chat_id, achievement, points) VALUES ($1,$2,$3)
      ON CONFLICT (chat_id, achievement) DO NOTHING RETURNING achievement`,
-    [chatId, id, gift]
+    [chatId, id, m.points || 0]
   );
   if (!ins.rows.length) return { ok: false, reason: "already" };
   try {
-    await earnPoints(chatId, gift, "clicker_gift", { achievement: id });
+    if (m.perk) {
+      const r = await grantRewardByCode(chatId, m.perk);
+      if (!r.ok) throw new Error("grant_failed:" + r.reason);
+      return { ok: true, kind: "perk", promoCode: r.promoCode, perkTitle: r.title, minOrder: r.minOrder };
+    }
+    await earnPoints(chatId, m.points || 0, "clicker_milestone", { milestone: id });
+    return { ok: true, kind: "points", points: m.points || 0 };
   } catch (e) {
     await pool.query(`DELETE FROM clicker_gifts WHERE chat_id=$1 AND achievement=$2`, [chatId, id]).catch(() => {});
     throw e;
   }
-  return { ok: true, points: gift };
 }

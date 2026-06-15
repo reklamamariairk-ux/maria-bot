@@ -113,6 +113,14 @@ export async function initClubSchema() {
     `);
   }
 
+  // Подарок-перк для кликера: бенто при заказе от 2000₽. active=FALSE → не в
+  // витрине обмена за баллы (выдаётся только за вехи кликера через grantRewardByCode).
+  await pool.query(`
+    INSERT INTO rewards_catalog (code, title, description, reward_type, discount_value, min_order, cost_points, active, sort_order)
+    VALUES ('free_bento', 'Бенто-торт в подарок', 'Бенто при заказе от 2000₽', 'free_item', NULL, 2000, 0, FALSE, 6)
+    ON CONFLICT (code) DO NOTHING
+  `);
+
   console.log("[CLUB] Schema ready");
 }
 
@@ -588,6 +596,37 @@ export async function redeemReward(
   } finally {
     client.release();
   }
+}
+
+/**
+ * Выдать награду-купон БЕСПЛАТНО (без списания баллов) — для подарков за вехи
+ * кликера. Ищет reward по code (даже неактивный — напр. free_bento скрыт из
+ * витрины), создаёт промокод в user_rewards (cost_paid=0). Возвращает код + условие.
+ */
+export async function grantRewardByCode(
+  chatId: number,
+  code: string
+): Promise<{ ok: boolean; reason?: string; promoCode?: string; title?: string; minOrder?: number; expiresAt?: string }> {
+  const { rows } = await pool.query(
+    `SELECT id, title, min_order FROM rewards_catalog WHERE code = $1`,
+    [code]
+  );
+  if (!rows[0]) return { ok: false, reason: "reward_unavailable" };
+  const rewardId = rows[0].id as number;
+  for (let i = 0; i < 5; i++) {
+    const promoCode = generatePromoCode();
+    try {
+      const ins = await pool.query(
+        `INSERT INTO user_rewards (chat_id, reward_id, promo_code, cost_paid, expires_at)
+         VALUES ($1, $2, $3, 0, NOW() + INTERVAL '30 days') RETURNING expires_at`,
+        [chatId, rewardId, promoCode]
+      );
+      return { ok: true, promoCode, title: rows[0].title, minOrder: rows[0].min_order, expiresAt: ins.rows[0].expires_at.toISOString() };
+    } catch (e) {
+      if ((e as { code?: string }).code !== "23505") throw e; // повтор только при коллизии кода
+    }
+  }
+  return { ok: false, reason: "code_generation_failed" };
 }
 
 export async function getMyRewards(chatId: number): Promise<{
