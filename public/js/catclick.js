@@ -1058,7 +1058,7 @@
   async function maybeRegisterRef() {
     if (!authed()) return;
     try {
-      const sp = (window.App && App.startParam) || '';
+      const sp = (window.App && App.startParam && App.startParam()) || '';
       const m = /^ckref_(\d+)$/.exec(sp);
       if (!m) return;
       if (localStorage.getItem('maria_ck_ref_done')) return;
