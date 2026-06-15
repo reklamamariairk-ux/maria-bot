@@ -54,6 +54,12 @@ export const ACHIEVEMENTS = [
   { id: "ach_lvl19",   name: "Повелитель котов",  icon: "star",   reward: 100000, type: "level",   target: 19 },
   { id: "ach_streak7", name: "Неделя верности",   icon: "fire",   reward: 7000,   type: "streak",  target: 7 },
   { id: "ach_ref3",    name: "Душа компании",     icon: "users",  reward: 15000,  type: "ref",     target: 3 },
+  // Коллекция голубей: собрать всех в категории / всех вообще (level>0 у бизнесов категории)
+  { id: "col_prod",  name: "Цех в сборе",       icon: "dove",   reward: 10000,  type: "collect", target: "prod" },
+  { id: "col_mkt",   name: "Маркетинг в сборе", icon: "dove",   reward: 10000,  type: "collect", target: "mkt" },
+  { id: "col_staff", name: "Команда в сборе",   icon: "dove",   reward: 10000,  type: "collect", target: "staff" },
+  { id: "col_net",   name: "Сеть в сборе",      icon: "dove",   reward: 10000,  type: "collect", target: "net" },
+  { id: "col_all",   name: "Повелитель голубей", icon: "trophy", reward: 60000,  type: "collect", target: "all" },
 ];
 const TASK_BY_ID = Object.fromEntries(TASKS.map((t) => [t.id, t]));
 const ALL_BY_ID: Record<string, any> = Object.fromEntries([...TASKS, ...ACHIEVEMENTS].map((t) => [t.id, t]));
@@ -583,6 +589,11 @@ function taskClaimable(t: any, s: ClickerState): boolean {
   if (t.type === "ref") return s.referrals >= t.target;
   if (t.type === "taps") return s.taps >= t.target;
   if (t.type === "cards") return s.cardsOwned >= t.target;
+  if (t.type === "collect") {
+    if (t.target === "all") return s.cards.every((c) => c.level > 0);
+    const inCat = s.cards.filter((c) => c.cat === t.target);
+    return inCat.length > 0 && inCat.every((c) => c.level > 0);
+  }
   return false;
 }
 
