@@ -177,6 +177,7 @@ export interface ClickerState {
   cipher: { morse: string; len: number; claimed: boolean; reward: number };
   taps: number; cardsOwned: number;
   season: { points: number; endsTs: number };
+  gamesDone?: string[];
 }
 
 export async function initClickerSchema(): Promise<void> {
@@ -228,6 +229,10 @@ export async function initClickerSchema(): Promise<void> {
     CREATE TABLE IF NOT EXISTS clicker_codes_used (
       chat_id BIGINT NOT NULL, code TEXT NOT NULL, used_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (chat_id, code)
+    );
+    CREATE TABLE IF NOT EXISTS clicker_daily (
+      chat_id BIGINT NOT NULL, game TEXT NOT NULL, day TEXT NOT NULL,
+      PRIMARY KEY (chat_id, game)
     );
     CREATE INDEX IF NOT EXISTS clicker_top_idx ON clicker_state (total_earned DESC);
   `);
@@ -286,10 +291,21 @@ async function refresh(client: any, chatId: number): Promise<{ r: any; cl: Recor
   return { r, cl, passive };
 }
 
+async function gamesDoneToday(client: any, chatId: number): Promise<string[]> {
+  const { rows } = await client.query(`SELECT game FROM clicker_daily WHERE chat_id=$1 AND day=$2`, [chatId, irkToday()]);
+  return rows.map((r: any) => r.game);
+}
+
 export async function getClicker(chatId: number): Promise<ClickerState> {
   const client = await pool.connect();
-  try { await client.query("BEGIN"); const { r, cl, passive } = await refresh(client, chatId); await client.query("COMMIT"); return buildState(r, cl, passive); }
-  catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+  try {
+    await client.query("BEGIN");
+    const { r, cl, passive } = await refresh(client, chatId);
+    const st = buildState(r, cl, passive);
+    st.gamesDone = await gamesDoneToday(client, chatId);
+    await client.query("COMMIT");
+    return st;
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
 export async function tapClicker(chatId: number, taps: number): Promise<ClickerState> {
@@ -433,6 +449,36 @@ export async function claimRain(chatId: number, score: number): Promise<{ ok: bo
     await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, rain_date=$4, updated_at=NOW() WHERE chat_id=$1`, [chatId, r.balance, r.total_earned, today]);
     await client.query("COMMIT");
     return { ok: true, reward, state: buildState(r, cl, 0) };
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+}
+
+// ── Мини-игры хаба «Игры» (детские квизы + казуальные). 1 заход/день на игру ──
+// Доверяем клампнутому клиентскому счёту (как «Золотой дождь»): cap = макс. очков,
+// per = монет за очко. Банк вопросов/контент — целиком во фронте catclick.js.
+const GAME_CFG: Record<string, { cap: number; per: number }> = {
+  quiz_kids:   { cap: 5,   per: 1000 }, // Котовикторина: 5 вопросов × 1000
+  quiz_riddle: { cap: 4,   per: 1200 }, // Загадки: 4 × 1200
+  count:       { cap: 6,   per: 400  }, // Счёт конфет: 6 × 400
+  memory:      { cap: 100, per: 60   }, // «Собери торт»: очки 0..100
+  slice:       { cap: 100, per: 70   }, // «Ровный крем» (взрослым): точность 0..100
+};
+export async function claimGame(chatId: number, game: string, score: number): Promise<{ ok: boolean; reward?: number; game?: string; state?: ClickerState; reason?: string }> {
+  const cfg = GAME_CFG[game]; if (!cfg) return { ok: false, reason: "bad_game" };
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { r, cl } = await refresh(client, chatId);
+    const today = irkToday();
+    const ex = await client.query(`SELECT day FROM clicker_daily WHERE chat_id=$1 AND game=$2`, [chatId, game]);
+    if (ex.rows.length && ex.rows[0].day === today) { await client.query("ROLLBACK"); return { ok: false, reason: "already" }; }
+    const sc = Math.max(0, Math.min(cfg.cap, Math.floor(Number(score) || 0)));
+    const reward = sc * cfg.per;
+    r.balance = Number(r.balance) + reward; r.total_earned = Number(r.total_earned) + reward;
+    await client.query(`INSERT INTO clicker_daily (chat_id, game, day) VALUES ($1,$2,$3) ON CONFLICT (chat_id, game) DO UPDATE SET day=$3`, [chatId, game, today]);
+    await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, updated_at=NOW() WHERE chat_id=$1`, [chatId, r.balance, r.total_earned]);
+    const st = buildState(r, cl, 0); st.gamesDone = await gamesDoneToday(client, chatId);
+    await client.query("COMMIT");
+    return { ok: true, reward, game, state: st };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 

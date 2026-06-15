@@ -110,6 +110,8 @@
     tap: (s) => SVG('<path d="M9 11V5.5a1.7 1.7 0 0 1 3.4 0V11M12.4 11V9.4a1.5 1.5 0 0 1 3 0V11M15.4 11v-.6a1.5 1.5 0 0 1 3 0V15a5 5 0 0 1-5 5h-1.6a4 4 0 0 1-3-1.4L6 15.4a1.6 1.6 0 0 1 2.4-2L9 14"/>', s),
     battery: (s) => SVG('<rect x="3" y="8" width="15" height="8" rx="2"/><path d="M20 11v2"/><path d="M9.5 9.5 7.5 12.4h2.6L8 15"/>', s),
     chest: (s) => SVG('<path d="M4 10.5 6 6h12l2 4.5M4 10.5V19h16v-8.5M4 10.5h16M10 10.5v3h4v-3"/>', s),
+    game: (s) => SVG('<rect x="2.5" y="8.5" width="19" height="9" rx="4.2"/><path d="M7 11.9v3M5.5 13.4h3M15.4 12.9h.01M17.6 14.1h.01M16.5 11.8h.01"/>', s),
+    quiz: (s) => SVG('<path d="M4 5.5h16A1.5 1.5 0 0 1 21.5 7v8a1.5 1.5 0 0 1-1.5 1.5H9l-4 3v-3H4A1.5 1.5 0 0 1 2.5 15V7A1.5 1.5 0 0 1 4 5.5Z"/><path d="M9.9 9.6a2.2 2.2 0 0 1 3.3 1.8c0 1.4-1.9 1.6-1.9 2.9M11.3 16.1h.01"/>', s),
     rain: (s) => SVG('<path d="M7.5 13.5A3.5 3.5 0 0 1 8 6.6a5 5 0 0 1 9.4 1.3A3.3 3.3 0 0 1 16.8 13.5M8 17l-1 2.5M12 17l-1 2.5M16 17l-1 2.5"/>', s),
     oven: (s) => SVG('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 9h16M7 6.6h.01M10 6.6h.01M7.5 13a4.5 4.5 0 0 1 9 0"/>', s),
     megaphone: (s) => SVG('<path d="M4 10v4l10 4.5V5.5L4 10ZM4 10H3.2A1.2 1.2 0 0 0 2 11.2v1.6A1.2 1.2 0 0 0 3.2 14H4M14 8.5a3.5 3.5 0 0 1 0 7M7 15v3.5"/>', s),
@@ -129,6 +131,68 @@
   const MORSE = { А: '.-', Б: '-...', В: '.--', Г: '--.', Д: '-..', Е: '.', Ж: '...-', З: '--..', И: '..', Й: '.---', К: '-.-', Л: '.-..', М: '--', Н: '-.', О: '---', П: '.--.', Р: '.-.', С: '...', Т: '-', У: '..-', Ф: '..-.', Х: '....', Ц: '-.-.', Ч: '---.', Ш: '----', Щ: '--.-', Ь: '-..-', Ы: '-.--', Э: '..-..', Ю: '..--', Я: '.-.-' };
   function dateSeed(day, salt) { let h = 2166136261 >>> 0; const s = day + salt; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h >>> 0; }
   function todaysCombo(day) { let h = dateSeed(day, 'combo'); const pool2 = CARDS.map(c => c.id); const pick = []; for (let i = 0; i < 3; i++) { h = (Math.imul(h, 1664525) + 1013904223) >>> 0; pick.push(pool2.splice(h % pool2.length, 1)[0]); } return pick; }
+
+  // ── Хаб «Игры»: детские квизы + казуальные. Контент тут (гость играет офлайн) ──
+  // {q: вопрос, a: верный ответ, w: [неверные]}. Движок строит 4 варианта и тасует.
+  const QUIZ_KIDS = [
+    { q: 'Сколько ног у паука?', a: '8', w: ['6', '4', '10'] },
+    { q: 'Какое животное даёт нам молоко?', a: 'Корова', w: ['Курица', 'Свинья', 'Лошадь'] },
+    { q: 'Какого цвета спелый банан?', a: 'Жёлтый', w: ['Синий', 'Красный', 'Зелёный'] },
+    { q: 'Где живут рыбы?', a: 'В воде', w: ['На дереве', 'В небе', 'В норе'] },
+    { q: 'Сколько дней в неделе?', a: '7', w: ['5', '10', '12'] },
+    { q: 'Как называется наша планета?', a: 'Земля', w: ['Марс', 'Луна', 'Солнце'] },
+    { q: 'Кто делает мёд?', a: 'Пчела', w: ['Муравей', 'Бабочка', 'Комар'] },
+    { q: 'Какое время года самое холодное?', a: 'Зима', w: ['Лето', 'Весна', 'Осень'] },
+    { q: 'Что нужно растению, чтобы расти?', a: 'Солнце и вода', w: ['Конфеты', 'Снег', 'Темнота'] },
+    { q: 'Сколько цветов у радуги?', a: '7', w: ['5', '3', '10'] },
+    { q: 'Какой первый месяц года?', a: 'Январь', w: ['Декабрь', 'Март', 'Июнь'] },
+    { q: 'Кто из них умеет летать?', a: 'Орёл', w: ['Кит', 'Слон', 'Черепаха'] },
+    { q: 'Что делают из молока?', a: 'Сыр', w: ['Хлеб', 'Сок', 'Бумагу'] },
+    { q: 'Какой формы колесо?', a: 'Круглое', w: ['Квадратное', 'Треугольное', 'Как звезда'] },
+    { q: 'Сколько пальцев на одной руке?', a: '5', w: ['4', '6', '10'] },
+    { q: 'Кто говорит «мяу»?', a: 'Кошка', w: ['Собака', 'Корова', 'Утка'] },
+    { q: 'Что светит на небе ночью?', a: 'Луна', w: ['Солнце', 'Радуга', 'Облако'] },
+    { q: 'Самое большое животное на Земле?', a: 'Синий кит', w: ['Слон', 'Жираф', 'Медведь'] },
+    { q: 'Из чего пекут хлеб?', a: 'Из муки', w: ['Из песка', 'Из травы', 'Из камней'] },
+    { q: 'Сколько будет 2 + 2?', a: '4', w: ['3', '5', '22'] },
+  ];
+  const QUIZ_RIDDLE = [
+    { q: 'Мягкие лапки, а в лапках — царапки. Кто это?', a: 'Кот', w: ['Пёс', 'Заяц', 'Ёж'] },
+    { q: 'Голову кивает, по площади гуляет, «гур-гур» воркует. Кто это?', a: 'Голубь', w: ['Ворона', 'Воробей', 'Сорока'] },
+    { q: 'Сладкий, пышный, со свечками в день рождения. Что это?', a: 'Торт', w: ['Суп', 'Хлеб', 'Каша'] },
+    { q: 'Усатый, полосатый, днём спит, ночью охотится. Кто?', a: 'Кот', w: ['Петух', 'Гусь', 'Конь'] },
+    { q: 'Носит письма на лапке, домой дорогу знает. Какая птица?', a: 'Почтовый голубь', w: ['Курица', 'Индюк', 'Пингвин'] },
+    { q: 'Белое, холодное, сладкое, тает во рту. Что это?', a: 'Мороженое', w: ['Лёд', 'Снег', 'Мел'] },
+    { q: 'Мурлычет, когда доволен, шипит, когда сердит. Кто?', a: 'Кот', w: ['Чайник', 'Змея', 'Ветер'] },
+    { q: 'Круглые, шоколадные, тают в руках — что любит котик?', a: 'Конфеты', w: ['Камни', 'Шишки', 'Жёлуди'] },
+    { q: 'Воркует на крыше, кружит над городом, любит зёрнышки. Кто?', a: 'Голубь', w: ['Летучая мышь', 'Бабочка', 'Пчела'] },
+    { q: 'Хвостик крючком, глазки горят, молочко лакает. Кто?', a: 'Котёнок', w: ['Цыплёнок', 'Поросёнок', 'Утёнок'] },
+    { q: 'Воздушное, кремовое, с вишенкой наверху. Что это?', a: 'Пирожное', w: ['Котлета', 'Огурец', 'Сухарь'] },
+    { q: 'Два крыла, рук нет, а письмо доставит. Кто?', a: 'Голубь', w: ['Робот', 'Почтальон', 'Самолётик'] },
+  ];
+  const GAME_META = {
+    quiz_kids:   { name: 'Котовикторина', icon: () => ICON.quiz(20) },
+    quiz_riddle: { name: 'Загадки',       icon: () => ICON.paw(20) },
+    count:       { name: 'Счёт конфет',   icon: () => ICON.cupcake(20) },
+  };
+  // детерминированная тасовка (LCG от seed) — стабильно в течение дня
+  function shuffleSeed(arr, seedNum) { const a = arr.slice(); let h = seedNum >>> 0; for (let i = a.length - 1; i > 0; i--) { h = (Math.imul(h, 1664525) + 1013904223) >>> 0; const j = h % (i + 1); const t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+  function pickDaily(bank, n, salt) { const ord = shuffleSeed(bank.map((_, i) => i), dateSeed(irkToday(), salt)); return ord.slice(0, n).map(i => bank[i]); }
+  function quizQuestions(deck) {
+    if (deck === 'count') return genCount(6);
+    const bank = deck === 'quiz_riddle' ? QUIZ_RIDDLE : QUIZ_KIDS, n = deck === 'quiz_riddle' ? 4 : 5;
+    return pickDaily(bank, n, deck).map((q, i) => ({ q: q.q, opts: shuffleSeed([q.a, ...q.w], dateSeed(irkToday(), deck + 'o' + i)), a: q.a }));
+  }
+  function genCount(n) {
+    const out = []; let h = dateSeed(irkToday(), 'count');
+    for (let i = 0; i < n; i++) {
+      h = (Math.imul(h, 1664525) + 1013904223) >>> 0; const x = 1 + (h >>> 3) % 5;
+      h = (Math.imul(h, 1664525) + 1013904223) >>> 0; const y = 1 + (h >>> 5) % 5; const sum = x + y;
+      const opts = []; [sum, sum + 1, Math.max(1, sum - 1), sum + 2].forEach(v => { if (opts.indexOf(String(v)) < 0) opts.push(String(v)); });
+      out.push({ q: '🍬'.repeat(x) + ' + ' + '🍬'.repeat(y) + ' = ?', opts: shuffleSeed(opts.slice(0, 4), dateSeed(irkToday(), 'co' + i)), a: String(sum) });
+    }
+    return out;
+  }
   function todaysCipher(day) { return CIPHER_WORDS[dateSeed(day, 'cipher') % CIPHER_WORDS.length]; }
   function toMorse(w) { return w.split('').map(c => MORSE[c] || '').join(' '); }
   const cardName = (id) => (CARDS.find(c => c.id === id) || {}).name || id;
@@ -216,7 +280,7 @@
   function coinSfx() { sfxTap(0); }
 
   // ── Гость (localStorage) ─────────────────────────────────────────────────────
-  function rawDefault() { return { balance: 0, totalEarned: 0, energy: 1000, multitapLevel: 0, energyLevel: 0, cards: {}, taps: 0, dailyStreak: 0, dailyDate: null, bE: 0, bT: 0, bDate: null, turboUntil: 0, tasksDone: {}, comboDate: null, comboHits: [], comboClaimed: null, cipherDate: null, bonusAt: 0, chestDate: null, rainDate: null, _ts: Date.now() }; }
+  function rawDefault() { return { balance: 0, totalEarned: 0, energy: 1000, multitapLevel: 0, energyLevel: 0, cards: {}, taps: 0, dailyStreak: 0, dailyDate: null, bE: 0, bT: 0, bDate: null, turboUntil: 0, tasksDone: {}, comboDate: null, comboHits: [], comboClaimed: null, cipherDate: null, bonusAt: 0, chestDate: null, rainDate: null, gamesDone: {}, _ts: Date.now() }; }
   function rawGet() { let s; try { s = JSON.parse(localStorage.getItem(LS)); } catch (_) {} if (!s) s = rawDefault(); if (!s.cards) s.cards = {}; return s; }
   function rawSave(s) { s._ts = Date.now(); localStorage.setItem(LS, JSON.stringify(s)); }
   function profitOf(c) { let p = 0; for (const x of CARDS) p += cardProfit(x, c[x.id] || 0); return p; }
@@ -377,6 +441,33 @@
       .ck-rain__hud .x{width:32px;height:32px;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.3);color:var(--cream);font-size:16px;cursor:pointer}
       .ck-rain canvas{flex:1;width:100%;display:block;touch-action:none;cursor:pointer}
       .ck-rain__hint{position:absolute;left:0;right:0;top:48%;text-align:center;color:var(--muted);font-size:13px;pointer-events:none}
+      .ck-quiz,.ck-mem,.ck-slice{position:absolute;inset:0;z-index:12;display:none;flex-direction:column;background:radial-gradient(135% 100% at 50% -8%,#241318,#0e0a0d);padding:0 16px 26px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+      .ck-quiz.on,.ck-mem.on,.ck-slice.on{display:flex}
+      .ck-quiz__hd{display:flex;align-items:center;gap:10px;padding:16px 0 6px;font-weight:800;font-size:16px;color:var(--cream)}
+      .ck-quiz__hd .t{flex:1;display:flex;align-items:center;gap:8px;color:var(--gold-l)}
+      .ck-quiz__hd .x{width:34px;height:34px;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.3);color:var(--cream);font-size:18px;cursor:pointer;flex:none}
+      .ck-quiz__dots{display:flex;gap:6px;justify-content:center;margin:8px 0 2px}
+      .ck-quiz__dots i{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.16);transition:background .2s}
+      .ck-quiz__dots i.d{background:var(--gold)}.ck-quiz__dots i.c{background:var(--gold-l);box-shadow:0 0 8px var(--gold)}
+      .ck-quiz__q{margin:20px 4px;font-size:21px;font-weight:800;color:var(--ink);text-align:center;line-height:1.3;min-height:58px;display:flex;align-items:center;justify-content:center}
+      .ck-quiz__opts{display:flex;flex-direction:column;gap:11px;max-width:440px;width:100%;margin:0 auto}
+      .ck-quiz__o{padding:16px 18px;border-radius:15px;border:1.5px solid var(--line);background:var(--panel);color:var(--ink);font-size:17px;font-weight:700;cursor:pointer;text-align:left;transition:transform .08s,background .2s,border-color .2s}
+      .ck-quiz__o:active{transform:scale(.98)}
+      .ck-quiz__o.ok{background:rgba(72,187,120,.22);border-color:#48bb78;color:#c6f6d5}
+      .ck-quiz__o.bad{background:rgba(229,62,62,.2);border-color:#e53e3e;color:#feb2b2}
+      .ck-mem__sub{text-align:center;color:var(--muted);font-size:13px;margin:6px 0 16px;font-variant-numeric:tabular-nums}
+      .ck-mem__grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;max-width:380px;width:100%;margin:0 auto}
+      .ck-mem__c{position:relative;aspect-ratio:1;border:none;background:none;cursor:pointer;padding:0}
+      .ck-mem__c .f,.ck-mem__c .b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:14px;backface-visibility:hidden;-webkit-backface-visibility:hidden;transition:transform .35s;font-size:30px}
+      .ck-mem__c .f{background:linear-gradient(160deg,#3a2630,#241318);border:1.5px solid var(--line);color:var(--gold-l);font-weight:800;font-size:22px}
+      .ck-mem__c .b{background:var(--panel);border:1.5px solid var(--gold);transform:rotateY(180deg)}
+      .ck-mem__c.show .f{transform:rotateY(180deg)}.ck-mem__c.show .b{transform:rotateY(0)}
+      .ck-mem__c.match .b{border-color:#48bb78;box-shadow:0 0 12px rgba(72,187,120,.5)}
+      .ck-slice__wrap{max-width:440px;width:100%;margin:34px auto 0;padding:0 6px}
+      .ck-slice__track{position:relative;height:48px;border-radius:24px;background:rgba(0,0,0,.32);border:1.5px solid var(--line);overflow:hidden}
+      .ck-slice__zone{position:absolute;top:0;bottom:0;left:42%;width:16%;background:linear-gradient(180deg,rgba(72,187,120,.42),rgba(72,187,120,.16));border-left:2px solid #48bb78;border-right:2px solid #48bb78}
+      .ck-slice__mark{position:absolute;top:-3px;bottom:-3px;left:0;width:6px;border-radius:3px;background:var(--gold-l);box-shadow:0 0 12px var(--gold);transform:translateX(-50%)}
+      .ck-slice__mark.good{background:#48bb78;box-shadow:0 0 14px #48bb78}.ck-slice__mark.ok{background:var(--gold)}.ck-slice__mark.bad{background:#e53e3e}
       .ck-bonus-fly{position:absolute;z-index:8;pointer-events:auto;cursor:pointer;filter:drop-shadow(0 0 13px rgba(255,212,90,.95));animation:ckBonusSpin 1.1s linear infinite}
       @keyframes ckBonusSpin{to{transform:rotate(360deg)}}
       .ck-season{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
@@ -481,6 +572,7 @@
         <div class="ck-energy"><div class="ck-energy__row" id="ck-enrow"><span id="ck-enpre">${ICON.bolt(15)}</span> <span id="ck-en">0</span> / <span id="ck-enmax">1000</span></div><div class="ck-energy__bar"><div class="ck-energy__fill" id="ck-enfill"></div></div></div>
       </div>
       <div class="ck-screen" id="ck-scr-up"><div class="ck-uphd"><div class="ck-bal" style="justify-content:center;font-size:30px">${COIN(26)} <span id="ck-bal2">0</span></div><div class="p" id="ck-prof2">${COIN(13)} +0 / час</div></div><div class="ck-uplist" id="ck-uplist"></div></div>
+      <div class="ck-screen" id="ck-scr-games"><div class="ck-uphd"><div class="b">${ICON.game(22)} Игры</div></div><div class="ck-uplist" id="ck-gameslist"></div></div>
       <div class="ck-screen" id="ck-scr-dove"><div class="ck-uphd"><div class="b">${ICON.dove(22)} Голубятня</div></div><div class="ck-uplist" id="ck-dovelist"></div></div>
       <div class="ck-screen" id="ck-scr-tasks"><div class="ck-uphd"><div class="b">${ICON.list(22)} Задания</div></div><div class="ck-uplist" id="ck-taskslist"></div></div>
       <div class="ck-screen" id="ck-scr-top"><div class="ck-uphd"><div class="b">${ICON.trophy(22)} Рейтинг</div><div class="p" id="ck-myrank"></div></div><div class="ck-uplist" id="ck-toplist"></div></div>
@@ -490,6 +582,7 @@
       <div class="ck-nav">
         <button class="ck-nav__b on" data-tab="cat">${ICON.paw(21)}Котик</button>
         <button class="ck-nav__b" data-tab="up">${ICON.bolt(21)}Прокачка</button>
+        <button class="ck-nav__b" data-tab="games">${ICON.game(21)}Игры</button>
         <button class="ck-nav__b" data-tab="dove">${ICON.dove(21)}Голуби</button>
         <button class="ck-nav__b" data-tab="tasks">${ICON.list(21)}Задания</button>
         <button class="ck-nav__b" data-tab="top">${ICON.trophy(21)}Рейтинг</button>
@@ -507,11 +600,13 @@
     tab = t;
     ov.querySelector('#ck-scr-cat').classList.toggle('on', t === 'cat');
     ov.querySelector('#ck-scr-up').classList.toggle('on', t === 'up');
+    ov.querySelector('#ck-scr-games').classList.toggle('on', t === 'games');
     ov.querySelector('#ck-scr-dove').classList.toggle('on', t === 'dove');
     ov.querySelector('#ck-scr-tasks').classList.toggle('on', t === 'tasks');
     ov.querySelector('#ck-scr-top').classList.toggle('on', t === 'top');
     ov.querySelectorAll('.ck-nav__b').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
     if (t === 'up') renderUpgrades();
+    if (t === 'games') renderGames();
     if (t === 'dove') renderDove();
     if (t === 'tasks') renderTasks();
     if (t === 'top') renderTop();
@@ -741,6 +836,26 @@
     else { const g = guestClaimRainRaw(score); if (g != null) { reward = g; st = guestDerive(); } }
     sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); coinShower(); dailyPopupRaw(ICON.rain(20) + ` Золотой дождь · ${score} монет`, reward || 0); renderAll(); renderTasks(); bumpBalance();
   }
+  // ── Хаб «Игры»: единый claim (clamp+гейт 1/день; для гостя — localStorage) ────
+  const GAME_CAP = { quiz_kids: { cap: 5, per: 1000 }, quiz_riddle: { cap: 4, per: 1200 }, count: { cap: 6, per: 400 }, memory: { cap: 100, per: 60 }, slice: { cap: 100, per: 70 } };
+  // gamesDone приходит только в getClicker/claimGame; tap/buy его не несут → кэшируем
+  let gdCache = [];
+  function gamesDoneNow() { if (authed()) { if (st && Array.isArray(st.gamesDone)) gdCache = st.gamesDone; return gdCache; } return guestGamesDoneList(); }
+  function gameDone(g) { return gamesDoneNow().indexOf(g) >= 0; }
+  function guestGamesDoneList() { const s = rawGet(); const today = irkToday(); const g = s.gamesDone || {}; return Object.keys(g).filter(k => g[k] === today); }
+  function guestClaimGameRaw(game, score) {
+    const cfg = GAME_CAP[game]; if (!cfg) return null; guestDerive(); const s = rawGet(); const today = irkToday();
+    if (!s.gamesDone) s.gamesDone = {}; if (s.gamesDone[game] === today) return null;
+    const sc = Math.max(0, Math.min(cfg.cap, Math.floor(score || 0))); const reward = sc * cfg.per;
+    s.balance += reward; s.totalEarned += reward; s.gamesDone[game] = today; rawSave(s); return reward;
+  }
+  async function submitGame(game, score) {
+    let reward = 0;
+    if (authed()) { const d = await api('/api/clicker/game', { method: 'POST', body: JSON.stringify({ game, score }) }).catch(() => null); if (d && !d.error) { st = d; reward = d.reward || 0; } }
+    else { const g = guestClaimGameRaw(game, score); if (g != null) { reward = g; st = guestDerive(); } }
+    return reward;
+  }
+
   function guestClaimRainRaw(score) {
     guestDerive(); const s = rawGet(); const today = irkToday(); if (s.rainDate === today) return 0;
     const sc = Math.max(0, Math.min(120, Math.floor(score))); const lvl = leagueFor(s.totalEarned).level; const reward = Math.min(80000, sc * (60 + lvl * 20));
@@ -1038,7 +1153,7 @@
     const rainCard = `<div class="ck-card ck-bonus">
       <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.rain(26)}</div><div class="ck-card__b"><div class="ck-card__n">Золотой дождь</div><div class="ck-card__s">${rainAvail ? 'Лови монеты 20 секунд → бонус' : 'Сыграно — приходи завтра'}</div></div>
       ${rainAvail ? `<button class="ck-card__buy" id="ck-rain-play">Играть</button>` : `<button class="ck-card__buy" disabled>✓ Сыграно</button>`}</div>`;
-    return '<div class="ck-sect">Бонусы дня</div>' + chestCard + rainCard + comboCard + cipherCard;
+    return '<div class="ck-sect">Бонусы дня</div>' + chestCard + comboCard + cipherCard;
   }
   function wireBonus() {
     const cb = ov.querySelector('#ck-combo-claim'); if (cb) cb.onclick = claimCombo;
@@ -1089,7 +1204,141 @@
     if (st.passiveEarned > 0) passivePopup(st.passiveEarned);
     lastTs = 0; syncT = 0; combo = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
   }
-  function close() { cancelAnimationFrame(raf); clearTimeout(bonusTimer); if (rainState) endRain(true); flush(); if (ov) ov.classList.remove('on'); window.scrollUnlock && window.scrollUnlock(); }
+  // ── Хаб «Игры»: рендер + квизы + «Собери торт» + «Ровный крем» ───────────────
+  let quizState = null, memState = null, sliceState = null;
+  const MEM_ICONS = ['🍰', '🧁', '🍮', '🍪', '🍩', '🍫'];
+
+  function renderGames() {
+    const box = ov && ov.querySelector('#ck-gameslist'); if (!box) return;
+    const card = (id, icon, name, desc) => {
+      const done = gameDone(id);
+      return `<div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${icon}</div><div class="ck-card__b"><div class="ck-card__n">${name}</div><div class="ck-card__s">${done ? 'Сыграно — приходи завтра' : desc}</div></div>${done ? `<button class="ck-card__buy" disabled>✓ Сегодня</button>` : `<button class="ck-card__buy" data-game="${id}">Играть</button>`}</div></div>`;
+    };
+    const rainAvail = !st || st.rainAvailable;
+    const rainCard = `<div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.rain(26)}</div><div class="ck-card__b"><div class="ck-card__n">Золотой дождь</div><div class="ck-card__s">${rainAvail ? 'Лови монеты 20 секунд → бонус' : 'Сыграно — приходи завтра'}</div></div>${rainAvail ? `<button class="ck-card__buy" id="ck-games-rain">Играть</button>` : `<button class="ck-card__buy" disabled>✓ Сегодня</button>`}</div></div>`;
+    box.innerHTML =
+      '<div class="ck-sect">Учимся и играем · детям</div>' +
+      card('quiz_kids', ICON.quiz(26), 'Котовикторина', '5 вопросов обо всём · +до 5000 ' + COIN(13)) +
+      card('quiz_riddle', ICON.paw(26), 'Загадки', 'Отгадай 4 загадки · +до 4800 ' + COIN(13)) +
+      card('count', ICON.cupcake(26), 'Счёт конфет', 'Сложи конфеты, малышам · +до 2400 ' + COIN(13)) +
+      card('memory', ICON.cake(26), 'Собери торт', 'Найди пары на память · +до 6000 ' + COIN(13)) +
+      '<div class="ck-sect">Казуальные · всем</div>' +
+      card('slice', ICON.cake(26), 'Ровный крем', 'Останови полоску в центре · +до 7000 ' + COIN(13)) +
+      rainCard;
+    box.querySelectorAll('.ck-card__buy[data-game]').forEach(b => b.onclick = () => startGame(b.dataset.game));
+    const rb = box.querySelector('#ck-games-rain'); if (rb) rb.onclick = openRain;
+  }
+  function startGame(g) { if (g === 'memory') openMemory(); else if (g === 'slice') openSlice(); else openQuiz(g); }
+  function resultPopup(title, amount, sub) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${title}</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><div style="color:var(--muted);font-size:13px">${sub || ''}</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
+
+  // — Квизы (Котовикторина / Загадки / Счёт конфет) —
+  function openQuiz(deck) {
+    if (gameDone(deck)) { flashMsg('Сыграно — приходи завтра'); return; }
+    const qs = quizQuestions(deck); if (!qs.length) return;
+    let el = ov.querySelector('#ck-quiz'); if (!el) { el = document.createElement('div'); el.id = 'ck-quiz'; el.className = 'ck-quiz'; ov.appendChild(el); }
+    quizState = { deck, qs, i: 0, correct: 0, locked: false }; el.classList.add('on'); renderQuizStep();
+  }
+  function renderQuizStep() {
+    const el = ov.querySelector('#ck-quiz'), s = quizState; if (!s) return; const q = s.qs[s.i]; const meta = GAME_META[s.deck];
+    const dots = s.qs.map((_, k) => `<i class="${k < s.i ? 'd' : ''} ${k === s.i ? 'c' : ''}"></i>`).join('');
+    el.innerHTML = `<div class="ck-quiz__hd"><div class="t">${meta.icon()} ${meta.name}</div><button class="x" id="ck-quiz-x">×</button></div><div class="ck-quiz__dots">${dots}</div><div class="ck-quiz__q">${q.q}</div><div class="ck-quiz__opts">${q.opts.map(o => `<button class="ck-quiz__o">${o}</button>`).join('')}</div>`;
+    el.querySelector('#ck-quiz-x').onclick = closeQuiz;
+    el.querySelectorAll('.ck-quiz__o').forEach(b => b.onclick = () => answerQuiz(b, q));
+  }
+  function answerQuiz(btn, q) {
+    const s = quizState; if (!s || s.locked) return; s.locked = true;
+    const ok = btn.textContent === q.a; const el = ov.querySelector('#ck-quiz');
+    el.querySelectorAll('.ck-quiz__o').forEach(b => { b.disabled = true; if (b.textContent === q.a) b.classList.add('ok'); else if (b === btn) b.classList.add('bad'); });
+    if (ok) { s.correct++; note(880, 0.12, 'triangle', 0.09, 1320); window.haptic && window.haptic('light'); } else { sfxError(); window.haptic && window.haptic('warning'); }
+    setTimeout(() => { s.i++; s.locked = false; if (s.i >= s.qs.length) finishQuiz(); else renderQuizStep(); }, 760);
+  }
+  async function finishQuiz() {
+    const s = quizState; if (!s) return; const deck = s.deck, correct = s.correct, total = s.qs.length, meta = GAME_META[deck]; closeQuiz();
+    const reward = await submitGame(deck, correct);
+    sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
+    resultPopup(`${meta.icon()} ${correct}/${total} верно!`, reward || 0, correct === total ? 'Идеально! 🌟' : 'Молодец, заходи завтра!');
+    renderAll(); renderGames(); bumpBalance();
+  }
+  function closeQuiz() { const el = ov.querySelector('#ck-quiz'); if (el) el.classList.remove('on'); quizState = null; }
+
+  // — «Собери торт» (память/пары) —
+  function openMemory() {
+    if (gameDone('memory')) { flashMsg('Сыграно — приходи завтра'); return; }
+    let el = ov.querySelector('#ck-mem'); if (!el) { el = document.createElement('div'); el.id = 'ck-mem'; el.className = 'ck-mem'; ov.appendChild(el); }
+    const cards = shuffleSeed([...MEM_ICONS, ...MEM_ICONS], dateSeed(irkToday(), 'mem')).map(v => ({ v, done: false }));
+    memState = { cards, flipped: [], matched: 0, moves: 0, t0: performance.now(), lock: false }; el.classList.add('on'); renderMemory();
+  }
+  function renderMemory() {
+    const el = ov.querySelector('#ck-mem'), s = memState; if (!s) return;
+    el.innerHTML = `<div class="ck-quiz__hd"><div class="t">${ICON.cake(20)} Собери торт</div><button class="x" id="ck-mem-x">×</button></div><div class="ck-mem__sub">Найди одинаковые пары · ходов: <span id="ck-mem-moves">0</span></div><div class="ck-mem__grid">${s.cards.map((c, k) => `<button class="ck-mem__c" data-k="${k}"><span class="f">?</span><span class="b">${c.v}</span></button>`).join('')}</div>`;
+    el.querySelector('#ck-mem-x').onclick = closeMemory;
+    el.querySelectorAll('.ck-mem__c').forEach(b => b.onclick = () => flipMem(parseInt(b.dataset.k, 10)));
+  }
+  function memCell(k) { return ov.querySelector(`.ck-mem__c[data-k="${k}"]`); }
+  function flipMem(k) {
+    const s = memState; if (!s || s.lock) return; const c = s.cards[k]; if (c.done || s.flipped.indexOf(k) >= 0) return;
+    memCell(k).classList.add('show'); s.flipped.push(k); note(740, 0.08, 'sine', 0.06);
+    if (s.flipped.length === 2) {
+      s.moves++; ov.querySelector('#ck-mem-moves').textContent = s.moves; s.lock = true;
+      const a = s.flipped[0], b = s.flipped[1];
+      if (s.cards[a].v === s.cards[b].v) { s.cards[a].done = s.cards[b].done = true; s.matched++; setTimeout(() => { memCell(a).classList.add('match'); memCell(b).classList.add('match'); s.flipped = []; s.lock = false; note(1046, 0.12, 'triangle', 0.08, 1320); window.haptic && window.haptic('light'); if (s.matched === MEM_ICONS.length) finishMemory(); }, 340); }
+      else { setTimeout(() => { memCell(a).classList.remove('show'); memCell(b).classList.remove('show'); s.flipped = []; s.lock = false; sfxError(); }, 720); }
+    }
+  }
+  async function finishMemory() {
+    const s = memState; if (!s) return; const secs = (performance.now() - s.t0) / 1000; const moves = s.moves;
+    const score = Math.max(20, Math.min(100, Math.round(100 - (moves - MEM_ICONS.length) * 5 - secs * 1.2))); closeMemory();
+    const reward = await submitGame('memory', score);
+    sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
+    resultPopup(`${ICON.cake(22)} Торт собран!`, reward || 0, `За ${moves} ходов · ${Math.round(secs)}с`);
+    renderAll(); renderGames(); bumpBalance();
+  }
+  function closeMemory() { const el = ov.querySelector('#ck-mem'); if (el) el.classList.remove('on'); memState = null; }
+
+  // — «Ровный крем» (тайминг, взрослым) —
+  function openSlice() {
+    if (gameDone('slice')) { flashMsg('Сыграно — приходи завтра'); return; }
+    let el = ov.querySelector('#ck-slice'); if (!el) { el = document.createElement('div'); el.id = 'ck-slice'; el.className = 'ck-slice'; ov.appendChild(el); }
+    sliceState = { round: 0, rounds: 5, score: 0, pos: 0, dir: 1, speed: 0.8, running: false, raf: 0, last: 0 };
+    el.classList.add('on'); renderSliceUI(); nextSliceRound();
+  }
+  function renderSliceUI() {
+    const el = ov.querySelector('#ck-slice');
+    el.innerHTML = `<div class="ck-quiz__hd"><div class="t">${ICON.cake(20)} Ровный крем</div><button class="x" id="ck-slice-x">×</button></div><div class="ck-mem__sub">Останови полоску в зелёном центре · раунд <span id="ck-slice-r">1</span>/5 · очки <span id="ck-slice-s">0</span></div><div class="ck-slice__wrap"><div class="ck-slice__track"><div class="ck-slice__zone"></div><div class="ck-slice__mark" id="ck-slice-mark"></div></div></div><button class="ck-card__buy" id="ck-slice-stop" style="margin:22px auto 0;justify-content:center;min-width:170px;font-size:17px">СТОП</button>`;
+    el.querySelector('#ck-slice-x').onclick = closeSlice;
+    el.querySelector('#ck-slice-stop').onclick = stopSlice;
+  }
+  function nextSliceRound() {
+    const s = sliceState; if (!s) return; if (s.round >= s.rounds) { finishSlice(); return; }
+    const r = ov.querySelector('#ck-slice-r'); if (r) r.textContent = s.round + 1;
+    s.pos = 0; s.dir = 1; s.speed = 0.8 + s.round * 0.18; s.running = true; s.last = performance.now();
+    cancelAnimationFrame(s.raf); s.raf = requestAnimationFrame(sliceLoop);
+  }
+  function sliceLoop(ts) {
+    const s = sliceState; if (!s || !s.running) return;
+    const dt = Math.min(0.05, (ts - s.last) / 1000); s.last = ts; s.pos += s.dir * s.speed * dt;
+    if (s.pos >= 1) { s.pos = 1; s.dir = -1; } if (s.pos <= 0) { s.pos = 0; s.dir = 1; }
+    const m = ov.querySelector('#ck-slice-mark'); if (m) m.style.left = (s.pos * 100) + '%';
+    s.raf = requestAnimationFrame(sliceLoop);
+  }
+  function stopSlice() {
+    const s = sliceState; if (!s || !s.running) return; s.running = false; cancelAnimationFrame(s.raf);
+    const dist = Math.abs(s.pos - 0.5); const pts = Math.max(0, Math.round(20 * (1 - dist / 0.5))); s.score += pts;
+    const ss = ov.querySelector('#ck-slice-s'); if (ss) ss.textContent = s.score;
+    const m = ov.querySelector('#ck-slice-mark'); if (m) m.classList.add(pts >= 16 ? 'good' : pts >= 8 ? 'ok' : 'bad');
+    if (pts >= 16) { note(1046, 0.14, 'triangle', 0.09, 1568); window.haptic && window.haptic('light'); } else sfxError();
+    s.round++; setTimeout(() => { const mk = ov.querySelector('#ck-slice-mark'); if (mk) mk.className = 'ck-slice__mark'; nextSliceRound(); }, 640);
+  }
+  async function finishSlice() {
+    const s = sliceState; if (!s) return; const score = Math.min(100, s.score); closeSlice();
+    const reward = await submitGame('slice', score);
+    sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
+    resultPopup(`${ICON.cake(22)} Крем готов!`, reward || 0, `Точность ${score}/100`);
+    renderAll(); renderGames(); bumpBalance();
+  }
+  function closeSlice() { if (sliceState) cancelAnimationFrame(sliceState.raf); const el = ov.querySelector('#ck-slice'); if (el) el.classList.remove('on'); sliceState = null; }
+
+  function close() { cancelAnimationFrame(raf); clearTimeout(bonusTimer); if (rainState) endRain(true); if (quizState) closeQuiz(); if (memState) closeMemory(); if (sliceState) closeSlice(); flush(); if (ov) ov.classList.remove('on'); window.scrollUnlock && window.scrollUnlock(); }
   window.catClickOpen = open; window.catClickClose = close; window.catClickBonusNow = () => { if (ov && ov.classList.contains('on')) showFlyingBonus(); }; // превью/тест золотого бонуса
   window.addEventListener('resize', () => { if (ov && ov.classList.contains('on') && st) applyCostume(leagueFor(st.totalEarned)); });
 })();
