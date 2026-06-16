@@ -32,22 +32,22 @@
     // cat = картинка кота на уровне (эволюция «глоу-ап»: тощий уличный → кот-император)
     // 19 уровней под арт Маши. ⚠️ Лестница продублирована в src/clicker.ts — менять синхронно.
     { level: 1,  name: 'Тощий котик',        need: 0,       cat: 'cat-stage1.png' },
-    { level: 2,  name: 'Обычный котик',      need: 200,     cat: 'cat-stage2.png' },
-    { level: 3,  name: 'Сытый котик',        need: 600,     cat: 'cat-stage3.png' },
-    { level: 4,  name: 'Толстый котик',      need: 1500,    cat: 'cat-stage4.png' },
-    { level: 5,  name: 'Котик на спорте',    need: 3500,    cat: 'cat-stage5.png' },
-    { level: 6,  name: 'Подкачанный котик',  need: 7000,    cat: 'cat-stage6.png' },
-    { level: 7,  name: 'Котик в тонусе',     need: 13000,   cat: 'cat-stage7.png' },
-    { level: 8,  name: 'Котик-бодибилдер',   need: 24000,   cat: 'cat-stage8.png' },
-    { level: 9,  name: 'Котик-силач',        need: 42000,   cat: 'cat-stage9.png' },
-    { level: 10, name: 'Котик-рэпер',        need: 70000,   cat: 'cat-stage10.png' },
-    { level: 11, name: 'Котик при деньгах',  need: 110000,  cat: 'cat-stage11.png' },
-    { level: 12, name: 'Котик-делец',        need: 170000,  cat: 'cat-stage12.png' },
-    { level: 13, name: 'Котик-бизнесмен',    need: 260000,  cat: 'cat-stage13.png' },
-    { level: 14, name: 'Котик-босс',         need: 400000,  cat: 'cat-stage14.png' },
-    { level: 15, name: 'Котик-магнат',       need: 1200000,  cat: 'cat-stage15.png' },
-    { level: 16, name: 'Котик-воротила',     need: 5000000,  cat: 'cat-stage16.png' },
-    { level: 17, name: 'Котик-олигарх',      need: 25000000, cat: 'cat-stage17.png' },
+    { level: 2,  name: 'Обычный котик',      need: 1000,    cat: 'cat-stage2.png' },
+    { level: 3,  name: 'Сытый котик',        need: 3000,    cat: 'cat-stage3.png' },
+    { level: 4,  name: 'Толстый котик',      need: 8000,    cat: 'cat-stage4.png' },
+    { level: 5,  name: 'Котик на спорте',    need: 18000,   cat: 'cat-stage5.png' },
+    { level: 6,  name: 'Подкачанный котик',  need: 38000,   cat: 'cat-stage6.png' },
+    { level: 7,  name: 'Котик в тонусе',     need: 70000,   cat: 'cat-stage7.png' },
+    { level: 8,  name: 'Котик-бодибилдер',   need: 120000,  cat: 'cat-stage8.png' },
+    { level: 9,  name: 'Котик-силач',        need: 200000,  cat: 'cat-stage9.png' },
+    { level: 10, name: 'Котик-рэпер',        need: 320000,  cat: 'cat-stage10.png' },
+    { level: 11, name: 'Котик при деньгах',  need: 500000,  cat: 'cat-stage11.png' },
+    { level: 12, name: 'Котик-делец',        need: 800000,  cat: 'cat-stage12.png' },
+    { level: 13, name: 'Котик-бизнесмен',    need: 1300000, cat: 'cat-stage13.png' },
+    { level: 14, name: 'Котик-босс',         need: 2000000, cat: 'cat-stage14.png' },
+    { level: 15, name: 'Котик-магнат',       need: 3500000,  cat: 'cat-stage15.png' },
+    { level: 16, name: 'Котик-воротила',     need: 8000000,  cat: 'cat-stage16.png' },
+    { level: 17, name: 'Котик-олигарх',      need: 30000000, cat: 'cat-stage17.png' },
     { level: 18, name: 'Котик-дон',          need: 150000000, cat: 'cat-stage18.png' },
     { level: 19, name: 'Повелитель котов',   need: 1200000000, cat: 'cat-stage19.png' },
   ];
@@ -74,7 +74,7 @@
   const perTapFor = (l) => 1 + l;
   const cardPrice = (c, l) => Math.round(c.basePrice * Math.pow(1.7, l));
   const cardProfit = (c, l) => c.baseProfit * l;
-  const dailyReward = (streak) => 500 * Math.min(Math.max(1, streak), 10);
+  const dailyReward = (streak) => 250 * Math.min(Math.max(1, streak), 10);
 
   // ── Иконки: единый набор (золото/крем) + брендовая монета ─────────────────────
   const COIN_SPRITE = `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -127,7 +127,7 @@
   const taskIcon = (id) => ({ site: ICON.globe, review: ICON.star, vk: ICON.users, tg: ICON.send, invite1: ICON.users, level3: ICON.star, balance10: ICON.wallet, streak3: ICON.fire }[id] || ICON.star)(26);
 
   // ── Бонусы дня (зеркало src/clicker.ts — алгоритм/слова/морзе менять синхронно) ──
-  const COMBO_REWARD = 50000, CIPHER_REWARD = 8000;
+  const COMBO_REWARD = 12000, CIPHER_REWARD = 3000;
   const CIPHER_WORDS = ['МАРИЯ', 'ТОРТ', 'КОТИК', 'КРЕМ', 'ЭКЛЕР', 'МУСС', 'БИСКВИТ', 'ВАНИЛЬ', 'ШОКОЛАД', 'КАРАМЕЛЬ', 'ДЕСЕРТ', 'ПЕКАРНЯ'];
   const MORSE = { А: '.-', Б: '-...', В: '.--', Г: '--.', Д: '-..', Е: '.', Ж: '...-', З: '--..', И: '..', Й: '.---', К: '-.-', Л: '.-..', М: '--', Н: '-.', О: '---', П: '.--.', Р: '.-.', С: '...', Т: '-', У: '..-', Ф: '..-.', Х: '....', Ц: '-.-.', Ч: '---.', Ш: '----', Щ: '--.-', Ь: '-..-', Ы: '-.--', Э: '..-..', Ю: '..--', Я: '.-.-' };
   function dateSeed(day, salt) { let h = 2166136261 >>> 0; const s = day + salt; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h >>> 0; }
@@ -814,11 +814,11 @@
   // ── Сундук удачи ──────────────────────────────────────────────────────────────
   function rollChestGuest(level) {
     const r = Math.random(), sc = 1 + level * 0.25;
-    if (r < 0.42) return { type: 'coins', amount: Math.round((500 + Math.random() * 1800) * sc) };
-    if (r < 0.68) return { type: 'coins', amount: Math.round((2000 + Math.random() * 4000) * sc) };
+    if (r < 0.42) return { type: 'coins', amount: Math.round((300 + Math.random() * 1000) * sc) };
+    if (r < 0.68) return { type: 'coins', amount: Math.round((1200 + Math.random() * 2500) * sc) };
     if (r < 0.82) return { type: 'turbo' };
     if (r < 0.95) return { type: 'energy' };
-    return { type: 'jackpot', amount: Math.round(15000 + Math.random() * 35000) };
+    return { type: 'jackpot', amount: Math.round(5000 + Math.random() * 15000) };
   }
   function guestOpenChestRaw() {
     guestDerive(); const s = rawGet(); const today = irkToday(); if (s.chestDate === today) return null;

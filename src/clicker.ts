@@ -70,27 +70,27 @@ export const ACHIEVEMENTS = [
 ];
 const TASK_BY_ID = Object.fromEntries(TASKS.map((t) => [t.id, t]));
 const ALL_BY_ID: Record<string, any> = Object.fromEntries([...TASKS, ...ACHIEVEMENTS].map((t) => [t.id, t]));
-const dailyReward = (streak: number) => 500 * Math.min(Math.max(1, streak), 10); // день1=500 … день10+=5000
+const dailyReward = (streak: number) => 250 * Math.min(Math.max(1, streak), 10); // день1=250 … день10+=2500
 
 // ⚠️ Лестница продублирована во фронте public/js/catclick.js (там же поле cat) — менять синхронно.
 export const LEAGUES = [
   { level: 1,  name: "Тощий котик",        need: 0 },
-  { level: 2,  name: "Обычный котик",      need: 200 },
-  { level: 3,  name: "Сытый котик",        need: 600 },
-  { level: 4,  name: "Толстый котик",      need: 1500 },
-  { level: 5,  name: "Котик на спорте",    need: 3500 },
-  { level: 6,  name: "Подкачанный котик",  need: 7000 },
-  { level: 7,  name: "Котик в тонусе",     need: 13000 },
-  { level: 8,  name: "Котик-бодибилдер",   need: 24000 },
-  { level: 9,  name: "Котик-силач",        need: 42000 },
-  { level: 10, name: "Котик-рэпер",        need: 70000 },
-  { level: 11, name: "Котик при деньгах",  need: 110000 },
-  { level: 12, name: "Котик-делец",        need: 170000 },
-  { level: 13, name: "Котик-бизнесмен",    need: 260000 },
-  { level: 14, name: "Котик-босс",         need: 400000 },
-  { level: 15, name: "Котик-магнат",       need: 1200000 },
-  { level: 16, name: "Котик-воротила",     need: 5000000 },
-  { level: 17, name: "Котик-олигарх",      need: 25000000 },
+  { level: 2,  name: "Обычный котик",      need: 1000 },
+  { level: 3,  name: "Сытый котик",        need: 3000 },
+  { level: 4,  name: "Толстый котик",      need: 8000 },
+  { level: 5,  name: "Котик на спорте",    need: 18000 },
+  { level: 6,  name: "Подкачанный котик",  need: 38000 },
+  { level: 7,  name: "Котик в тонусе",     need: 70000 },
+  { level: 8,  name: "Котик-бодибилдер",   need: 120000 },
+  { level: 9,  name: "Котик-силач",        need: 200000 },
+  { level: 10, name: "Котик-рэпер",        need: 320000 },
+  { level: 11, name: "Котик при деньгах",  need: 500000 },
+  { level: 12, name: "Котик-делец",        need: 800000 },
+  { level: 13, name: "Котик-бизнесмен",    need: 1300000 },
+  { level: 14, name: "Котик-босс",         need: 2000000 },
+  { level: 15, name: "Котик-магнат",       need: 3500000 },
+  { level: 16, name: "Котик-воротила",     need: 8000000 },
+  { level: 17, name: "Котик-олигарх",      need: 30000000 },
   { level: 18, name: "Котик-дон",          need: 150000000 },
   { level: 19, name: "Повелитель котов",   need: 1200000000 },
 ];
@@ -154,8 +154,8 @@ const cardProfit = (c: { baseProfit: number }, lvl: number) => c.baseProfit * lv
 
 // ── Бонусы дня: Комбо (3 карты) + Шифр (морзе) — детерминированы от даты ─────────
 // ⚠️ Алгоритм/слова/морзе продублированы во фронте public/js/catclick.js — менять синхронно.
-const COMBO_REWARD = 50000;
-const CIPHER_REWARD = 8000;
+const COMBO_REWARD = 12000;
+const CIPHER_REWARD = 3000;
 const CIPHER_WORDS = ["МАРИЯ", "ТОРТ", "КОТИК", "КРЕМ", "ЭКЛЕР", "МУСС", "БИСКВИТ", "ВАНИЛЬ", "ШОКОЛАД", "КАРАМЕЛЬ", "ДЕСЕРТ", "ПЕКАРНЯ"];
 const MORSE: Record<string, string> = {
   А: ".-", Б: "-...", В: ".--", Г: "--.", Д: "-..", Е: ".", Ж: "...-", З: "--..", И: "..", Й: ".---",
@@ -498,11 +498,11 @@ export async function claimGame(chatId: number, game: string, score: number): Pr
 /** Сундук удачи: 1 открытие в день, взвешенный приз (решается на сервере). */
 function rollChest(level: number): { type: string; amount?: number } {
   const r = Math.random(); const sc = 1 + level * 0.25;
-  if (r < 0.42) return { type: "coins", amount: Math.round((500 + Math.random() * 1800) * sc) };
-  if (r < 0.68) return { type: "coins", amount: Math.round((2000 + Math.random() * 4000) * sc) };
+  if (r < 0.42) return { type: "coins", amount: Math.round((300 + Math.random() * 1000) * sc) };
+  if (r < 0.68) return { type: "coins", amount: Math.round((1200 + Math.random() * 2500) * sc) };
   if (r < 0.82) return { type: "turbo" };
   if (r < 0.95) return { type: "energy" };
-  return { type: "jackpot", amount: Math.round(15000 + Math.random() * 35000) };
+  return { type: "jackpot", amount: Math.round(5000 + Math.random() * 15000) };
 }
 export async function openChest(chatId: number): Promise<{ ok: boolean; prize?: { type: string; amount?: number }; state?: ClickerState; reason?: string }> {
   const client = await pool.connect();
