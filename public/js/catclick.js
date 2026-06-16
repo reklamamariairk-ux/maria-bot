@@ -1137,6 +1137,15 @@
       }                                                       // сбой → pending остаётся, повтор позже
     } catch (_) {}
   }
+  // Реальные покупки у «Марии» → игровые монеты (за новые траты, троттлинг на сервере).
+  async function maybePurchaseBonus() {
+    try {
+      if (!authed()) return;
+      const d = await api('/api/clicker/purchase-sync', { method: 'POST', body: '{}' }).catch(() => null);
+      if (d && !d.error) { if (d.balance != null) st = d; if (d.bonus > 0) { sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); purchasePopup(d.bonus); } }
+    } catch (_) {}
+  }
+  function purchasePopup(amount) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Спасибо за покупки!</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><div style="color:var(--muted);font-size:13px">Бонус за покупки в «Марии» — чем больше заказываешь, тем больше монет в игре 🎂</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
   // Перенос прогресса гостя на серверный аккаунт при первом входе (одна попытка).
   async function maybeMigrateGuest() {
     try {
@@ -1323,7 +1332,7 @@
   async function open() {
     if (!ov) build();
     ov.classList.add('on'); window.scrollLock && window.scrollLock(); ac();
-    await load(); await maybeMigrateGuest(); await ensureRefRegistered(); curLevel = leagueFor(st.totalEarned).level;
+    await load(); await maybeMigrateGuest(); await ensureRefRegistered(); await maybePurchaseBonus(); curLevel = leagueFor(st.totalEarned).level;
     ov.querySelector('#ck-cat').src = A(leagueFor(st.totalEarned).cat || 'idle.png');
     setTab('cat'); renderAll(); spawnSparks(); applySeason(); scheduleBonus();
     if (st.passiveEarned > 0) passivePopup(st.passiveEarned);

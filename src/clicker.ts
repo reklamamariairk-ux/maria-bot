@@ -7,6 +7,7 @@
 import { pool } from "./db";
 import { clickerReferralLink } from "./links";
 import { earnPoints, isPhoneVerified, grantRewardByCode } from "./club";
+import { fetchLk } from "./lk";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -245,6 +246,9 @@ export async function initClickerSchema(): Promise<void> {
       chat_id BIGINT NOT NULL, achievement TEXT NOT NULL, points INT NOT NULL,
       granted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (chat_id, achievement)
+    );
+    CREATE TABLE IF NOT EXISTS clicker_purchase_sync (
+      chat_id BIGINT PRIMARY KEY, spent_synced BIGINT NOT NULL DEFAULT 0, last_check TIMESTAMPTZ
     );
     CREATE INDEX IF NOT EXISTS clicker_top_idx ON clicker_state (total_earned DESC);
   `);
@@ -796,4 +800,43 @@ export async function claimMilestone(chatId: number, id: string): Promise<{ ok: 
     await pool.query(`DELETE FROM clicker_gifts WHERE chat_id=$1 AND achievement=$2`, [chatId, id]).catch(() => {});
     throw e;
   }
+}
+
+// ── Реальные покупки → игровые монеты (чем больше тратишь у «Марии», тем больше) ──
+// Сигнал — year_spent из /api/lk (lk.php, уже работает). За НОВЫЕ траты с прошлой
+// сверки начисляем монеты (watermark spent_synced — не задвоить). Троттлинг 1ч,
+// чтобы не дёргать сайт. Первый заход начисляет за весь YTD (приветствие лояльным).
+const PURCHASE_RATE = 20;            // монет за 1₽ покупок
+const PURCHASE_CAP = 5_000_000;      // потолок одной сверки (защита от выбросов/данных)
+export async function syncPurchaseBonus(chatId: number): Promise<{ ok: boolean; granted: number; yearSpent?: number; state?: ClickerState }> {
+  // Атомарно «застолбить» сверку: вставить/обновить last_check, только если прошло >1ч.
+  const claim = await pool.query(
+    `INSERT INTO clicker_purchase_sync (chat_id, last_check) VALUES ($1, NOW())
+     ON CONFLICT (chat_id) DO UPDATE SET last_check = NOW()
+       WHERE clicker_purchase_sync.last_check IS NULL OR clicker_purchase_sync.last_check < NOW() - INTERVAL '1 hour'
+     RETURNING spent_synced`,
+    [chatId]
+  );
+  if (!claim.rows.length) return { ok: true, granted: 0 }; // троттлинг — сверка была недавно
+
+  const spentSynced = Number(claim.rows[0].spent_synced || 0);
+  const lk = await fetchLk(chatId).catch(() => null);
+  if (!lk || !lk.ok || !lk.data || !lk.data.configured) return { ok: true, granted: 0 };
+  const yearSpent = Math.max(0, Math.floor(Number(lk.data.year_spent || 0)));
+  const delta = Math.max(0, yearSpent - spentSynced); // откат/новый год → 0, watermark подвинем
+  // Двигаем watermark всегда (в т.ч. при rollover вниз), чтобы не копить ложный delta.
+  await pool.query(`UPDATE clicker_purchase_sync SET spent_synced=$2 WHERE chat_id=$1`, [chatId, yearSpent]);
+  const grant = Math.min(delta * PURCHASE_RATE, PURCHASE_CAP);
+  if (grant <= 0) return { ok: true, granted: 0, yearSpent };
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { r, cl } = await refresh(client, chatId);
+    r.balance = Number(r.balance) + grant; r.total_earned = Number(r.total_earned) + grant;
+    await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, updated_at=NOW() WHERE chat_id=$1`, [chatId, r.balance, r.total_earned]);
+    const st = buildState(r, cl, 0); st.gamesDone = await gamesDoneToday(client, chatId);
+    await client.query("COMMIT");
+    return { ok: true, granted: grant, yearSpent, state: st };
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
