@@ -122,6 +122,12 @@ export async function initClubSchema() {
     VALUES ('free_bento', 'Бенто-торт в подарок', 'Бенто при заказе от 2000₽', 'free_item', NULL, 2000, 0, FALSE, 6)
     ON CONFLICT (code) DO NOTHING
   `);
+  // Топ-приз кликера (за «Повелителя котов», ~год игры): бенто с пониженным порогом.
+  await pool.query(`
+    INSERT INTO rewards_catalog (code, title, description, reward_type, discount_value, min_order, cost_points, active, sort_order)
+    VALUES ('free_bento_top', 'Бенто-торт «Повелителю котов»', 'Бенто при заказе от 1000₽', 'free_item', NULL, 1000, 0, FALSE, 7)
+    ON CONFLICT (code) DO NOTHING
+  `);
 
   console.log("[CLUB] Schema ready");
 }

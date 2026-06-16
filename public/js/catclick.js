@@ -258,8 +258,8 @@
     { id: 'ms_lvl10', title: 'Уровень 10', cond: { type: 'level', target: 10 }, kind: 'points', points: 500 },
     { id: 'ms_lvl13', title: 'Уровень 13', cond: { type: 'level', target: 13 }, kind: 'perk', perkText: 'Промокод −5% (от 500₽)' },
     { id: 'ms_lvl15', title: 'Уровень 15', cond: { type: 'level', target: 15 }, kind: 'points', points: 1000 },
-    { id: 'ms_lvl17', title: 'Уровень 17', cond: { type: 'level', target: 17 }, kind: 'perk', perkText: 'Десерт в подарок (от 2000₽)' },
-    { id: 'ms_lvl19', title: 'Последний уровень — Повелитель котов', cond: { type: 'level', target: 19 }, kind: 'points', points: 20000 },
+    { id: 'ms_lvl17', title: 'Уровень 17', cond: { type: 'level', target: 17 }, kind: 'perk', perkText: 'Скидка 500₽ (от 3000₽)' },
+    { id: 'ms_lvl19', title: 'Последний уровень — Повелитель котов', cond: { type: 'level', target: 19 }, kind: 'both', points: 20000, perkText: 'Бенто-торт в подарок (от 1000₽)' },
     { id: 'ms_col_prod', title: 'Все голуби «Производство»', cond: { type: 'collect', target: 'prod' }, kind: 'points', points: 300 },
     { id: 'ms_col_mkt', title: 'Все голуби «Маркетинг»', cond: { type: 'collect', target: 'mkt' }, kind: 'points', points: 300 },
     { id: 'ms_col_staff', title: 'Все голуби «Персонал»', cond: { type: 'collect', target: 'staff' }, kind: 'points', points: 300 },
@@ -1225,14 +1225,14 @@
     if (authed()) { const d = await api('/api/clicker/milestones').catch(() => null); if (d && d.milestones) { data = d.milestones; pv = !!d.phoneVerified; } }
     if (!data) { const gs = authed() ? st : guestDerive(); data = MILESTONES.map(m => ({ id: m.id, title: m.title, kind: m.kind, points: m.points || 0, perkText: m.perkText || '', reached: condMet({ type: m.cond.type, target: m.cond.target }, gs), granted: false })); }
     return data.map(m => {
-      const rewardLabel = m.kind === 'perk' ? `🎁 ${m.perkText}` : `🪙 +${fmt(m.points)} баллов на карту`;
+      const rewardLabel = m.kind === 'both' ? `🪙 +${fmt(m.points)} баллов + 🎁 ${m.perkText}` : m.kind === 'perk' ? `🎁 ${m.perkText}` : `🪙 +${fmt(m.points)} баллов на карту`;
       let btn;
       if (m.granted) btn = `<button class="ck-card__buy" disabled>✓ Получено</button>`;
       else if (!authed()) btn = `<button class="ck-card__buy" disabled>Войти</button>`;
       else if (!m.reached) btn = `<button class="ck-card__buy" disabled>🔒 Рано</button>`;
       else if (pv) btn = `<button class="ck-card__buy" data-ms="${m.id}">Забрать</button>`;
       else btn = `<button class="ck-card__buy" data-ms="phone">Телефон</button>`;
-      return `<div class="ck-card"${m.granted ? ' style="opacity:.55"' : ''}><div class="ck-card__ic">${m.kind === 'perk' ? ICON.gift(26) : ICON.star(26)}</div><div class="ck-card__b"><div class="ck-card__n">${m.title}</div><div class="ck-card__s">${rewardLabel}</div></div>${btn}</div>`;
+      return `<div class="ck-card"${m.granted ? ' style="opacity:.55"' : ''}><div class="ck-card__ic">${m.kind === 'points' ? ICON.star(26) : ICON.gift(26)}</div><div class="ck-card__b"><div class="ck-card__n">${m.title}</div><div class="ck-card__s">${rewardLabel}</div></div>${btn}</div>`;
     }).join('');
   }
   async function claimMilestoneAct(id) {
@@ -1240,13 +1240,14 @@
     const d = await api('/api/clicker/milestone', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null);
     if (d && !d.error) {
       sfxLevel(); window.haptic && window.haptic('success'); confettiBurst();
-      if (d.kind === 'perk') promoPopup(d.perkTitle, d.promoCode, d.minOrder); else giftPopup(d.points);
+      if (d.promoCode) promoPopup(d.perkTitle, d.promoCode, d.minOrder, d.points); else giftPopup(d.points);
       renderTasks();
     } else flashMsg(d && d.error === 'need_phone' ? 'Сначала подтверди телефон' : d && d.error === 'already' ? 'Награда уже получена' : d && d.error === 'not_ready' ? 'Веха ещё не достигнута' : 'Не получилось, попробуй позже');
   }
-  function promoPopup(title, code, minOrder) {
+  function promoPopup(title, code, minOrder, points) {
     const pop = ov.querySelector('#ck-pop');
-    pop.innerHTML = `<h3>${ICON.gift(20)} Подарок!</h3><div style="font-size:18px;font-weight:800;color:var(--ink);margin:4px 0">${title || 'Подарок «Мария»'}</div><div style="margin:8px 0;font-size:13px;color:var(--muted)">Назови этот промокод менеджеру при заказе${minOrder ? ` от ${fmt(minOrder)}₽` : ''}:</div><div class="ck-morse" style="font-size:21px;letter-spacing:2px">${code}</div><div style="font-size:12px;color:var(--muted);margin-top:6px">Код действует 30 дней · сохранён в «Мои награды»</div><button id="ck-pop-ok">Сохранить</button>`;
+    const ptsLine = points ? `<div style="font-size:13px;color:var(--gold-l);font-weight:700;margin:6px 0">🪙 +${fmt(points)} баллов на карту тоже начислено</div>` : '';
+    pop.innerHTML = `<h3>${ICON.gift(20)} Подарок!</h3><div style="font-size:18px;font-weight:800;color:var(--ink);margin:4px 0">${title || 'Подарок «Мария»'}</div>${ptsLine}<div style="margin:8px 0;font-size:13px;color:var(--muted)">Назови этот промокод менеджеру при заказе${minOrder ? ` от ${fmt(minOrder)}₽` : ''}:</div><div class="ck-morse" style="font-size:21px;letter-spacing:2px">${code}</div><div style="font-size:12px;color:var(--muted);margin-top:6px">Код действует 30 дней · сохранён в «Мои награды»</div><button id="ck-pop-ok">Сохранить</button>`;
     pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
   }
   function giftPopup(points) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Подарок на карту!</h3><div class="v">+${points} баллов</div><div style="color:var(--muted);font-size:13px">Баллы «Мария» зачислены на твою карту клуба — трать при заказе тортов 🎂</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }

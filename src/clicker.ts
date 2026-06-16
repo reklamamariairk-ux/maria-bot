@@ -746,8 +746,8 @@ export const MILESTONES: { id: string; title: string; cond: { type: string; targ
   { id: "ms_lvl10",    title: "Уровень 10",               cond: { type: "level", target: 10 },    points: 500 },
   { id: "ms_lvl13",    title: "Уровень 13",               cond: { type: "level", target: 13 },    perk: "discount_5",   perkText: "Промокод −5% (от 500₽)" },
   { id: "ms_lvl15",    title: "Уровень 15",               cond: { type: "level", target: 15 },    points: 1000 },
-  { id: "ms_lvl17",    title: "Уровень 17",               cond: { type: "level", target: 17 },    perk: "free_dessert", perkText: "Десерт в подарок (от 2000₽)" },
-  { id: "ms_lvl19",    title: "Последний уровень — Повелитель котов", cond: { type: "level", target: 19 }, points: 20000 },
+  { id: "ms_lvl17",    title: "Уровень 17",               cond: { type: "level", target: 17 },    perk: "discount_500", perkText: "Скидка 500₽ (от 3000₽)" },
+  { id: "ms_lvl19",    title: "Последний уровень — Повелитель котов", cond: { type: "level", target: 19 }, points: 20000, perk: "free_bento_top", perkText: "Бенто-торт в подарок (от 1000₽)" },
   { id: "ms_col_prod", title: "Все голуби «Производство»", cond: { type: "collect", target: "prod" },  points: 300 },
   { id: "ms_col_mkt",  title: "Все голуби «Маркетинг»",    cond: { type: "collect", target: "mkt" },   points: 300 },
   { id: "ms_col_staff",title: "Все голуби «Персонал»",     cond: { type: "collect", target: "staff" }, points: 300 },
@@ -767,7 +767,8 @@ export async function getMilestones(chatId: number): Promise<{ milestones: any[]
   return {
     phoneVerified,
     milestones: MILESTONES.map((m) => ({
-      id: m.id, title: m.title, kind: m.perk ? "perk" : "points",
+      id: m.id, title: m.title,
+      kind: m.perk && m.points ? "both" : (m.perk ? "perk" : "points"),
       points: m.points || 0, perkText: m.perkText || "",
       reached: msReached(m, s), granted: granted.has(m.id),
     })),
@@ -789,13 +790,16 @@ export async function claimMilestone(chatId: number, id: string): Promise<{ ok: 
   );
   if (!ins.rows.length) return { ok: false, reason: "already" };
   try {
+    const out: { ok: boolean; kind: string; points?: number; promoCode?: string; perkTitle?: string; minOrder?: number } = {
+      ok: true, kind: m.perk && m.points ? "both" : (m.perk ? "perk" : "points"),
+    };
+    if (m.points) { await earnPoints(chatId, m.points, "clicker_milestone", { milestone: id }); out.points = m.points; }
     if (m.perk) {
       const r = await grantRewardByCode(chatId, m.perk);
       if (!r.ok) throw new Error("grant_failed:" + r.reason);
-      return { ok: true, kind: "perk", promoCode: r.promoCode, perkTitle: r.title, minOrder: r.minOrder };
+      out.promoCode = r.promoCode; out.perkTitle = r.title; out.minOrder = r.minOrder;
     }
-    await earnPoints(chatId, m.points || 0, "clicker_milestone", { milestone: id });
-    return { ok: true, kind: "points", points: m.points || 0 };
+    return out;
   } catch (e) {
     await pool.query(`DELETE FROM clicker_gifts WHERE chat_id=$1 AND achievement=$2`, [chatId, id]).catch(() => {});
     throw e;
