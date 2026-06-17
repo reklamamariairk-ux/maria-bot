@@ -8,6 +8,7 @@ import { Router } from "express";
 import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements, getRewards, redeemReward, claimBonus, openChest, claimRain, claimGame, getMilestones, claimMilestone, syncPurchaseBonus, migrateGuest, redeemCode, getSquads, joinSquad } from "../clicker";
 import { rateLimit } from "../middleware";
 import { requireTgUser, getTgUser } from "../auth";
+import { getBonusQueue, ackBonusQueue, queueAuthOk } from "../bonus1c";
 import { log } from "../logger";
 
 const router = Router();
@@ -152,6 +153,22 @@ router.post("/api/clicker/task", requireTgUser, rateLimit(40), async (req, res) 
   const u = getTgUser(req)!; const id = String((req.body as { id?: string }).id || "");
   try { const r = await claimTask(u.id, id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ reward: r.reward, ...r.state }); }
   catch (e) { log.error({ err: e, chatId: u.id }, "[task]"); res.status(500).json({ error: "internal" }); }
+});
+
+// ── PULL-режим: 1С сама забирает очередь начислений (без TG-авторизации, токен) ──
+// GET  /api/clicker/bonus-queue?token=...        → pending-начисления {id,phone,amount,reason,key}
+// POST /api/clicker/bonus-ack {token, ids:[...]} → пометить зачисленными
+router.get("/api/clicker/bonus-queue", rateLimit(120), async (req, res) => {
+  if (!queueAuthOk(String(req.query.token || ""))) { res.status(403).json({ error: "forbidden" }); return; }
+  try { const limit = Number(req.query.limit) || 100; res.json({ items: await getBonusQueue(limit) }); }
+  catch (e) { log.error({ err: e }, "[bonus-queue]"); res.status(500).json({ error: "internal" }); }
+});
+
+router.post("/api/clicker/bonus-ack", rateLimit(120), async (req, res) => {
+  const body = (req.body || {}) as { token?: string; ids?: number[] };
+  if (!queueAuthOk(String(body.token || ""))) { res.status(403).json({ error: "forbidden" }); return; }
+  try { const acked = await ackBonusQueue(Array.isArray(body.ids) ? body.ids : []); res.json({ acked }); }
+  catch (e) { log.error({ err: e }, "[bonus-ack]"); res.status(500).json({ error: "internal" }); }
 });
 
 export default router;

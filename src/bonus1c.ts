@@ -14,13 +14,40 @@
 import { pool } from "./db";
 import { log } from "./logger";
 
-const BONUS_ADD_API = process.env.BONUS_ADD_API ?? "";     // https://www.maria-irk.ru/api/bonus-add.php
-const BONUS_ADD_TOKEN = process.env.BONUS_ADD_TOKEN ?? "";  // совпадает с BONUS_TOKEN в шлюзе
+const BONUS_ADD_API = process.env.BONUS_ADD_API ?? "";       // push-режим: шлюз на сайте
+const BONUS_ADD_TOKEN = process.env.BONUS_ADD_TOKEN ?? "";
+const BONUS_QUEUE_TOKEN = process.env.BONUS_QUEUE_TOKEN ?? ""; // pull-режим: токен для 1С, которая забирает очередь
 const MAX_ATTEMPTS = 8;
 const BATCH = 25;
 
+// Очередь активна, если настроен ЛЮБОЙ режим: push (шлюз) ИЛИ pull (1С тянет сама).
 export function bonusSyncEnabled(): boolean {
-  return Boolean(BONUS_ADD_API);
+  return Boolean(BONUS_ADD_API || BONUS_QUEUE_TOKEN);
+}
+export function queueAuthOk(token: string | undefined): boolean {
+  return Boolean(BONUS_QUEUE_TOKEN) && token === BONUS_QUEUE_TOKEN;
+}
+
+/** PULL-режим: 1С забирает pending-начисления. Возвращает список к зачислению. */
+export async function getBonusQueue(limit = 100): Promise<{ id: number; phone: string; amount: number; reason: string | null; key: string | null }[]> {
+  const lim = Math.max(1, Math.min(500, Math.floor(limit) || 100));
+  const { rows } = await pool.query(
+    `SELECT id, phone, amount, reason, idem_key FROM bonus_outbox
+      WHERE status='pending' ORDER BY id LIMIT $1`,
+    [lim]
+  );
+  return rows.map((r) => ({ id: Number(r.id), phone: r.phone, amount: r.amount, reason: r.reason, key: r.idem_key }));
+}
+
+/** PULL-режим: 1С подтверждает зачисление — помечаем строки отправленными. */
+export async function ackBonusQueue(ids: number[]): Promise<number> {
+  const clean = (Array.isArray(ids) ? ids : []).map((x) => Math.floor(Number(x))).filter((x) => Number.isFinite(x) && x > 0);
+  if (!clean.length) return 0;
+  const { rowCount } = await pool.query(
+    `UPDATE bonus_outbox SET status='sent', sent_at=NOW(), last_error=NULL WHERE id = ANY($1::bigint[]) AND status='pending'`,
+    [clean]
+  );
+  return rowCount || 0;
 }
 
 export async function initBonusSchema(): Promise<void> {
@@ -43,7 +70,7 @@ export async function initBonusSchema(): Promise<void> {
 
 /** Поставить начисление в очередь на 1С (no-op, если интеграция не настроена). */
 export async function enqueueAccrual(phone: string, amount: number, reason: string, idemKey?: string): Promise<void> {
-  if (!BONUS_ADD_API) return;
+  if (!bonusSyncEnabled()) return;
   const p = String(phone || "").replace(/\D+/g, "");
   const a = Math.floor(Number(amount) || 0);
   if (!p || a <= 0) return;
