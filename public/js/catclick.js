@@ -218,13 +218,14 @@
     const bank = deck === 'quiz_riddle' ? QUIZ_RIDDLE : QUIZ_KIDS, n = deck === 'quiz_riddle' ? 4 : 5;
     return pickDaily(bank, n, deck).map((q, i) => ({ q: q.q, opts: shuffleSeed([q.a, ...q.w], dateSeed(irkToday(), deck + 'o' + i)), a: q.a }));
   }
+  const CANDY = `<svg width="26" height="26" viewBox="0 0 32 32" style="vertical-align:-.32em;margin:0 1px"><g stroke="#d8487f" stroke-width="1.8" stroke-linejoin="round"><path d="M7 16 1.5 11.5v9z" fill="#ff9ec4"/><path d="M25 16 30.5 11.5v9z" fill="#ff9ec4"/><ellipse cx="16" cy="16" rx="8" ry="7" fill="#ff7aae"/></g><path d="M12.5 13.5c2 1.8 5 1.8 7 0" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" opacity=".7"/></svg>`;
   function genCount(n) {
     const out = []; let h = dateSeed(irkToday(), 'count');
     for (let i = 0; i < n; i++) {
       h = (Math.imul(h, 1664525) + 1013904223) >>> 0; const x = 1 + (h >>> 3) % 5;
       h = (Math.imul(h, 1664525) + 1013904223) >>> 0; const y = 1 + (h >>> 5) % 5; const sum = x + y;
       const opts = []; [sum, sum + 1, Math.max(1, sum - 1), sum + 2].forEach(v => { if (opts.indexOf(String(v)) < 0) opts.push(String(v)); });
-      out.push({ q: '🍬'.repeat(x) + ' + ' + '🍬'.repeat(y) + ' = ?', opts: shuffleSeed(opts.slice(0, 4), dateSeed(irkToday(), 'co' + i)), a: String(sum) });
+      out.push({ q: CANDY.repeat(x) + ' + ' + CANDY.repeat(y) + ' = ?', opts: shuffleSeed(opts.slice(0, 4), dateSeed(irkToday(), 'co' + i)), a: String(sum) });
     }
     return out;
   }
@@ -614,6 +615,46 @@
       .ck-nav__b{flex:1;border:none;background:transparent;color:var(--muted);padding:9px 0 12px;font-weight:600;font-size:11.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px}.ck-nav__b.on{color:var(--gold-l)}
       .ck-levelup{position:absolute;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;pointer-events:none}.ck-levelup span{font-family:'Nunito',sans-serif;color:var(--gold-l);font-weight:700;font-size:26px;background:linear-gradient(180deg,rgba(46,17,25,.92),rgba(26,10,15,.92));border:1px solid var(--line);padding:14px 24px;border-radius:18px;opacity:0;box-shadow:0 12px 36px rgba(0,0,0,.5)}.ck-levelup span.show{animation:ckLU 1.6s ease-out}@keyframes ckLU{0%{opacity:0;transform:scale(.6)}20%{opacity:1;transform:scale(1.1)}80%{opacity:1}100%{opacity:0}}
       .ck-pop{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9;background:linear-gradient(180deg,#2e1119,#1d0a11);border:1px solid var(--line);border-radius:20px;padding:24px;text-align:center;box-shadow:0 18px 50px rgba(0,0,0,.6);display:none;max-width:80%}.ck-pop.on{display:block}.ck-pop h3{margin:0 0 6px;font-family:'Nunito',sans-serif;font-weight:700;font-size:20px;color:var(--cream)}.ck-pop .v{font-family:'Nunito',sans-serif;font-size:32px;font-weight:700;color:var(--gold-l);margin:10px 0;display:inline-flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums}.ck-pop button{margin-top:10px;border:1px solid #ffe9b3;border-radius:14px;padding:12px 28px;font-weight:800;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;cursor:pointer}
+      /* ===================== ДИЗАЙН-ДОВОДКА (перенос на master) ===================== */
+      .ck-ov{--cream:#eee7dd;--ink:#f1ece6;--muted:#9aa0ab;background:radial-gradient(130% 100% at 50% -10%,#2c2320 0%,#1a1413 52%,#0e0a09 100%);font-family:'Nunito','Mulish',system-ui,sans-serif}
+      .ck-ov button:focus-visible,.ck-ov input:focus-visible,.ck-cat:focus-visible,.ck-gems__c:focus-visible,.ck-mem__c:focus-visible,.ck-quiz__o:focus-visible,.ck-nav__b:focus-visible{outline:2px solid var(--gold-l);outline-offset:2px}
+      .ck-ov[data-tier="1"]{--tg:rgba(176,166,150,.12)}.ck-ov[data-tier="2"]{--tg:rgba(240,170,80,.16)}.ck-ov[data-tier="3"]{--tg:rgba(255,185,70,.18)}.ck-ov[data-tier="4"]{--tg:rgba(214,120,180,.17)}.ck-ov[data-tier="5"]{--tg:rgba(240,120,110,.17)}.ck-ov[data-tier="6"]{--tg:rgba(255,200,95,.2)}
+      .ck-ov:not(.turbo)[data-tier="1"]{background:radial-gradient(85% 55% at 50% -4%,rgba(176,166,150,.14),transparent 62%),linear-gradient(0deg,rgba(0,0,0,.5),transparent 42%),radial-gradient(130% 110% at 50% -10%,#2e2824 0%,#171210 52%,#090706 100%)}
+      .ck-ov:not(.turbo)[data-tier="2"]{background:radial-gradient(92% 58% at 50% -4%,rgba(238,168,78,.24),transparent 64%),linear-gradient(0deg,rgba(20,10,4,.55),transparent 44%),radial-gradient(130% 110% at 50% -10%,#3c2c19 0%,#1e130b 52%,#0c0806 100%)}
+      .ck-ov:not(.turbo)[data-tier="3"]{background:radial-gradient(98% 60% at 50% -3%,rgba(255,185,66,.32),transparent 66%),linear-gradient(0deg,rgba(24,12,4,.55),transparent 44%),radial-gradient(130% 110% at 50% -10%,#48311a 0%,#23150b 52%,#0e0907 100%)}
+      .ck-ov:not(.turbo)[data-tier="4"]{background:radial-gradient(98% 62% at 50% -3%,rgba(214,108,176,.28),transparent 66%),linear-gradient(0deg,rgba(14,6,14,.55),transparent 44%),radial-gradient(130% 110% at 50% -10%,#3c2540 0%,#1d101b 52%,#0c080c 100%)}
+      .ck-ov:not(.turbo)[data-tier="5"]{background:radial-gradient(100% 64% at 50% -3%,rgba(236,116,108,.30),transparent 66%),linear-gradient(0deg,rgba(16,6,8,.55),transparent 44%),radial-gradient(130% 110% at 50% -10%,#48202f 0%,#250f17 52%,#0d080a 100%)}
+      .ck-ov:not(.turbo)[data-tier="6"]{background:radial-gradient(115% 72% at 50% -5%,rgba(255,201,92,.38),transparent 68%),linear-gradient(0deg,rgba(18,8,6,.55),transparent 46%),radial-gradient(130% 110% at 50% -10%,#50232f 0%,#290f18 52%,#0c0708 100%)}
+      .ck-ov[data-tier="1"] .ck-catwrap::before{background:radial-gradient(circle at 50% 46%,rgba(176,166,150,.50) 0%,rgba(150,138,120,.26) 44%,transparent 71%)}
+      .ck-ov[data-tier="2"] .ck-catwrap::before{background:radial-gradient(circle at 50% 46%,rgba(255,196,112,.62) 0%,rgba(240,160,70,.34) 44%,transparent 71%)}
+      .ck-ov[data-tier="3"] .ck-catwrap::before{background:radial-gradient(circle at 50% 46%,rgba(255,206,110,.70) 0%,rgba(255,176,64,.42) 44%,transparent 72%)}
+      .ck-ov[data-tier="4"] .ck-catwrap::before{background:radial-gradient(circle at 50% 46%,rgba(232,140,206,.60) 0%,rgba(196,98,168,.34) 44%,transparent 71%)}
+      .ck-ov[data-tier="5"] .ck-catwrap::before{background:radial-gradient(circle at 50% 46%,rgba(255,150,130,.60) 0%,rgba(226,84,88,.34) 44%,transparent 71%)}
+      .ck-ov[data-tier="6"] .ck-catwrap::before{background:radial-gradient(circle at 50% 46%,rgba(255,216,120,.78) 0%,rgba(255,182,70,.48) 44%,transparent 73%)}
+      .ck-catwrap{align-items:flex-end;padding-bottom:10px;isolation:isolate}
+      .ck-catwrap::before{top:62%;z-index:1}.ck-catwrap::after{bottom:8%;z-index:1}.ck-cat{z-index:2}
+      .ck-scene{position:absolute;inset:0;z-index:0;background-position:center center;background-size:cover;background-repeat:no-repeat;filter:brightness(.62) saturate(.92)}
+      .ck-scene::after{content:'';position:absolute;inset:0;background:radial-gradient(70% 42% at 50% 46%,transparent,rgba(0,0,0,.34) 100%),linear-gradient(180deg,rgba(0,0,0,.74),rgba(0,0,0,.34) 16%,transparent 38%,transparent 60%,rgba(0,0,0,.52) 88%,rgba(0,0,0,.66))}
+      .ck-ov[data-tier="2"] .ck-scene::after,.ck-ov[data-tier="3"] .ck-scene::after,.ck-ov[data-tier="4"] .ck-scene::after{background:radial-gradient(70% 42% at 50% 46%,transparent,rgba(0,0,0,.36) 100%),linear-gradient(180deg,rgba(0,0,0,.82),rgba(0,0,0,.45) 18%,rgba(0,0,0,.08) 40%,transparent 58%,rgba(0,0,0,.55) 88%,rgba(0,0,0,.68))}
+      .ck-ov[data-tier="1"] .ck-scene{background-image:url(/assets/images/scene/tier1.webp)}.ck-ov[data-tier="2"] .ck-scene{background-image:url(/assets/images/scene/tier2.webp)}.ck-ov[data-tier="3"] .ck-scene{background-image:url(/assets/images/scene/tier3.webp)}.ck-ov[data-tier="4"] .ck-scene{background-image:url(/assets/images/scene/tier4.webp)}.ck-ov[data-tier="5"] .ck-scene{background-image:url(/assets/images/scene/tier5.webp)}.ck-ov[data-tier="6"] .ck-scene{background-image:url(/assets/images/scene/tier6.webp)}
+      #ck-scr-cat>:not(.ck-scene){position:relative;z-index:1}
+      .ck-combo{z-index:8;top:13%}
+      .ck-lvl{text-shadow:0 1px 4px rgba(0,0,0,.75)}.ck-prog__t{color:#c2c7cf;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+      .ck-screen.on{animation:ckScreenIn .22s ease-out}@keyframes ckScreenIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+      .ck-nav__b{position:relative;transition:color .18s}.ck-nav__b.on::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:24px;height:3px;border-radius:0 0 3px 3px;background:var(--gold);box-shadow:0 0 8px var(--gold)}
+      .cat-staff .ck-biz__art{background:linear-gradient(150deg,#8fae4f,#3f5e1e)}.cat-net .ck-biz__art{background:linear-gradient(150deg,#6f76c2,#2f3470)}
+      .ck-card__buy,.ck-biz__buy{min-height:44px;box-sizing:border-box}
+      .ck-reward{display:flex;align-items:center;gap:12px;border-radius:16px;padding:11px 12px;margin-bottom:9px;background:linear-gradient(180deg,rgba(255,231,166,.10),rgba(238,191,82,.03));border:1px solid rgba(238,191,82,.22);box-shadow:0 3px 10px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.05)}
+      .ck-reward__ic{width:46px;height:46px;flex:none;border-radius:13px;display:flex;align-items:center;justify-content:center;color:#fff8ec;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 2px 6px rgba(0,0,0,.3);background:linear-gradient(150deg,#f0c24e,#9c6a1c)}
+      .ck-reward__ic::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 32% 22%,rgba(255,255,255,.22),transparent 60%);pointer-events:none}
+      .ck-reward__ic svg{position:relative;z-index:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))}
+      .ck-reward.r-promo .ck-reward__ic{background:linear-gradient(150deg,#cc5e72,#7a2030)}.ck-reward.r-dessert .ck-reward__ic{background:linear-gradient(150deg,#ff9ec4,#cf5e8a)}
+      .ck-reward__b{flex:1;min-width:0}
+      .ck-soon{flex:none;font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--gold-l);background:rgba(238,191,82,.14);border:1px solid rgba(238,191,82,.4);border-radius:20px;padding:6px 12px}
+      .ck-skel{position:relative;overflow:hidden;background:rgba(255,255,255,.05)}.ck-skel::after{content:'';position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(255,255,255,.10),transparent);animation:ckShimmer 1.2s ease-in-out infinite}@keyframes ckShimmer{100%{transform:translateX(100%)}}
+      .ck-skrow{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:7px}.ck-skrow .sk-r{width:24px;height:24px;border-radius:50%;flex:none}.ck-skrow .sk-n{height:12px;border-radius:6px;flex:1}.ck-skrow .sk-v{width:62px;height:12px;border-radius:6px;flex:none}
+      .ck-empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding:30px 18px;color:var(--muted)}.ck-empty__ic{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(238,191,82,.08);border:1px solid var(--line);color:var(--gold);margin-bottom:12px}.ck-empty__ic svg{width:30px;height:30px}.ck-empty__t{font-weight:800;font-size:15px;color:var(--cream);margin-bottom:4px}.ck-empty__s{font-size:12.5px;line-height:1.5;max-width:240px}
+      @media (prefers-reduced-motion:reduce){.ck-screen.on,.ck-skel::after,.ck-conf,.ck-coin,.ck-flyc,.ck-ripple,.ck-flash,.ck-balpop,.ck-bonus-fly{animation:none!important}}
     `;
     document.head.appendChild(s);
   }
@@ -631,6 +672,7 @@
         <div class="ck-bal">${COIN(32)} <span id="ck-bal">0</span></div>
         <div class="ck-prof" id="ck-prof">${COIN(14)} +0 / час</div>
         <div class="ck-prog"><div class="ck-prog__bar"><div class="ck-prog__fill" id="ck-prog"></div></div><div class="ck-prog__t" id="ck-progt"></div></div>
+        <div class="ck-scene" id="ck-scene"></div>
         <div class="ck-catwrap" id="ck-catwrap"><img class="ck-cat" id="ck-cat" draggable="false"/><img class="ck-hat" id="ck-hat" draggable="false" style="display:none"/><div class="ck-combo" id="ck-combo"></div></div>
         <div class="ck-boosts">
           <button class="ck-boost" id="ck-bt-turbo">${ICON.rocket(16)} Турбо <span id="ck-bt-turbo-n"></span></button>
@@ -682,7 +724,7 @@
   const turboOn = () => Date.now() < turboUntil;
   function onTap(e) {
     e.preventDefault(); ac();
-    if (st.energy < 1) { flashMsg('нет энергии ⚡'); return; }
+    if (st.energy < 1) { flashMsg('Нет энергии — подожди'); return; }
     const mult = turboOn() ? TURBO_MULT : 1;
     const gain = st.perTap * mult;
     st.energy -= 1; st.balance += gain; st.totalEarned += gain; pending++;
@@ -997,8 +1039,10 @@
     if (on) ov.querySelector('#ck-enpre').innerHTML = ICON.rocket(15) + ' ТУРБО ×5! ·';
     else ov.querySelector('#ck-enpre').innerHTML = ICON.bolt(15);
     if (lg.level !== curLevel) { if (lg.level > curLevel) levelUp(lg); curLevel = lg.level; }
+    const tier = bgTier(lg.level); if (ov.dataset.tier !== '' + tier) ov.dataset.tier = '' + tier;
     applyCostume(lg);
   }
+  function bgTier(l) { return l <= 3 ? 1 : l <= 6 ? 2 : l <= 10 ? 3 : l <= 13 ? 4 : l <= 16 ? 5 : 6; }
   function applyCostume(lg) {
     const cat = ov.querySelector('#ck-cat'), hat = ov.querySelector('#ck-hat');
     hat.style.display = 'none'; // шапки-наклейки убраны — костюм = смена всей картинки кота
@@ -1039,11 +1083,13 @@
     const banner = !REWARDS_ENABLED
       ? `<div class="ck-card" style="background:linear-gradient(90deg,rgba(238,191,82,.18),rgba(238,191,82,.05))"><div class="ck-card__ic">${ICON.gift(26)}</div><div class="ck-card__b"><div class="ck-card__n">Обменивай монеты на реальное</div><div class="ck-card__s">Скидки и бонусы «Марии» — скоро открываем!</div></div></div>`
       : '';
+    const RMETA = { promo5: { ic: ICON.medal, cls: 'r-promo' }, promo10: { ic: ICON.gem, cls: 'r-promo' }, bonus300: { ic: ICON.wallet, cls: 'r-bonus' }, dessert: { ic: ICON.cupcake, cls: 'r-dessert' } };
     const cards = REWARDS.map(r => {
-      const btn = !REWARDS_ENABLED
-        ? `<button class="ck-card__buy" disabled>Скоро</button>`
+      const m = RMETA[r.id] || { ic: ICON.gift, cls: '' };
+      const right = !REWARDS_ENABLED
+        ? `<span class="ck-soon">Скоро</span>`
         : `<button class="ck-card__buy" data-redeem="${r.id}" ${bal >= r.cost ? '' : 'disabled'}>${COIN(14)} ${fmt(r.cost)}</button>`;
-      return `<div class="ck-card"${REWARDS_ENABLED ? '' : ' style="opacity:.7"'}><div class="ck-card__ic">${ICON.gift(26)}</div><div class="ck-card__b"><div class="ck-card__n">${r.name}</div><div class="ck-card__s">${r.note} · ${fmt(r.cost)} монет</div></div>${btn}</div>`;
+      return `<div class="ck-reward ${m.cls}"><div class="ck-reward__ic">${m.ic(24)}</div><div class="ck-reward__b"><div class="ck-card__n">${r.name}</div><div class="ck-card__s">${r.note} · ${fmt(r.cost)} монет</div></div>${right}</div>`;
     }).join('');
     return '<div class="ck-sect">Награды «Марии»</div>' + banner + cards;
   }
@@ -1067,26 +1113,28 @@
       for (const c of cards) {
         const has = c.level > 0;
         const art = BIZ_ART_V ? `<img src="/assets/images/biz/${c.id}.png?v=${BIZ_ART_V}" alt="" loading="lazy">` : cardIcon(c.id, 36);
-        h += `<div class="ck-dove ${has ? 'got' : 'silh'}" style="animation-delay:${(i * 0.03).toFixed(2)}s"><div class="ck-dove__art">${art}${has ? '' : '<span class="ck-dove__q">?</span>'}</div><div class="ck-dove__n">${has ? c.name : '???'}</div><div class="ck-dove__role">${has ? 'Ур. ' + c.level : 'не открыт'}</div></div>`;
+        h += `<div class="ck-dove ${has ? 'got' : 'silh'}" style="animation-delay:${(i * 0.03).toFixed(2)}s"><div class="ck-dove__art">${art}${has ? '' : `<span class="ck-dove__q">${ICON.lock(30)}</span>`}</div><div class="ck-dove__n">${has ? c.name : '???'}</div><div class="ck-dove__role">${has ? 'Ур. ' + c.level : 'не открыт'}</div></div>`;
         i++;
       }
       h += '</div>';
     }
     list.innerHTML = h;
   }
+  function skelRows(n) { let h = ''; for (let i = 0; i < n; i++) h += '<div class="ck-skrow"><span class="sk-r ck-skel"></span><span class="sk-n ck-skel"></span><span class="sk-v ck-skel"></span></div>'; return h; }
+  function emptyState(ic, title, sub) { return `<div class="ck-empty"><div class="ck-empty__ic">${ic}</div><div class="ck-empty__t">${title}</div><div class="ck-empty__s">${sub}</div></div>`; }
   async function renderTop() {
     const list = ov.querySelector('#ck-toplist'); const rank = ov.querySelector('#ck-myrank');
     const left = fmtDur(seasonEndsTs() - Date.now());
     const brag = `<button class="ck-card__buy" id="ck-brag" style="width:100%;justify-content:center;margin-bottom:12px">${ICON.trophy(15)} Похвастаться карточкой</button>`;
     const sq = await squadBlock();
     const wire = () => { const bb = ov.querySelector('#ck-brag'); if (bb) bb.onclick = shareCard; sq.wire(); };
-    if (!authed()) { rank.textContent = `Сезон недели · до сброса ${left}`; list.innerHTML = brag + sq.html + '<div class="ck-sect">Топ недели</div><div style="text-align:center;color:var(--muted);padding:24px 14px;line-height:1.5">Личный рейтинг — при входе через приложение «Мария».</div>'; wire(); return; }
-    list.innerHTML = brag + sq.html + '<div style="text-align:center;color:var(--muted);padding:20px">Загрузка…</div>'; wire();
+    if (!authed()) { rank.textContent = `Сезон недели · до сброса ${left}`; list.innerHTML = brag + sq.html + '<div class="ck-sect">Топ недели</div>' + emptyState(ICON.trophy(30), 'Личный рейтинг закрыт', 'Войди через приложение «Мария» — копи монеты и попадай в топ недели.'); wire(); return; }
+    list.innerHTML = brag + sq.html + '<div class="ck-sect">Топ недели</div>' + skelRows(5); wire();
     const d = await loadTop();
     const ends = d && d.seasonEndsTs ? fmtDur(d.seasonEndsTs - Date.now()) : left;
     rank.textContent = `Сезон недели · до сброса ${ends}` + (d && d.myRank ? ` · ты #${d.myRank}` : '');
     const head = '<div class="ck-sect">Топ недели</div>';
-    if (!d || !d.top || !d.top.length) { list.innerHTML = brag + sq.html + head + '<div style="text-align:center;color:var(--muted);padding:20px">Сезон только начался — заработай монеты и будь первым!</div>'; wire(); return; }
+    if (!d || !d.top || !d.top.length) { list.innerHTML = brag + sq.html + head + emptyState(ICON.trophy(30), 'Сезон только начался', 'Заработай монеты и стань первым в топе недели!'); wire(); return; }
     list.innerHTML = brag + sq.html + head + d.top.map((r, i) => `<div class="ck-row${r.me ? ' me' : ''}"><div class="r">${i < 3 ? ICON.medal(20) : i + 1}</div><div class="n">${(r.name || '').replace(/</g, '&lt;')}</div><div class="v">${COIN(14)} ${fmt(r.total)}</div></div>`).join('');
     wire();
   }
@@ -1182,6 +1230,7 @@
   }
   async function renderTasks() {
     const list = ov.querySelector('#ck-taskslist');
+    if (authed()) list.innerHTML = skelRows(6);
     const refCount = (st && st.referrals) || 0;
     const refBlock = `<div class="ck-card" style="background:linear-gradient(90deg,rgba(238,191,82,.18),rgba(238,191,82,.05))">
       <div class="ck-card__ic">${ICON.users(26)}</div><div class="ck-card__b"><div class="ck-card__n">Пригласи друзей</div>
@@ -1211,7 +1260,7 @@
     }).join('');
     const progRows = await milestonesHtml();
     const promoCard = `<div class="ck-sect">Промокод</div><div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.gift(26)}</div><div class="ck-card__b"><div class="ck-card__n">Есть промокод?</div><div class="ck-card__s">Лови коды в соцсетях «Марии» → монеты</div></div></div><div style="display:flex;gap:8px"><input class="ck-cipher-in" id="ck-code-in" maxlength="24" placeholder="ВВЕДИ КОД" autocomplete="off" spellcheck="false"/><button class="ck-card__buy" id="ck-code-go" style="justify-content:center">Применить</button></div></div>`;
-    list.innerHTML = bonusBlock() + promoCard + '<div class="ck-sect">🎁 Награды за прогресс</div>' + progRows + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows + '<div class="ck-sect">Достижения</div>' + achRows;
+    list.innerHTML = bonusBlock() + promoCard + `<div class="ck-sect">${ICON.gift(13)} Награды за прогресс</div>` + progRows + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows + '<div class="ck-sect">Достижения</div>' + achRows;
     ov.querySelector('#ck-invite').onclick = shareRef;
     list.querySelectorAll('[data-open]').forEach(b => b.onclick = () => { const id = b.dataset.open, link = b.dataset.link; if (link) { if (window.App && App.openExternal) App.openExternal(link); else window.open(link, '_blank'); } linkOpened[id] = true; setTimeout(renderTasks, 400); });
     list.querySelectorAll('[data-claim]').forEach(b => b.onclick = () => claimTask(b.dataset.claim));
@@ -1225,11 +1274,11 @@
     if (authed()) { const d = await api('/api/clicker/milestones').catch(() => null); if (d && d.milestones) { data = d.milestones; pv = !!d.phoneVerified; } }
     if (!data) { const gs = authed() ? st : guestDerive(); data = MILESTONES.map(m => ({ id: m.id, title: m.title, kind: m.kind, points: m.points || 0, perkText: m.perkText || '', reached: condMet({ type: m.cond.type, target: m.cond.target }, gs), granted: false })); }
     return data.map(m => {
-      const rewardLabel = m.kind === 'both' ? `🪙 +${fmt(m.points)} баллов + 🎁 ${m.perkText}` : m.kind === 'perk' ? `🎁 ${m.perkText}` : `🪙 +${fmt(m.points)} баллов на карту`;
+      const rewardLabel = m.kind === 'both' ? `${COIN(13)} +${fmt(m.points)} баллов + ${ICON.gift(13)} ${m.perkText}` : m.kind === 'perk' ? `${ICON.gift(13)} ${m.perkText}` : `${COIN(13)} +${fmt(m.points)} баллов на карту`;
       let btn;
       if (m.granted) btn = `<button class="ck-card__buy" disabled>✓ Получено</button>`;
       else if (!authed()) btn = `<button class="ck-card__buy" disabled>Войти</button>`;
-      else if (!m.reached) btn = `<button class="ck-card__buy" disabled>🔒 Рано</button>`;
+      else if (!m.reached) btn = `<button class="ck-card__buy" disabled>${ICON.lock(14)} Рано</button>`;
       else if (pv) btn = `<button class="ck-card__buy" data-ms="${m.id}">Забрать</button>`;
       else btn = `<button class="ck-card__buy" data-ms="phone">Телефон</button>`;
       return `<div class="ck-card"${m.granted ? ' style="opacity:.55"' : ''}><div class="ck-card__ic">${m.kind === 'points' ? ICON.star(26) : ICON.gift(26)}</div><div class="ck-card__b"><div class="ck-card__n">${m.title}</div><div class="ck-card__s">${rewardLabel}</div></div>${btn}</div>`;
@@ -1246,7 +1295,7 @@
   }
   function promoPopup(title, code, minOrder, points) {
     const pop = ov.querySelector('#ck-pop');
-    const ptsLine = points ? `<div style="font-size:13px;color:var(--gold-l);font-weight:700;margin:6px 0">🪙 +${fmt(points)} баллов на карту тоже начислено</div>` : '';
+    const ptsLine = points ? `<div style="font-size:13px;color:var(--gold-l);font-weight:700;margin:6px 0">${COIN(13)} +${fmt(points)} баллов на карту тоже начислено</div>` : '';
     pop.innerHTML = `<h3>${ICON.gift(20)} Подарок!</h3><div style="font-size:18px;font-weight:800;color:var(--ink);margin:4px 0">${title || 'Подарок «Мария»'}</div>${ptsLine}<div style="margin:8px 0;font-size:13px;color:var(--muted)">Назови этот промокод менеджеру при заказе${minOrder ? ` от ${fmt(minOrder)}₽` : ''}:</div><div class="ck-morse" style="font-size:21px;letter-spacing:2px">${code}</div><div style="font-size:12px;color:var(--muted);margin-top:6px">Код действует 30 дней · сохранён в «Мои награды»</div><button id="ck-pop-ok">Сохранить</button>`;
     pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
   }
@@ -1341,7 +1390,15 @@
   }
   // ── Хаб «Игры»: рендер + квизы + «Собери торт» + «Ровный крем» ───────────────
   let quizState = null, memState = null, towerState = null;
-  const MEM_ICONS = ['🍰', '🧁', '🍮', '🍪', '🍩', '🍫'];
+  // Рисованные сладости (правило бренда «никаких эмодзи как арта»); совпадение по равенству строк.
+  const MEM_ICONS = [
+    `<svg width="34" height="34" viewBox="0 0 40 40"><path d="M12 18h16l-1.6 12.4a1.8 1.8 0 0 1-1.8 1.6H15.4a1.8 1.8 0 0 1-1.8-1.6z" fill="#e7c08a" stroke="#b98a4e" stroke-width="1.6" stroke-linejoin="round"/><path d="M10 18c-.4-3.6 3-5.6 5.2-5.6.8-3.2 8.8-3.2 9.6 0 2.2 0 5.6 2 5.2 5.6z" fill="#ff9ec4" stroke="#e0639a" stroke-width="1.6" stroke-linejoin="round"/><circle cx="20" cy="9.6" r="2.3" fill="#e8413f"/></svg>`,
+    `<svg width="34" height="34" viewBox="0 0 40 40"><rect x="7" y="18.4" width="26" height="5.6" rx="2.8" fill="#fff0c4" stroke="#e6c98a" stroke-width="1.1"/><path d="M8 19c0-5 5-8.2 12-8.2s12 3.2 12 8.2q-12 3-24 0z" fill="#c9a6e0" stroke="#9a6fc4" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 23.4c0 5 5 8.2 12 8.2s12-3.2 12-8.2q-12-3-24 0z" fill="#c9a6e0" stroke="#9a6fc4" stroke-width="1.5" stroke-linejoin="round"/><g fill="#b88fd6"><circle cx="10.5" cy="18.8" r="0.9"/><circle cx="14.5" cy="18.4" r="0.9"/><circle cx="25.5" cy="18.4" r="0.9"/><circle cx="29.5" cy="18.8" r="0.9"/></g><path d="M11 14.8q9-3 18 0" fill="none" stroke="#ecdcf6" stroke-width="1.4" stroke-linecap="round" opacity=".85"/></svg>`,
+    `<svg width="34" height="34" viewBox="0 0 40 40"><circle cx="20" cy="20" r="13" fill="#d6a25a" stroke="#a9762f" stroke-width="1.6"/><circle cx="15" cy="16" r="1.8" fill="#4a2c14"/><circle cx="24" cy="15" r="1.8" fill="#4a2c14"/><circle cx="26" cy="23" r="1.8" fill="#4a2c14"/><circle cx="17" cy="25" r="1.8" fill="#4a2c14"/><circle cx="21" cy="20" r="1.5" fill="#4a2c14"/></svg>`,
+    `<svg width="34" height="34" viewBox="0 0 40 40"><circle cx="20" cy="21" r="12" fill="#e7c08a" stroke="#b98a4e" stroke-width="1.6"/><path d="M20 9c6.6 0 12 5.4 12 12 0 2-.5 4-1.4 5.6C28 24 24 26 20 26s-8-2-10.6-.6A11.9 11.9 0 0 1 8 21C8 14.4 13.4 9 20 9z" fill="#7a4a2a" stroke="#5a3318" stroke-width="1.4" stroke-linejoin="round"/><circle cx="20" cy="21" r="4.2" fill="#1a1413"/><circle cx="16" cy="15" r="1" fill="#ff9ec4"/><circle cx="24" cy="14" r="1" fill="#7da33f"/><circle cx="27" cy="19" r="1" fill="#ffd24d"/><circle cx="13" cy="19" r="1" fill="#5aa8e8"/></svg>`,
+    `<svg width="34" height="34" viewBox="0 0 40 40"><path d="M8 31 20 12l12 19z" fill="#f0c688" stroke="#c9954a" stroke-width="1.6" stroke-linejoin="round"/><path d="M18 24.6 L33 24.6 L33 21 L23 21 Z" fill="#fff3e0" stroke="#e3c39a" stroke-width="1"/><path d="M7 31 L33 15 L33 11.5 L7 27.5 Z" fill="#ff9ec4" stroke="#e0639a" stroke-width="1.4" stroke-linejoin="round"/><circle cx="32.4" cy="11.9" r="2.6" fill="#e8413f" stroke="#b02a28" stroke-width="0.9"/></svg>`,
+    `<svg width="34" height="34" viewBox="0 0 40 40"><g stroke="#c0392b" stroke-width="1.6" stroke-linejoin="round"><path d="M11 20 4 13v14z" fill="#ff8a7a"/><path d="M29 20 36 13v14z" fill="#ff8a7a"/><ellipse cx="20" cy="20" rx="9" ry="8" fill="#ff6b5e"/></g><path d="M16 16c2.4 2.4 5.6 2.4 8 0" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".7"/></svg>`,
+  ];
 
   function renderGames() {
     const box = ov && ov.querySelector('#ck-gameslist'); if (!box) return;
@@ -1353,7 +1410,7 @@
     const rainCard = `<div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.rain(26)}</div><div class="ck-card__b"><div class="ck-card__n">Золотой дождь</div><div class="ck-card__s">${rainAvail ? 'Лови монеты 20 секунд → бонус' : 'Сыграно — приходи завтра'}</div></div>${rainAvail ? `<button class="ck-card__buy" id="ck-games-rain">Играть</button>` : `<button class="ck-card__buy" disabled>✓ Сегодня</button>`}</div></div>`;
     const gated = ['quiz_kids', 'quiz_riddle', 'count', 'memory', 'gems', 'tower'];
     const total = gated.length + 1, doneN = gated.filter(gameDone).length + (rainAvail ? 0 : 1), remain = total - doneN;
-    const head = `<div class="ck-games-hd">${remain > 0 ? `Сегодня доступно игр: <b>${remain}</b> из ${total} · награды ждут 🪙` : 'Все игры на сегодня пройдены — заходи завтра 🎉'}</div>`;
+    const head = `<div class="ck-games-hd">${remain > 0 ? `Сегодня доступно игр: <b>${remain}</b> из ${total} · награды ждут ${COIN(14)}` : 'Все игры на сегодня пройдены — заходи завтра!'}</div>`;
     box.innerHTML = head +
       '<div class="ck-sect">Учимся и играем · детям</div>' +
       card('quiz_kids', ICON.quiz(26), 'Котовикторина', '5 вопросов обо всём · +до 5000 ' + COIN(13)) +
