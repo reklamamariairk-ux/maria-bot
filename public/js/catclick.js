@@ -773,12 +773,30 @@
   function ripple(x, y) { const fx = ov.querySelector('#ck-fx'); const r = fx.getBoundingClientRect(); const el = document.createElement('div'); el.className = 'ck-ripple'; el.style.left = (x - r.left) + 'px'; el.style.top = (y - r.top) + 'px'; fx.appendChild(el); setTimeout(() => el.remove(), 520); }
   function bumpBalance() { const b = ov && ov.querySelector('#ck-bal'); if (!b) return; b.classList.remove('ck-balpop'); void b.offsetWidth; b.classList.add('ck-balpop'); }
   function flyCoin(x, y) {
-    const now = performance.now(); if (now - lastFly < 80) return; lastFly = now;
-    const fx = ov.querySelector('#ck-fx'); const r = fx.getBoundingClientRect(); const bal = ov.querySelector('#ck-bal'); if (!bal) return; const br = bal.getBoundingClientRect();
+    const now = performance.now(); if (now - lastFly < 70) return; lastFly = now;
+    bumpBalance();
+    let rm = false; try { rm = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+    if (rm) return;
+    const fx = ov.querySelector('#ck-fx'); const r = fx.getBoundingClientRect();
     const el = document.createElement('div'); el.className = 'ck-flyc'; el.innerHTML = COIN(20);
-    el.style.left = (x - r.left - 10) + 'px'; el.style.top = (y - r.top - 10) + 'px'; fx.appendChild(el);
-    requestAnimationFrame(() => { el.style.left = (br.left + br.width / 2 - r.left - 10) + 'px'; el.style.top = (br.top + br.height / 2 - r.top - 10) + 'px'; el.style.transform = 'scale(.45)'; el.style.opacity = '0'; });
-    setTimeout(() => { el.remove(); bumpBalance(); }, 510);
+    el.style.transition = 'none';
+    let px = x - r.left - 10, py = y - r.top - 10;
+    el.style.left = px + 'px'; el.style.top = py + 'px'; fx.appendChild(el);
+    // всплеск веером вверх: случайный угол + гравитация-дуга + вращение + затухание
+    const ang = -Math.PI / 2 + (Math.random() - 0.5) * 1.2;
+    const sp = 3.4 + Math.random() * 2.4;
+    let vx = Math.cos(ang) * sp, vy = Math.sin(ang) * sp;
+    let rot = (Math.random() - 0.5) * 50; const vr = (Math.random() - 0.5) * 26;
+    const start = now, dur = 600 + Math.random() * 220;
+    (function step() {
+      const e = performance.now() - start;
+      if (e >= dur || !el.isConnected) { el.remove(); return; }
+      vy += 0.18; px += vx; py += vy; rot += vr; const k = e / dur;
+      el.style.left = px + 'px'; el.style.top = py + 'px';
+      el.style.transform = 'rotate(' + rot.toFixed(1) + 'deg) scale(' + (1 - k * 0.55).toFixed(2) + ')';
+      el.style.opacity = (1 - k * k).toFixed(2);
+      requestAnimationFrame(step);
+    })();
   }
   function flash() { const fx = ov.querySelector('#ck-fx'); const el = document.createElement('div'); el.className = 'ck-flash'; fx.appendChild(el); setTimeout(() => el.remove(), 720); }
   function confettiBurst() {
