@@ -655,6 +655,16 @@
       .ck-skrow{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:7px}.ck-skrow .sk-r{width:24px;height:24px;border-radius:50%;flex:none}.ck-skrow .sk-n{height:12px;border-radius:6px;flex:1}.ck-skrow .sk-v{width:62px;height:12px;border-radius:6px;flex:none}
       .ck-empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding:30px 18px;color:var(--muted)}.ck-empty__ic{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(238,191,82,.08);border:1px solid var(--line);color:var(--gold);margin-bottom:12px}.ck-empty__ic svg{width:30px;height:30px}.ck-empty__t{font-weight:800;font-size:15px;color:var(--cream);margin-bottom:4px}.ck-empty__s{font-size:12.5px;line-height:1.5;max-width:240px}
       @media (prefers-reduced-motion:reduce){.ck-screen.on,.ck-skel::after,.ck-conf,.ck-coin,.ck-flyc,.ck-ripple,.ck-flash,.ck-balpop,.ck-bonus-fly{animation:none!important}}
+      /* Онбординг-туториал (показ один раз) */
+      .ck-tut{position:absolute;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;background:rgba(8,5,6,.74);backdrop-filter:blur(4px);padding:24px;animation:ckScreenIn .25s ease-out}
+      .ck-tut__card{max-width:330px;width:100%;background:linear-gradient(180deg,#2e1119,#1d0a11);border:1px solid var(--line);border-radius:22px;padding:22px 20px;text-align:center;box-shadow:0 18px 50px rgba(0,0,0,.6)}
+      .ck-tut__ic{width:64px;height:64px;margin:0 auto 10px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 38% 30%,rgba(255,227,156,.28),rgba(238,191,82,.08));border:1px solid var(--line);color:var(--gold-l)}
+      .ck-tut h3{margin:0 0 4px;font-family:'Nunito',sans-serif;font-weight:700;font-size:21px;color:var(--cream)}
+      .ck-tut__sub{color:var(--muted);font-size:12.5px;line-height:1.45;margin-bottom:14px}
+      .ck-tut__step{display:flex;align-items:center;gap:12px;text-align:left;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:9px}
+      .ck-tut__step .si{width:38px;height:38px;flex:none;border-radius:11px;display:flex;align-items:center;justify-content:center;background:linear-gradient(150deg,#f0c24e,#9c6a1c);color:#1a1413}
+      .ck-tut__step .st{font-weight:700;font-size:13.5px;color:var(--ink)}.ck-tut__step .sd{font-size:11.5px;color:var(--muted);margin-top:1px}
+      .ck-tut__go{margin-top:6px;width:100%;border:1px solid #ffe9b3;border-radius:14px;padding:13px;font-weight:800;font-size:16px;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;cursor:pointer}
     `;
     document.head.appendChild(s);
   }
@@ -1379,13 +1389,29 @@
     raf = requestAnimationFrame(loop);
   }
 
+  function showTutorial() {
+    if (!ov) return;
+    const t = document.createElement('div'); t.className = 'ck-tut';
+    t.innerHTML = `<div class="ck-tut__card">
+      <div class="ck-tut__ic">${ICON.paw(36)}</div>
+      <h3>Котик Комбат</h3>
+      <div class="ck-tut__sub">Помоги котику дорасти от подвала до тронного зала — 19 уровней и реальные награды «Марии».</div>
+      <div class="ck-tut__step"><div class="si">${ICON.paw(20)}</div><div><div class="st">Тапай котика</div><div class="sd">Каждый тап — монеты, лови комбо ×N</div></div></div>
+      <div class="ck-tut__step"><div class="si">${ICON.shop(20)}</div><div><div class="st">Заводи бизнесы</div><div class="sd">В «Прокачке» — монеты копятся сами, даже офлайн</div></div></div>
+      <div class="ck-tut__step"><div class="si">${ICON.gift(20)}</div><div><div class="st">Заходи каждый день</div><div class="sd">Награды, комбо дня и баллы на карту «Марии»</div></div></div>
+      <button class="ck-tut__go" id="ck-tut-go">Поехали!</button></div>`;
+    ov.appendChild(t);
+    t.querySelector('#ck-tut-go').onclick = () => { try { localStorage.setItem('ck_tut_v1', '1'); } catch (e) {} t.remove(); window.haptic && window.haptic('light'); };
+  }
   async function open() {
     if (!ov) build();
     ov.classList.add('on'); window.scrollLock && window.scrollLock(); ac();
     await load(); await maybeMigrateGuest(); await ensureRefRegistered(); await maybePurchaseBonus(); curLevel = leagueFor(st.totalEarned).level;
     ov.querySelector('#ck-cat').src = A(leagueFor(st.totalEarned).cat || 'idle.png');
     setTab('cat'); renderAll(); spawnSparks(); applySeason(); scheduleBonus();
-    if (st.passiveEarned > 0) passivePopup(st.passiveEarned);
+    let _seenTut = true; try { _seenTut = !!localStorage.getItem('ck_tut_v1'); } catch (e) {}
+    if (!_seenTut) showTutorial();
+    else if (st.passiveEarned > 0) passivePopup(st.passiveEarned);
     lastTs = 0; syncT = 0; combo = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
   }
   // ── Хаб «Игры»: рендер + квизы + «Собери торт» + «Ровный крем» ───────────────
