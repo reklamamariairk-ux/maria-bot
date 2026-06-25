@@ -5,12 +5,14 @@
  * (стрик), лидерборд. Антинакрутка: энергия/пассив/турбо считаются на сервере.
  */
 import { pool } from "./db";
-import { clickerReferralLink } from "./links";
+import { clickerReferralLink, miniAppLink } from "./links";
 import { earnPoints, isPhoneVerified, grantRewardByCode } from "./club";
 import { fetchLk } from "./lk";
 import * as fs from "fs";
 import * as path from "path";
 import { trackEvent } from "./analytics";
+import type { PushService } from "./push";
+import { log } from "./logger";
 
 // Подарки за достижения → реальные баллы на карту клуба «Мария» (earnPoints).
 // Выдаются ОДИН раз, только игроку с подтверждённым телефоном. Суммы — в gift у
@@ -111,6 +113,18 @@ export const REWARDS = [
 ];
 const REWARD_BY_ID = Object.fromEntries(REWARDS.map((r) => [r.id, r]));
 const REDEEM_PER_DAY = 1; // анти-абуз: не больше N обменов в день
+
+// Приз топ-3 недельного сезона (#7). Награда = баллы на карту клуба «Мария»
+// (earnPoints, только подтверждённый телефон). ⚠️ Суммы/факт раздачи — согласовать
+// с Машей: пока WEEKLY_PRIZES_ENABLED=false → топ фиксируется и показывается в
+// лидерборде, но баллы НЕ начисляются и победителям не пишем (как REWARDS).
+export const WEEKLY_PRIZES_ENABLED = false;
+export const WEEKLY_PRIZES = [
+  { rank: 1, points: 1000, label: "1000 баллов на карту" },
+  { rank: 2, points: 500,  label: "500 баллов на карту" },
+  { rank: 3, points: 300,  label: "300 баллов на карту" },
+];
+const WEEKLY_PRIZE_BY_RANK = Object.fromEntries(WEEKLY_PRIZES.map((p) => [p.rank, p]));
 
 // Категории Mine. ⚠️ CARDS продублированы во фронте catclick.js (+ cardIcon по id) — синхронно.
 export const CARD_CATS = [
@@ -250,6 +264,17 @@ export async function initClickerSchema(): Promise<void> {
     );
     CREATE TABLE IF NOT EXISTS clicker_purchase_sync (
       chat_id BIGINT PRIMARY KEY, spent_synced BIGINT NOT NULL DEFAULT 0, last_check TIMESTAMPTZ
+    );
+    CREATE TABLE IF NOT EXISTS clicker_week_winners (
+      week_key     TEXT NOT NULL,
+      rank         INT NOT NULL,
+      chat_id      BIGINT NOT NULL,
+      points       BIGINT NOT NULL,
+      prize_points INT NOT NULL DEFAULT 0,
+      awarded      BOOLEAN NOT NULL DEFAULT FALSE,
+      pushed       BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (week_key, rank)
     );
     CREATE INDEX IF NOT EXISTS clicker_top_idx ON clicker_state (total_earned DESC);
   `);
@@ -573,7 +598,10 @@ export async function boostClicker(chatId: number, type: string): Promise<{ ok: 
 }
 
 /** Топ игроков за СЕЗОН (текущая неделя): очки = total_earned − week_base. Имя из subscribers. */
-export async function getTop(chatId: number, limit = 30): Promise<{ top: { name: string; total: number; me: boolean }[]; myRank: number | null; seasonEndsTs: number }> {
+export async function getTop(chatId: number, limit = 30): Promise<{
+  top: { name: string; total: number; me: boolean }[]; myRank: number | null; seasonEndsTs: number;
+  weekly: { enabled: boolean; prizes: { rank: number; points: number; label: string }[]; lastWeek: { rank: number; name: string; points: number; me: boolean }[] };
+}> {
   const cur = weekKey();
   const { rows } = await pool.query(
     `SELECT c.chat_id, (c.total_earned - c.week_base) AS pts, s.first_name, s.username
@@ -585,7 +613,89 @@ export async function getTop(chatId: number, limit = 30): Promise<{ top: { name:
   const me = await pool.query(`SELECT week_key, (total_earned - week_base) AS pts FROM clicker_state WHERE chat_id=$1`, [chatId]);
   const myPts = me.rows.length && me.rows[0].week_key === cur ? Number(me.rows[0].pts) : 0;
   const rank = await pool.query(`SELECT COUNT(*)::int AS n FROM clicker_state WHERE week_key=$2 AND (total_earned - week_base) > $1`, [myPts, cur]);
-  return { top, myRank: myPts > 0 ? rank.rows[0].n + 1 : null, seasonEndsTs: seasonEndsTs() };
+  // прошлая неделя — победители топ-3 (для соц-доказательства + «приз недели»)
+  const lwKey = String(weekMonday() - 7);
+  const lw = await pool.query(
+    `SELECT w.rank, w.chat_id, w.points, s.first_name, s.username
+       FROM clicker_week_winners w LEFT JOIN subscribers s ON s.chat_id = w.chat_id
+      WHERE w.week_key = $1 ORDER BY w.rank`, [lwKey]
+  );
+  const lastWeek = lw.rows.map((r) => ({ rank: Number(r.rank), name: (r.first_name || r.username || "Котовод").toString().slice(0, 24), points: Number(r.points), me: Number(r.chat_id) === chatId }));
+  return {
+    top, myRank: myPts > 0 ? rank.rows[0].n + 1 : null, seasonEndsTs: seasonEndsTs(),
+    weekly: { enabled: WEEKLY_PRIZES_ENABLED, prizes: WEEKLY_PRIZES, lastWeek },
+  };
+}
+
+/**
+ * Закрытие недельного сезона (#7) — крон в понедельник ~00:02 Иркутск, ДО того как
+ * активные игроки обнулят свой week_base в новой неделе. Фиксирует топ-3 завершившейся
+ * недели и (если WEEKLY_PRIZES_ENABLED) начисляет баллы на карту подтверждённым.
+ * Идемпотентно: повторный вызов за ту же неделю ничего не задвоит.
+ * Пуш победителям — отдельно днём (pushWeeklyWinners), чтобы не будить ночью.
+ */
+export async function closeWeeklySeason(): Promise<{ week: string; recorded: number; awarded: number }> {
+  const endedKey = String(weekMonday() - 7);
+  const exist = await pool.query(`SELECT 1 FROM clicker_week_winners WHERE week_key=$1 LIMIT 1`, [endedKey]);
+  if (exist.rowCount) { log.info({ endedKey }, "[weekly] already closed"); return { week: endedKey, recorded: 0, awarded: 0 }; }
+  const { rows } = await pool.query(
+    `SELECT chat_id, (total_earned - week_base) AS pts
+       FROM clicker_state
+      WHERE week_key = $1 AND (total_earned - week_base) > 0
+      ORDER BY pts DESC LIMIT 3`, [endedKey]
+  );
+  if (!rows.length) { log.info({ endedKey }, "[weekly] no participants"); return { week: endedKey, recorded: 0, awarded: 0 }; }
+  let recorded = 0, awarded = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const rank = i + 1, chatId = Number(rows[i].chat_id), pts = Number(rows[i].pts);
+    const prize = WEEKLY_PRIZE_BY_RANK[rank];
+    let prizePoints = 0, didAward = false;
+    if (WEEKLY_PRIZES_ENABLED && prize) {
+      const verified = await isPhoneVerified(chatId).catch(() => false);
+      if (verified) {
+        await earnPoints(chatId, prize.points, "clicker_weekly_top", { rank, week: endedKey }).catch(() => {});
+        prizePoints = prize.points; didAward = true; awarded++;
+      }
+    }
+    await pool.query(
+      `INSERT INTO clicker_week_winners (week_key, rank, chat_id, points, prize_points, awarded)
+       VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (week_key, rank) DO NOTHING`,
+      [endedKey, rank, chatId, pts, prizePoints, didAward]
+    );
+    recorded++;
+  }
+  log.info({ endedKey, recorded, awarded, enabled: WEEKLY_PRIZES_ENABLED }, "[weekly] season closed");
+  return { week: endedKey, recorded, awarded };
+}
+
+/**
+ * Пуш победителям прошлой недели — крон в понедельник днём (не в тихие часы).
+ * Только при включённых призах (иначе нечего обещать). Дедуп по флагу pushed.
+ */
+export async function pushWeeklyWinners(push: PushService): Promise<{ sent: number }> {
+  if (!WEEKLY_PRIZES_ENABLED) return { sent: 0 };
+  const endedKey = String(weekMonday() - 7);
+  const { rows } = await pool.query(
+    `SELECT rank, chat_id, prize_points, awarded FROM clicker_week_winners WHERE week_key=$1 AND pushed=FALSE ORDER BY rank`,
+    [endedKey]
+  );
+  let sent = 0;
+  for (const r of rows) {
+    const chatId = Number(r.chat_id), rank = Number(r.rank);
+    const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : "🥉";
+    const prize = WEEKLY_PRIZE_BY_RANK[rank];
+    const link = miniAppLink(chatId, "click");
+    const text = r.awarded
+      ? `${medal} *Ты ${rank}-й в недельном топе «Котика Комбат»!*\n\nНаграда — ${prize?.label} «Марии» — уже на твоей карте. Поздравляем! 🎉\n\n[Открыть игру](${link})`
+      : `${medal} *Ты ${rank}-й в недельном топе «Котика Комбат»!*\n\nПриз — ${prize?.label} — ждёт тебя. Подтверди телефон в приложении «Мария», чтобы забрать.\n\n[Открыть](${link})`;
+    const ok = await push.sendPushSafely(chatId, "marketing_game", text);
+    if (ok) {
+      await pool.query(`UPDATE clicker_week_winners SET pushed=TRUE WHERE week_key=$1 AND rank=$2`, [endedKey, rank]);
+      sent++;
+    }
+  }
+  if (sent) log.info({ endedKey, sent }, "[weekly] winners notified");
+  return { sent };
 }
 
 /** Команды: рейтинг по сумме намолоченного, выбор/смена команды. */

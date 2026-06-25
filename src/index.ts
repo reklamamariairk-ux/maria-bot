@@ -36,7 +36,7 @@ import gameRouter from "./routes/game";
 import petRouter from "./routes/pet";
 import { initPetSchema } from "./pet";
 import clickerRouter from "./routes/clicker";
-import { initClickerSchema, registerRef } from "./clicker";
+import { initClickerSchema, registerRef, closeWeeklySeason, pushWeeklyWinners } from "./clicker";
 import { initAnalyticsSchema } from "./analytics";
 import { initClickerPushSchema, runClickerRetentionPush } from "./clicker-push";
 import { initBonusSchema, startBonusWorker } from "./bonus1c";
@@ -1381,6 +1381,12 @@ app.post("/api/admin/clicker/push", requireAdminToken, async (_req, res) => {
   catch (e) { log.error({ err: e }, "[CLICKER PUSH MANUAL]"); res.status(500).json({ error: "internal" }); }
 });
 
+// Админ: ручное закрытие недельного сезона + пуш победителям (для теста).
+app.post("/api/admin/clicker/weekly-close", requireAdminToken, async (_req, res) => {
+  try { const close = await closeWeeklySeason(); const push = await pushWeeklyWinners(_pushService); res.json({ ok: true, ...close, pushed: push.sent }); }
+  catch (e) { log.error({ err: e }, "[WEEKLY CLOSE MANUAL]"); res.status(500).json({ error: "internal" }); }
+});
+
 // Админ: перезагрузить data/dietary-overrides.json и переразметить in-memory каталог
 // без рестарта (для оперативной коррекции false-positive)
 app.post("/api/admin/dietary/reload", requireAdminToken, (_req, res) => {
@@ -1963,6 +1969,19 @@ async function main() {
     runClickerRetentionPush(_pushService).catch((e) => log.error({ err: e }, "[CLICKER PUSH CRON]"));
   });
   console.log("[STARTUP] Clicker retention-push cron scheduled (daily 17:00 Irkutsk)");
+
+  // Закрытие недельного сезона «Котик Комбат» — понедельник 00:02 Иркутск (вс 16:02 UTC),
+  // ДО обнуления week_base активными игроками. Фиксирует топ-3 + начисляет призы.
+  cron.schedule("2 16 * * 0", () => {
+    closeWeeklySeason().catch((e) => log.error({ err: e }, "[WEEKLY CLOSE CRON]"));
+  });
+  console.log("[STARTUP] Weekly-season close cron scheduled (Mon 00:02 Irkutsk)");
+
+  // Пуш победителям недели — понедельник 10:00 Иркутск (02:00 UTC), не в тихие часы.
+  cron.schedule("0 2 * * 1", () => {
+    pushWeeklyWinners(_pushService).catch((e) => log.error({ err: e }, "[WEEKLY PUSH CRON]"));
+  });
+  console.log("[STARTUP] Weekly-winners push cron scheduled (Mon 10:00 Irkutsk)");
 
   // Secret-of-day cron — каждое утро 09:00 Иркутск (UTC 01:00) выбирает товар
   cron.schedule("0 1 * * *", () => {

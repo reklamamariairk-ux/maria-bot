@@ -1243,10 +1243,29 @@
     const d = await loadTop();
     const ends = d && d.seasonEndsTs ? fmtDur(d.seasonEndsTs - Date.now()) : left;
     rank.textContent = `Сезон недели · до сброса ${ends}` + (d && d.myRank ? ` · ты #${d.myRank}` : '');
+    const wk = weeklyPrizeCard(d && d.weekly);
     const head = '<div class="ck-sect">Топ недели</div>';
-    if (!d || !d.top || !d.top.length) { list.innerHTML = brag + sq.html + head + emptyState(ICON.trophy(30), 'Сезон только начался', 'Заработай монеты и стань первым в топе недели!'); wire(); return; }
-    list.innerHTML = brag + sq.html + head + d.top.map((r, i) => `<div class="ck-row${r.me ? ' me' : ''}"><div class="r">${i < 3 ? ICON.medal(20) : i + 1}</div><div class="n">${(r.name || '').replace(/</g, '&lt;')}</div><div class="v">${COIN(14)} ${fmt(r.total)}</div></div>`).join('');
+    if (!d || !d.top || !d.top.length) { list.innerHTML = brag + wk + sq.html + head + emptyState(ICON.trophy(30), 'Сезон только начался', 'Заработай монеты и стань первым в топе недели!'); wire(); return; }
+    list.innerHTML = brag + wk + sq.html + head + d.top.map((r, i) => `<div class="ck-row${r.me ? ' me' : ''}"><div class="r">${i < 3 ? ICON.medal(20) : i + 1}</div><div class="n">${(r.name || '').replace(/</g, '&lt;')}</div><div class="v">${COIN(14)} ${fmt(r.total)}</div></div>`).join('');
     wire();
+  }
+  function weeklyPrizeCard(w) {
+    if (!w) return '';
+    const head = '<div class="ck-sect">Приз недели</div>';
+    let body;
+    if (w.enabled && w.prizes && w.prizes.length) {
+      body = '<div class="ck-card ck-bonus" style="flex-direction:column;align-items:stretch;gap:8px;padding:12px 14px">'
+        + w.prizes.map((p) => `<div class="ck-row"><div class="r">${ICON.medal(20)}</div><div class="n">${p.rank} место</div><div class="v" style="color:var(--gold-l)">${(p.label || '').replace(/</g, '&lt;')}</div></div>`).join('')
+        + '</div>';
+    } else {
+      body = `<div class="ck-card" style="background:linear-gradient(90deg,rgba(238,191,82,.18),rgba(238,191,82,.05))"><div class="ck-card__ic">${ICON.trophy(26)}</div><div class="ck-card__b"><div class="ck-card__n">Призы за топ-3 недели</div><div class="ck-card__s">Реальные награды «Марии» лучшим игрокам недели — скоро!</div></div><span class="ck-soon">Скоро</span></div>`;
+    }
+    let lw = '';
+    if (w.lastWeek && w.lastWeek.length) {
+      lw = '<div class="ck-sect">Прошлая неделя</div>'
+        + w.lastWeek.map((r) => `<div class="ck-row${r.me ? ' me' : ''}"><div class="r">${ICON.medal(20)}</div><div class="n">${(r.name || '').replace(/</g, '&lt;')}</div><div class="v">${COIN(14)} ${fmt(r.points)}</div></div>`).join('');
+    }
+    return head + body + lw;
   }
   async function squadBlock() {
     if (!authed()) {
