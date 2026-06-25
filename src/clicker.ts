@@ -10,6 +10,7 @@ import { earnPoints, isPhoneVerified, grantRewardByCode } from "./club";
 import { fetchLk } from "./lk";
 import * as fs from "fs";
 import * as path from "path";
+import { trackEvent } from "./analytics";
 
 // Подарки за достижения → реальные баллы на карту клуба «Мария» (earnPoints).
 // Выдаются ОДИН раз, только игроку с подтверждённым телефоном. Суммы — в gift у
@@ -304,6 +305,13 @@ async function refresh(client: any, chatId: number): Promise<{ r: any; cl: Recor
     `UPDATE clicker_state SET balance=$2, total_earned=$3, energy=$4, boost_energy_used=$5, boost_turbo_used=$6, boost_date=$7, week_key=$8, week_base=$9, updated_at=NOW() WHERE chat_id=$1`,
     [chatId, r.balance, r.total_earned, r.energy, r.boost_energy_used, r.boost_turbo_used, r.boost_date, r.week_key, r.week_base]
   );
+  // аналитика: повышение уровня (одно событие на уровень, из любого источника дохода)
+  const lvlNow = leagueFor(Number(r.total_earned)).level;
+  if (lvlNow > (r.notified_level || 0)) {
+    if (lvlNow >= 2) trackEvent(chatId, "levelup", { level: lvlNow });
+    await client.query(`UPDATE clicker_state SET notified_level=$2 WHERE chat_id=$1`, [chatId, lvlNow]);
+    r.notified_level = lvlNow;
+  }
   return { r, cl, passive };
 }
 

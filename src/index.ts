@@ -37,6 +37,7 @@ import petRouter from "./routes/pet";
 import { initPetSchema } from "./pet";
 import clickerRouter from "./routes/clicker";
 import { initClickerSchema, registerRef } from "./clicker";
+import { initAnalyticsSchema } from "./analytics";
 import { initBonusSchema, startBonusWorker } from "./bonus1c";
 import cartRouter from "./routes/cart";
 import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, fetchProductById, reloadDietaryOverrides, detectDietary, Product } from "./scraper";
@@ -1899,6 +1900,7 @@ async function main() {
   await initClubSchema();
   await initPetSchema();
   await initClickerSchema();
+  await initAnalyticsSchema();
   await initBonusSchema();
   startBonusWorker();
 
