@@ -665,6 +665,34 @@
       .ck-tut__step .si{width:38px;height:38px;flex:none;border-radius:11px;display:flex;align-items:center;justify-content:center;background:linear-gradient(150deg,#f0c24e,#9c6a1c);color:#1a1413}
       .ck-tut__step .st{font-weight:700;font-size:13.5px;color:var(--ink)}.ck-tut__step .sd{font-size:11.5px;color:var(--muted);margin-top:1px}
       .ck-tut__go{margin-top:6px;width:100%;border:1px solid #ffe9b3;border-radius:14px;padding:13px;font-weight:800;font-size:16px;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;cursor:pointer}
+      /* Цель «следующий котик» у прогресс-бара */
+      .ck-progwrap{display:flex;align-items:center;justify-content:center;gap:12px;width:84%;max-width:380px;margin-top:10px}
+      .ck-progwrap .ck-prog{width:auto;flex:1;min-width:0;margin-top:0}
+      .ck-goal{display:flex;flex-direction:column;align-items:center;gap:3px;flex:none;width:58px;text-align:center}
+      .ck-goal[hidden]{display:none}
+      .ck-goal__av{width:42px;height:42px;border-radius:50%;border:2px solid var(--gold);background:rgba(0,0,0,.4);box-shadow:0 0 12px rgba(238,191,82,.4),inset 0 1px 3px rgba(0,0,0,.5);overflow:hidden;display:flex;align-items:center;justify-content:center}
+      .ck-goal__av img{width:132%;height:132%;object-fit:contain;filter:saturate(1.05) brightness(.92);opacity:.95;transform:translateY(9%)}
+      .ck-goal__l{font-size:8.5px;font-weight:800;color:var(--gold-l);text-shadow:0 1px 3px rgba(0,0,0,.85);line-height:1.05;letter-spacing:.2px;max-width:58px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+      /* Эскалация комбо */
+      .ck-combo[data-tier="1"]{color:#ffd27a;text-shadow:0 0 14px rgba(255,170,60,.7),0 2px 10px rgba(0,0,0,.6)}
+      .ck-combo[data-tier="2"]{color:#ff9d4d;text-shadow:0 0 18px rgba(255,120,30,.85),0 2px 10px rgba(0,0,0,.6)}
+      .ck-combo[data-tier="3"]{color:#ff6a4d;text-shadow:0 0 26px rgba(255,70,40,.95),0 2px 12px rgba(0,0,0,.7)}
+      @keyframes ckcombopop{0%{transform:translateX(-50%) scale(.62)}55%{transform:translateX(-50%) scale(1.16)}100%{transform:translateX(-50%) scale(1)}}
+      .ck-combo.pop{animation:ckcombopop .26s ease-out}
+      @keyframes ckcatshake{0%,100%{transform:translate(0,0)}20%{transform:translate(-5px,2px)}40%{transform:translate(5px,-2px)}60%{transform:translate(-4px,1px)}80%{transform:translate(4px,-1px)}}
+      .ck-catwrap.ck-shake{animation:ckcatshake .42s ease-in-out}
+      .ck-burst{position:absolute;width:9px;height:9px;border-radius:50%;background:radial-gradient(circle,#fff,#ffd27a 60%,rgba(255,170,60,0));box-shadow:0 0 8px rgba(255,200,90,.85);pointer-events:none;transition:transform .5s ease-out,opacity .5s}
+      /* Подсказка «энергия кончилась» */
+      @keyframes ckenshake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+      .ck-energy.shake{animation:ckenshake .42s ease-in-out}
+      #ck-scr-cat .ck-ehint{position:absolute;left:50%;bottom:18px;transform:translateX(-50%) translateY(10px);width:min(330px,88%);box-sizing:border-box;background:linear-gradient(180deg,rgba(42,32,28,.98),rgba(28,21,19,.98));border:1px solid var(--gold);border-radius:16px;padding:14px 16px;box-shadow:0 14px 44px rgba(0,0,0,.55);display:flex;flex-direction:column;gap:9px;z-index:30;opacity:0;transition:opacity .25s,transform .25s}
+      #ck-scr-cat .ck-ehint.show{opacity:1;transform:translateX(-50%) translateY(0)}
+      .ck-ehint__h{display:flex;align-items:center;gap:8px;font-family:'Nunito',sans-serif;font-weight:800;color:var(--gold-l);font-size:15.5px}
+      .ck-ehint__h .ck-i{color:var(--gold)}
+      .ck-ehint__s{font-size:12.5px;color:var(--muted);line-height:1.45}
+      .ck-ehint__btn{margin-top:2px;border:1px solid #ffe9b3;border-radius:12px;padding:11px;font-weight:800;font-size:14px;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;box-shadow:0 4px 11px rgba(165,112,28,.38),inset 0 1px 0 rgba(255,255,255,.5)}
+      .ck-ehint__btn .ck-i{color:#5a2028}
+      @media (prefers-reduced-motion:reduce){.ck-combo.pop,.ck-catwrap.ck-shake,.ck-burst,.ck-energy.shake,#ck-scr-cat .ck-ehint{animation:none!important;transition:none!important}}
     `;
     document.head.appendChild(s);
   }
@@ -681,7 +709,7 @@
         <div class="ck-greet" id="ck-greet"></div>
         <div class="ck-bal">${COIN(32)} <span id="ck-bal">0</span></div>
         <div class="ck-prof" id="ck-prof">${COIN(14)} +0 / час</div>
-        <div class="ck-prog"><div class="ck-prog__bar"><div class="ck-prog__fill" id="ck-prog"></div></div><div class="ck-prog__t" id="ck-progt"></div></div>
+        <div class="ck-progwrap"><div class="ck-prog"><div class="ck-prog__bar"><div class="ck-prog__fill" id="ck-prog"></div></div><div class="ck-prog__t" id="ck-progt"></div></div><div class="ck-goal" id="ck-goal" hidden><div class="ck-goal__av"><img id="ck-goal-img" alt="" draggable="false"/></div><div class="ck-goal__l" id="ck-goal-l"></div></div></div>
         <div class="ck-scene" id="ck-scene"></div>
         <div class="ck-catwrap" id="ck-catwrap"><img class="ck-cat" id="ck-cat" draggable="false"/><img class="ck-hat" id="ck-hat" draggable="false" style="display:none"/><div class="ck-combo" id="ck-combo"></div></div>
         <div class="ck-boosts">
@@ -734,7 +762,7 @@
   const turboOn = () => Date.now() < turboUntil;
   function onTap(e) {
     e.preventDefault(); ac();
-    if (st.energy < 1) { flashMsg('Нет энергии — подожди'); return; }
+    if (st.energy < 1) { energyEmpty(); return; }
     const mult = turboOn() ? TURBO_MULT : 1;
     const gain = st.perTap * mult;
     st.energy -= 1; st.balance += gain; st.totalEarned += gain; pending++;
@@ -749,7 +777,57 @@
     if (combo >= 12 && combo % 3 === 0) coinShower();
     renderTop2();
   }
-  function showCombo() { const el = ov.querySelector('#ck-combo'); el.innerHTML = ICON.fire(20) + ' x' + combo; el.classList.add('show'); el.style.fontSize = Math.min(40, 20 + combo) + 'px'; }
+  let comboHideT = 0;
+  function showCombo() {
+    const el = ov.querySelector('#ck-combo');
+    const tier = combo >= 30 ? 3 : combo >= 20 ? 2 : combo >= 10 ? 1 : 0;
+    el.dataset.tier = tier;
+    el.innerHTML = ICON.fire(Math.min(30, Math.round(18 + combo * 0.5))) + ' ×' + combo;
+    el.style.fontSize = Math.min(46, 22 + combo) + 'px';
+    el.classList.add('show'); el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+    clearTimeout(comboHideT); comboHideT = setTimeout(() => el.classList.remove('show'), 950);
+    if (combo >= 10 && combo % 10 === 0) comboMilestone(tier);
+  }
+  function comboMilestone(tier) {
+    window.haptic && window.haptic('medium');
+    const wrap = ov.querySelector('#ck-catwrap');
+    if (wrap) { wrap.classList.remove('ck-shake'); void wrap.offsetWidth; wrap.classList.add('ck-shake'); setTimeout(() => wrap.classList.remove('ck-shake'), 440); }
+    burstSparks(8 + tier * 4);
+  }
+  function burstSparks(n) {
+    let rm = false; try { rm = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+    if (rm) return;
+    const fx = ov.querySelector('#ck-fx'), w = fx.clientWidth, h = fx.clientHeight, cx = w / 2, cy = h * 0.5;
+    for (let i = 0; i < n; i++) {
+      const d = document.createElement('div'); d.className = 'ck-burst';
+      const a = (i / n) * Math.PI * 2 + Math.random() * 0.6, dist = 45 + Math.random() * 75;
+      d.style.left = cx + 'px'; d.style.top = cy + 'px'; fx.appendChild(d);
+      requestAnimationFrame(() => { d.style.transform = `translate(${(Math.cos(a) * dist).toFixed(0)}px,${(Math.sin(a) * dist).toFixed(0)}px) scale(0)`; d.style.opacity = '0'; });
+      setTimeout(() => d.remove(), 520);
+    }
+  }
+  let enHintAt = -1e9;
+  function energyEmpty() {
+    window.haptic && window.haptic('medium');
+    const en = ov.querySelector('.ck-energy'); if (en) { en.classList.remove('shake'); void en.offsetWidth; en.classList.add('shake'); setTimeout(() => en.classList.remove('shake'), 440); }
+    const now = performance.now(); if (now - enHintAt < 5000) return; enHintAt = now;
+    showEnergyHint();
+  }
+  function showEnergyHint() {
+    const scr = ov.querySelector('#ck-scr-cat'); if (!scr) return;
+    const old = scr.querySelector('.ck-ehint'); if (old) old.remove();
+    const hasBoost = st && st.boostEnergyLeft > 0;
+    const persec = Math.round(REGEN * 10) / 10;
+    const el = document.createElement('div'); el.className = 'ck-ehint';
+    el.innerHTML = `<div class="ck-ehint__h">${ICON.bolt(20)} Энергия кончилась</div>`
+      + `<div class="ck-ehint__s">${hasBoost ? 'Восстанови сейчас или подожди — энергия копится сама, +' + persec + '/сек.' : 'Энергия копится сама, +' + persec + '/сек. А бизнесы в «Прокачке» приносят монеты даже без тапов.'}</div>`
+      + `<button class="ck-ehint__btn" id="ck-eh-act">${ICON.bolt(17)} ${hasBoost ? 'Восстановить (' + st.boostEnergyLeft + ')' : 'К бизнесам'}</button>`;
+    scr.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('show'));
+    const close = () => { el.classList.remove('show'); setTimeout(() => el.remove(), 250); };
+    el.querySelector('#ck-eh-act').onclick = () => { if (hasBoost) boost('energy'); else setTab('up'); close(); };
+    setTimeout(close, 6500);
+  }
   function flyUp(x, y, txt, size) {
     const fx = ov.querySelector('#ck-fx'); const r = fx.getBoundingClientRect();
     const el = document.createElement('div'); el.className = 'ck-up'; el.textContent = txt; el.style.fontSize = (size || 24) + 'px';
@@ -1052,6 +1130,10 @@
     const nn = nextNeed(st.totalEarned), prog = ov.querySelector('#ck-prog'), progt = ov.querySelector('#ck-progt');
     if (nn) { const pct = Math.min(100, (st.totalEarned - lg.need) / (nn - lg.need) * 100); prog.style.width = pct + '%'; progt.innerHTML = `${fmt(st.totalEarned)} / ${fmt(nn)} ${COIN(12)} до ур. ${lg.level + 1}`; }
     else { prog.style.width = '100%'; progt.textContent = 'Максимальный уровень!'; }
+    // цель — силуэт следующего котика
+    const goal = ov.querySelector('#ck-goal'), nx = LEAGUES[lg.level];
+    if (nx && nn) { goal.hidden = false; const gi = ov.querySelector('#ck-goal-img'), gs = A(nx.cat); if (gi.getAttribute('src') !== gs) gi.src = gs; ov.querySelector('#ck-goal-l').textContent = nx.name; goal.title = 'Цель: ' + nx.name; }
+    else goal.hidden = true;
     // ежедневка
     const daily = ov.querySelector('#ck-daily');
     daily.style.display = '';
