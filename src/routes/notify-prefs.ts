@@ -25,10 +25,11 @@ router.get("/api/notify-prefs", requireTgUser, async (req, res) => {
 
 router.post("/api/notify-prefs", requireTgUser, async (req, res) => {
   const u = getTgUser(req)!;
-  const body = req.body as { marketing_promo?: boolean; marketing_rewards?: boolean };
-  const prefs: { marketing_promo?: boolean; marketing_rewards?: boolean } = {};
+  const body = req.body as { marketing_promo?: boolean; marketing_rewards?: boolean; marketing_game?: boolean };
+  const prefs: { marketing_promo?: boolean; marketing_rewards?: boolean; marketing_game?: boolean } = {};
   if (typeof body.marketing_promo === "boolean") prefs.marketing_promo = body.marketing_promo;
   if (typeof body.marketing_rewards === "boolean") prefs.marketing_rewards = body.marketing_rewards;
+  if (typeof body.marketing_game === "boolean") prefs.marketing_game = body.marketing_game;
   try {
     await setNotificationPrefs(u.id, prefs);
     const fresh = await getNotificationPrefs(u.id);

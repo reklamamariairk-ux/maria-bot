@@ -1765,4 +1765,8 @@
   // друг перешёл по ckref-ссылке → бонус начислится, даже если в игру он не зайдёт.
   function refBootstrap() { try { if (window.App && App.ready && App.ready.then) App.ready.then(() => ensureRefRegistered()); else ensureRefRegistered(); } catch (_) { ensureRefRegistered(); } }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(refBootstrap, 1500)); else setTimeout(refBootstrap, 1500);
+  // Deep-link из пуша-возврата (?startapp=click) → сразу открываем игру.
+  function clickAutoOpen() { try { const sp = (window.App && App.startParam && App.startParam()) || ''; if (sp === 'click' || sp === 'game') { try { window.catClickOpen(); } catch (_) {} } } catch (_) {} }
+  function clickBootstrap() { try { if (window.App && App.ready && App.ready.then) App.ready.then(clickAutoOpen); else clickAutoOpen(); } catch (_) { clickAutoOpen(); } }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(clickBootstrap, 600)); else setTimeout(clickBootstrap, 600);
 })();

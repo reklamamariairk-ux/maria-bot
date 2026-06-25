@@ -68,8 +68,10 @@ export async function initDb() {
       chat_id           BIGINT PRIMARY KEY,
       marketing_promo   BOOLEAN DEFAULT TRUE,
       marketing_rewards BOOLEAN DEFAULT TRUE,
+      marketing_game    BOOLEAN DEFAULT TRUE,
       updated_at        TIMESTAMPTZ DEFAULT NOW()
     );
+    ALTER TABLE notification_prefs ADD COLUMN IF NOT EXISTS marketing_game BOOLEAN DEFAULT TRUE;
 
     CREATE TABLE IF NOT EXISTS cart_snapshots (
       chat_id        BIGINT PRIMARY KEY,
@@ -520,24 +522,26 @@ export async function setOrderStatus(chatId: number, orderId: string, status: st
 export interface NotificationPrefs {
   marketing_promo: boolean;
   marketing_rewards: boolean;
+  marketing_game: boolean;
 }
 export async function getNotificationPrefs(chatId: number): Promise<NotificationPrefs> {
   const { rows } = await pool.query(
-    `SELECT marketing_promo, marketing_rewards FROM notification_prefs WHERE chat_id = $1`,
+    `SELECT marketing_promo, marketing_rewards, marketing_game FROM notification_prefs WHERE chat_id = $1`,
     [chatId]
   );
-  if (rows[0]) return { marketing_promo: rows[0].marketing_promo, marketing_rewards: rows[0].marketing_rewards };
-  return { marketing_promo: true, marketing_rewards: true };
+  if (rows[0]) return { marketing_promo: rows[0].marketing_promo, marketing_rewards: rows[0].marketing_rewards, marketing_game: rows[0].marketing_game };
+  return { marketing_promo: true, marketing_rewards: true, marketing_game: true };
 }
 export async function setNotificationPrefs(chatId: number, prefs: Partial<NotificationPrefs>) {
   await pool.query(
-    `INSERT INTO notification_prefs (chat_id, marketing_promo, marketing_rewards, updated_at)
-     VALUES ($1, COALESCE($2, TRUE), COALESCE($3, TRUE), NOW())
+    `INSERT INTO notification_prefs (chat_id, marketing_promo, marketing_rewards, marketing_game, updated_at)
+     VALUES ($1, COALESCE($2, TRUE), COALESCE($3, TRUE), COALESCE($4, TRUE), NOW())
      ON CONFLICT (chat_id) DO UPDATE
        SET marketing_promo   = COALESCE($2, notification_prefs.marketing_promo),
            marketing_rewards = COALESCE($3, notification_prefs.marketing_rewards),
+           marketing_game    = COALESCE($4, notification_prefs.marketing_game),
            updated_at        = NOW()`,
-    [chatId, prefs.marketing_promo ?? null, prefs.marketing_rewards ?? null]
+    [chatId, prefs.marketing_promo ?? null, prefs.marketing_rewards ?? null, prefs.marketing_game ?? null]
   );
 }
 
@@ -785,7 +789,7 @@ export async function consumeRewards(chatId: number): Promise<{ id: number; kind
 }
 
 // Smart-notification policy
-export type NotificationKind = "transactional" | "marketing" | "marketing_promo" | "marketing_rewards";
+export type NotificationKind = "transactional" | "marketing" | "marketing_promo" | "marketing_rewards" | "marketing_game";
 const RATE_RULES = {
   transactional: { maxPerDay: 999, minIntervalMin: 0 },
   marketing:     { maxPerWeek: 1,  minIntervalMin: 60 },
@@ -799,20 +803,23 @@ function isQuietHours(): boolean {
 }
 
 export async function canSendNotification(chatId: number, kind: NotificationKind): Promise<{ ok: boolean; reason?: string }> {
-  const isMarketing = kind === "marketing" || kind === "marketing_promo" || kind === "marketing_rewards";
+  const isMarketing = kind === "marketing" || kind === "marketing_promo" || kind === "marketing_rewards" || kind === "marketing_game";
   if (isMarketing && isQuietHours()) {
     return { ok: false, reason: "quiet_hours" };
   }
   // User-prefs check
-  if (kind === "marketing_promo" || kind === "marketing_rewards") {
+  if (kind === "marketing_promo" || kind === "marketing_rewards" || kind === "marketing_game") {
     const prefs = await getNotificationPrefs(chatId);
     if (kind === "marketing_promo"   && !prefs.marketing_promo)   return { ok: false, reason: "promo_disabled" };
     if (kind === "marketing_rewards" && !prefs.marketing_rewards) return { ok: false, reason: "rewards_disabled" };
+    if (kind === "marketing_game"    && !prefs.marketing_game)    return { ok: false, reason: "game_disabled" };
   }
-  if (isMarketing) {
+  // Недельный лимит маркетинга (1/нед) — НЕ распространяется на игровые пуши:
+  // у них своя частота (1/день максимум, контролируется крон-джобом).
+  if (isMarketing && kind !== "marketing_game") {
     const { rows } = await pool.query(
       `SELECT COUNT(*)::int AS cnt FROM notification_log
-       WHERE chat_id = $1 AND kind LIKE 'marketing%' AND sent_at > NOW() - INTERVAL '7 days'`,
+       WHERE chat_id = $1 AND kind LIKE 'marketing%' AND kind <> 'marketing_game' AND sent_at > NOW() - INTERVAL '7 days'`,
       [chatId]
     );
     if ((rows[0]?.cnt ?? 0) >= RATE_RULES.marketing.maxPerWeek) {

@@ -38,6 +38,7 @@ import { initPetSchema } from "./pet";
 import clickerRouter from "./routes/clicker";
 import { initClickerSchema, registerRef } from "./clicker";
 import { initAnalyticsSchema } from "./analytics";
+import { initClickerPushSchema, runClickerRetentionPush } from "./clicker-push";
 import { initBonusSchema, startBonusWorker } from "./bonus1c";
 import cartRouter from "./routes/cart";
 import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, fetchProductById, reloadDietaryOverrides, detectDietary, Product } from "./scraper";
@@ -1373,6 +1374,13 @@ app.post("/api/admin/holidays/push", requireAdminToken, async (_req, res) => {
   res.json({ ok: true, status: "scheduled" });
 });
 
+// Админ: ручной прогон пушей-возвратов «Котик Комбат» (для теста; обычно крон 17:00 Иркутск).
+// Дедуп по дню действует — повторный вызов в тот же день не задвоит.
+app.post("/api/admin/clicker/push", requireAdminToken, async (_req, res) => {
+  try { const r = await runClickerRetentionPush(_pushService); res.json({ ok: true, ...r }); }
+  catch (e) { log.error({ err: e }, "[CLICKER PUSH MANUAL]"); res.status(500).json({ error: "internal" }); }
+});
+
 // Админ: перезагрузить data/dietary-overrides.json и переразметить in-memory каталог
 // без рестарта (для оперативной коррекции false-positive)
 app.post("/api/admin/dietary/reload", requireAdminToken, (_req, res) => {
@@ -1901,6 +1909,7 @@ async function main() {
   await initPetSchema();
   await initClickerSchema();
   await initAnalyticsSchema();
+  await initClickerPushSchema();
   await initBonusSchema();
   startBonusWorker();
 
@@ -1947,6 +1956,13 @@ async function main() {
     pushCartAbandonments().catch((e) => log.error({ err: e }, "[CART ABANDON CRON]"));
   });
   console.log("[STARTUP] Cart-abandonment cron scheduled (hourly)");
+
+  // Пуши-возвраты «Котик Комбат» — раз в день 17:00 Иркутск (09:00 UTC).
+  // 1 игровой пуш/день/игрок: серия под угрозой (приоритет) или «энергия полная».
+  cron.schedule("0 9 * * *", () => {
+    runClickerRetentionPush(_pushService).catch((e) => log.error({ err: e }, "[CLICKER PUSH CRON]"));
+  });
+  console.log("[STARTUP] Clicker retention-push cron scheduled (daily 17:00 Irkutsk)");
 
   // Secret-of-day cron — каждое утро 09:00 Иркутск (UTC 01:00) выбирает товар
   cron.schedule("0 1 * * *", () => {

@@ -849,7 +849,7 @@ function profCopyReferralCode() {
 window.profCopyReferralCode = profCopyReferralCode;
 
 /* ── Notification preferences ─────────────────────────────────────────────── */
-let _notifyPrefs = { marketing_promo: true, marketing_rewards: true };
+let _notifyPrefs = { marketing_promo: true, marketing_rewards: true, marketing_game: true };
 async function profLoadNotifyPrefs() {
   if (!App.isAuthed()) return;
   try {
@@ -864,8 +864,10 @@ window.profLoadNotifyPrefs = profLoadNotifyPrefs;
 function renderNotifyToggles() {
   const promo   = document.getElementById('prof-toggle-promo');
   const rewards = document.getElementById('prof-toggle-rewards');
+  const game    = document.getElementById('prof-toggle-game');
   if (promo)   promo.setAttribute('data-on',   _notifyPrefs.marketing_promo   ? 'true' : 'false');
   if (rewards) rewards.setAttribute('data-on', _notifyPrefs.marketing_rewards ? 'true' : 'false');
+  if (game)    game.setAttribute('data-on',    _notifyPrefs.marketing_game    ? 'true' : 'false');
 }
 
 async function profToggleNotify(key) {
