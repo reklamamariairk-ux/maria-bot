@@ -34,6 +34,29 @@ function weekMonday(): number { const d = Math.floor((Date.now() + 8 * 3600 * 10
 const weekKey = () => String(weekMonday());
 const seasonEndsTs = () => (weekMonday() + 7) * 86400000 - 8 * 3600 * 1000; // ms UTC начала след. недели
 
+// ── Престиж (#9) ─────────────────────────────────────────────────────────────
+// После макс. уровня (19) игрок может «уйти в престиж»: прогресс сбрасывается, но
+// даётся ПОСТОЯННЫЙ множитель к заработку (+10% за престиж, стак до x2). Чисто
+// игровая прогрессия (никакой реальной стоимости) — Маша не нужна.
+const PRESTIGE_MIN_LEVEL = 19;
+const PRESTIGE_BONUS = 0.1;   // +10% к тапу и пассиву за каждый престиж
+const PRESTIGE_MAX = 10;
+const prestigeMultOf = (p: number) => 1 + Math.min(Math.max(0, p || 0), PRESTIGE_MAX) * PRESTIGE_BONUS;
+
+// ── Ивенты (#9) ──────────────────────────────────────────────────────────────
+// Временные окна с множителем монет. v1 — «Выходные ×2» (сб/вс по Иркутску). Чисто
+// игровые монеты, всем поровну. Флаг — на случай быстрого выключения.
+export const EVENTS_ENABLED = true;
+function activeEvent(): { id: string; name: string; mult: number; endsTs: number } | null {
+  if (!EVENTS_ENABLED) return null;
+  const wd = new Date(Date.now() + 8 * 3600 * 1000).getUTCDay(); // 0=вс … 6=сб (Иркутск)
+  if (wd === 6 || wd === 0) return { id: "weekend", name: "Выходные ×2", mult: 2, endsTs: seasonEndsTs() };
+  return null;
+}
+const eventMult = () => activeEvent()?.mult ?? 1;
+// Общий множитель заработка (тап + пассив): престиж × ивент.
+const gainMult = (prestige: number) => prestigeMultOf(prestige) * eventMult();
+
 // Соцссылки «Марии» для заданий-маркетинга. ⚠️ Продублировано во фронте catclick.js.
 // Пустая ссылка = задание скрыто (не отправляем людей в никуда). Заполнить реальными URL.
 export const SOCIAL = {
@@ -200,6 +223,8 @@ export interface ClickerState {
   cipher: { morse: string; len: number; claimed: boolean; reward: number };
   taps: number; cardsOwned: number;
   season: { points: number; endsTs: number };
+  prestige: number; prestigeMult: number; prestigeReady: boolean;
+  event: { active: boolean; name: string; mult: number; endsTs: number } | null;
   gamesDone?: string[];
 }
 
@@ -235,6 +260,7 @@ export async function initClickerSchema(): Promise<void> {
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS chest_date TEXT;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS rain_date TEXT;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS squad TEXT;
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS prestige INT NOT NULL DEFAULT 0;
     CREATE INDEX IF NOT EXISTS clicker_squad_idx ON clicker_state (squad);
     CREATE TABLE IF NOT EXISTS clicker_cards (
       chat_id BIGINT NOT NULL, card TEXT NOT NULL, level INT NOT NULL DEFAULT 0,
@@ -309,6 +335,8 @@ function buildState(r: any, cl: Record<string, number>, passiveEarned: number): 
     cipher: { morse: toMorse(todaysCipher(today)), len: todaysCipher(today).length, claimed: r.cipher_date === today, reward: CIPHER_REWARD },
     taps: Number(r.taps || 0), cardsOwned: CARDS.filter((c) => (cl[c.id] || 0) > 0).length,
     season: { points: r.week_key === weekKey() ? Math.max(0, Number(r.total_earned) - Number(r.week_base || 0)) : 0, endsTs: seasonEndsTs() },
+    prestige: Number(r.prestige || 0), prestigeMult: prestigeMultOf(Number(r.prestige || 0)), prestigeReady: lg.level >= PRESTIGE_MIN_LEVEL,
+    event: (() => { const e = activeEvent(); return e ? { active: true, name: e.name, mult: e.mult, endsTs: e.endsTs } : null; })(),
   };
 }
 
@@ -321,7 +349,7 @@ async function refresh(client: any, chatId: number): Promise<{ r: any; cl: Recor
   if (r.boost_date !== today) { r.boost_energy_used = 0; r.boost_turbo_used = 0; r.boost_date = today; }
   const secs = Math.max(0, (Date.now() - new Date(r.updated_at).getTime()) / 1000);
   r.energy = Math.min(energyMaxFor(r.energy_limit_level), Math.round(r.energy + secs * REGEN_PER_SEC));
-  const passive = Math.floor(profitPerHour(cl) * Math.min(secs / 3600, PASSIVE_CAP_HOURS));
+  const passive = Math.floor(profitPerHour(cl) * Math.min(secs / 3600, PASSIVE_CAP_HOURS) * gainMult(r.prestige));
   if (passive > 0) { r.balance = Number(r.balance) + passive; r.total_earned = Number(r.total_earned) + passive; }
   // сезон: новая неделя → база = текущий total (очки сезона обнуляются)
   const wk = weekKey();
@@ -365,12 +393,41 @@ export async function tapClicker(chatId: number, taps: number): Promise<ClickerS
     const { r, cl } = await refresh(client, chatId);
     const can = Math.min(want, Math.floor(r.energy / TAP_COST));
     const turbo = r.turbo_until && new Date(r.turbo_until).getTime() > Date.now() ? TURBO_MULT : 1;
-    const earned = can * perTapFor(r.multitap_level) * turbo;
+    const earned = Math.floor(can * perTapFor(r.multitap_level) * turbo * gainMult(r.prestige));
     r.energy -= can * TAP_COST; r.balance = Number(r.balance) + earned; r.total_earned = Number(r.total_earned) + earned;
     await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, taps=taps+$4, energy=$5, updated_at=NOW() WHERE chat_id=$1`,
       [chatId, r.balance, r.total_earned, can, r.energy]);
     await client.query("COMMIT");
     return buildState(r, cl, 0);
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+}
+
+/**
+ * Престиж (#9): доступен с макс. уровня. Сбрасывает прогресс (баланс/всего/бизнесы/
+ * апгрейды), но +1 к престижу = постоянный множитель заработка. Сохраняет стрик,
+ * рефералов, команду, lifetime-тапы и закрытые достижения (чтобы не фармить награды).
+ */
+export async function prestigeReset(chatId: number): Promise<{ ok: boolean; state?: ClickerState; prestige?: number; reason?: string }> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { r } = await refresh(client, chatId);
+    const lvl = leagueFor(Number(r.total_earned)).level;
+    if (lvl < PRESTIGE_MIN_LEVEL) { await client.query("ROLLBACK"); return { ok: false, reason: "not_ready" }; }
+    if (Number(r.prestige || 0) >= PRESTIGE_MAX) { await client.query("ROLLBACK"); return { ok: false, reason: "max" }; }
+    const newPrestige = Number(r.prestige || 0) + 1;
+    await client.query(`DELETE FROM clicker_cards WHERE chat_id=$1`, [chatId]);
+    await client.query(
+      `UPDATE clicker_state SET balance=0, total_earned=0, energy=$2, multitap_level=0, energy_limit_level=0,
+         week_base=0, week_key=$3, notified_level=0, prestige=$4, updated_at=NOW() WHERE chat_id=$1`,
+      [chatId, energyMaxFor(0), weekKey(), newPrestige]
+    );
+    await client.query("COMMIT");
+    trackEvent(chatId, "prestige", { prestige: newPrestige });
+    // отражаем сброс в in-memory строке для ответа (без повторного запроса)
+    r.balance = 0; r.total_earned = 0; r.energy = energyMaxFor(0); r.multitap_level = 0;
+    r.energy_limit_level = 0; r.week_base = 0; r.week_key = weekKey(); r.notified_level = 0; r.prestige = newPrestige;
+    return { ok: true, prestige: newPrestige, state: buildState(r, {}, 0) };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
@@ -599,17 +656,17 @@ export async function boostClicker(chatId: number, type: string): Promise<{ ok: 
 
 /** Топ игроков за СЕЗОН (текущая неделя): очки = total_earned − week_base. Имя из subscribers. */
 export async function getTop(chatId: number, limit = 30): Promise<{
-  top: { name: string; total: number; me: boolean }[]; myRank: number | null; seasonEndsTs: number;
+  top: { name: string; total: number; me: boolean; prestige: number }[]; myRank: number | null; seasonEndsTs: number;
   weekly: { enabled: boolean; prizes: { rank: number; points: number; label: string }[]; lastWeek: { rank: number; name: string; points: number; me: boolean }[] };
 }> {
   const cur = weekKey();
   const { rows } = await pool.query(
-    `SELECT c.chat_id, (c.total_earned - c.week_base) AS pts, s.first_name, s.username
+    `SELECT c.chat_id, (c.total_earned - c.week_base) AS pts, c.prestige, s.first_name, s.username
        FROM clicker_state c LEFT JOIN subscribers s ON s.chat_id = c.chat_id
       WHERE c.week_key = $2 AND (c.total_earned - c.week_base) > 0
       ORDER BY pts DESC LIMIT $1`, [limit, cur]
   );
-  const top = rows.map((r) => ({ name: (r.first_name || r.username || "Котовод").toString().slice(0, 24), total: Number(r.pts), me: Number(r.chat_id) === chatId }));
+  const top = rows.map((r) => ({ name: (r.first_name || r.username || "Котовод").toString().slice(0, 24), total: Number(r.pts), me: Number(r.chat_id) === chatId, prestige: Number(r.prestige || 0) }));
   const me = await pool.query(`SELECT week_key, (total_earned - week_base) AS pts FROM clicker_state WHERE chat_id=$1`, [chatId]);
   const myPts = me.rows.length && me.rows[0].week_key === cur ? Number(me.rows[0].pts) : 0;
   const rank = await pool.query(`SELECT COUNT(*)::int AS n FROM clicker_state WHERE week_key=$2 AND (total_earned - week_base) > $1`, [myPts, cur]);

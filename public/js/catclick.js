@@ -236,6 +236,8 @@
   // ── Сезон (неделя) + Достижения (зеркало src/clicker.ts — менять синхронно) ──────
   const weekMonday = () => { const d = Math.floor((Date.now() + 8 * 3600e3) / 86400000); return d - ((d + 3) % 7); };
   const seasonEndsTs = () => (weekMonday() + 7) * 86400000 - 8 * 3600e3;
+  // Ивент-зеркало src/clicker.ts (#9): «Выходные ×2» сб/вс по Иркутску. Менять синхронно.
+  function ckEvent() { const wd = new Date(Date.now() + 8 * 3600e3).getUTCDay(); if (wd === 6 || wd === 0) return { active: true, name: 'Выходные ×2', mult: 2, endsTs: seasonEndsTs() }; return null; }
   const ACHIEVEMENTS = [
     { id: 'ach_taps1k', name: 'Разминка лап', icon: 'tap', reward: 2000, type: 'taps', target: 1000 },
     { id: 'ach_taps10k', name: 'Мастер тапа', icon: 'tap', reward: 10000, type: 'taps', target: 10000 },
@@ -363,6 +365,7 @@
       cipher: { morse: toMorse(todaysCipher(today)), len: todaysCipher(today).length, claimed: s.cipherDate === today, reward: CIPHER_REWARD },
       taps: s.taps || 0, cardsOwned: CARDS.filter(c => (s.cards[c.id] || 0) > 0).length,
       season: { points: 0, endsTs: seasonEndsTs() },
+      prestige: 0, prestigeMult: 1, prestigeReady: false, event: ckEvent(),
     };
   }
 
@@ -693,6 +696,13 @@
       .ck-ehint__btn{margin-top:2px;border:1px solid #ffe9b3;border-radius:12px;padding:11px;font-weight:800;font-size:14px;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;box-shadow:0 4px 11px rgba(165,112,28,.38),inset 0 1px 0 rgba(255,255,255,.5)}
       .ck-ehint__btn .ck-i{color:#5a2028}
       @media (prefers-reduced-motion:reduce){.ck-combo.pop,.ck-catwrap.ck-shake,.ck-burst,.ck-energy.shake,#ck-scr-cat .ck-ehint{animation:none!important;transition:none!important}}
+      /* Ивент-баннер + престиж (#9) */
+      .ck-event{margin-top:5px;padding:5px 13px;border-radius:20px;font-size:12px;font-weight:800;color:#5a2028;background:linear-gradient(90deg,#ffe7a6,#f0c24e);box-shadow:0 3px 12px rgba(238,191,82,.4);display:inline-flex;align-items:center;gap:6px}
+      .ck-event[hidden]{display:none}.ck-event b{font-weight:900}.ck-event .ck-i{color:#5a2028}
+      .ck-pbadge{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:800;color:#3a230c;background:linear-gradient(90deg,#ffe39c,#e0a93a);padding:1px 7px;border-radius:9px;vertical-align:1px;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+      .ck-pbadge .ck-i{color:#5a2028}.ck-pbadge--sm{font-size:9.5px;padding:0 6px}
+      .ck-prestige{margin-top:9px;border:1px solid #ffe9b3;border-radius:13px;padding:9px 16px;font-weight:800;font-size:13px;background:linear-gradient(180deg,#ffe7a6,#cf9a36);color:#5a2028;cursor:pointer;display:inline-flex;align-items:center;gap:7px;box-shadow:0 4px 12px rgba(165,112,28,.4)}
+      .ck-prestige[hidden]{display:none}.ck-prestige .ck-i{color:#5a2028}
     `;
     document.head.appendChild(s);
   }
@@ -709,7 +719,9 @@
         <div class="ck-greet" id="ck-greet"></div>
         <div class="ck-bal">${COIN(32)} <span id="ck-bal">0</span></div>
         <div class="ck-prof" id="ck-prof">${COIN(14)} +0 / час</div>
+        <div class="ck-event" id="ck-event" hidden></div>
         <div class="ck-progwrap"><div class="ck-prog"><div class="ck-prog__bar"><div class="ck-prog__fill" id="ck-prog"></div></div><div class="ck-prog__t" id="ck-progt"></div></div><div class="ck-goal" id="ck-goal" hidden><div class="ck-goal__av"><img id="ck-goal-img" alt="" draggable="false"/></div><div class="ck-goal__l" id="ck-goal-l"></div></div></div>
+        <button class="ck-prestige" id="ck-prestige" hidden></button>
         <div class="ck-scene" id="ck-scene"></div>
         <div class="ck-catwrap" id="ck-catwrap"><img class="ck-cat" id="ck-cat" draggable="false"/><img class="ck-hat" id="ck-hat" draggable="false" style="display:none"/><div class="ck-combo" id="ck-combo"></div></div>
         <div class="ck-boosts">
@@ -740,6 +752,7 @@
     ov.querySelector('#ck-daily').onclick = dailyBtn;
     ov.querySelector('#ck-bt-turbo').onclick = () => boost('turbo');
     ov.querySelector('#ck-bt-energy').onclick = () => boost('energy');
+    ov.querySelector('#ck-prestige').onclick = prestigeConfirm;
     ov.querySelectorAll('.ck-nav__b').forEach(b => b.onclick = () => setTab(b.dataset.tab));
   }
 
@@ -764,7 +777,8 @@
     e.preventDefault(); ac();
     if (st.energy < 1) { energyEmpty(); return; }
     const mult = turboOn() ? TURBO_MULT : 1;
-    const gain = st.perTap * mult;
+    const eMult = (st.event && st.event.active) ? st.event.mult : 1; // ивент ×N (зеркало сервера)
+    const gain = Math.floor(st.perTap * mult * (st.prestigeMult || 1) * eMult);
     st.energy -= 1; st.balance += gain; st.totalEarned += gain; pending++;
     if (!authed()) { const s = rawGet(); s.energy -= 1; s.balance += gain; s.totalEarned += gain; s.taps = (s.taps || 0) + 1; rawSave(s); }
     // комбо
@@ -1118,13 +1132,44 @@
     ov.querySelector('#ck-enfill').style.width = Math.min(100, st.energy / st.energyMax * 100) + '%';
   }
 
+  function prestigeConfirm() {
+    if (!st || !st.prestigeReady) return;
+    if (!authed()) { flashMsg('Престиж — при входе через «Марию»'); return; }
+    const next = (st.prestige || 0) + 1, m = (1 + next * 0.1).toFixed(1);
+    const pop = ov.querySelector('#ck-pop');
+    pop.innerHTML = `<h3>${ICON.star(20)} Престиж ${next}</h3>`
+      + `<div style="color:var(--cream);font-size:14px;line-height:1.5;margin:6px 0 4px">Сбросишь баланс, бизнесы и апгрейды — но <b style="color:var(--gold-l)">навсегда</b> получишь <b style="color:var(--gold-l)">×${m}</b> к заработку.</div>`
+      + `<div style="color:var(--muted);font-size:12.5px;line-height:1.45">Серия, друзья, команда и достижения останутся.</div>`
+      + `<button id="ck-pp-go">Уйти в престиж</button>`
+      + `<button id="ck-pp-no" style="background:rgba(255,255,255,.08);color:var(--cream);box-shadow:none;border-color:var(--line);margin-top:8px">Пока нет</button>`;
+    pop.classList.add('on');
+    pop.querySelector('#ck-pp-no').onclick = () => pop.classList.remove('on');
+    pop.querySelector('#ck-pp-go').onclick = () => { pop.classList.remove('on'); prestigeDo(); };
+  }
+  async function prestigeDo() {
+    const d = await api('/api/clicker/prestige', { method: 'POST', body: '{}' }).catch(() => null);
+    if (d && !d.error) {
+      st = d; sfxLevel(); window.haptic && window.haptic('success'); flash(); confettiBurst(); coinShower();
+      const t = ov.querySelector('#ck-levelup-t'); t.innerHTML = ICON.star(22) + ' Престиж ' + d.prestige + ' · заработок ×' + (1 + d.prestige * 0.1).toFixed(1); t.classList.remove('show'); void t.offsetWidth; t.classList.add('show');
+      renderAll(); renderUpgrades(); bumpBalance();
+    } else flashMsg(d && d.error === 'not_ready' ? 'Сначала дойди до макс. уровня' : d && d.error === 'max' ? 'Достигнут максимум престижа' : 'Не получилось');
+  }
   function renderAll() {
     if (!ov || !st) return;
     const lg = leagueFor(st.totalEarned);
     ov.querySelector('#ck-bal').textContent = fmt(st.balance);
     ov.querySelector('#ck-bal2').textContent = fmt(st.balance);
-    ov.querySelector('#ck-lvl').textContent = `Уровень ${lg.level} · ${lg.name}`;
+    const pBadge = st.prestige > 0 ? ` <span class="ck-pbadge">${ICON.star(12)} Престиж ${st.prestige}</span>` : '';
+    ov.querySelector('#ck-lvl').innerHTML = `Уровень ${lg.level} · ${lg.name}${pBadge}`;
     const prof = `${COIN(13)} +${fmt(st.profitPerHour)} / час`; ov.querySelector('#ck-prof').innerHTML = prof; ov.querySelector('#ck-prof2').innerHTML = prof;
+    // ивент-баннер (×N монеты)
+    const evb = ov.querySelector('#ck-event');
+    if (st.event && st.event.active) { evb.hidden = false; evb.innerHTML = `${ICON.bolt(15)} <b>${st.event.name}</b> · до конца ${fmtDur(st.event.endsTs - Date.now())}`; }
+    else evb.hidden = true;
+    // кнопка престижа (на макс. уровне, только для авторизованных)
+    const pb = ov.querySelector('#ck-prestige');
+    if (st.prestigeReady && authed()) { pb.hidden = false; pb.innerHTML = `${ICON.star(16)} Уйти в престиж · заработок ×${(1 + (st.prestige + 1) * 0.1).toFixed(1)}`; }
+    else pb.hidden = true;
     ov.querySelector('#ck-en').textContent = Math.floor(st.energy); ov.querySelector('#ck-enmax').textContent = st.energyMax;
     ov.querySelector('#ck-enfill').style.width = Math.min(100, st.energy / st.energyMax * 100) + '%';
     const nn = nextNeed(st.totalEarned), prog = ov.querySelector('#ck-prog'), progt = ov.querySelector('#ck-progt');
@@ -1246,7 +1291,7 @@
     const wk = weeklyPrizeCard(d && d.weekly);
     const head = '<div class="ck-sect">Топ недели</div>';
     if (!d || !d.top || !d.top.length) { list.innerHTML = brag + wk + sq.html + head + emptyState(ICON.trophy(30), 'Сезон только начался', 'Заработай монеты и стань первым в топе недели!'); wire(); return; }
-    list.innerHTML = brag + wk + sq.html + head + d.top.map((r, i) => `<div class="ck-row${r.me ? ' me' : ''}"><div class="r">${i < 3 ? ICON.medal(20) : i + 1}</div><div class="n">${(r.name || '').replace(/</g, '&lt;')}</div><div class="v">${COIN(14)} ${fmt(r.total)}</div></div>`).join('');
+    list.innerHTML = brag + wk + sq.html + head + d.top.map((r, i) => `<div class="ck-row${r.me ? ' me' : ''}"><div class="r">${i < 3 ? ICON.medal(20) : i + 1}</div><div class="n">${(r.name || '').replace(/</g, '&lt;')}${r.prestige > 0 ? ` <span class="ck-pbadge ck-pbadge--sm">★${r.prestige}</span>` : ''}</div><div class="v">${COIN(14)} ${fmt(r.total)}</div></div>`).join('');
     wire();
   }
   function weeklyPrizeCard(w) {
