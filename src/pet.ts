@@ -225,12 +225,3 @@ export async function setPetLocation(chatId: number, location: string): Promise<
   return getPet(chatId);
 }
 
-/** Начислить монеты (из мини-игр). */
-export async function addPetCoins(chatId: number, coins: number): Promise<void> {
-  if (coins <= 0) return;
-  await pool.query(
-    `INSERT INTO pet_state (chat_id, coins) VALUES ($1,$2)
-     ON CONFLICT (chat_id) DO UPDATE SET coins = pet_state.coins + $2`,
-    [chatId, Math.round(coins)]
-  );
-}

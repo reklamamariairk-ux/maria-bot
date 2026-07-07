@@ -770,15 +770,8 @@
   }
 
   function setTab(t) {
+    if (t === 'home') { window.haptic && window.haptic('light'); try { window.catPetOpen && window.catPetOpen(); } catch (_) {} return; }
     tab = t;
-    if (t === 'home') {
-      window.haptic && window.haptic('light');
-      try { window.catPetOpen && window.catPetOpen(); } catch (_) {}
-      // не меняем активный экран/подсветку кликера: питомец — оверлей сверху
-      ov.querySelectorAll('.ck-nav__b').forEach(b => b.classList.remove('on'));
-      ov.querySelector('.ck-nav__b[data-tab="home"]').classList.add('on');
-      return;
-    }
     ov.querySelector('#ck-scr-cat').classList.toggle('on', t === 'cat');
     ov.querySelector('#ck-scr-up').classList.toggle('on', t === 'up');
     ov.querySelector('#ck-scr-dove').classList.toggle('on', t === 'dove');

@@ -31,7 +31,6 @@
     { k: 'hunger', ic: PIC.hunger, name: 'Сытость' },
     { k: 'mood',   ic: PIC.mood,   name: 'Настроение' },
     { k: 'energy', ic: PIC.energy, name: 'Энергия' },
-    { k: 'hygiene',ic: PIC.hygiene,name: 'Чистота' },
   ];
   const LS = 'maria_pet_v1';
   // Магазин (цены — источник правды на бэке; здесь зеркало + арт и посадка на голову)
@@ -56,6 +55,7 @@
     const hrs = Math.max(0, (Date.now() - (s._ts || Date.now())) / 3600000);
     const dec = { hunger: 6, mood: 4, energy: 3, hygiene: 2.5 };
     ['hunger', 'mood', 'energy', 'hygiene'].forEach(k => s[k] = Math.max(0, Math.min(100, Math.round(s[k] - dec[k] * hrs))));
+    s.careStreak = s.care_streak || 0;  // гостевой стрик: snake→camel для renderNeeds
     s._ts = Date.now(); localStorage.setItem(LS, JSON.stringify(s));
     return s;
   }
@@ -232,7 +232,7 @@
     ov.querySelector('#pet-lvl').innerHTML = `Ур. ${state.level} · ${state.coins} монет<br><span style="font-weight:600;opacity:.85">${state.xp}/${state.xpNext} XP</span>`;
     const ps = ov.querySelector('#pet-streak');
     if (ps) ps.innerHTML = (state.careStreak > 0)
-      ? PIC.pet(14) + ' Забота: ' + state.careStreak + (state.careStreak >= 5 ? ' дней 🔥' : ' дн.')
+      ? PIC.pet(14) + ' Забота: ' + state.careStreak + (state.careStreak >= 5 ? ' дней' : ' дн.')
       : 'Погладь Василия!';
   }
 
@@ -253,9 +253,9 @@
     if (cfg.action === 'play') { showPlay(); return; }
     cat.busy = true;
     const catEl = ov.querySelector('#pet-cat');
-    if (cfg.action === 'feed') { catEl.src = A('happy.png'); bubble('Ням! 🍖'); hearts(); }
-    else if (cfg.action === 'sleep') { catEl.src = A('full.png'); bubble('Zzz 💤'); }
-    else { catEl.src = A('happy.png'); bubble('Мур! 💕'); hearts(); }
+    if (cfg.action === 'feed') { catEl.src = A('happy.png'); bubble('Ням!'); hearts(); }
+    else if (cfg.action === 'sleep') { catEl.src = A('full.png'); bubble('Zzz'); }
+    else { catEl.src = A('happy.png'); bubble('Мур!'); hearts(); }
     window.haptic?.('light');
     await doAction(cfg.action);
     setTimeout(() => { cat.busy = false; }, 1400);
@@ -274,7 +274,7 @@
     const fx = ov.querySelector('#pet-fx'); const catEl = ov.querySelector('#pet-cat');
     const r = catEl.getBoundingClientRect(); const sr = fx.getBoundingClientRect();
     for (let i = 0; i < 6; i++) {
-      const h = document.createElement('div'); h.textContent = '❤️'; h.style.cssText = 'position:absolute;font-size:22px;pointer-events:none;transition:transform 1s ease-out,opacity 1s';
+      const h = document.createElement('div'); h.innerHTML = PIC.pet(22); h.style.cssText = 'position:absolute;font-size:22px;pointer-events:none;transition:transform 1s ease-out,opacity 1s';
       h.style.left = (r.left - sr.left + r.width * (0.3 + Math.random() * 0.4)) + 'px'; h.style.top = (r.top - sr.top + r.height * 0.2) + 'px';
       fx.appendChild(h);
       requestAnimationFrame(() => { h.style.transform = `translate(${(Math.random() - .5) * 80}px,-${80 + Math.random() * 60}px)`; h.style.opacity = '0'; });
