@@ -893,13 +893,21 @@ export async function redeemReward(chatId: number, id: string): Promise<{ ok: bo
     await client.query("COMMIT");
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
   // выдать реальный код (вне tx). При сбое — вернуть монеты (компенсация).
-  const grant = await grantRewardByCode(chatId, rw.catalog);
-  if (!grant.ok || !grant.promoCode) {
-    await pool.query(`UPDATE clicker_state SET balance=balance+$2 WHERE chat_id=$1`, [chatId, rw.cost]).catch(() => {});
-    await pool.query(`DELETE FROM clicker_redemptions WHERE chat_id=$1 AND code='PENDING' AND reward_id=$2 AND created_at > NOW()-INTERVAL '1 minute'`, [chatId, id]).catch(() => {});
+  let grant;
+  try {
+    grant = await grantRewardByCode(chatId, rw.catalog);
+  } catch (e) {
+    await pool.query(`UPDATE clicker_state SET balance=balance+$2 WHERE chat_id=$1`, [chatId, rw.cost]).catch((err) => console.error("[redeem] refund failed", err));
+    await pool.query(`DELETE FROM clicker_redemptions WHERE chat_id=$1 AND code='PENDING' AND reward_id=$2 AND created_at > NOW()-INTERVAL '1 minute'`, [chatId, id]).catch((err) => console.error("[redeem] pending cleanup failed", err));
+    console.error("[redeem] grantRewardByCode threw", e);
     return { ok: false, reason: "grant_failed" };
   }
-  await pool.query(`UPDATE clicker_redemptions SET code=$3 WHERE chat_id=$1 AND reward_id=$2 AND code='PENDING'`, [chatId, id, grant.promoCode]).catch(() => {});
+  if (!grant.ok || !grant.promoCode) {
+    await pool.query(`UPDATE clicker_state SET balance=balance+$2 WHERE chat_id=$1`, [chatId, rw.cost]).catch((err) => console.error("[redeem] refund failed", err));
+    await pool.query(`DELETE FROM clicker_redemptions WHERE chat_id=$1 AND code='PENDING' AND reward_id=$2 AND created_at > NOW()-INTERVAL '1 minute'`, [chatId, id]).catch((err) => console.error("[redeem] pending cleanup failed", err));
+    return { ok: false, reason: "grant_failed" };
+  }
+  await pool.query(`UPDATE clicker_redemptions SET code=$3 WHERE chat_id=$1 AND reward_id=$2 AND code='PENDING' AND created_at > NOW()-INTERVAL '1 minute'`, [chatId, id, grant.promoCode]).catch((err) => console.error("[redeem] code stamp failed", err));
   return { ok: true, code: grant.promoCode, state: buildState(r, cl, 0) };
 }
 
