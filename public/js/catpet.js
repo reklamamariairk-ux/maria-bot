@@ -48,7 +48,7 @@
 
   // ── Состояние: сервер или localStorage ──────────────────────────────────────
   function authed() { return !!(window.App && App.isAuthed && App.isAuthed()); }
-  function localDefault() { return { hunger: 80, mood: 80, energy: 80, hygiene: 80, level: 1, xp: 0, xpNext: 100, coins: 0, location: 'kitchen', items: { owned: [], equipped: null }, _ts: Date.now() }; }
+  function localDefault() { return { hunger: 80, mood: 80, energy: 80, hygiene: 80, level: 1, xp: 0, xpNext: 100, coins: 0, location: 'kitchen', items: { owned: [], equipped: null }, care_streak: 0, care_date: null, _ts: Date.now() }; }
   function localGet() {
     let s; try { s = JSON.parse(localStorage.getItem(LS)); } catch (_) {}
     if (!s) s = localDefault();
@@ -72,7 +72,19 @@
     const s = localGet();
     const R = { feed: { hunger: 45, mood: 8 }, sleep: { energy: 55, mood: 5 }, play: { mood: 35, energy: -10 }, walk: { mood: 18, energy: -4 } }[action] || {};
     Object.keys(R).forEach(k => s[k] = Math.max(0, Math.min(100, s[k] + R[k])));
-    s.xp += 12; s.coins += 3; while (s.xp >= s.xpNext) { s.xp -= s.xpNext; s.level++; s.xpNext = s.level * 100; }
+    s.xp += 12; while (s.xp >= s.xpNext) { s.xp -= s.xpNext; s.level++; s.xpNext = s.level * 100; }
+    // стрик заботы — монеты только раз в день (анти-фарм)
+    const dayKey = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+    const yKey = new Date(Date.now() + 8 * 3600 * 1000 - 86400000).toISOString().slice(0, 10);
+    let sb = 0;
+    if (s.care_date !== dayKey) {
+      s.care_streak = (s.care_date === yKey) ? (s.care_streak || 0) + 1 : 1;
+      s.care_date = dayKey;
+      sb = 100 * Math.min(Math.max(1, s.care_streak), 10);
+      s.coins += sb;               // у гостя монеты локальные
+    }
+    s.careStreak = s.care_streak;  // для единообразия с сервером
+    s._streakBonus = sb;
     s._ts = Date.now(); localStorage.setItem(LS, JSON.stringify(s)); return s;
   }
   async function api(path, opts) {
@@ -81,9 +93,25 @@
   }
   async function loadState() { state = authed() ? await api('/api/pet') : localGet(); loc = state.location && LOC[state.location] ? state.location : 'kitchen'; }
   async function doAction(action) {
-    if (authed()) { try { state = await api('/api/pet/action', { method: 'POST', body: JSON.stringify({ action }) }); } catch (_) {} }
-    else state = localAction(action);
+    let bonus = 0;
+    if (authed()) {
+      try {
+        const resp = await api('/api/pet/action', { method: 'POST', body: JSON.stringify({ action }) });
+        state = resp; bonus = Number(resp.streakBonus || 0);
+      } catch (_) {}
+    } else {
+      state = localAction(action);
+      bonus = Number(state._streakBonus || 0);
+    }
     renderNeeds();
+    if (bonus > 0) showCareBonus(bonus, state.careStreak);
+  }
+  function showCareBonus(bonus, streak) {
+    let t = ov.querySelector('#pet-toast');
+    if (!t) { t = document.createElement('div'); t.id = 'pet-toast'; t.className = 'pet-toast'; ov.appendChild(t); }
+    t.innerHTML = 'Василий рад! Забота ' + streak + ' дн. подряд · +' + bonus + ' монет';
+    t.classList.add('on');
+    clearTimeout(t._tm); t._tm = setTimeout(() => t.classList.remove('on'), 2600);
   }
   async function saveLoc() { if (authed()) { api('/api/pet/location', { method: 'POST', body: JSON.stringify({ location: loc }) }).catch(() => {}); } else { const s = localGet(); s.location = loc; localStorage.setItem(LS, JSON.stringify(s)); } }
   async function buyItem(id) {
@@ -144,6 +172,9 @@
       .pet-item__b.buy:disabled{background:#e7ddcf;color:#b3a48f;cursor:default}
       .pet-item__b.equip{background:#ff7a2d;color:#fff}
       .pet-item__b.on{background:#7ed957;color:#fff}
+      .pet-streak{position:absolute;top:10px;right:12px;z-index:6;font-weight:800;font-size:13px;color:#c2882a;background:rgba(255,255,255,.7);border-radius:12px;padding:5px 10px}
+      .pet-toast{position:absolute;left:50%;top:54px;transform:translateX(-50%);z-index:8;max-width:88%;text-align:center;background:linear-gradient(180deg,#ffe7a6,#eebf52);color:#5a2028;font-weight:800;font-size:13px;border-radius:14px;padding:9px 14px;opacity:0;transition:opacity .3s;pointer-events:none}
+      .pet-toast.on{opacity:1}
     `;
     document.head.appendChild(s);
   }
@@ -154,6 +185,7 @@
     ov.innerHTML = `
       <div class="pet-top" id="pet-needs"></div>
       <div class="pet-lvl" id="pet-lvl"></div>
+      <div class="pet-streak" id="pet-streak"></div>
       <button class="pet-x" id="pet-x">×</button>
       <button class="pet-shop-btn" id="pet-shop-btn"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.57a1 1 0 0 0 .99.84H5v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V10h1.15a1 1 0 0 0 .99-.84l.58-3.57a2 2 0 0 0-1.34-2.23z"/></svg></button>
       <div class="pet-stage" id="pet-stage">
@@ -198,6 +230,10 @@
       el.style.background = v > 50 ? 'linear-gradient(90deg,#7ed957,#aee571)' : v > 25 ? 'linear-gradient(90deg,#ffb347,#ffd23f)' : 'linear-gradient(90deg,#ff5a5a,#ff8a8a)';
     });
     ov.querySelector('#pet-lvl').innerHTML = `Ур. ${state.level} · ${state.coins} монет<br><span style="font-weight:600;opacity:.85">${state.xp}/${state.xpNext} XP</span>`;
+    const ps = ov.querySelector('#pet-streak');
+    if (ps) ps.innerHTML = (state.careStreak > 0)
+      ? PIC.pet(14) + ' Забота: ' + state.careStreak + (state.careStreak >= 5 ? ' дней 🔥' : ' дн.')
+      : 'Погладь Василия!';
   }
 
   function renderLoc() {
