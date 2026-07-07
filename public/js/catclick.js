@@ -476,8 +476,6 @@
       .ck-ov.on{display:flex}.ck-ov.turbo{background:radial-gradient(130% 100% at 50% -10%,#3a2a20 0%,#241712 55%,#120c0a 100%)}
       .ck-screen{position:relative;z-index:1;flex:1;display:none;flex-direction:column;align-items:center;overflow:hidden}.ck-screen.on{display:flex}
       .ck-x{position:absolute;top:12px;right:12px;z-index:9;width:34px;height:34px;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.28);color:var(--cream);font-size:17px;cursor:pointer}
-      .ck-shop{position:absolute;top:12px;left:12px;z-index:9;display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border:1px solid #ffe9b3;border-radius:17px;background:linear-gradient(180deg,#ffe7a6,#eebf52 58%,#cf9a36);color:#5a2028;font-weight:800;font-size:13px;cursor:pointer;box-shadow:0 6px 15px rgba(170,115,30,.38),inset 0 1px 0 rgba(255,255,255,.55)}
-      .ck-shop .ck-i{vertical-align:-.16em}
       .ck-i{display:inline-block;vertical-align:-.16em}.ck-coin-i{display:inline-block;vertical-align:-.18em;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4))}
       .ck-daily{margin-top:13px;display:inline-flex;align-items:center;gap:7px;background:linear-gradient(180deg,#ffe7a6,#eebf52 58%,#cf9a36);color:#5a2028;font-weight:800;border:1px solid #ffe9b3;border-radius:14px;padding:9px 18px;font-size:13px;cursor:pointer;box-shadow:0 7px 18px rgba(170,115,30,.4),inset 0 1px 0 rgba(255,255,255,.55)}
       .ck-lvl{margin-top:13px;color:var(--gold-l);font-family:'Nunito',sans-serif;font-weight:700;font-size:17px;letter-spacing:.2px}
@@ -728,7 +726,6 @@
     ov = document.createElement('div'); ov.className = 'ck-ov';
     ov.innerHTML = `
       ${COIN_SPRITE}
-      <button class="ck-shop" id="ck-shop">${ICON.shop(15)} Магазин</button>
       <button class="ck-x" id="ck-x">×</button>
       <div class="ck-screen on" id="ck-scr-cat">
         <button class="ck-daily" id="ck-daily" style="display:none"></button>
@@ -765,7 +762,6 @@
       </div>`;
     document.body.appendChild(ov);
     ov.querySelector('#ck-x').onclick = close;
-    ov.querySelector('#ck-shop').onclick = () => { window.haptic && window.haptic('light'); close(); };
     ov.querySelector('#ck-cat').addEventListener('pointerdown', onTap);
     ov.querySelector('#ck-daily').onclick = dailyBtn;
     ov.querySelector('#ck-bt-turbo').onclick = () => boost('turbo');
@@ -1274,7 +1270,7 @@
       else flashMsg(d && d.error === 'daily_limit' ? 'Лимит на сегодня' : d && d.error === 'disabled' ? 'Скоро откроем' : 'Не хватает монет');
     }).catch(() => flashMsg('Ошибка'));
   }
-  function codePopup(code) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Награда твоя!</h3><div class="v" style="font-size:22px">${code}</div><div style="color:var(--muted);font-size:13px">Применить в корзине или показать кассиру</div><div style="display:flex;gap:8px;justify-content:center;margin-top:12px"><button class="ck-card__buy" id="ck-pop-copy" style="justify-content:center">Скопировать</button></div><button id="ck-pop-ok" style="margin-top:10px">Класс!</button>`; pop.classList.add('on'); const cp = pop.querySelector('#ck-pop-copy'); if (cp) cp.onclick = () => { try { navigator.clipboard && navigator.clipboard.writeText(code); cp.textContent = 'Скопировано'; } catch (_) {} }; pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
+  function codePopup(code) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Награда твоя!</h3><div class="v" style="font-size:22px">${code}</div><div style="color:var(--muted);font-size:13px">Применить в корзине или показать кассиру</div><div style="display:flex;gap:8px;justify-content:center;margin-top:12px"><button class="ck-card__buy" id="ck-pop-copy" style="justify-content:center">Скопировать</button></div><button id="ck-pop-ok" style="margin-top:10px">Класс!</button>`; pop.classList.add('on'); const cp = pop.querySelector('#ck-pop-copy'); if (cp) cp.onclick = () => { const done = () => { cp.textContent = 'Скопировано'; }; if (navigator.clipboard) { navigator.clipboard.writeText(code).then(done, done); } else { done(); } }; pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
   function renderDove() {
     const list = ov.querySelector('#ck-dovelist'); if (!st) { list.innerHTML = ''; return; }
     const owned = st.cards.filter(c => c.level > 0).length, total = st.cards.length;
@@ -1489,7 +1485,7 @@
     const pop = ov.querySelector('#ck-pop');
     const ptsLine = points ? `<div style="font-size:13px;color:var(--gold-l);font-weight:700;margin:6px 0">${COIN(13)} +${fmt(points)} баллов на карту тоже начислено</div>` : '';
     pop.innerHTML = `<h3>${ICON.gift(20)} Подарок!</h3><div style="font-size:18px;font-weight:800;color:var(--ink);margin:4px 0">${title || 'Подарок «Мария»'}</div>${ptsLine}<div style="margin:8px 0;font-size:13px;color:var(--muted)">Применить в корзине или назвать менеджеру${minOrder ? ` (от ${fmt(minOrder)}₽)` : ''}:</div><div class="ck-morse" style="font-size:21px;letter-spacing:2px">${code}</div><div style="font-size:12px;color:var(--muted);margin-top:6px">Код действует 30 дней · сохранён в «Мои награды»</div><div style="display:flex;gap:8px;justify-content:center;margin:10px 0 2px"><button class="ck-card__buy" id="ck-pop-copy" style="justify-content:center">Скопировать</button></div><button id="ck-pop-ok">Закрыть</button>`;
-    pop.classList.add('on'); const cp = pop.querySelector('#ck-pop-copy'); if (cp) cp.onclick = () => { try { navigator.clipboard && navigator.clipboard.writeText(code); cp.textContent = 'Скопировано'; } catch (_) {} }; pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
+    pop.classList.add('on'); const cp = pop.querySelector('#ck-pop-copy'); if (cp) cp.onclick = () => { const done = () => { cp.textContent = 'Скопировано'; }; if (navigator.clipboard) { navigator.clipboard.writeText(code).then(done, done); } else { done(); } }; pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
   }
   function giftPopup(points) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Подарок на карту!</h3><div class="v">+${points} баллов</div><div style="color:var(--muted);font-size:13px">Баллы «Мария» зачислены на твою карту клуба — трать при заказе тортов 🎂</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
   function requestPhone() {
@@ -1587,7 +1583,7 @@
   }
   async function open() {
     if (!ov) build();
-    ov.classList.add('on'); document.documentElement.classList.remove('ck-gamefirst'); window.scrollLock && window.scrollLock(); ac();
+    ov.classList.add('on'); window.scrollLock && window.scrollLock(); ac();
     await load(); await maybeMigrateGuest(); await ensureRefRegistered(); await maybePurchaseBonus(); curLevel = leagueFor(st.totalEarned).level;
     ov.querySelector('#ck-cat').src = A(leagueFor(st.totalEarned).cat || 'idle.png');
     setTab('cat'); renderAll(); spawnSparks(); applySeason(); scheduleBonus();
@@ -1851,8 +1847,5 @@
   // Deep-link из пуша-возврата (?startapp=click) → сразу открываем игру.
   function clickAutoOpen() { try { const sp = (window.App && App.startParam && App.startParam()) || ''; if (sp === 'click' || sp === 'game') { try { window.catClickOpen(); } catch (_) {} } } catch (_) {} }
   function clickBootstrap() { try { if (window.App && App.ready && App.ready.then) App.ready.then(clickAutoOpen); else clickAutoOpen(); } catch (_) { clickAutoOpen(); } }
-  // Гейм-first (сплэш уже на экране, магазин под ним): открываем игру сразу, без задержки-«моргания».
-  const _ckGameFirst = document.documentElement.classList.contains('ck-gamefirst');
-  const _ckDelay = _ckGameFirst ? 0 : 600;
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(clickBootstrap, _ckDelay)); else setTimeout(clickBootstrap, _ckDelay);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(clickBootstrap, 600)); else setTimeout(clickBootstrap, 600);
 })();
