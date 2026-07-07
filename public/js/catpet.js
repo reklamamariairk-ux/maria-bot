@@ -172,7 +172,7 @@
       .pet-item__b.buy:disabled{background:#e7ddcf;color:#b3a48f;cursor:default}
       .pet-item__b.equip{background:#ff7a2d;color:#fff}
       .pet-item__b.on{background:#7ed957;color:#fff}
-      .pet-streak{position:absolute;top:10px;right:12px;z-index:6;font-weight:800;font-size:13px;color:#c2882a;background:rgba(255,255,255,.7);border-radius:12px;padding:5px 10px}
+      .pet-streak{position:absolute;top:10px;right:52px;z-index:6;font-weight:800;font-size:13px;color:#c2882a;background:rgba(255,255,255,.7);border-radius:12px;padding:5px 10px}
       .pet-toast{position:absolute;left:50%;top:54px;transform:translateX(-50%);z-index:8;max-width:88%;text-align:center;background:linear-gradient(180deg,#ffe7a6,#eebf52);color:#5a2028;font-weight:800;font-size:13px;border-radius:14px;padding:9px 14px;opacity:0;transition:opacity .3s;pointer-events:none}
       .pet-toast.on{opacity:1}
     `;
