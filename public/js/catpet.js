@@ -141,10 +141,10 @@
       .pet-lvl{position:absolute;top:10px;right:48px;color:#fff;font-weight:800;font-size:13px;text-shadow:0 1px 3px rgba(0,0,0,.5);text-align:right;line-height:1.2}
       .pet-x{position:absolute;top:8px;right:8px;width:34px;height:34px;border:none;border-radius:50%;background:rgba(0,0,0,.3);color:#fff;font-size:19px;cursor:pointer;z-index:4}
       .pet-stage{position:relative;flex:1;overflow:hidden}
-      .pet-cat{position:absolute;bottom:14%;width:34%;max-width:200px;filter:drop-shadow(0 12px 14px rgba(0,0,0,.3));transform-origin:bottom center;will-change:left,transform}
+      .pet-cat{position:absolute;bottom:23%;height:46%;width:auto;max-height:320px;filter:drop-shadow(0 12px 14px rgba(0,0,0,.3));transform-origin:bottom center;will-change:left,transform}
       .pet-fx{position:absolute;inset:0;pointer-events:none;z-index:4}
       .pet-name{position:absolute;top:10px;left:12px;color:#fff;font-weight:900;font-size:18px;text-shadow:0 2px 5px rgba(0,0,0,.5);z-index:3}
-      .pet-action{position:absolute;left:50%;bottom:78px;transform:translateX(-50%);z-index:5}
+      .pet-action{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);z-index:5}
       .pet-action__btn{border:none;border-radius:18px;padding:14px 30px;font-size:17px;font-weight:800;color:#fff;background:#ff7a2d;box-shadow:0 8px 20px rgba(255,122,45,.5);cursor:pointer}
       .pet-nav{position:relative;z-index:3;display:flex;justify-content:space-around;padding:8px 6px 14px;background:linear-gradient(0deg,rgba(0,0,0,.32),transparent)}
       .pet-nav__b{flex:1;margin:0 4px;border:none;border-radius:14px;padding:8px 4px;background:rgba(255,255,255,.85);font-size:12px;font-weight:700;color:#7a3b12;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
@@ -333,9 +333,9 @@
         cat.frame = (cat.frame + dt * 8) % WALK.length;
         catEl.src = A(WALK[Math.floor(cat.frame)]);
         catEl.style.transform = `scaleX(${cat.dir})`;
-        if (cat.t > 3 + Math.random() * 3) { cat.mode = 'idle'; cat.t = 0; catEl.src = A('idle.png'); catEl.style.transform = 'scaleX(1)'; }
-      } else { // idle
-        if (cat.t > 1.5 + Math.random() * 2) { cat.mode = 'walk'; cat.t = 0; cat.dir = Math.random() < 0.5 ? -1 : 1; }
+        if (cat.t > 1.2 + Math.random() * 1.4) { cat.mode = 'idle'; cat.t = 0; catEl.src = A('idle.png'); catEl.style.transform = 'scaleX(1)'; }
+      } else { // idle — кот в основном стоит анфас (шапка видна, нет дрожания кадров)
+        if (cat.t > 4 + Math.random() * 4) { cat.mode = 'walk'; cat.t = 0; cat.dir = Math.random() < 0.5 ? -1 : 1; }
       }
     }
     const catW = catEl.offsetWidth;
