@@ -66,6 +66,9 @@ export async function initPetSchema(): Promise<void> {
       acquired_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (chat_id, item)
     );
+    ALTER TABLE pet_state ADD COLUMN IF NOT EXISTS care_streak      INT NOT NULL DEFAULT 0;
+    ALTER TABLE pet_state ADD COLUMN IF NOT EXISTS care_date        TEXT;
+    ALTER TABLE pet_state ADD COLUMN IF NOT EXISTS pet_coins_merged BOOLEAN NOT NULL DEFAULT FALSE;
   `);
 }
 
