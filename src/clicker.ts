@@ -12,6 +12,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { trackEvent } from "./analytics";
 import type { PushService } from "./push";
+import type { PoolClient } from "pg";
 import { log } from "./logger";
 
 // Подарки за достижения → реальные баллы на карту клуба «Мария» (earnPoints).
@@ -892,6 +893,25 @@ export async function redeemReward(chatId: number, id: string): Promise<{ ok: bo
     await client.query("COMMIT");
     return { ok: true, code, state: buildState(r, cl, 0) };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+}
+
+/**
+ * Начислить монеты в ОБЩИЙ кошелёк кликера (balance + total_earned).
+ * Создаёт строку clicker_state при отсутствии (напр. игрок был только в питомце).
+ * Принимает опциональный `client` — чтобы начислять ВНУТРИ существующей транзакции
+ * (атомарно с обновлением питомца). Без client — своим запросом через pool.
+ * Идемпотентность НЕ гарантируется — вызывать один раз на событие.
+ */
+export async function addClickerBalance(chatId: number, coins: number, client?: PoolClient): Promise<void> {
+  if (!coins || coins <= 0) return;
+  const n = Math.round(coins);
+  const q = client ?? pool;
+  await q.query(
+    `INSERT INTO clicker_state (chat_id, balance, total_earned) VALUES ($1,$2,$2)
+     ON CONFLICT (chat_id) DO UPDATE SET balance = clicker_state.balance + $2,
+       total_earned = clicker_state.total_earned + $2, updated_at = NOW()`,
+    [chatId, n]
+  );
 }
 
 function taskClaimable(t: any, s: ClickerState): boolean {
