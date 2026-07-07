@@ -6,6 +6,7 @@
  * Состояние персистится в Neon per chat_id (работает для TG и VK — internalId).
  */
 import { pool } from "./db";
+import { addClickerBalance } from "./clicker";
 
 export type PetNeed = "hunger" | "mood" | "energy" | "hygiene";
 export type PetAction = "feed" | "sleep" | "wash" | "play" | "walk";
@@ -14,6 +15,7 @@ export type PetLocation = "kitchen" | "bedroom" | "playroom" | "yard";
 export interface PetState {
   hunger: number; mood: number; energy: number; hygiene: number;
   level: number; xp: number; xpNext: number; coins: number;
+  careStreak: number;
   location: PetLocation;
   items?: { owned: string[]; equipped: string | null };
 }
@@ -43,6 +45,12 @@ const LOCATIONS: PetLocation[] = ["kitchen", "bedroom", "playroom", "yard"];
 
 const clamp = (v: number) => Math.max(0, Math.min(100, Math.round(v)));
 const xpForNext = (level: number) => level * 100; // нужно опыта до следующего уровня
+
+// День по Иркутску (UTC+8), YYYY-MM-DD — как irkToday()/claimDaily в clicker.ts.
+const irkDay = (offsetDays = 0) =>
+  new Date(Date.now() + 8 * 3600 * 1000 - offsetDays * 86400000).toISOString().slice(0, 10);
+// Награда за день заботы (в общий кошелёк): день1=100 … день10+=1000. Параметр экономики.
+const careStreakBonus = (streak: number) => 100 * Math.min(Math.max(1, streak), 10);
 
 export async function initPetSchema(): Promise<void> {
   await pool.query(`
@@ -76,6 +84,7 @@ function toState(r: any): PetState {
   return {
     hunger: r.hunger, mood: r.mood, energy: r.energy, hygiene: r.hygiene,
     level: r.level, xp: r.xp, xpNext: xpForNext(r.level), coins: r.coins,
+    careStreak: r.care_streak ?? 0,
     location: LOCATIONS.includes(r.location) ? r.location : "kitchen",
   };
 }
@@ -93,14 +102,10 @@ export async function getPet(chatId: number): Promise<PetState> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await client.query(
-      `INSERT INTO pet_state (chat_id) VALUES ($1) ON CONFLICT (chat_id) DO NOTHING`,
-      [chatId]
-    );
-    const { rows } = await client.query(
-      `SELECT * FROM pet_state WHERE chat_id = $1 FOR UPDATE`,
-      [chatId]
-    );
+    await client.query(`INSERT INTO pet_state (chat_id) VALUES ($1) ON CONFLICT (chat_id) DO NOTHING`, [chatId]);
+    // строка кошелька кликера обязана существовать (для миграции и чтения баланса)
+    await client.query(`INSERT INTO clicker_state (chat_id) VALUES ($1) ON CONFLICT (chat_id) DO NOTHING`, [chatId]);
+    const { rows } = await client.query(`SELECT * FROM pet_state WHERE chat_id = $1 FOR UPDATE`, [chatId]);
     const r = rows[0];
     const hrs = Math.max(0, (Date.now() - new Date(r.updated_at).getTime()) / 3600000);
     if (hrs > 0.001) {
@@ -113,8 +118,16 @@ export async function getPet(chatId: number): Promise<PetState> {
         [chatId, r.hunger, r.mood, r.energy, r.hygiene]
       );
     }
+    // одноразовая миграция старых pet_state.coins в общий кошелёк (атомарно, в этой же транзакции)
+    if (!r.pet_coins_merged) {
+      await addClickerBalance(chatId, r.coins, client); // no-op если coins<=0
+      await client.query(`UPDATE pet_state SET coins = 0, pet_coins_merged = TRUE, updated_at=NOW() WHERE chat_id=$1`, [chatId]);
+      r.coins = 0; r.pet_coins_merged = true;
+    }
+    const balRow = await client.query(`SELECT balance FROM clicker_state WHERE chat_id=$1`, [chatId]);
     await client.query("COMMIT");
     const state = toState(r);
+    state.coins = Number(balRow.rows[0]?.balance ?? 0); // единый баланс
     state.items = await getItems(chatId);
     return state;
   } catch (e) {
