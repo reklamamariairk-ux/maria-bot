@@ -28,7 +28,7 @@ router.post("/api/pet/action", requireTgUser, rateLimit(60), async (req, res) =>
   try {
     const r = await doPetAction(u.id, action);
     if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
-    res.json(r.state);
+    res.json({ ...r.state, streakBonus: r.streakBonus ?? 0, careStreak: r.careStreak ?? r.state?.careStreak ?? 0 });
   } catch (e) {
     log.error({ err: e, chatId: u.id, action }, "[POST /api/pet/action]");
     res.status(500).json({ error: "internal" });
