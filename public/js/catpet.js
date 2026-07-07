@@ -41,7 +41,7 @@
     if (!s) s = localDefault();
     if (!s.items) s.items = { owned: [], equipped: null };
     const hrs = Math.max(0, (Date.now() - (s._ts || Date.now())) / 3600000);
-    const dec = { hunger: 12, mood: 8, energy: 6, hygiene: 5 };
+    const dec = { hunger: 6, mood: 4, energy: 3, hygiene: 2.5 };
     ['hunger', 'mood', 'energy', 'hygiene'].forEach(k => s[k] = Math.max(0, Math.min(100, Math.round(s[k] - dec[k] * hrs))));
     s._ts = Date.now(); localStorage.setItem(LS, JSON.stringify(s));
     return s;

@@ -30,7 +30,7 @@ export const SHOP: { id: string; name: string; price: number }[] = [
 const SHOP_IDS = new Set(SHOP.map((s) => s.id));
 
 // падение потребностей, очков/час
-const DECAY: Record<PetNeed, number> = { hunger: 12, mood: 8, energy: 6, hygiene: 5 };
+const DECAY: Record<PetNeed, number> = { hunger: 6, mood: 4, energy: 3, hygiene: 2.5 };
 // сколько потребность поднимает действие
 const RESTORE: Record<PetAction, Partial<Record<PetNeed, number>>> = {
   feed:  { hunger: 45, mood: 8 },
