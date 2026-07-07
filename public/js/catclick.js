@@ -745,7 +745,6 @@
         <div class="ck-energy"><div class="ck-energy__row" id="ck-enrow"><span id="ck-enpre">${ICON.bolt(15)}</span> <span id="ck-en">0</span> / <span id="ck-enmax">1000</span></div><div class="ck-energy__bar"><div class="ck-energy__fill" id="ck-enfill"></div></div></div>
       </div>
       <div class="ck-screen" id="ck-scr-up"><div class="ck-uphd"><div class="ck-bal" style="justify-content:center;font-size:30px">${COIN(26)} <span id="ck-bal2">0</span></div><div class="p" id="ck-prof2">${COIN(13)} +0 / час</div></div><div class="ck-uplist" id="ck-uplist"></div></div>
-      <div class="ck-screen" id="ck-scr-games"><div class="ck-uphd"><div class="b">${ICON.game(22)} Игры</div></div><div class="ck-uplist" id="ck-gameslist"></div></div>
       <div class="ck-screen" id="ck-scr-dove"><div class="ck-uphd"><div class="b">${ICON.dove(22)} Голубятня</div></div><div class="ck-uplist" id="ck-dovelist"></div></div>
       <div class="ck-screen" id="ck-scr-tasks"><div class="ck-uphd"><div class="b">${ICON.list(22)} Задания</div></div><div class="ck-uplist" id="ck-taskslist"></div></div>
       <div class="ck-screen" id="ck-scr-top"><div class="ck-uphd"><div class="b">${ICON.trophy(22)} Рейтинг</div><div class="p" id="ck-myrank"></div></div><div class="ck-uplist" id="ck-toplist"></div></div>
@@ -755,7 +754,6 @@
       <div class="ck-nav">
         <button class="ck-nav__b on" data-tab="cat">${ICON.paw(21)}Котик</button>
         <button class="ck-nav__b" data-tab="up">${ICON.bolt(21)}Прокачка</button>
-        <button class="ck-nav__b" data-tab="games">${ICON.game(21)}Игры</button>
         <button class="ck-nav__b" data-tab="dove">${ICON.dove(21)}Голуби</button>
         <button class="ck-nav__b" data-tab="tasks">${ICON.list(21)}Задания</button>
         <button class="ck-nav__b" data-tab="top">${ICON.trophy(21)}Рейтинг</button>
@@ -774,13 +772,11 @@
     tab = t;
     ov.querySelector('#ck-scr-cat').classList.toggle('on', t === 'cat');
     ov.querySelector('#ck-scr-up').classList.toggle('on', t === 'up');
-    ov.querySelector('#ck-scr-games').classList.toggle('on', t === 'games');
     ov.querySelector('#ck-scr-dove').classList.toggle('on', t === 'dove');
     ov.querySelector('#ck-scr-tasks').classList.toggle('on', t === 'tasks');
     ov.querySelector('#ck-scr-top').classList.toggle('on', t === 'top');
     ov.querySelectorAll('.ck-nav__b').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
     if (t === 'up') renderUpgrades();
-    if (t === 'games') renderGames();
     if (t === 'dove') renderDove();
     if (t === 'tasks') renderTasks();
     if (t === 'top') renderTop();
