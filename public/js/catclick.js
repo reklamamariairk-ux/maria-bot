@@ -1849,7 +1849,7 @@
   function refBootstrap() { try { if (window.App && App.ready && App.ready.then) App.ready.then(() => ensureRefRegistered()); else ensureRefRegistered(); } catch (_) { ensureRefRegistered(); } }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(refBootstrap, 1500)); else setTimeout(refBootstrap, 1500);
   // Deep-link из пуша-возврата (?startapp=click) → сразу открываем игру.
-  function clickAutoOpen() { try { const sp = (window.App && App.startParam && App.startParam()) || ''; if (sp === 'click' || sp === 'game') { try { window.catClickOpen(); } catch (_) {} } } catch (_) {} }
+  function clickAutoOpen() { try { const sp = (window.App && App.startParam && App.startParam()) || ''; const gf = document.documentElement.classList.contains('ck-gamefirst'); if (sp === 'click' || sp === 'game' || gf) { try { window.catClickOpen(); } catch (_) {} } } catch (_) {} }
   function clickBootstrap() { try { if (window.App && App.ready && App.ready.then) App.ready.then(clickAutoOpen); else clickAutoOpen(); } catch (_) { clickAutoOpen(); } }
   // Гейм-first (сплэш уже на экране, магазин под ним): открываем игру сразу, без задержки-«моргания».
   const _ckGameFirst = document.documentElement.classList.contains('ck-gamefirst');

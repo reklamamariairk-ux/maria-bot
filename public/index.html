@@ -41,8 +41,14 @@
   </style>
   <script>
     // Ставим класс до первого кадра body — магазин не «моргнёт» перед игрой.
-    try { var _sp = (window.App && App.startParam && App.startParam()) || '';
-      if (_sp === 'game' || _sp === 'click') document.documentElement.classList.add('ck-gamefirst'); } catch (e) {}
+    // Триггер: TG start_param (game|click из t.me deep-link) ИЛИ ?startapp=game в URL
+    // (кнопка меню BotFather грузит URL напрямую, start_param в неё не приходит).
+    try {
+      var _sp = (window.App && App.startParam && App.startParam()) || '';
+      var _qg = ''; try { _qg = new URLSearchParams(location.search).get('startapp') || ''; } catch (e2) {}
+      if (_sp === 'game' || _sp === 'click' || _qg === 'game' || _qg === 'click')
+        document.documentElement.classList.add('ck-gamefirst');
+    } catch (e) {}
   </script>
 </head>
 <body>
@@ -1299,7 +1305,7 @@
 <script src="/js/catfeed.js" defer></script>
 <script src="/js/catpet.js" defer></script>
 <script src="/js/catlive.js" defer></script>
-<script src="/js/catclick.js?v=87" defer></script>
+<script src="/js/catclick.js?v=88" defer></script>
 <!-- /js/bakery.js удалён — Игры убраны до новой геймификации (см. game.js — wheel/streak/secret) -->
 <script src="/js/chat.js" defer></script>
 <script src="/js/catalog.js" defer></script>
