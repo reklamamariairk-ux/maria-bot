@@ -131,7 +131,7 @@
     const s = document.createElement('style'); s.id = 'catpet-css';
     s.textContent = `
       .pet-i{display:inline-block;vertical-align:-.18em}
-      .pet-ov{position:fixed;inset:0;z-index:9999;display:none;flex-direction:column;overflow:hidden;background:#fdfaf3 center/cover no-repeat;touch-action:none;user-select:none}
+      .pet-ov{position:fixed;inset:0;z-index:9999;display:none;flex-direction:column;overflow:hidden;background:#fdfaf3 center/cover no-repeat;touch-action:none;user-select:none;max-width:480px;margin:0 auto;box-shadow:0 0 0 100vmax rgba(20,14,10,.5)}
       .pet-ov.on{display:flex}
       .pet-top{position:relative;z-index:3;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:10px 12px;background:linear-gradient(180deg,rgba(0,0,0,.28),transparent)}
       .pet-need{display:flex;align-items:center;gap:5px;flex:1 1 44%}
