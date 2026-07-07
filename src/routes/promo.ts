@@ -49,11 +49,14 @@ router.post("/api/promo/validate", rateLimit(20), async (req, res) => {
             const todayIrk = new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
             if (ur.used_at) { res.json({ ok: false, reason: "already_used", message: "Награда уже использована" }); return; }
             if (new Date(ur.expires_at).toISOString().slice(0, 10) < todayIrk) { res.json({ ok: false, reason: "expired", message: "Срок действия истёк" }); return; }
+            if (ur.reward_type !== "percent" && ur.reward_type !== "amount") {
+              res.json({ ok: false, reason: "show_at_cashier", message: "Награду выдаёт кассир — покажите код на кассе" }); return;
+            }
             if (ur.min_order && cartTotal < ur.min_order) {
               res.json({ ok: false, reason: "min_order_not_met", min_order: ur.min_order, message: `Минимальная сумма заказа: ${ur.min_order.toLocaleString("ru-RU")} ₽` }); return;
             }
-            const discount = ur.reward_type === "percent" ? Math.floor(cartTotal * (ur.discount_value / 100)) : Math.min(ur.discount_value, cartTotal);
-            res.json({ ok: true, code: code.toUpperCase(), type: ur.reward_type, value: ur.discount_value, discount, description: "Награда «Марии»" });
+            const discount = ur.reward_type === "percent" ? Math.floor(cartTotal * (ur.discount_value! / 100)) : Math.min(ur.discount_value!, cartTotal);
+            res.json({ ok: true, code: code.toUpperCase(), type: ur.reward_type, value: ur.discount_value, discount, description: ur.title });
             return;
           }
         } catch (e) {
@@ -104,7 +107,12 @@ router.post("/api/promo/use", rateLimit(10), async (req, res) => {
     if (tgUser) {
       try {
         const ur = await findUserReward(tgUser.id, code);
-        if (ur) { await markUserRewardUsed(code, tgUser.id, orderId); res.json({ ok: true }); return; }
+        if (ur) {
+          if (ur.reward_type !== "percent" && ur.reward_type !== "amount") {
+            res.json({ ok: true }); return; // free_item — кассир гасит, не списываем онлайн
+          }
+          await markUserRewardUsed(code, tgUser.id, orderId); res.json({ ok: true }); return;
+        }
       } catch (e) {
         log.error({ err: e, code, orderId, chatId: tgUser.id }, "[promo/use] user_reward");
         res.status(500).json({ error: "internal" }); return;

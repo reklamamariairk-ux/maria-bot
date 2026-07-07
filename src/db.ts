@@ -989,9 +989,9 @@ export async function markBirthdayNotified(chatId: number) {
 
 // ─── User rewards (персональные коды из клубной системы) ─────────────────────
 export async function findUserReward(chatId: number, code: string): Promise<
-  { reward_type: "percent" | "amount"; discount_value: number; min_order: number; expires_at: Date; used_at: Date | null } | null> {
+  { reward_type: "percent" | "amount" | "free_item"; discount_value: number | null; min_order: number; title: string; expires_at: Date; used_at: Date | null } | null> {
   const { rows } = await pool.query(
-    `SELECT rc.reward_type, rc.discount_value, rc.min_order, ur.expires_at, ur.used_at
+    `SELECT rc.reward_type, rc.discount_value, rc.min_order, rc.title, ur.expires_at, ur.used_at
        FROM user_rewards ur JOIN rewards_catalog rc ON rc.id = ur.reward_id
       WHERE ur.promo_code = $1 AND ur.chat_id = $2`,
     [String(code).toUpperCase(), chatId]
