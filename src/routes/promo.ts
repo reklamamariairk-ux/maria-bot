@@ -48,7 +48,7 @@ router.post("/api/promo/validate", rateLimit(20), async (req, res) => {
           if (ur) {
             const todayIrk = new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
             if (ur.used_at) { res.json({ ok: false, reason: "already_used", message: "Награда уже использована" }); return; }
-            if (ur.expires_at.toISOString().slice(0, 10) < todayIrk) { res.json({ ok: false, reason: "expired", message: "Срок действия истёк" }); return; }
+            if (new Date(ur.expires_at).toISOString().slice(0, 10) < todayIrk) { res.json({ ok: false, reason: "expired", message: "Срок действия истёк" }); return; }
             if (ur.min_order && cartTotal < ur.min_order) {
               res.json({ ok: false, reason: "min_order_not_met", min_order: ur.min_order, message: `Минимальная сумма заказа: ${ur.min_order.toLocaleString("ru-RU")} ₽` }); return;
             }
