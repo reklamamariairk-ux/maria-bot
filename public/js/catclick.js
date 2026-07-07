@@ -754,6 +754,7 @@
       <div class="ck-nav">
         <button class="ck-nav__b on" data-tab="cat">${ICON.paw(21)}Котик</button>
         <button class="ck-nav__b" data-tab="up">${ICON.bolt(21)}Прокачка</button>
+        <button class="ck-nav__b" data-tab="home">${ICON.paw(21)}Дом</button>
         <button class="ck-nav__b" data-tab="dove">${ICON.dove(21)}Голуби</button>
         <button class="ck-nav__b" data-tab="tasks">${ICON.list(21)}Задания</button>
         <button class="ck-nav__b" data-tab="top">${ICON.trophy(21)}Рейтинг</button>
@@ -770,6 +771,14 @@
 
   function setTab(t) {
     tab = t;
+    if (t === 'home') {
+      window.haptic && window.haptic('light');
+      try { window.catPetOpen && window.catPetOpen(); } catch (_) {}
+      // не меняем активный экран/подсветку кликера: питомец — оверлей сверху
+      ov.querySelectorAll('.ck-nav__b').forEach(b => b.classList.remove('on'));
+      ov.querySelector('.ck-nav__b[data-tab="home"]').classList.add('on');
+      return;
+    }
     ov.querySelector('#ck-scr-cat').classList.toggle('on', t === 'cat');
     ov.querySelector('#ck-scr-up').classList.toggle('on', t === 'up');
     ov.querySelector('#ck-scr-dove').classList.toggle('on', t === 'dove');
