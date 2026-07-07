@@ -16,6 +16,7 @@ import clubRouter from "./routes/club";
 import lkRouter from "./routes/lk";
 import promoRouter from "./routes/promo";
 import orderRatingRouter from "./routes/order-rating";
+import orderLocationRouter from "./routes/order-location";
 import cakeConceptRouter from "./routes/cake-concept";
 import selfieCakeRouter from "./routes/selfie-cake";
 import { createWishlistRouter } from "./routes/wishlist";
@@ -1435,6 +1436,7 @@ app.post("/api/admin/promo/reload", requireAdminToken, (_req, res) => {
 
 // Order rating routes (GET + POST) вынесены в src/routes/order-rating.ts
 app.use(orderRatingRouter);
+app.use(orderLocationRouter);
 
 // /api/wishlist/share/:code вынесен в src/routes/wishlist.ts
 // /api/reviews/stats-batch также вынесен в src/routes/reviews.ts
