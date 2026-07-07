@@ -342,8 +342,10 @@
     catEl.style.left = (cat.x * W - catW / 2) + 'px';
     // шапка на голове — чисто на фронтальной позе; во время ходьбы (вид сбоку) прячем
     const hatEl = ov.querySelector('#pet-hat');
-    if (hatEl && hatEl.style.display !== 'none') {
-      const id = state && state.items && state.items.equipped; const h = id && HAT(id);
+    if (hatEl && hatEl.style.display !== 'none' && hatEl.src) {
+      // параметры шапки берём из уже проставленного src (renderHat), а не из state —
+      // устойчивее к рассинхрону состояния между рендером и циклом
+      const h = SHOP.find(x => hatEl.src.indexOf(x.img) !== -1);
       const walking = cat.mode === 'walk' && !cat.busy;
       hatEl.style.opacity = walking ? '0' : '1';
       if (h && !walking) {
