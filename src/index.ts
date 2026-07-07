@@ -1927,38 +1927,61 @@ function enrichShopCoords(s: Record<string, unknown>): Record<string, unknown> {
   return { ...s, lat: IRKUTSK_CENTER.lat, lon: IRKUTSK_CENTER.lon, _coords_source: "city_center" };
 }
 
-app.get("/api/shops", rateLimit(60), async (_req, res) => {
-  if (!SHOPS_API || !SHOPS_TOKEN) {
-    res.status(503).json({ count: 0, shops: [], error: "shops_api_not_configured" });
-    return;
+// Фолбэк: бандл-список кафе (data/shops.json) — когда сайтовый шлюз /api/shops.php
+// недоступен (сейчас 404) или отдаёт пусто. Данные реальные (со страницы контактов
+// сайта), координаты доставляет enrichShopCoords.
+function bundledShops(): { count: number; shops: unknown[] } | null {
+  try {
+    const raw = fsSync.readFileSync(path.join(__dirname, "..", "data", "shops.json"), "utf-8");
+    const data = JSON.parse(raw) as { shops?: unknown[] };
+    const shops = Array.isArray(data.shops)
+      ? data.shops.map((s) => enrichShopCoords(s as Record<string, unknown>))
+      : [];
+    return { count: shops.length, shops };
+  } catch {
+    return null;
   }
-  // Кеш 1 час
+}
+
+app.get("/api/shops", rateLimit(60), async (_req, res) => {
+  // Кеш 1 час (общий для апстрима и фолбэка)
   if (_shopsCache && (Date.now() - _shopsCache.ts) < 3600_000) {
     res.json(_shopsCache.data);
     return;
   }
-  try {
-    const sep = SHOPS_API.includes("?") ? "&" : "?";
-    const url = `${SHOPS_API}${sep}token=${encodeURIComponent(SHOPS_TOKEN)}`;
-    const raw = await new Promise<unknown>((resolve, reject) => {
-      const req = https.get(url, { rejectUnauthorized: false }, (r) => {
-        let body = ""; r.on("data", (c: Buffer) => body += c);
-        r.on("end", () => { try { resolve(JSON.parse(body)); } catch (e) { reject(e); } });
+  // 1) Сайтовый шлюз, если настроен и жив
+  if (SHOPS_API && SHOPS_TOKEN) {
+    try {
+      const sep = SHOPS_API.includes("?") ? "&" : "?";
+      const url = `${SHOPS_API}${sep}token=${encodeURIComponent(SHOPS_TOKEN)}`;
+      const raw = await new Promise<unknown>((resolve, reject) => {
+        const req = https.get(url, { rejectUnauthorized: false }, (r) => {
+          let body = ""; r.on("data", (c: Buffer) => body += c);
+          r.on("end", () => { try { resolve(JSON.parse(body)); } catch (e) { reject(e); } });
+        });
+        req.on("error", reject);
+        req.setTimeout(10_000, () => { req.destroy(); reject(new Error("Timeout")); });
       });
-      req.on("error", reject);
-      req.setTimeout(10_000, () => { req.destroy(); reject(new Error("Timeout")); });
-    });
-    // Обогащаем shops координатами
-    const data = raw as { shops?: unknown[]; count?: number };
-    if (Array.isArray(data?.shops)) {
-      data.shops = data.shops.map((s) => enrichShopCoords(s as Record<string, unknown>));
+      const data = raw as { shops?: unknown[]; count?: number };
+      if (Array.isArray(data?.shops) && data.shops.length > 0) {
+        data.shops = data.shops.map((s) => enrichShopCoords(s as Record<string, unknown>));
+        _shopsCache = { data, ts: Date.now() };
+        res.json(data);
+        return;
+      }
+      console.warn("[SHOPS] upstream empty — using bundled fallback");
+    } catch (e) {
+      console.warn("[SHOPS] upstream failed — using bundled fallback:", (e as Error).message);
     }
-    _shopsCache = { data, ts: Date.now() };
-    res.json(data);
-  } catch (e) {
-    console.error("[SHOPS]", (e as Error).message);
-    res.status(502).json({ count: 0, shops: [], error: "fetch_failed" });
   }
+  // 2) Фолбэк: реальный список кафе из бандла (data/shops.json)
+  const fb = bundledShops();
+  if (fb && fb.shops.length > 0) {
+    _shopsCache = { data: fb, ts: Date.now() };
+    res.json(fb);
+    return;
+  }
+  res.status(502).json({ count: 0, shops: [], error: "unavailable" });
 });
 
 // Сброс кеша адресов кафе — следующий /api/shops подтянет свежее с сайта
