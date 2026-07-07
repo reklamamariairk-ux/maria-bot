@@ -36,6 +36,48 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('Access-Control-Allow-Origin: *');
 
+// ── Начисление бонусов в 1С (Mini App «Мария»). ──────────────────────────────
+// POST {token, phone, amount, reason, key} → 1С /hs/Website/BonusAdd (web:web).
+// Срабатывает ТОЛЬКО на свой POST; GET-чтение баланса ниже не затрагивается.
+// Имена полей BonusAdd точно неизвестны (в доках только read) → шлём значение
+// под распространёнными именами, 1С прочитает нужное.
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+    $bi = json_decode(file_get_contents('php://input'), true);
+    if (is_array($bi) && isset($bi['token'], $bi['phone'], $bi['amount'])) {
+        if ($bi['token'] !== LK_TOKEN) { http_response_code(403); echo json_encode(['ok' => false, 'error' => 'forbidden']); exit; }
+        $bph = preg_replace('/\D+/', '', (string)$bi['phone']);
+        $bam = (int)$bi['amount'];
+        if ($bph === '' || $bam <= 0) { http_response_code(400); echo json_encode(['ok' => false, 'error' => 'bad_params']); exit; }
+        $brs = (string)($bi['reason'] ?? 'Mini App «Мария»');
+        $bky = (string)($bi['key'] ?? '');
+        $bpl = json_encode([
+            'phone' => $bph, 'Phone' => $bph, 'Телефон' => $bph,
+            'amount' => $bam, 'Amount' => $bam, 'Сумма' => $bam, 'Bonus' => $bam, 'Балл' => $bam,
+            'comment' => $brs, 'Комментарий' => $brs,
+            'key' => $bky, 'Ключ' => $bky,
+        ], JSON_UNESCAPED_UNICODE);
+        $bch = curl_init();
+        curl_setopt_array($bch, [
+            CURLOPT_URL            => ONEC_HOST . '/f_base_2023/hs/Website/BonusAdd',
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $bpl,
+            CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 15,
+            CURLOPT_HTTPAUTH       => CURLAUTH_BASIC,
+            CURLOPT_USERPWD        => ONEC_AUTH,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
+        ]);
+        $bbd = curl_exec($bch);
+        $bhc = (int)curl_getinfo($bch, CURLINFO_HTTP_CODE);
+        curl_close($bch);
+        if ($bhc >= 200 && $bhc < 300) { echo json_encode(['ok' => true, 'onec' => $bbd], JSON_UNESCAPED_UNICODE); }
+        else { http_response_code(502); echo json_encode(['ok' => false, 'error' => 'onec_' . $bhc, 'detail' => $bbd], JSON_UNESCAPED_UNICODE); }
+        exit;
+    }
+}
+
 if (($_GET['token'] ?? '') !== LK_TOKEN) {
     http_response_code(403);
     echo json_encode(['error' => 'forbidden']);

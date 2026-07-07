@@ -5,8 +5,16 @@
  * (стрик), лидерборд. Антинакрутка: энергия/пассив/турбо считаются на сервере.
  */
 import { pool } from "./db";
+import { clickerReferralLink } from "./links";
+import { earnPoints, isPhoneVerified, grantRewardByCode } from "./club";
+import { fetchLk } from "./lk";
 import * as fs from "fs";
 import * as path from "path";
+
+// Подарки за достижения → реальные баллы на карту клуба «Мария» (earnPoints).
+// Выдаются ОДИН раз, только игроку с подтверждённым телефоном. Суммы — в gift у
+// достижения ниже. ⚠️ Реальная ценность (баллы клуба) — согласовать суммы с Машей.
+export const GIFTS_ENABLED = true;
 
 const REGEN_PER_SEC = 1.5;
 const TAP_COST = 1;
@@ -54,32 +62,38 @@ export const ACHIEVEMENTS = [
   { id: "ach_lvl19",   name: "Повелитель котов",  icon: "star",   reward: 100000, type: "level",   target: 19 },
   { id: "ach_streak7", name: "Неделя верности",   icon: "fire",   reward: 7000,   type: "streak",  target: 7 },
   { id: "ach_ref3",    name: "Душа компании",     icon: "users",  reward: 15000,  type: "ref",     target: 3 },
+  // Коллекция голубей: собрать всех в категории / всех вообще (level>0 у бизнесов категории)
+  { id: "col_prod",  name: "Цех в сборе",       icon: "dove",   reward: 10000,  type: "collect", target: "prod" },
+  { id: "col_mkt",   name: "Маркетинг в сборе", icon: "dove",   reward: 10000,  type: "collect", target: "mkt" },
+  { id: "col_staff", name: "Команда в сборе",   icon: "dove",   reward: 10000,  type: "collect", target: "staff" },
+  { id: "col_net",   name: "Сеть в сборе",      icon: "dove",   reward: 10000,  type: "collect", target: "net" },
+  { id: "col_all",   name: "Повелитель голубей", icon: "trophy", reward: 60000,  type: "collect", target: "all" },
 ];
 const TASK_BY_ID = Object.fromEntries(TASKS.map((t) => [t.id, t]));
 const ALL_BY_ID: Record<string, any> = Object.fromEntries([...TASKS, ...ACHIEVEMENTS].map((t) => [t.id, t]));
-const dailyReward = (streak: number) => 500 * Math.min(Math.max(1, streak), 10); // день1=500 … день10+=5000
+const dailyReward = (streak: number) => 250 * Math.min(Math.max(1, streak), 10); // день1=250 … день10+=2500
 
 // ⚠️ Лестница продублирована во фронте public/js/catclick.js (там же поле cat) — менять синхронно.
 export const LEAGUES = [
   { level: 1,  name: "Тощий котик",        need: 0 },
-  { level: 2,  name: "Обычный котик",      need: 200 },
-  { level: 3,  name: "Сытый котик",        need: 600 },
-  { level: 4,  name: "Толстый котик",      need: 1500 },
-  { level: 5,  name: "Котик на спорте",    need: 3500 },
-  { level: 6,  name: "Подкачанный котик",  need: 7000 },
-  { level: 7,  name: "Котик в тонусе",     need: 13000 },
-  { level: 8,  name: "Котик-бодибилдер",   need: 24000 },
-  { level: 9,  name: "Котик-силач",        need: 42000 },
-  { level: 10, name: "Котик-рэпер",        need: 70000 },
-  { level: 11, name: "Котик при деньгах",  need: 110000 },
-  { level: 12, name: "Котик-делец",        need: 170000 },
-  { level: 13, name: "Котик-бизнесмен",    need: 260000 },
-  { level: 14, name: "Котик-босс",         need: 400000 },
-  { level: 15, name: "Котик-магнат",       need: 600000 },
-  { level: 16, name: "Котик-воротила",     need: 880000 },
-  { level: 17, name: "Котик-олигарх",      need: 1250000 },
-  { level: 18, name: "Котик-дон",          need: 1750000 },
-  { level: 19, name: "Повелитель котов",   need: 2500000 },
+  { level: 2,  name: "Обычный котик",      need: 1000 },
+  { level: 3,  name: "Сытый котик",        need: 3000 },
+  { level: 4,  name: "Толстый котик",      need: 8000 },
+  { level: 5,  name: "Котик на спорте",    need: 18000 },
+  { level: 6,  name: "Подкачанный котик",  need: 38000 },
+  { level: 7,  name: "Котик в тонусе",     need: 70000 },
+  { level: 8,  name: "Котик-бодибилдер",   need: 120000 },
+  { level: 9,  name: "Котик-силач",        need: 200000 },
+  { level: 10, name: "Котик-рэпер",        need: 320000 },
+  { level: 11, name: "Котик при деньгах",  need: 500000 },
+  { level: 12, name: "Котик-делец",        need: 800000 },
+  { level: 13, name: "Котик-бизнесмен",    need: 1300000 },
+  { level: 14, name: "Котик-босс",         need: 2000000 },
+  { level: 15, name: "Котик-магнат",       need: 3500000 },
+  { level: 16, name: "Котик-воротила",     need: 8000000 },
+  { level: 17, name: "Котик-олигарх",      need: 30000000 },
+  { level: 18, name: "Котик-дон",          need: 150000000 },
+  { level: 19, name: "Повелитель котов",   need: 1200000000 },
 ];
 function leagueFor(total: number) { let l = LEAGUES[0]; for (const x of LEAGUES) if (total >= x.need) l = x; return l; }
 function nextNeed(total: number): number | null { const n = LEAGUES.find((x) => x.need > total); return n ? n.need : null; }
@@ -141,8 +155,8 @@ const cardProfit = (c: { baseProfit: number }, lvl: number) => c.baseProfit * lv
 
 // ── Бонусы дня: Комбо (3 карты) + Шифр (морзе) — детерминированы от даты ─────────
 // ⚠️ Алгоритм/слова/морзе продублированы во фронте public/js/catclick.js — менять синхронно.
-const COMBO_REWARD = 50000;
-const CIPHER_REWARD = 8000;
+const COMBO_REWARD = 12000;
+const CIPHER_REWARD = 3000;
 const CIPHER_WORDS = ["МАРИЯ", "ТОРТ", "КОТИК", "КРЕМ", "ЭКЛЕР", "МУСС", "БИСКВИТ", "ВАНИЛЬ", "ШОКОЛАД", "КАРАМЕЛЬ", "ДЕСЕРТ", "ПЕКАРНЯ"];
 const MORSE: Record<string, string> = {
   А: ".-", Б: "-...", В: ".--", Г: "--.", Д: "-..", Е: ".", Ж: "...-", З: "--..", И: "..", Й: ".---",
@@ -166,11 +180,12 @@ export interface ClickerState {
   dailyAvailable: boolean; dailyStreak: number; dailyNext: number;
   chestAvailable: boolean; rainAvailable: boolean; squad: string | null;
   boostEnergyLeft: number; boostTurboLeft: number; turboMsLeft: number;
-  referrals: number; refCode: string;
+  referrals: number; refCode: string; refLink: string;
   combo: { cards: string[]; hits: string[]; complete: boolean; claimed: boolean; reward: number };
   cipher: { morse: string; len: number; claimed: boolean; reward: number };
   taps: number; cardsOwned: number;
   season: { points: number; endsTs: number };
+  gamesDone?: string[];
 }
 
 export async function initClickerSchema(): Promise<void> {
@@ -223,6 +238,18 @@ export async function initClickerSchema(): Promise<void> {
       chat_id BIGINT NOT NULL, code TEXT NOT NULL, used_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (chat_id, code)
     );
+    CREATE TABLE IF NOT EXISTS clicker_daily (
+      chat_id BIGINT NOT NULL, game TEXT NOT NULL, day TEXT NOT NULL,
+      PRIMARY KEY (chat_id, game)
+    );
+    CREATE TABLE IF NOT EXISTS clicker_gifts (
+      chat_id BIGINT NOT NULL, achievement TEXT NOT NULL, points INT NOT NULL,
+      granted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (chat_id, achievement)
+    );
+    CREATE TABLE IF NOT EXISTS clicker_purchase_sync (
+      chat_id BIGINT PRIMARY KEY, spent_synced BIGINT NOT NULL DEFAULT 0, last_check TIMESTAMPTZ
+    );
     CREATE INDEX IF NOT EXISTS clicker_top_idx ON clicker_state (total_earned DESC);
   `);
 }
@@ -251,7 +278,7 @@ function buildState(r: any, cl: Record<string, number>, passiveEarned: number): 
     rainAvailable: r.rain_date !== today,
     squad: r.squad || null,
     boostEnergyLeft: DAILY_BOOSTS - bUsedE, boostTurboLeft: DAILY_BOOSTS - bUsedT, turboMsLeft: turboMs,
-    referrals: r.referrals || 0, refCode: String(r.chat_id),
+    referrals: r.referrals || 0, refCode: String(r.chat_id), refLink: clickerReferralLink(Number(r.chat_id)),
     combo: (() => { const cards = todaysCombo(today); const hits = r.combo_date === today ? parseHits(r.combo_hits) : []; return { cards, hits, complete: cards.every((c) => hits.includes(c)), claimed: r.combo_claimed === today, reward: COMBO_REWARD }; })(),
     cipher: { morse: toMorse(todaysCipher(today)), len: todaysCipher(today).length, claimed: r.cipher_date === today, reward: CIPHER_REWARD },
     taps: Number(r.taps || 0), cardsOwned: CARDS.filter((c) => (cl[c.id] || 0) > 0).length,
@@ -280,10 +307,21 @@ async function refresh(client: any, chatId: number): Promise<{ r: any; cl: Recor
   return { r, cl, passive };
 }
 
+async function gamesDoneToday(client: any, chatId: number): Promise<string[]> {
+  const { rows } = await client.query(`SELECT game FROM clicker_daily WHERE chat_id=$1 AND day=$2`, [chatId, irkToday()]);
+  return rows.map((r: any) => r.game);
+}
+
 export async function getClicker(chatId: number): Promise<ClickerState> {
   const client = await pool.connect();
-  try { await client.query("BEGIN"); const { r, cl, passive } = await refresh(client, chatId); await client.query("COMMIT"); return buildState(r, cl, passive); }
-  catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+  try {
+    await client.query("BEGIN");
+    const { r, cl, passive } = await refresh(client, chatId);
+    const st = buildState(r, cl, passive);
+    st.gamesDone = await gamesDoneToday(client, chatId);
+    await client.query("COMMIT");
+    return st;
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
 export async function tapClicker(chatId: number, taps: number): Promise<ClickerState> {
@@ -430,14 +468,45 @@ export async function claimRain(chatId: number, score: number): Promise<{ ok: bo
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
+// ── Мини-игры хаба «Игры» (детские квизы + казуальные). 1 заход/день на игру ──
+// Доверяем клампнутому клиентскому счёту (как «Золотой дождь»): cap = макс. очков,
+// per = монет за очко. Банк вопросов/контент — целиком во фронте catclick.js.
+const GAME_CFG: Record<string, { cap: number; per: number }> = {
+  quiz_kids:   { cap: 5,   per: 1000 }, // Котовикторина: 5 вопросов × 1000
+  quiz_riddle: { cap: 4,   per: 1200 }, // Загадки: 4 × 1200
+  count:       { cap: 6,   per: 400  }, // Счёт конфет: 6 × 400
+  memory:      { cap: 100, per: 60   }, // «Собери торт»: очки 0..100
+  gems:        { cap: 200, per: 45   }, // «Сладкий ряд» (match-3): собрано конфет
+  tower:       { cap: 200, per: 60   }, // «Башня тортов»: коржей в башне
+};
+export async function claimGame(chatId: number, game: string, score: number): Promise<{ ok: boolean; reward?: number; game?: string; state?: ClickerState; reason?: string }> {
+  const cfg = GAME_CFG[game]; if (!cfg) return { ok: false, reason: "bad_game" };
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { r, cl } = await refresh(client, chatId);
+    const today = irkToday();
+    const ex = await client.query(`SELECT day FROM clicker_daily WHERE chat_id=$1 AND game=$2`, [chatId, game]);
+    if (ex.rows.length && ex.rows[0].day === today) { await client.query("ROLLBACK"); return { ok: false, reason: "already" }; }
+    const sc = Math.max(0, Math.min(cfg.cap, Math.floor(Number(score) || 0)));
+    const reward = sc * cfg.per;
+    r.balance = Number(r.balance) + reward; r.total_earned = Number(r.total_earned) + reward;
+    await client.query(`INSERT INTO clicker_daily (chat_id, game, day) VALUES ($1,$2,$3) ON CONFLICT (chat_id, game) DO UPDATE SET day=$3`, [chatId, game, today]);
+    await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, updated_at=NOW() WHERE chat_id=$1`, [chatId, r.balance, r.total_earned]);
+    const st = buildState(r, cl, 0); st.gamesDone = await gamesDoneToday(client, chatId);
+    await client.query("COMMIT");
+    return { ok: true, reward, game, state: st };
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+}
+
 /** Сундук удачи: 1 открытие в день, взвешенный приз (решается на сервере). */
 function rollChest(level: number): { type: string; amount?: number } {
   const r = Math.random(); const sc = 1 + level * 0.25;
-  if (r < 0.42) return { type: "coins", amount: Math.round((500 + Math.random() * 1800) * sc) };
-  if (r < 0.68) return { type: "coins", amount: Math.round((2000 + Math.random() * 4000) * sc) };
+  if (r < 0.42) return { type: "coins", amount: Math.round((300 + Math.random() * 1000) * sc) };
+  if (r < 0.68) return { type: "coins", amount: Math.round((1200 + Math.random() * 2500) * sc) };
   if (r < 0.82) return { type: "turbo" };
   if (r < 0.95) return { type: "energy" };
-  return { type: "jackpot", amount: Math.round(15000 + Math.random() * 35000) };
+  return { type: "jackpot", amount: Math.round(5000 + Math.random() * 15000) };
 }
 export async function openChest(chatId: number): Promise<{ ok: boolean; prize?: { type: string; amount?: number }; state?: ClickerState; reason?: string }> {
   const client = await pool.connect();
@@ -544,6 +613,41 @@ export async function registerRef(chatId: number, code: string): Promise<{ ok: b
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
+/**
+ * Перенос прогресса гостя (localStorage) на серверный аккаунт при первом входе.
+ * ТОЛЬКО в свежий аккаунт (total=0, нет карт, нет тапов) — чтобы не затереть
+ * реальный прогресс. Данные гостя самозаявленные → анти-чит кэпы (MIGRATE_CAP,
+ * лимиты уровней). Идемпотентно: на не-свежий аккаунт вернёт not_fresh.
+ */
+const MIGRATE_CAP = 300000;          // потолок переносимых монет (хватает на ранний гейм)
+const MIGRATE_CARD_MAX = 10;         // потолок уровня бизнеса
+const MIGRATE_UP_MAX = 20;           // потолок уровня мультитапа/энергии
+export async function migrateGuest(chatId: number, snap: any): Promise<{ ok: boolean; migrated?: number; state?: ClickerState; reason?: string }> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { r, cl } = await refresh(client, chatId);
+    if (Number(r.total_earned) > 0 || Object.keys(cl).length > 0 || Number(r.taps) > 0) { await client.query("ROLLBACK"); return { ok: false, reason: "not_fresh" }; }
+    const capCoins = (v: any) => Math.max(0, Math.min(MIGRATE_CAP, Math.floor(Number(v) || 0)));
+    const total = capCoins(snap && snap.totalEarned);
+    const bal = Math.min(total, capCoins(snap && snap.balance));
+    const mt = Math.max(0, Math.min(MIGRATE_UP_MAX, Math.floor(Number(snap && snap.multitapLevel) || 0)));
+    const en = Math.max(0, Math.min(MIGRATE_UP_MAX, Math.floor(Number(snap && snap.energyLevel) || 0)));
+    const taps = Math.max(0, Math.min(100000, Math.floor(Number(snap && snap.taps) || 0)));
+    r.balance = bal; r.total_earned = total; r.multitap_level = mt; r.energy_limit_level = en;
+    await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, multitap_level=$4, energy_limit_level=$5, taps=$6, updated_at=NOW() WHERE chat_id=$1`, [chatId, bal, total, mt, en, taps]);
+    if (snap && snap.cards && typeof snap.cards === "object") {
+      for (const c of CARDS) {
+        const lv = Math.max(0, Math.min(MIGRATE_CARD_MAX, Math.floor(Number(snap.cards[c.id]) || 0)));
+        if (lv > 0) { cl[c.id] = lv; await client.query(`INSERT INTO clicker_cards (chat_id, card, level) VALUES ($1,$2,$3) ON CONFLICT (chat_id, card) DO UPDATE SET level=$3`, [chatId, c.id, lv]); }
+      }
+    }
+    const st = buildState(r, cl, 0); st.gamesDone = await gamesDoneToday(client, chatId);
+    await client.query("COMMIT");
+    return { ok: true, migrated: total, state: st };
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+}
+
 /** Витрина реальных наград (обмен монет). Пока enabled=false — только показ. */
 export async function getRewards(chatId: number): Promise<{ enabled: boolean; balance: number; rewards: any[]; history: any[] }> {
   const s = await getClicker(chatId);
@@ -583,6 +687,11 @@ function taskClaimable(t: any, s: ClickerState): boolean {
   if (t.type === "ref") return s.referrals >= t.target;
   if (t.type === "taps") return s.taps >= t.target;
   if (t.type === "cards") return s.cardsOwned >= t.target;
+  if (t.type === "collect") {
+    if (t.target === "all") return s.cards.every((c) => c.level > 0);
+    const inCat = s.cards.filter((c) => c.cat === t.target);
+    return inCat.length > 0 && inCat.every((c) => c.level > 0);
+  }
   return false;
 }
 
@@ -625,5 +734,113 @@ export async function claimTask(chatId: number, id: string): Promise<{ ok: boole
     await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, updated_at=NOW() WHERE chat_id=$1`, [chatId, r.balance, r.total_earned]);
     await client.query("COMMIT");
     return { ok: true, reward: t.reward, state: buildState(r, cl, 0) };
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+}
+
+// ── Награды за прогресс: лестница вех. Каждая веха = реальный подарок ОДИН раз ──
+// points → баллы на карту клуба (earnPoints); perk → купон с условием min_order
+// (grantRewardByCode, корзина применяет промокод). Только подтверждённый телефон.
+// ⚠️ Суммы/перки — согласовать с Машей (реальная ценность лояльности).
+export const MILESTONES: { id: string; title: string; cond: { type: string; target: any }; points?: number; perk?: string; perkText?: string }[] = [
+  { id: "ms_lvl5",     title: "Уровень 5",                cond: { type: "level", target: 5 },     points: 200 },
+  { id: "ms_lvl10",    title: "Уровень 10",               cond: { type: "level", target: 10 },    points: 500 },
+  { id: "ms_lvl13",    title: "Уровень 13",               cond: { type: "level", target: 13 },    perk: "discount_5",   perkText: "Промокод −5% (от 500₽)" },
+  { id: "ms_lvl15",    title: "Уровень 15",               cond: { type: "level", target: 15 },    points: 1000 },
+  { id: "ms_lvl17",    title: "Уровень 17",               cond: { type: "level", target: 17 },    perk: "discount_500", perkText: "Скидка 500₽ (от 3000₽)" },
+  { id: "ms_lvl19",    title: "Последний уровень — Повелитель котов", cond: { type: "level", target: 19 }, points: 20000, perk: "free_bento_top", perkText: "Бенто-торт в подарок (от 1000₽)" },
+  { id: "ms_col_prod", title: "Все голуби «Производство»", cond: { type: "collect", target: "prod" },  points: 300 },
+  { id: "ms_col_mkt",  title: "Все голуби «Маркетинг»",    cond: { type: "collect", target: "mkt" },   points: 300 },
+  { id: "ms_col_staff",title: "Все голуби «Персонал»",     cond: { type: "collect", target: "staff" }, points: 300 },
+  { id: "ms_col_net",  title: "Все голуби «Сеть»",         cond: { type: "collect", target: "net" },   points: 300 },
+  { id: "ms_col_all",  title: "Вся коллекция голубей",     cond: { type: "collect", target: "all" },   perk: "free_bento",  perkText: "Бенто-торт в подарок (от 2000₽)" },
+  { id: "ms_ref3",     title: "Пригласил 3 друзей",        cond: { type: "ref", target: 3 },       points: 500 },
+  { id: "ms_ref10",    title: "Пригласил 10 друзей",       cond: { type: "ref", target: 10 },      perk: "discount_10", perkText: "Промокод −10% (от 1000₽)" },
+];
+const MS_BY_ID = Object.fromEntries(MILESTONES.map((m) => [m.id, m]));
+const msReached = (m: any, s: ClickerState) => taskClaimable({ type: m.cond.type, target: m.cond.target } as any, s);
+
+export async function getMilestones(chatId: number): Promise<{ milestones: any[]; phoneVerified: boolean }> {
+  const s = await getClicker(chatId);
+  const gr = await pool.query(`SELECT achievement FROM clicker_gifts WHERE chat_id=$1`, [chatId]);
+  const granted = new Set(gr.rows.map((r) => r.achievement));
+  const phoneVerified = await isPhoneVerified(chatId).catch(() => false);
+  return {
+    phoneVerified,
+    milestones: MILESTONES.map((m) => ({
+      id: m.id, title: m.title,
+      kind: m.perk && m.points ? "both" : (m.perk ? "perk" : "points"),
+      points: m.points || 0, perkText: m.perkText || "",
+      reached: msReached(m, s), granted: granted.has(m.id),
+    })),
+  };
+}
+
+/** Забрать награду за веху: баллы на карту или перк-купон. 1 раз, телефон обязателен. */
+export async function claimMilestone(chatId: number, id: string): Promise<{ ok: boolean; kind?: string; points?: number; promoCode?: string; perkTitle?: string; minOrder?: number; reason?: string }> {
+  if (!GIFTS_ENABLED) return { ok: false, reason: "disabled" };
+  const m: any = MS_BY_ID[id]; if (!m) return { ok: false, reason: "no_milestone" };
+  const s = await getClicker(chatId);
+  if (!msReached(m, s)) return { ok: false, reason: "not_ready" };
+  if (!(await isPhoneVerified(chatId).catch(() => false))) return { ok: false, reason: "need_phone" };
+  // Бронируем выдачу (PK clicker_gifts) — защита от двойной выдачи.
+  const ins = await pool.query(
+    `INSERT INTO clicker_gifts (chat_id, achievement, points) VALUES ($1,$2,$3)
+     ON CONFLICT (chat_id, achievement) DO NOTHING RETURNING achievement`,
+    [chatId, id, m.points || 0]
+  );
+  if (!ins.rows.length) return { ok: false, reason: "already" };
+  try {
+    const out: { ok: boolean; kind: string; points?: number; promoCode?: string; perkTitle?: string; minOrder?: number } = {
+      ok: true, kind: m.perk && m.points ? "both" : (m.perk ? "perk" : "points"),
+    };
+    if (m.points) { await earnPoints(chatId, m.points, "clicker_milestone", { milestone: id }); out.points = m.points; }
+    if (m.perk) {
+      const r = await grantRewardByCode(chatId, m.perk);
+      if (!r.ok) throw new Error("grant_failed:" + r.reason);
+      out.promoCode = r.promoCode; out.perkTitle = r.title; out.minOrder = r.minOrder;
+    }
+    return out;
+  } catch (e) {
+    await pool.query(`DELETE FROM clicker_gifts WHERE chat_id=$1 AND achievement=$2`, [chatId, id]).catch(() => {});
+    throw e;
+  }
+}
+
+// ── Реальные покупки → игровые монеты (чем больше тратишь у «Марии», тем больше) ──
+// Сигнал — year_spent из /api/lk (lk.php, уже работает). За НОВЫЕ траты с прошлой
+// сверки начисляем монеты (watermark spent_synced — не задвоить). Троттлинг 1ч,
+// чтобы не дёргать сайт. Первый заход начисляет за весь YTD (приветствие лояльным).
+const PURCHASE_RATE = 20;            // монет за 1₽ покупок
+const PURCHASE_CAP = 5_000_000;      // потолок одной сверки (защита от выбросов/данных)
+export async function syncPurchaseBonus(chatId: number): Promise<{ ok: boolean; granted: number; yearSpent?: number; state?: ClickerState }> {
+  // Атомарно «застолбить» сверку: вставить/обновить last_check, только если прошло >1ч.
+  const claim = await pool.query(
+    `INSERT INTO clicker_purchase_sync (chat_id, last_check) VALUES ($1, NOW())
+     ON CONFLICT (chat_id) DO UPDATE SET last_check = NOW()
+       WHERE clicker_purchase_sync.last_check IS NULL OR clicker_purchase_sync.last_check < NOW() - INTERVAL '1 hour'
+     RETURNING spent_synced`,
+    [chatId]
+  );
+  if (!claim.rows.length) return { ok: true, granted: 0 }; // троттлинг — сверка была недавно
+
+  const spentSynced = Number(claim.rows[0].spent_synced || 0);
+  const lk = await fetchLk(chatId).catch(() => null);
+  if (!lk || !lk.ok || !lk.data || !lk.data.configured) return { ok: true, granted: 0 };
+  const yearSpent = Math.max(0, Math.floor(Number(lk.data.year_spent || 0)));
+  const delta = Math.max(0, yearSpent - spentSynced); // откат/новый год → 0, watermark подвинем
+  // Двигаем watermark всегда (в т.ч. при rollover вниз), чтобы не копить ложный delta.
+  await pool.query(`UPDATE clicker_purchase_sync SET spent_synced=$2 WHERE chat_id=$1`, [chatId, yearSpent]);
+  const grant = Math.min(delta * PURCHASE_RATE, PURCHASE_CAP);
+  if (grant <= 0) return { ok: true, granted: 0, yearSpent };
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { r, cl } = await refresh(client, chatId);
+    r.balance = Number(r.balance) + grant; r.total_earned = Number(r.total_earned) + grant;
+    await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, updated_at=NOW() WHERE chat_id=$1`, [chatId, r.balance, r.total_earned]);
+    const st = buildState(r, cl, 0); st.gamesDone = await gamesDoneToday(client, chatId);
+    await client.query("COMMIT");
+    return { ok: true, granted: grant, yearSpent, state: st };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }

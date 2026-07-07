@@ -5,9 +5,10 @@
  * POST /api/clicker/boost {type:turbo|energy} · GET /api/clicker/top
  */
 import { Router } from "express";
-import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements, getRewards, redeemReward, claimBonus, openChest, claimRain, redeemCode, getSquads, joinSquad } from "../clicker";
+import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements, getRewards, redeemReward, claimBonus, openChest, claimRain, claimGame, getMilestones, claimMilestone, syncPurchaseBonus, migrateGuest, redeemCode, getSquads, joinSquad } from "../clicker";
 import { rateLimit } from "../middleware";
 import { requireTgUser, getTgUser } from "../auth";
+import { getBonusQueue, ackBonusQueue, queueAuthOk } from "../bonus1c";
 import { log } from "../logger";
 
 const router = Router();
@@ -44,6 +45,12 @@ router.post("/api/clicker/rain", requireTgUser, rateLimit(30), async (req, res) 
   const u = getTgUser(req)!; const score = Number((req.body as { score?: number }).score) || 0;
   try { const r = await claimRain(u.id, score); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ reward: r.reward, ...r.state }); }
   catch (e) { log.error({ err: e, chatId: u.id }, "[rain]"); res.status(500).json({ error: "internal" }); }
+});
+
+router.post("/api/clicker/game", requireTgUser, rateLimit(40), async (req, res) => {
+  const u = getTgUser(req)!; const { game, score } = req.body as { game?: string; score?: number };
+  try { const r = await claimGame(u.id, String(game || ""), Number(score) || 0); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ reward: r.reward, game: r.game, ...r.state }); }
+  catch (e) { log.error({ err: e, chatId: u.id }, "[game]"); res.status(500).json({ error: "internal" }); }
 });
 
 router.post("/api/clicker/chest", requireTgUser, rateLimit(30), async (req, res) => {
@@ -98,6 +105,18 @@ router.post("/api/clicker/ref", requireTgUser, rateLimit(20), async (req, res) =
   catch (e) { log.error({ err: e, chatId: u.id }, "[ref]"); res.status(500).json({ error: "internal" }); }
 });
 
+router.post("/api/clicker/purchase-sync", requireTgUser, rateLimit(20), async (req, res) => {
+  const u = getTgUser(req)!;
+  try { const r = await syncPurchaseBonus(u.id); res.json({ bonus: r.granted || 0, yearSpent: r.yearSpent, ...(r.state || {}) }); }
+  catch (e) { log.error({ err: e, chatId: u.id }, "[purchase-sync]"); res.status(500).json({ error: "internal" }); }
+});
+
+router.post("/api/clicker/migrate", requireTgUser, rateLimit(10), async (req, res) => {
+  const u = getTgUser(req)!;
+  try { const r = await migrateGuest(u.id, req.body || {}); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ migrated: r.migrated, ...r.state }); }
+  catch (e) { log.error({ err: e, chatId: u.id }, "[migrate]"); res.status(500).json({ error: "internal" }); }
+});
+
 router.get("/api/clicker/tasks", requireTgUser, rateLimit(60), async (req, res) => {
   const u = getTgUser(req)!;
   try { res.json(await getTasks(u.id)); } catch (e) { log.error({ err: e, chatId: u.id }, "[tasks]"); res.status(500).json({ error: "internal" }); }
@@ -106,6 +125,17 @@ router.get("/api/clicker/tasks", requireTgUser, rateLimit(60), async (req, res) 
 router.get("/api/clicker/achievements", requireTgUser, rateLimit(60), async (req, res) => {
   const u = getTgUser(req)!;
   try { res.json(await getAchievements(u.id)); } catch (e) { log.error({ err: e, chatId: u.id }, "[achievements]"); res.status(500).json({ error: "internal" }); }
+});
+
+router.get("/api/clicker/milestones", requireTgUser, rateLimit(60), async (req, res) => {
+  const u = getTgUser(req)!;
+  try { res.json(await getMilestones(u.id)); } catch (e) { log.error({ err: e, chatId: u.id }, "[milestones]"); res.status(500).json({ error: "internal" }); }
+});
+
+router.post("/api/clicker/milestone", requireTgUser, rateLimit(20), async (req, res) => {
+  const u = getTgUser(req)!; const id = String((req.body as { id?: string }).id || "");
+  try { const r = await claimMilestone(u.id, id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json(r); }
+  catch (e) { log.error({ err: e, chatId: u.id }, "[milestone]"); res.status(500).json({ error: "internal" }); }
 });
 
 router.get("/api/clicker/rewards", requireTgUser, rateLimit(60), async (req, res) => {
@@ -123,6 +153,22 @@ router.post("/api/clicker/task", requireTgUser, rateLimit(40), async (req, res) 
   const u = getTgUser(req)!; const id = String((req.body as { id?: string }).id || "");
   try { const r = await claimTask(u.id, id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ reward: r.reward, ...r.state }); }
   catch (e) { log.error({ err: e, chatId: u.id }, "[task]"); res.status(500).json({ error: "internal" }); }
+});
+
+// ── PULL-режим: 1С сама забирает очередь начислений (без TG-авторизации, токен) ──
+// GET  /api/clicker/bonus-queue?token=...        → pending-начисления {id,phone,amount,reason,key}
+// POST /api/clicker/bonus-ack {token, ids:[...]} → пометить зачисленными
+router.get("/api/clicker/bonus-queue", rateLimit(120), async (req, res) => {
+  if (!queueAuthOk(String(req.query.token || ""))) { res.status(403).json({ error: "forbidden" }); return; }
+  try { const limit = Number(req.query.limit) || 100; res.json({ items: await getBonusQueue(limit) }); }
+  catch (e) { log.error({ err: e }, "[bonus-queue]"); res.status(500).json({ error: "internal" }); }
+});
+
+router.post("/api/clicker/bonus-ack", rateLimit(120), async (req, res) => {
+  const body = (req.body || {}) as { token?: string; ids?: number[] };
+  if (!queueAuthOk(String(body.token || ""))) { res.status(403).json({ error: "forbidden" }); return; }
+  try { const acked = await ackBonusQueue(Array.isArray(body.ids) ? body.ids : []); res.json({ acked }); }
+  catch (e) { log.error({ err: e }, "[bonus-ack]"); res.status(500).json({ error: "internal" }); }
 });
 
 export default router;

@@ -16,6 +16,7 @@ import clubRouter from "./routes/club";
 import lkRouter from "./routes/lk";
 import promoRouter from "./routes/promo";
 import orderRatingRouter from "./routes/order-rating";
+import orderLocationRouter from "./routes/order-location";
 import cakeConceptRouter from "./routes/cake-concept";
 import selfieCakeRouter from "./routes/selfie-cake";
 import { createWishlistRouter } from "./routes/wishlist";
@@ -36,7 +37,8 @@ import gameRouter from "./routes/game";
 import petRouter from "./routes/pet";
 import { initPetSchema } from "./pet";
 import clickerRouter from "./routes/clicker";
-import { initClickerSchema } from "./clicker";
+import { initClickerSchema, registerRef } from "./clicker";
+import { initBonusSchema, startBonusWorker } from "./bonus1c";
 import cartRouter from "./routes/cart";
 import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, fetchProductById, reloadDietaryOverrides, detectDietary, Product } from "./scraper";
 import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind, getNotificationPrefs, setNotificationPrefs, saveCartSnapshot, clearCartSnapshot, getAbandonedCarts, markCartAbandonedPushed, getSpinStatus, recordSpin, WHEEL_PRIZES, touchVisitStreak, setSecretOfDay, getSecretOfDay, getUnusedRewards, consumeRewards, hasHolidayPushSent, markHolidayPushSent, getReviewsForProduct, getReviewStats, getReviewStatsBatch, getMyReview, upsertReview, deleteMyReview, setReviewHidden, countReviewsLast24h, createWishlistShare, getWishlistShare, incrementWishlistShareOpens, countWishlistSharesLast24h, getOrderRating, upsertOrderRating, hasRatingPromptSent, markRatingPromptSent, countPromoUses, hasUserUsedPromo, recordPromoUse } from "./db";
@@ -436,6 +438,20 @@ bot.command("start", async (ctx) => {
     // Referral payload: /start ref_MARIA-XXX (code-based, активная схема)
     // Старый numeric-формат (/start ref_12345) — deprecated, игнорируется.
     const payload = ctx.match?.trim();
+    // Реферал кликера: /start ckref_<internalId пригласившего>. Надёжный путь
+    // (?start= всегда доходит до бота, в отличие от Mini App ?startapp=).
+    if (payload && payload.startsWith("ckref_")) {
+      const ownerId = Number(payload.slice(6));
+      if (Number.isFinite(ownerId) && ownerId !== ctx.from.id) {
+        const r = await registerRef(ctx.from.id, String(ownerId)).catch(() => null);
+        if (r?.ok) {
+          const userName = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" ") || "Новый друг";
+          await sendRaw(ownerId, `🎉 *${userName}* зашёл в «Котик Комбат» по твоей ссылке — тебе +5000 монет 🪙 Спасибо, что зовёшь друзей!`, { parse_mode: "Markdown" }).catch(() => {});
+        }
+        await ctx.reply(`🐱 Добро пожаловать в «Котик Комбат»!\n\nТебе начислено +2500 монет за вход по приглашению. Жми и качай котика 👇`, { reply_markup: webAppButton("", "🎮 Играть") }).catch(() => {});
+        return;
+      }
+    }
     if (payload && payload.startsWith("ref_")) {
       const rest = payload.slice(4);
       if (/^MARIA-/i.test(rest)) {
@@ -585,7 +601,13 @@ app.use(requestLogger());
 // rateLimit и requireAdminToken вынесены в `./middleware`
 // (см. волну рефакторинга #5). Импортируются ниже.
 
-app.use(express.static(path.join(__dirname, "..", "public")));
+app.use(express.static(path.join(__dirname, "..", "public"), {
+  setHeaders(res, filePath) {
+    // HTML не кэшируем — иначе Telegram/браузер держат старый index с прежним ?v=
+    // (JS/CSS версионируются через ?v= и могут кэшироваться). Свежесть кода после деплоя.
+    if (filePath.endsWith(".html")) res.setHeader("Cache-Control", "no-cache");
+  },
+}));
 
 // Прокси логотипа
 function proxyAsset(url: string, contentType: string) {
@@ -1399,6 +1421,7 @@ app.post("/api/admin/promo/reload", requireAdminToken, (_req, res) => {
 
 // Order rating routes (GET + POST) вынесены в src/routes/order-rating.ts
 app.use(orderRatingRouter);
+app.use(orderLocationRouter); // live-трекинг доставки для maria-app (in-memory, эфемерно)
 
 // /api/wishlist/share/:code вынесен в src/routes/wishlist.ts
 // /api/reviews/stats-batch также вынесен в src/routes/reviews.ts
@@ -1878,6 +1901,8 @@ async function main() {
   await initClubSchema();
   await initPetSchema();
   await initClickerSchema();
+  await initBonusSchema();
+  startBonusWorker();
 
   // Sentry error handler — после всех routes, до listen
   app.use(sentryExpressErrorHandler());

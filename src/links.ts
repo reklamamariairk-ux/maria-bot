@@ -35,6 +35,21 @@ export function referralLink(internalId: number, code: string): string {
 }
 
 /**
+ * Реф-ссылка кликера «Котик Комбат» (своя схема `ckref_<internalId>`, читается
+ * фронтом в App.startParam()). TG: `?startapp=ckref_` (открывает Mini App с
+ * параметром), VK: `#ckref_` в hash. code = internalId пригласившего.
+ */
+export function clickerReferralLink(internalId: number): string {
+  const code = String(internalId);
+  if (platformOf(internalId) === "vk" && VK_APP_ID) {
+    return `https://vk.com/app${VK_APP_ID}#ckref_${code}`;
+  }
+  // ?start= → уходит в /start бота (обрабатывает ckref_ и регистрирует реферал).
+  // Самый надёжный путь: не зависит от настроек Mini App (в отличие от ?startapp=).
+  return `https://t.me/${BOT_USERNAME}?start=ckref_${code}`;
+}
+
+/**
  * Для VK-получателя добавляет в конец текста ссылку на мини-апп (в VK push
  * без ссылки ведёт в никуда — нет постоянной webApp-кнопки как в TG-чате).
  * Для TG возвращает текст без изменений (байт-в-байт прежнее поведение).

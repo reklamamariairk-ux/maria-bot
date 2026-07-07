@@ -21,7 +21,7 @@
   <link rel="dns-prefetch" href="https://www.maria-irk.ru"/>
   <link rel="dns-prefetch" href="https://b24.maria-irk.ru"/>
   <!-- Бренд «Мария»: Onest (UI, кириллица), Playfair Display (дисплей), JetBrains Mono (цифры). Manrope — fallback. -->
-  <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400..800&family=Playfair+Display:wght@600;700;800&family=JetBrains+Mono:wght@500;600&family=Manrope:wght@500..700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400..800&family=Playfair+Display:wght@600;700;800&family=JetBrains+Mono:wght@500;600&family=Manrope:wght@500..700&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="/js/utils.js"></script>
   <script src="/js/tg-bridge.js"></script>
@@ -121,7 +121,7 @@
       </span>
     </button>
     <button class="selfie-card" data-haptic="light" onclick="haptic('light');openSelfieCakeModal()">
-      <span class="selfie-card__ic">📸</span>
+      <span class="selfie-card__ic"><span data-icon="camera" data-size="18"></span></span>
       <span class="selfie-card__body">
         <span class="selfie-card__t">Ты как торт</span>
         <span class="selfie-card__sub">AI-портрет</span>
@@ -132,35 +132,35 @@
   <!-- Категории chips — быстрый entry -->
   <div class="home-cats" id="home-cats">
     <button class="home-cat" data-haptic="light" onclick="haptic('light');switchTab('menu');setTimeout(()=>window.catShowProducts?.('Торты'),200)">
-      <span class="home-cat__ic">🎂</span>
+      <span class="home-cat__ic"><span data-icon="cake" data-size="24"></span></span>
       <span class="home-cat__t">Торты</span>
     </button>
     <button class="home-cat" data-haptic="light" onclick="haptic('light');switchTab('menu');setTimeout(()=>window.catShowProducts?.('Пироги'),200)">
-      <span class="home-cat__ic">🥧</span>
+      <span class="home-cat__ic"><span data-icon="pie" data-size="24"></span></span>
       <span class="home-cat__t">Пироги</span>
     </button>
     <button class="home-cat" data-haptic="light" onclick="haptic('light');switchTab('menu');setTimeout(()=>window.catShowProducts?.('Пирожные и десерты'),200)">
-      <span class="home-cat__ic">🥐</span>
+      <span class="home-cat__ic"><span data-icon="croissant" data-size="24"></span></span>
       <span class="home-cat__t">Десерты</span>
     </button>
     <button class="home-cat" data-haptic="light" onclick="haptic('light');switchTab('menu');setTimeout(()=>window.catShowProducts?.('Наборы'),200)">
-      <span class="home-cat__ic">🎁</span>
+      <span class="home-cat__ic"><span data-icon="gift" data-size="24"></span></span>
       <span class="home-cat__t">Наборы</span>
     </button>
     <button class="home-cat" data-haptic="light" onclick="haptic('light');switchTab('order')">
-      <span class="home-cat__ic">🎨</span>
+      <span class="home-cat__ic"><span data-icon="palette" data-size="24"></span></span>
       <span class="home-cat__t">На заказ</span>
     </button>
   </div>
 
   <!-- «Котик Марии» — виртуальный питомец (доступен ВСЕМ; мини-игры внутри, в Игровой) -->
-  <div class="home-game" onclick="catClickOpen()" style="margin:14px 16px;border-radius:22px;padding:16px;display:flex;align-items:center;gap:14px;cursor:pointer;background:linear-gradient(135deg,#ffe0b3,#ffb45e);box-shadow:0 10px 26px rgba(214,107,31,.34)">
+  <div class="home-game" onclick="catClickOpen()" style="margin:14px 16px;border-radius:22px;padding:16px;display:flex;align-items:center;gap:14px;cursor:pointer;background:linear-gradient(135deg,var(--gold-l),var(--gold));box-shadow:0 10px 26px var(--gold-glow)">
     <img src="/assets/images/cat/happy.png" alt="Котик" style="width:74px;height:74px;object-fit:contain;flex:0 0 auto;filter:drop-shadow(0 5px 7px rgba(0,0,0,.2))" loading="lazy"/>
     <div style="flex:1;min-width:0">
-      <div style="font-weight:900;font-size:18px;color:#7a3b12">🐱 Котик Комбат</div>
-      <div style="font-size:13px;color:#9a5a2a;margin-top:2px">Тапай котика, копи монеты и прокачивай уровни-костюмы!</div>
+      <div style="font-weight:900;font-size:18px;color:var(--ink-1)">Котик Комбат</div>
+      <div style="font-size:13px;color:var(--ink-3);margin-top:2px">Тапай котика, копи монеты и прокачивай уровни-костюмы!</div>
     </div>
-    <span style="background:#d61f37;color:#fff;font-weight:800;font-size:14px;padding:10px 18px;border-radius:14px;white-space:nowrap;box-shadow:0 4px 12px rgba(214,31,55,.35)">Открыть</span>
+    <span style="background:var(--red);color:#fff;font-weight:800;font-size:14px;padding:10px 18px;border-radius:14px;white-space:nowrap;box-shadow:0 4px 12px var(--red-glow)">Открыть</span>
   </div>
 
   <!-- Секрет дня — sticky-карточка с товаром-секрет -->
@@ -183,7 +183,7 @@
   <div class="sh"><span class="sh__line"></span><span class="sh__text">Готовые наборы</span><span class="sh__line"></span></div>
   <div class="home-bundles" id="home-bundles">
     <button class="home-bundle" onclick="bundleAdd('birthday')">
-      <span class="home-bundle__ic">🎉</span>
+      <span class="home-bundle__ic"><span data-icon="partyPopper" data-size="24"></span></span>
       <span class="home-bundle__body">
         <span class="home-bundle__t">На день рождения</span>
         <span class="home-bundle__sub">Торт + 10 эклеров</span>
@@ -191,7 +191,7 @@
       <span class="home-bundle__price">~1 500 ₽</span>
     </button>
     <button class="home-bundle" onclick="bundleAdd('coffee')">
-      <span class="home-bundle__ic">☕</span>
+      <span class="home-bundle__ic"><span data-icon="coffee" data-size="24"></span></span>
       <span class="home-bundle__body">
         <span class="home-bundle__t">Кофе-брейк</span>
         <span class="home-bundle__sub">5 круассанов + 3 печенья</span>
@@ -199,7 +199,7 @@
       <span class="home-bundle__price">~800 ₽</span>
     </button>
     <button class="home-bundle" onclick="bundleAdd('gift')">
-      <span class="home-bundle__ic">🎁</span>
+      <span class="home-bundle__ic"><span data-icon="gift" data-size="24"></span></span>
       <span class="home-bundle__body">
         <span class="home-bundle__t">Подарочный набор</span>
         <span class="home-bundle__sub">Макаронс + чизкейк</span>
@@ -207,7 +207,7 @@
       <span class="home-bundle__price">~2 500 ₽</span>
     </button>
     <button class="home-bundle" onclick="bundleAdd('mini')">
-      <span class="home-bundle__ic">🍰</span>
+      <span class="home-bundle__ic"><span data-icon="cake" data-size="24"></span></span>
       <span class="home-bundle__body">
         <span class="home-bundle__t">На троих</span>
         <span class="home-bundle__sub">Мини-тортик</span>
@@ -296,7 +296,7 @@
 
   <!-- Гид по подаркам — wizard «помоги выбрать» -->
   <button class="home-club-chip home-gift-chip" data-haptic="light" onclick="haptic('light');openGiftWizard()">
-    <span class="home-club-chip__ic home-gift-chip__ic">🎁</span>
+    <span class="home-club-chip__ic home-gift-chip__ic"><span data-icon="gift" data-size="20"></span></span>
     <div class="home-club-chip__body">
       <div class="home-club-chip__t">Подобрать подарок</div>
       <div class="home-club-chip__s">4 вопроса — и 3 идеальных варианта</div>
@@ -306,7 +306,7 @@
 
   <!-- Корпоративные заказы — компактный chip -->
   <button class="home-club-chip home-corp-chip" data-haptic="light" onclick="haptic('light');openCorpForm()">
-    <span class="home-club-chip__ic home-corp-chip__ic">🏢</span>
+    <span class="home-club-chip__ic home-corp-chip__ic"><span data-icon="building" data-size="20"></span></span>
     <div class="home-club-chip__body">
       <div class="home-club-chip__t">Корпоративные заказы</div>
       <div class="home-club-chip__s">ДР сотрудников · корпоративы · подарки партнёрам · от 30 шт</div>
@@ -911,7 +911,7 @@
         <span class="prof-row__ic prof-row__ic--accent"><span data-icon="gift" data-size="18"></span></span>
         <span class="prof-row__t">Мои награды</span>
         <span class="prof-row__sub" id="prof-rewards-sub">Купоны, баллы, билеты — применятся в заказе</span>
-        <span class="prof-row__val" id="prof-rewards-count" style="background:var(--ap-red,#d61f37);color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">0</span>
+        <span class="prof-row__val" id="prof-rewards-count" style="background:var(--red);color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">0</span>
         <span class="prof-row__chev"><span data-icon="chevronRight" data-size="14"></span></span>
       </button>
       <button class="prof-row" data-haptic="light" onclick="haptic('light');profOpenOrders()">
@@ -1273,7 +1273,7 @@
 <script src="/js/catfeed.js" defer></script>
 <script src="/js/catpet.js" defer></script>
 <script src="/js/catlive.js" defer></script>
-<script src="/js/catclick.js?v=38" defer></script>
+<script src="/js/catclick.js?v=62" defer></script>
 <!-- /js/bakery.js удалён — Игры убраны до новой геймификации (см. game.js — wheel/streak/secret) -->
 <script src="/js/chat.js" defer></script>
 <script src="/js/catalog.js" defer></script>

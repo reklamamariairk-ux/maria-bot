@@ -32,24 +32,24 @@
     // cat = картинка кота на уровне (эволюция «глоу-ап»: тощий уличный → кот-император)
     // 19 уровней под арт Маши. ⚠️ Лестница продублирована в src/clicker.ts — менять синхронно.
     { level: 1,  name: 'Тощий котик',        need: 0,       cat: 'cat-stage1.png' },
-    { level: 2,  name: 'Обычный котик',      need: 200,     cat: 'cat-stage2.png' },
-    { level: 3,  name: 'Сытый котик',        need: 600,     cat: 'cat-stage3.png' },
-    { level: 4,  name: 'Толстый котик',      need: 1500,    cat: 'cat-stage4.png' },
-    { level: 5,  name: 'Котик на спорте',    need: 3500,    cat: 'cat-stage5.png' },
-    { level: 6,  name: 'Подкачанный котик',  need: 7000,    cat: 'cat-stage6.png' },
-    { level: 7,  name: 'Котик в тонусе',     need: 13000,   cat: 'cat-stage7.png' },
-    { level: 8,  name: 'Котик-бодибилдер',   need: 24000,   cat: 'cat-stage8.png' },
-    { level: 9,  name: 'Котик-силач',        need: 42000,   cat: 'cat-stage9.png' },
-    { level: 10, name: 'Котик-рэпер',        need: 70000,   cat: 'cat-stage10.png' },
-    { level: 11, name: 'Котик при деньгах',  need: 110000,  cat: 'cat-stage11.png' },
-    { level: 12, name: 'Котик-делец',        need: 170000,  cat: 'cat-stage12.png' },
-    { level: 13, name: 'Котик-бизнесмен',    need: 260000,  cat: 'cat-stage13.png' },
-    { level: 14, name: 'Котик-босс',         need: 400000,  cat: 'cat-stage14.png' },
-    { level: 15, name: 'Котик-магнат',       need: 600000,  cat: 'cat-stage15.png' },
-    { level: 16, name: 'Котик-воротила',     need: 880000,  cat: 'cat-stage16.png' },
-    { level: 17, name: 'Котик-олигарх',      need: 1250000, cat: 'cat-stage17.png' },
-    { level: 18, name: 'Котик-дон',          need: 1750000, cat: 'cat-stage18.png' },
-    { level: 19, name: 'Повелитель котов',   need: 2500000, cat: 'cat-stage19.png' },
+    { level: 2,  name: 'Обычный котик',      need: 1000,    cat: 'cat-stage2.png' },
+    { level: 3,  name: 'Сытый котик',        need: 3000,    cat: 'cat-stage3.png' },
+    { level: 4,  name: 'Толстый котик',      need: 8000,    cat: 'cat-stage4.png' },
+    { level: 5,  name: 'Котик на спорте',    need: 18000,   cat: 'cat-stage5.png' },
+    { level: 6,  name: 'Подкачанный котик',  need: 38000,   cat: 'cat-stage6.png' },
+    { level: 7,  name: 'Котик в тонусе',     need: 70000,   cat: 'cat-stage7.png' },
+    { level: 8,  name: 'Котик-бодибилдер',   need: 120000,  cat: 'cat-stage8.png' },
+    { level: 9,  name: 'Котик-силач',        need: 200000,  cat: 'cat-stage9.png' },
+    { level: 10, name: 'Котик-рэпер',        need: 320000,  cat: 'cat-stage10.png' },
+    { level: 11, name: 'Котик при деньгах',  need: 500000,  cat: 'cat-stage11.png' },
+    { level: 12, name: 'Котик-делец',        need: 800000,  cat: 'cat-stage12.png' },
+    { level: 13, name: 'Котик-бизнесмен',    need: 1300000, cat: 'cat-stage13.png' },
+    { level: 14, name: 'Котик-босс',         need: 2000000, cat: 'cat-stage14.png' },
+    { level: 15, name: 'Котик-магнат',       need: 3500000,  cat: 'cat-stage15.png' },
+    { level: 16, name: 'Котик-воротила',     need: 8000000,  cat: 'cat-stage16.png' },
+    { level: 17, name: 'Котик-олигарх',      need: 30000000, cat: 'cat-stage17.png' },
+    { level: 18, name: 'Котик-дон',          need: 150000000, cat: 'cat-stage18.png' },
+    { level: 19, name: 'Повелитель котов',   need: 1200000000, cat: 'cat-stage19.png' },
   ];
   const REF_REFERRER = 5000, REF_INVITEE = 2500, BOT = 'mariatortik_bot';
   // Соцссылки «Марии» — зеркало SOCIAL в src/clicker.ts (менять синхронно). Пустая = задание скрыто.
@@ -74,7 +74,7 @@
   const perTapFor = (l) => 1 + l;
   const cardPrice = (c, l) => Math.round(c.basePrice * Math.pow(1.7, l));
   const cardProfit = (c, l) => c.baseProfit * l;
-  const dailyReward = (streak) => 500 * Math.min(Math.max(1, streak), 10);
+  const dailyReward = (streak) => 250 * Math.min(Math.max(1, streak), 10);
 
   // ── Иконки: единый набор (золото/крем) + брендовая монета ─────────────────────
   const COIN_SPRITE = `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -110,21 +110,126 @@
     tap: (s) => SVG('<path d="M9 11V5.5a1.7 1.7 0 0 1 3.4 0V11M12.4 11V9.4a1.5 1.5 0 0 1 3 0V11M15.4 11v-.6a1.5 1.5 0 0 1 3 0V15a5 5 0 0 1-5 5h-1.6a4 4 0 0 1-3-1.4L6 15.4a1.6 1.6 0 0 1 2.4-2L9 14"/>', s),
     battery: (s) => SVG('<rect x="3" y="8" width="15" height="8" rx="2"/><path d="M20 11v2"/><path d="M9.5 9.5 7.5 12.4h2.6L8 15"/>', s),
     chest: (s) => SVG('<path d="M4 10.5 6 6h12l2 4.5M4 10.5V19h16v-8.5M4 10.5h16M10 10.5v3h4v-3"/>', s),
+    game: (s) => SVG('<rect x="2.5" y="8.5" width="19" height="9" rx="4.2"/><path d="M7 11.9v3M5.5 13.4h3M15.4 12.9h.01M17.6 14.1h.01M16.5 11.8h.01"/>', s),
+    quiz: (s) => SVG('<path d="M4 5.5h16A1.5 1.5 0 0 1 21.5 7v8a1.5 1.5 0 0 1-1.5 1.5H9l-4 3v-3H4A1.5 1.5 0 0 1 2.5 15V7A1.5 1.5 0 0 1 4 5.5Z"/><path d="M9.9 9.6a2.2 2.2 0 0 1 3.3 1.8c0 1.4-1.9 1.6-1.9 2.9M11.3 16.1h.01"/>', s),
+    gem: (s) => SVG('<path d="M6 3h12l3 5-9 13L3 8l3-5Z"/><path d="M3 8h18M9 3 7.5 8 12 21M15 3l1.5 5L12 21"/>', s),
     rain: (s) => SVG('<path d="M7.5 13.5A3.5 3.5 0 0 1 8 6.6a5 5 0 0 1 9.4 1.3A3.3 3.3 0 0 1 16.8 13.5M8 17l-1 2.5M12 17l-1 2.5M16 17l-1 2.5"/>', s),
     oven: (s) => SVG('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 9h16M7 6.6h.01M10 6.6h.01M7.5 13a4.5 4.5 0 0 1 9 0"/>', s),
     megaphone: (s) => SVG('<path d="M4 10v4l10 4.5V5.5L4 10ZM4 10H3.2A1.2 1.2 0 0 0 2 11.2v1.6A1.2 1.2 0 0 0 3.2 14H4M14 8.5a3.5 3.5 0 0 1 0 7M7 15v3.5"/>', s),
     chef: (s) => SVG('<path d="M7 13.5h10V19a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1v-5.5ZM7 13.5a3.6 3.6 0 0 1-.8-7A3.4 3.4 0 0 1 12 4.6a3.4 3.4 0 0 1 5.8 1.9 3.6 3.6 0 0 1-.8 7M7 16.5h10"/>', s),
     lock: (s) => SVG('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>', s),
+    dove: (s) => SVG('<path d="M21 7c-1.2.8-2.2.9-3 .4-1.6-1-4-.6-5.5 1.2C11 10.4 8.6 11.4 5 11.4c1.3 1.8 3.6 2.7 6 2.2-.9 2.2-2.7 3.6-5 4 2.3 1.4 5.5 1.4 8-.6 2-1.6 3-4 3-6.6 0-.9.4-1.7 1.2-2.2M8.5 18 7 21M12.5 17.5 12 21"/>', s),
   };
-  const cardIcon = (id) => ({ bakery: ICON.cupcake, coffee: ICON.coffee, oven: ICON.oven, cakefactory: ICON.cake, ads: ICON.megaphone, smm: ICON.send, tasting: ICON.star, loyalty: ICON.wallet, barista: ICON.coffee, baker: ICON.chef, confectioner: ICON.cupcake, manager: ICON.users, delivery: ICON.scooter, newshop: ICON.shop, franchise: ICON.gift, region: ICON.globe }[id] || ICON.cupcake)(26);
+  const cardIcon = (id, s = 26) => ({ bakery: ICON.cupcake, coffee: ICON.coffee, oven: ICON.oven, cakefactory: ICON.cake, ads: ICON.megaphone, smm: ICON.send, tasting: ICON.star, loyalty: ICON.wallet, barista: ICON.coffee, baker: ICON.chef, confectioner: ICON.cupcake, manager: ICON.users, delivery: ICON.scooter, newshop: ICON.shop, franchise: ICON.gift, region: ICON.globe }[id] || ICON.cupcake)(s);
+  // арт-плитка бизнеса: иллюстрация-PNG если есть (BIZ_ART_V>0), иначе SVG-иконка
+  const BIZ_ART_V = 5; // голуби-помощники /assets/images/biz/<id>.png (все v3 — единый набор)
+  const cardArt = (id) => BIZ_ART_V ? `<img src="/assets/images/biz/${id}.png?v=${BIZ_ART_V}" alt="" loading="lazy">` : cardIcon(id, 30);
   const taskIcon = (id) => ({ site: ICON.globe, review: ICON.star, vk: ICON.users, tg: ICON.send, invite1: ICON.users, level3: ICON.star, balance10: ICON.wallet, streak3: ICON.fire }[id] || ICON.star)(26);
 
   // ── Бонусы дня (зеркало src/clicker.ts — алгоритм/слова/морзе менять синхронно) ──
-  const COMBO_REWARD = 50000, CIPHER_REWARD = 8000;
+  const COMBO_REWARD = 12000, CIPHER_REWARD = 3000;
   const CIPHER_WORDS = ['МАРИЯ', 'ТОРТ', 'КОТИК', 'КРЕМ', 'ЭКЛЕР', 'МУСС', 'БИСКВИТ', 'ВАНИЛЬ', 'ШОКОЛАД', 'КАРАМЕЛЬ', 'ДЕСЕРТ', 'ПЕКАРНЯ'];
   const MORSE = { А: '.-', Б: '-...', В: '.--', Г: '--.', Д: '-..', Е: '.', Ж: '...-', З: '--..', И: '..', Й: '.---', К: '-.-', Л: '.-..', М: '--', Н: '-.', О: '---', П: '.--.', Р: '.-.', С: '...', Т: '-', У: '..-', Ф: '..-.', Х: '....', Ц: '-.-.', Ч: '---.', Ш: '----', Щ: '--.-', Ь: '-..-', Ы: '-.--', Э: '..-..', Ю: '..--', Я: '.-.-' };
   function dateSeed(day, salt) { let h = 2166136261 >>> 0; const s = day + salt; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h >>> 0; }
   function todaysCombo(day) { let h = dateSeed(day, 'combo'); const pool2 = CARDS.map(c => c.id); const pick = []; for (let i = 0; i < 3; i++) { h = (Math.imul(h, 1664525) + 1013904223) >>> 0; pick.push(pool2.splice(h % pool2.length, 1)[0]); } return pick; }
+
+  // ── Хаб «Игры»: детские квизы + казуальные. Контент тут (гость играет офлайн) ──
+  // {q: вопрос, a: верный ответ, w: [неверные]}. Движок строит 4 варианта и тасует.
+  const QUIZ_KIDS = [
+    { q: 'Сколько ног у паука?', a: '8', w: ['6', '4', '10'] },
+    { q: 'Какое животное даёт нам молоко?', a: 'Корова', w: ['Курица', 'Свинья', 'Лошадь'] },
+    { q: 'Какого цвета спелый банан?', a: 'Жёлтый', w: ['Синий', 'Красный', 'Зелёный'] },
+    { q: 'Где живут рыбы?', a: 'В воде', w: ['На дереве', 'В небе', 'В норе'] },
+    { q: 'Сколько дней в неделе?', a: '7', w: ['5', '10', '12'] },
+    { q: 'Как называется наша планета?', a: 'Земля', w: ['Марс', 'Луна', 'Солнце'] },
+    { q: 'Кто делает мёд?', a: 'Пчела', w: ['Муравей', 'Бабочка', 'Комар'] },
+    { q: 'Какое время года самое холодное?', a: 'Зима', w: ['Лето', 'Весна', 'Осень'] },
+    { q: 'Что нужно растению, чтобы расти?', a: 'Солнце и вода', w: ['Конфеты', 'Снег', 'Темнота'] },
+    { q: 'Сколько цветов у радуги?', a: '7', w: ['5', '3', '10'] },
+    { q: 'Какой первый месяц года?', a: 'Январь', w: ['Декабрь', 'Март', 'Июнь'] },
+    { q: 'Кто из них умеет летать?', a: 'Орёл', w: ['Кит', 'Слон', 'Черепаха'] },
+    { q: 'Что делают из молока?', a: 'Сыр', w: ['Хлеб', 'Сок', 'Бумагу'] },
+    { q: 'Какой формы колесо?', a: 'Круглое', w: ['Квадратное', 'Треугольное', 'Как звезда'] },
+    { q: 'Сколько пальцев на одной руке?', a: '5', w: ['4', '6', '10'] },
+    { q: 'Кто говорит «мяу»?', a: 'Кошка', w: ['Собака', 'Корова', 'Утка'] },
+    { q: 'Что светит на небе ночью?', a: 'Луна', w: ['Солнце', 'Радуга', 'Облако'] },
+    { q: 'Самое большое животное на Земле?', a: 'Синий кит', w: ['Слон', 'Жираф', 'Медведь'] },
+    { q: 'Из чего пекут хлеб?', a: 'Из муки', w: ['Из песка', 'Из травы', 'Из камней'] },
+    { q: 'Сколько будет 2 + 2?', a: '4', w: ['3', '5', '22'] },
+    { q: 'Какого цвета трава летом?', a: 'Зелёная', w: ['Синяя', 'Розовая', 'Чёрная'] },
+    { q: 'Сколько месяцев в году?', a: '12', w: ['7', '10', '24'] },
+    { q: 'Кто живёт в улье?', a: 'Пчёлы', w: ['Муравьи', 'Птицы', 'Рыбы'] },
+    { q: 'Что падает зимой с неба?', a: 'Снег', w: ['Песок', 'Листья', 'Конфеты'] },
+    { q: 'Какое животное самое быстрое на суше?', a: 'Гепард', w: ['Черепаха', 'Улитка', 'Слон'] },
+    { q: 'Сколько глаз у человека?', a: '2', w: ['1', '3', '4'] },
+    { q: 'Кто из них насекомое?', a: 'Бабочка', w: ['Кошка', 'Воробей', 'Лягушка'] },
+    { q: 'Что растёт на дубе?', a: 'Жёлуди', w: ['Яблоки', 'Бананы', 'Шишки'] },
+    { q: 'Какой день после понедельника?', a: 'Вторник', w: ['Среда', 'Пятница', 'Воскресенье'] },
+    { q: 'Из чего делают масло?', a: 'Из молока', w: ['Из песка', 'Из воды', 'Из камня'] },
+    { q: 'Кто плетёт паутину?', a: 'Паук', w: ['Муравей', 'Жук', 'Оса'] },
+    { q: 'Какого цвета снег?', a: 'Белый', w: ['Зелёный', 'Синий', 'Красный'] },
+    { q: 'Где растут яблоки?', a: 'На дереве', w: ['Под землёй', 'В море', 'На траве'] },
+    { q: 'Сколько лап у кошки?', a: '4', w: ['2', '6', '8'] },
+    { q: 'Что делает корова?', a: 'Мычит', w: ['Лает', 'Каркает', 'Квакает'] },
+    { q: 'Какое время суток самое тёмное?', a: 'Ночь', w: ['Утро', 'День', 'Полдень'] },
+    { q: 'Какая птица не умеет летать?', a: 'Пингвин', w: ['Орёл', 'Воробей', 'Голубь'] },
+    { q: 'Что нужно, чтобы видеть в темноте?', a: 'Свет', w: ['Вода', 'Холод', 'Шум'] },
+    { q: 'Сколько будет 3 + 1?', a: '4', w: ['5', '2', '31'] },
+    { q: 'Какого цвета солнце днём?', a: 'Жёлтое', w: ['Синее', 'Чёрное', 'Зелёное'] },
+    { q: 'Кто живёт в будке и сторожит дом?', a: 'Собака', w: ['Кошка', 'Корова', 'Коза'] },
+    { q: 'Из чего птицы вьют гнездо?', a: 'Из веточек', w: ['Из конфет', 'Из стекла', 'Из железа'] },
+  ];
+  const QUIZ_RIDDLE = [
+    { q: 'Мягкие лапки, а в лапках — царапки. Кто это?', a: 'Кот', w: ['Пёс', 'Заяц', 'Ёж'] },
+    { q: 'Голову кивает, по площади гуляет, «гур-гур» воркует. Кто это?', a: 'Голубь', w: ['Ворона', 'Воробей', 'Сорока'] },
+    { q: 'Сладкий, пышный, со свечками в день рождения. Что это?', a: 'Торт', w: ['Суп', 'Хлеб', 'Каша'] },
+    { q: 'Усатый, полосатый, днём спит, ночью охотится. Кто?', a: 'Кот', w: ['Петух', 'Гусь', 'Конь'] },
+    { q: 'Носит письма на лапке, домой дорогу знает. Какая птица?', a: 'Почтовый голубь', w: ['Курица', 'Индюк', 'Пингвин'] },
+    { q: 'Белое, холодное, сладкое, тает во рту. Что это?', a: 'Мороженое', w: ['Лёд', 'Снег', 'Мел'] },
+    { q: 'Мурлычет, когда доволен, шипит, когда сердит. Кто?', a: 'Кот', w: ['Чайник', 'Змея', 'Ветер'] },
+    { q: 'Круглые, шоколадные, тают в руках — что любит котик?', a: 'Конфеты', w: ['Камни', 'Шишки', 'Жёлуди'] },
+    { q: 'Воркует на крыше, кружит над городом, любит зёрнышки. Кто?', a: 'Голубь', w: ['Летучая мышь', 'Бабочка', 'Пчела'] },
+    { q: 'Хвостик крючком, глазки горят, молочко лакает. Кто?', a: 'Котёнок', w: ['Цыплёнок', 'Поросёнок', 'Утёнок'] },
+    { q: 'Воздушное, кремовое, с вишенкой наверху. Что это?', a: 'Пирожное', w: ['Котлета', 'Огурец', 'Сухарь'] },
+    { q: 'Два крыла, рук нет, а письмо доставит. Кто?', a: 'Голубь', w: ['Робот', 'Почтальон', 'Самолётик'] },
+    { q: 'Зимой и летом одним цветом. Что это?', a: 'Ёлка', w: ['Берёза', 'Куст', 'Трава'] },
+    { q: 'Не лает, не кусает, а в дом не пускает. Что это?', a: 'Замок', w: ['Кот', 'Забор', 'Окно'] },
+    { q: 'Пёстрая, ест зелёное, даёт белое. Кто?', a: 'Корова', w: ['Коза', 'Кошка', 'Курица'] },
+    { q: 'Пушистая шубка, на лапках подушки, а внутри царапки. Кто?', a: 'Кот', w: ['Заяц', 'Белка', 'Лиса'] },
+    { q: 'Гнездо на карнизе, крошки клюёт у окна, воркует. Кто?', a: 'Голубь', w: ['Снегирь', 'Дятел', 'Сова'] },
+    { q: 'Сладкая, тянется, в фантике живёт. Что это?', a: 'Конфета', w: ['Печенье', 'Сухарь', 'Орех'] },
+    { q: 'Круглый бок, румяный, от бабушки укатился. Кто?', a: 'Колобок', w: ['Блин', 'Бублик', 'Пирог'] },
+    { q: 'Белый, сладкий, узором на торте лежит. Что это?', a: 'Крем', w: ['Соль', 'Мука', 'Снег'] },
+    { q: 'Перья сизые, грудка отливает, символ мира. Кто?', a: 'Голубь', w: ['Орёл', 'Павлин', 'Аист'] },
+    { q: 'Тёплый, румяный, из печки, с хрустящей корочкой. Что это?', a: 'Хлеб', w: ['Лёд', 'Камень', 'Мяч'] },
+    { q: 'Лапками умывается, на солнышке греется, мышей ловит. Кто?', a: 'Кот', w: ['Ёж', 'Крот', 'Бобр'] },
+    { q: 'Воздушный шарик из теста, внутри дырка. Что это?', a: 'Бублик', w: ['Торт', 'Каша', 'Котлета'] },
+  ];
+  const GAME_META = {
+    quiz_kids:   { name: 'Котовикторина', icon: () => ICON.quiz(20) },
+    quiz_riddle: { name: 'Загадки',       icon: () => ICON.paw(20) },
+    count:       { name: 'Счёт конфет',   icon: () => ICON.cupcake(20) },
+  };
+  // детерминированная тасовка (LCG от seed) — стабильно в течение дня
+  function shuffleSeed(arr, seedNum) { const a = arr.slice(); let h = seedNum >>> 0; for (let i = a.length - 1; i > 0; i--) { h = (Math.imul(h, 1664525) + 1013904223) >>> 0; const j = h % (i + 1); const t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+  function pickDaily(bank, n, salt) { const ord = shuffleSeed(bank.map((_, i) => i), dateSeed(irkToday(), salt)); return ord.slice(0, n).map(i => bank[i]); }
+  function quizQuestions(deck) {
+    if (deck === 'count') return genCount(6);
+    const bank = deck === 'quiz_riddle' ? QUIZ_RIDDLE : QUIZ_KIDS, n = deck === 'quiz_riddle' ? 4 : 5;
+    return pickDaily(bank, n, deck).map((q, i) => ({ q: q.q, opts: shuffleSeed([q.a, ...q.w], dateSeed(irkToday(), deck + 'o' + i)), a: q.a }));
+  }
+  // Рисованная конфета для «Счёта конфет» (вместо эмодзи 🍬)
+  const CANDY = `<svg width="26" height="26" viewBox="0 0 32 32" style="vertical-align:-.32em;margin:0 1px"><g stroke="#d8487f" stroke-width="1.8" stroke-linejoin="round"><path d="M7 16 1.5 11.5v9z" fill="#ff9ec4"/><path d="M25 16 30.5 11.5v9z" fill="#ff9ec4"/><ellipse cx="16" cy="16" rx="8" ry="7" fill="#ff7aae"/></g><path d="M12.5 13.5c2 1.8 5 1.8 7 0" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" opacity=".7"/></svg>`;
+  function genCount(n) {
+    const out = []; let h = dateSeed(irkToday(), 'count');
+    for (let i = 0; i < n; i++) {
+      h = (Math.imul(h, 1664525) + 1013904223) >>> 0; const x = 1 + (h >>> 3) % 5;
+      h = (Math.imul(h, 1664525) + 1013904223) >>> 0; const y = 1 + (h >>> 5) % 5; const sum = x + y;
+      const opts = []; [sum, sum + 1, Math.max(1, sum - 1), sum + 2].forEach(v => { if (opts.indexOf(String(v)) < 0) opts.push(String(v)); });
+      out.push({ q: CANDY.repeat(x) + ' + ' + CANDY.repeat(y) + ' = ?', opts: shuffleSeed(opts.slice(0, 4), dateSeed(irkToday(), 'co' + i)), a: String(sum) });
+    }
+    return out;
+  }
   function todaysCipher(day) { return CIPHER_WORDS[dateSeed(day, 'cipher') % CIPHER_WORDS.length]; }
   function toMorse(w) { return w.split('').map(c => MORSE[c] || '').join(' '); }
   const cardName = (id) => (CARDS.find(c => c.id === id) || {}).name || id;
@@ -141,8 +246,30 @@
     { id: 'ach_lvl19', name: 'Повелитель котов', icon: 'star', reward: 100000, type: 'level', target: 19 },
     { id: 'ach_streak7', name: 'Неделя верности', icon: 'fire', reward: 7000, type: 'streak', target: 7 },
     { id: 'ach_ref3', name: 'Душа компании', icon: 'users', reward: 15000, type: 'ref', target: 3 },
+    { id: 'col_prod', name: 'Цех в сборе', icon: 'dove', reward: 10000, type: 'collect', target: 'prod' },
+    { id: 'col_mkt', name: 'Маркетинг в сборе', icon: 'dove', reward: 10000, type: 'collect', target: 'mkt' },
+    { id: 'col_staff', name: 'Команда в сборе', icon: 'dove', reward: 10000, type: 'collect', target: 'staff' },
+    { id: 'col_net', name: 'Сеть в сборе', icon: 'dove', reward: 10000, type: 'collect', target: 'net' },
+    { id: 'col_all', name: 'Повелитель голубей', icon: 'trophy', reward: 60000, type: 'collect', target: 'all' },
   ];
-  const achIcon = (key) => ({ tap: ICON.tap, wallet: ICON.wallet, shop: ICON.shop, trophy: ICON.trophy, star: ICON.star, fire: ICON.fire, users: ICON.users }[key] || ICON.star)(26);
+  const achIcon = (key) => ({ tap: ICON.tap, wallet: ICON.wallet, shop: ICON.shop, trophy: ICON.trophy, star: ICON.star, fire: ICON.fire, users: ICON.users, dove: ICON.dove }[key] || ICON.star)(26);
+  // Лестница «Награды за прогресс» (зеркало src/clicker.ts MILESTONES — синхронно).
+  // points → баллы на карту клуба; perk → купон с условием. Выдача серверная.
+  const MILESTONES = [
+    { id: 'ms_lvl5', title: 'Уровень 5', cond: { type: 'level', target: 5 }, kind: 'points', points: 200 },
+    { id: 'ms_lvl10', title: 'Уровень 10', cond: { type: 'level', target: 10 }, kind: 'points', points: 500 },
+    { id: 'ms_lvl13', title: 'Уровень 13', cond: { type: 'level', target: 13 }, kind: 'perk', perkText: 'Промокод −5% (от 500₽)' },
+    { id: 'ms_lvl15', title: 'Уровень 15', cond: { type: 'level', target: 15 }, kind: 'points', points: 1000 },
+    { id: 'ms_lvl17', title: 'Уровень 17', cond: { type: 'level', target: 17 }, kind: 'perk', perkText: 'Скидка 500₽ (от 3000₽)' },
+    { id: 'ms_lvl19', title: 'Последний уровень — Повелитель котов', cond: { type: 'level', target: 19 }, kind: 'both', points: 20000, perkText: 'Бенто-торт в подарок (от 1000₽)' },
+    { id: 'ms_col_prod', title: 'Все голуби «Производство»', cond: { type: 'collect', target: 'prod' }, kind: 'points', points: 300 },
+    { id: 'ms_col_mkt', title: 'Все голуби «Маркетинг»', cond: { type: 'collect', target: 'mkt' }, kind: 'points', points: 300 },
+    { id: 'ms_col_staff', title: 'Все голуби «Персонал»', cond: { type: 'collect', target: 'staff' }, kind: 'points', points: 300 },
+    { id: 'ms_col_net', title: 'Все голуби «Сеть»', cond: { type: 'collect', target: 'net' }, kind: 'points', points: 300 },
+    { id: 'ms_col_all', title: 'Вся коллекция голубей', cond: { type: 'collect', target: 'all' }, kind: 'perk', perkText: 'Бенто-торт в подарок (от 2000₽)' },
+    { id: 'ms_ref3', title: 'Пригласил 3 друзей', cond: { type: 'ref', target: 3 }, kind: 'points', points: 500 },
+    { id: 'ms_ref10', title: 'Пригласил 10 друзей', cond: { type: 'ref', target: 10 }, kind: 'perk', perkText: 'Промокод −10% (от 1000₽)' },
+  ];
   function condMet(t, s) {
     if (t.type === 'link') return !!linkOpened[t.id];
     if (t.type === 'level') return s.level >= t.target;
@@ -151,6 +278,7 @@
     if (t.type === 'ref') return (s.referrals || 0) >= t.target;
     if (t.type === 'taps') return (s.taps || 0) >= t.target;
     if (t.type === 'cards') return (s.cardsOwned || 0) >= t.target;
+    if (t.type === 'collect') { const cs = s.cards || []; if (t.target === 'all') return cs.length > 0 && cs.every(c => c.level > 0); const ic = cs.filter(c => c.cat === t.target); return ic.length > 0 && ic.every(c => c.level > 0); }
     return false;
   }
   function fmtDur(ms) { const h = Math.max(0, Math.floor(ms / 3600e3)); const d = Math.floor(h / 24); return d > 0 ? `${d}д ${h % 24}ч` : `${h}ч`; }
@@ -165,9 +293,10 @@
   ];
 
   let ov, audio, raf, lastTs = 0, pending = 0, syncT = 0, curLevel = 1, tab = 'cat';
-  let st = null, turboUntil = 0, combo = 0, comboT = 0, bonusTimer = 0, rainState = null, rainRAF = 0, upCat = 'prod';
+  let st = null, turboUntil = 0, combo = 0, comboT = 0, bonusTimer = 0, rainState = null, rainRAF = 0, upCat = 'prod', lastBought = null;
 
   function authed() { return !!(window.App && App.isAuthed && App.isAuthed()); }
+  const reduceMotion = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } };
   // ── Звук: мастер-шина с ревером + богатый синтез (без файлов) ─────────────────
   let bus, comboFx;
   function ac() {
@@ -206,7 +335,7 @@
   function coinSfx() { sfxTap(0); }
 
   // ── Гость (localStorage) ─────────────────────────────────────────────────────
-  function rawDefault() { return { balance: 0, totalEarned: 0, energy: 1000, multitapLevel: 0, energyLevel: 0, cards: {}, taps: 0, dailyStreak: 0, dailyDate: null, bE: 0, bT: 0, bDate: null, turboUntil: 0, tasksDone: {}, comboDate: null, comboHits: [], comboClaimed: null, cipherDate: null, bonusAt: 0, chestDate: null, rainDate: null, _ts: Date.now() }; }
+  function rawDefault() { return { balance: 0, totalEarned: 0, energy: 1000, multitapLevel: 0, energyLevel: 0, cards: {}, taps: 0, dailyStreak: 0, dailyDate: null, bE: 0, bT: 0, bDate: null, turboUntil: 0, tasksDone: {}, comboDate: null, comboHits: [], comboClaimed: null, cipherDate: null, bonusAt: 0, chestDate: null, rainDate: null, gamesDone: {}, _ts: Date.now() }; }
   function rawGet() { let s; try { s = JSON.parse(localStorage.getItem(LS)); } catch (_) {} if (!s) s = rawDefault(); if (!s.cards) s.cards = {}; return s; }
   function rawSave(s) { s._ts = Date.now(); localStorage.setItem(LS, JSON.stringify(s)); }
   function profitOf(c) { let p = 0; for (const x of CARDS) p += cardProfit(x, c[x.id] || 0); return p; }
@@ -247,7 +376,7 @@
     let ok = false;
     if (authed()) { try { const d = await api('/api/clicker/buy', { method: 'POST', body: JSON.stringify({ type, id }) }); if (!d.error) { st = d; ok = true; } } catch (_) {} }
     else { const s = guestBuyRaw(type, id); if (s) { st = guestDerive(); ok = true; } }
-    if (ok) { sfxBuy(); window.haptic && window.haptic('medium'); renderAll(); renderUpgrades(); } else { sfxError(); flashMsg('Не хватает монет'); }
+    if (ok) { lastBought = type === 'card' ? id : null; sfxBuy(); window.haptic && window.haptic('medium'); renderAll(); renderUpgrades(); } else { sfxError(); flashMsg('Не хватает монет'); }
   }
   function guestBuyRaw(type, id) {
     guestDerive(); const s = rawGet(); let cost = 0;
@@ -324,28 +453,29 @@
     if (document.getElementById('catclick-css')) return;
     const s = document.createElement('style'); s.id = 'catclick-css';
     s.textContent = `
-      .ck-ov{--gold:#eebf52;--gold-l:#ffe49c;--gold-d:#c2882a;--cream:#f4ead7;--ink:#efe2cf;--muted:#bb9d88;--panel:rgba(255,238,214,.055);--line:rgba(238,191,82,.16);
+      .ck-ov{--gold:#f0c24e;--gold-l:#ffe39c;--gold-d:#c2882a;--cream:#eee7dd;--ink:#f1ece6;--muted:#9aa0ab;--panel:rgba(255,255,255,.05);--line:rgba(255,255,255,.085);
         position:fixed;inset:0;z-index:9999;display:none;flex-direction:column;
-        background:radial-gradient(135% 105% at 50% -8%,#4e1b26 0%,#2c1017 52%,#180a0f 100%);
-        overflow:hidden;touch-action:manipulation;user-select:none;-webkit-user-select:none;color:var(--ink);font-family:'Inter',system-ui,sans-serif}
+        background:radial-gradient(130% 100% at 50% -10%,#2c2320 0%,#1a1413 52%,#0e0a09 100%);
+        overflow:hidden;touch-action:manipulation;user-select:none;-webkit-user-select:none;color:var(--ink);font-family:'Nunito','Mulish',system-ui,sans-serif}
+      .ck-ov button:focus-visible,.ck-ov input:focus-visible,.ck-cat:focus-visible,.ck-gems__c:focus-visible,.ck-mem__c:focus-visible,.ck-quiz__o:focus-visible,.ck-nav__b:focus-visible{outline:2px solid var(--gold-l);outline-offset:2px}
       .ck-ov::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:0;background:radial-gradient(125% 75% at 50% 118%,rgba(0,0,0,.55),transparent 58%)}
-      .ck-ov.on{display:flex}.ck-ov.turbo{background:radial-gradient(135% 105% at 50% -8%,#6e2026 0%,#3a0f15 58%,#1c080f 100%)}
+      .ck-ov.on{display:flex}.ck-ov.turbo{background:radial-gradient(130% 100% at 50% -10%,#3a2a20 0%,#241712 55%,#120c0a 100%)}
       .ck-screen{position:relative;z-index:1;flex:1;display:none;flex-direction:column;align-items:center;overflow:hidden}.ck-screen.on{display:flex}
       .ck-x{position:absolute;top:12px;right:12px;z-index:9;width:34px;height:34px;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.28);color:var(--cream);font-size:17px;cursor:pointer}
       .ck-i{display:inline-block;vertical-align:-.16em}.ck-coin-i{display:inline-block;vertical-align:-.18em;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4))}
       .ck-daily{margin-top:13px;display:inline-flex;align-items:center;gap:7px;background:linear-gradient(180deg,#ffe7a6,#eebf52 58%,#cf9a36);color:#5a2028;font-weight:800;border:1px solid #ffe9b3;border-radius:14px;padding:9px 18px;font-size:13px;cursor:pointer;box-shadow:0 7px 18px rgba(170,115,30,.4),inset 0 1px 0 rgba(255,255,255,.55)}
-      .ck-lvl{margin-top:13px;color:var(--gold-l);font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:17px;letter-spacing:.2px}
-      .ck-bal{display:flex;align-items:center;justify-content:center;gap:9px;margin-top:4px;font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:40px;font-variant-numeric:tabular-nums;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.45)}
+      .ck-lvl{margin-top:13px;color:var(--gold-l);font-family:'Nunito',sans-serif;font-weight:700;font-size:17px;letter-spacing:.2px}
+      .ck-bal{display:flex;align-items:center;justify-content:center;gap:9px;margin-top:4px;font-family:'Nunito',sans-serif;font-weight:700;font-size:40px;font-variant-numeric:tabular-nums;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.45)}
       .ck-prof{margin-top:6px;display:inline-flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);padding:4px 13px;border-radius:20px;font-weight:700;font-size:12px;color:var(--gold);font-variant-numeric:tabular-nums}
       .ck-prog{width:80%;max-width:330px;margin-top:10px}.ck-prog__bar{height:8px;border-radius:6px;background:rgba(0,0,0,.34);box-shadow:inset 0 1px 2px rgba(0,0,0,.45);overflow:hidden}.ck-prog__fill{height:100%;border-radius:6px;background:linear-gradient(90deg,#cf9a36,#ffe49c);box-shadow:0 0 8px rgba(238,191,82,.55);transition:width .3s}.ck-prog__t{color:var(--muted);font-size:10.5px;text-align:center;margin-top:4px;font-weight:600;font-variant-numeric:tabular-nums}
       .ck-catwrap{position:relative;flex:1;width:100%;display:flex;align-items:center;justify-content:center}
-      .ck-catwrap::before{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:76%;height:76%;background:radial-gradient(ellipse at center,rgba(255,196,72,.54) 0%,rgba(255,170,48,.30) 42%,rgba(255,170,48,0) 70%);filter:blur(9px);pointer-events:none;z-index:0;animation:ckGlowPulse 4.2s ease-in-out infinite}
+      .ck-catwrap::before{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(84vw,340px);height:min(84vw,340px);border-radius:50%;background:radial-gradient(circle at 50% 46%,rgba(255,214,104,.78) 0%,rgba(255,182,64,.46) 44%,rgba(255,176,56,0) 71%);box-shadow:inset 0 0 0 2px rgba(255,222,124,.45),0 0 95px rgba(255,188,68,.34);filter:blur(1.5px);pointer-events:none;z-index:0;animation:ckGlowPulse 4.2s ease-in-out infinite}
       .ck-catwrap::after{content:'';position:absolute;left:50%;bottom:5%;transform:translateX(-50%);width:44%;height:22px;border-radius:50%;background:radial-gradient(ellipse at center,rgba(0,0,0,.5),transparent 72%);filter:blur(3px);pointer-events:none;z-index:0;animation:ckShadowPulse 3.6s ease-in-out infinite}
       .ck-cat{position:relative;z-index:1;max-width:62%;max-height:94%;width:auto;height:auto;object-fit:contain;cursor:pointer;filter:drop-shadow(0 14px 18px rgba(40,8,12,.5));transform-origin:bottom center;-webkit-tap-highlight-color:transparent;animation:ckBreathe 3.8s ease-in-out infinite}
       .ck-cat.tap{animation:ckBreathe 3.8s ease-in-out infinite,ckTapSq .26s ease-out}.ck-cat.turbo{filter:drop-shadow(0 0 30px #ffb13d) drop-shadow(0 16px 22px rgba(40,8,12,.5))}
       @keyframes ckBreathe{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-5px) scale(1.016)}}
       @keyframes ckTapSq{0%{transform:scale(1,1)}30%{transform:scale(1.07,.9)}62%{transform:scale(.97,1.05)}100%{transform:scale(1,1)}}
-      @keyframes ckGlowPulse{0%,100%{opacity:.82;transform:translate(-50%,-50%) scale(1)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.07)}}
+      @keyframes ckGlowPulse{0%,100%{opacity:.88;transform:translate(-50%,-50%) scale(1)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.09)}}
       @keyframes ckShadowPulse{0%,100%{opacity:1;width:44%}50%{opacity:.8;width:40%}}
       .ck-ripple{position:absolute;width:0;height:0;border:2px solid var(--gold-l);border-radius:50%;pointer-events:none;z-index:6;transform:translate(-50%,-50%);animation:ckRip .5s ease-out forwards}
       @keyframes ckRip{0%{width:8px;height:8px;opacity:.7}100%{width:130px;height:130px;opacity:0}}
@@ -367,6 +497,44 @@
       .ck-rain__hud .x{width:32px;height:32px;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.3);color:var(--cream);font-size:16px;cursor:pointer}
       .ck-rain canvas{flex:1;width:100%;display:block;touch-action:none;cursor:pointer}
       .ck-rain__hint{position:absolute;left:0;right:0;top:48%;text-align:center;color:var(--muted);font-size:13px;pointer-events:none}
+      .ck-quiz,.ck-mem,.ck-tower,.ck-gems{position:absolute;inset:0;z-index:12;display:none;flex-direction:column;background:radial-gradient(135% 100% at 50% -8%,#241318,#0e0a0d);padding:0 16px 26px;overflow:hidden;-webkit-overflow-scrolling:touch}
+      .ck-quiz,.ck-mem,.ck-gems{overflow-y:auto}
+      .ck-quiz.on,.ck-mem.on,.ck-tower.on,.ck-gems.on{display:flex}
+      .ck-gems__grid{display:grid;gap:5px;max-width:360px;width:100%;margin:10px auto 0;padding:8px;background:rgba(0,0,0,.22);border:1px solid var(--line);border-radius:18px;box-shadow:inset 0 2px 14px rgba(0,0,0,.4)}
+      .ck-gems__c{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border:none;border-radius:12px;background:rgba(255,255,255,.03);cursor:pointer;padding:0;transition:transform .1s,box-shadow .15s}
+      .ck-gems__c:active{transform:scale(.9)}
+      .ck-gems__c.sel{background:rgba(238,191,82,.16);box-shadow:0 0 0 2px var(--gold),0 0 14px var(--gold);transform:scale(1.04)}
+      .ck-gems__c .cd{width:80%;height:80%;border-radius:46% 46% 50% 50%/50%;position:relative;box-shadow:inset 0 -4px 7px rgba(0,0,0,.32),inset 0 3px 5px rgba(255,255,255,.25),0 2px 4px rgba(0,0,0,.35)}
+      .ck-gems__c .cd::after{content:'';position:absolute;top:13%;left:20%;width:32%;height:24%;border-radius:50%;background:rgba(255,255,255,.6);filter:blur(.5px)}
+      .cd0{background:radial-gradient(circle at 38% 30%,#ff9db4,#d11d54)}
+      .cd1{background:radial-gradient(circle at 38% 30%,#ffe39a,#cf9320)}
+      .cd2{background:radial-gradient(circle at 38% 30%,#c79877,#5e3a25)}
+      .cd3{background:radial-gradient(circle at 38% 30%,#bdee9f,#4f9b3e)}
+      .cd4{background:radial-gradient(circle at 38% 30%,#aeb8ff,#4350c0)}
+      .ck-gems__c.clr{animation:ckGemPop .24s ease-out forwards}
+      @keyframes ckGemPop{0%{transform:scale(1)}45%{transform:scale(1.35);filter:brightness(1.8)}100%{transform:scale(.15);opacity:0}}
+      .ck-tower__score{position:absolute;left:0;right:0;top:84px;z-index:2;text-align:center;font-size:40px;font-weight:900;color:var(--gold-l);text-shadow:0 2px 14px rgba(0,0,0,.6);pointer-events:none;font-variant-numeric:tabular-nums}
+      #ck-tower-cv{flex:1;width:100%;display:block;touch-action:none;cursor:pointer}
+      .ck-quiz__hd{display:flex;align-items:center;gap:10px;padding:16px 0 6px;font-weight:800;font-size:16px;color:var(--cream)}
+      .ck-quiz__hd .t{flex:1;display:flex;align-items:center;gap:8px;color:var(--gold-l)}
+      .ck-quiz__hd .x{width:34px;height:34px;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.3);color:var(--cream);font-size:18px;cursor:pointer;flex:none}
+      .ck-quiz__dots{display:flex;gap:6px;justify-content:center;margin:8px 0 2px}
+      .ck-quiz__dots i{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.16);transition:background .2s}
+      .ck-quiz__dots i.d{background:var(--gold)}.ck-quiz__dots i.c{background:var(--gold-l);box-shadow:0 0 8px var(--gold)}
+      .ck-quiz__q{margin:20px 4px;font-size:21px;font-weight:800;color:var(--ink);text-align:center;line-height:1.3;min-height:58px;display:flex;align-items:center;justify-content:center}
+      .ck-quiz__opts{display:flex;flex-direction:column;gap:11px;max-width:440px;width:100%;margin:0 auto}
+      .ck-quiz__o{padding:16px 18px;border-radius:15px;border:1.5px solid var(--line);background:var(--panel);color:var(--ink);font-size:17px;font-weight:700;cursor:pointer;text-align:left;transition:transform .08s,background .2s,border-color .2s}
+      .ck-quiz__o:active{transform:scale(.98)}
+      .ck-quiz__o.ok{background:rgba(72,187,120,.22);border-color:#48bb78;color:#c6f6d5}
+      .ck-quiz__o.bad{background:rgba(229,62,62,.2);border-color:#e53e3e;color:#feb2b2}
+      .ck-mem__sub{text-align:center;color:var(--muted);font-size:13px;margin:6px 0 16px;font-variant-numeric:tabular-nums}
+      .ck-mem__grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;max-width:380px;width:100%;margin:0 auto}
+      .ck-mem__c{position:relative;aspect-ratio:1;border:none;background:none;cursor:pointer;padding:0}
+      .ck-mem__c .f,.ck-mem__c .b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:14px;backface-visibility:hidden;-webkit-backface-visibility:hidden;transition:transform .35s;font-size:30px}
+      .ck-mem__c .f{background:linear-gradient(160deg,#3a2630,#241318);border:1.5px solid var(--line);color:var(--gold-l);font-weight:800;font-size:22px}
+      .ck-mem__c .b{background:var(--panel);border:1.5px solid var(--gold);transform:rotateY(180deg)}
+      .ck-mem__c.show .f{transform:rotateY(180deg)}.ck-mem__c.show .b{transform:rotateY(0)}
+      .ck-mem__c.match .b{border-color:#48bb78;box-shadow:0 0 12px rgba(72,187,120,.5)}
       .ck-bonus-fly{position:absolute;z-index:8;pointer-events:auto;cursor:pointer;filter:drop-shadow(0 0 13px rgba(255,212,90,.95));animation:ckBonusSpin 1.1s linear infinite}
       @keyframes ckBonusSpin{to{transform:rotate(360deg)}}
       .ck-season{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
@@ -375,9 +543,9 @@
       @keyframes ckFall{0%{transform:translateY(-24px) translateX(0) rotate(0);opacity:0}12%{opacity:.92}100%{transform:translateY(112vh) translateX(var(--sx,20px)) rotate(var(--rz,180deg));opacity:.3}}
       .ck-ov[data-season="ny"] .ck-catwrap::before{background:radial-gradient(ellipse at center,rgba(150,205,255,.42) 0%,rgba(120,175,245,.22) 42%,transparent 70%)}
       .ck-ov[data-season="spring"] .ck-catwrap::before,.ck-ov[data-season="love"] .ck-catwrap::before{background:radial-gradient(ellipse at center,rgba(255,165,205,.44) 0%,rgba(255,120,170,.22) 42%,transparent 70%)}
-      @media (prefers-reduced-motion:reduce){.ck-cat,.ck-cat.tap,.ck-catwrap::before,.ck-catwrap::after,.ck-spark,.ck-fl{animation:none}.ck-season{display:none}}
+      @media (prefers-reduced-motion:reduce){.ck-cat,.ck-cat.tap,.ck-catwrap::before,.ck-catwrap::after,.ck-spark,.ck-fl,.ck-conf,.ck-coin,.ck-flyc,.ck-ripple,.ck-flash,.ck-balpop,.ck-bonus-fly,.ck-biz,.ck-dove,.ck-up,.ck-combo,.ck-levelup span{animation:none!important}.ck-season{display:none}}
       .ck-hat{position:absolute;pointer-events:none;filter:drop-shadow(0 4px 6px rgba(0,0,0,.3))}
-      .ck-combo{position:absolute;top:17%;left:50%;transform:translateX(-50%);font-family:'Playfair Display',serif;font-weight:800;color:var(--gold-l);text-shadow:0 2px 10px rgba(0,0,0,.6);pointer-events:none;opacity:0;font-size:24px}
+      .ck-combo{position:absolute;top:17%;left:50%;transform:translateX(-50%);font-family:'Nunito',sans-serif;font-weight:800;color:var(--gold-l);text-shadow:0 2px 10px rgba(0,0,0,.6);pointer-events:none;opacity:0;font-size:24px}
       .ck-combo.show{opacity:1}
       .ck-fx{position:absolute;inset:0;pointer-events:none;z-index:6;overflow:hidden}
       .ck-boosts{display:flex;gap:10px;margin:2px 0 9px}
@@ -386,16 +554,49 @@
       .ck-energy{width:84%;max-width:360px;margin:0 0 16px}.ck-energy__row{display:flex;align-items:center;gap:7px;font-weight:700;font-size:13px;margin-bottom:6px;color:var(--cream);font-variant-numeric:tabular-nums}.ck-energy__row .ck-i{color:var(--gold)}.ck-energy__bar{height:11px;border-radius:8px;background:rgba(0,0,0,.34);box-shadow:inset 0 1px 2px rgba(0,0,0,.45);overflow:hidden}.ck-energy__fill{height:100%;border-radius:8px;background:linear-gradient(90deg,#c2882a,#ffe49c);box-shadow:0 0 7px rgba(238,191,82,.5);transition:width .25s}
       .ck-up{position:absolute;color:var(--gold-l);font-weight:800;pointer-events:none;text-shadow:0 2px 5px rgba(0,0,0,.5);z-index:7;font-variant-numeric:tabular-nums}
       .ck-coin{position:absolute;z-index:7;pointer-events:none}
-      .ck-uphd{padding:16px 16px 6px;text-align:center;width:100%;box-sizing:border-box}.ck-uphd .b{font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:24px;display:inline-flex;align-items:center;gap:8px;color:var(--cream)}.ck-uphd .b .ck-i{color:var(--gold)}.ck-uphd .p{color:var(--gold);font-weight:700;font-size:13px;margin-top:3px;display:inline-flex;align-items:center;gap:5px;font-variant-numeric:tabular-nums}
+      .ck-uphd{padding:16px 16px 6px;text-align:center;width:100%;box-sizing:border-box}.ck-uphd .b{font-family:'Nunito',sans-serif;font-weight:700;font-size:24px;display:inline-flex;align-items:center;gap:8px;color:var(--cream)}.ck-uphd .b .ck-i{color:var(--gold)}.ck-uphd .p{color:var(--gold);font-weight:700;font-size:13px;margin-top:3px;display:inline-flex;align-items:center;gap:5px;font-variant-numeric:tabular-nums}
       .ck-uplist{flex:1;overflow:auto;padding:6px 12px 16px;width:100%;box-sizing:border-box}
       .ck-sect{color:var(--muted);font-weight:700;font-size:11px;margin:12px 4px 7px;text-transform:uppercase;letter-spacing:.7px}
+      .ck-games-hd{margin:10px 2px 2px;padding:11px 14px;border-radius:14px;background:linear-gradient(90deg,rgba(238,191,82,.16),rgba(238,191,82,.04));border:1px solid var(--line);color:var(--cream);font-size:13.5px;font-weight:700;text-align:center}.ck-games-hd b{color:var(--gold-l);font-size:16px}
+      .ck-gift{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--gold-l);background:rgba(238,191,82,.1);border:1px solid var(--line);border-radius:11px;padding:8px 11px;font-weight:600;margin-top:2px}
+      .ck-gift.ok{color:#9be7a8;background:rgba(72,187,120,.1)}
+      .ck-gift.earned{justify-content:space-between}.ck-gift.earned span{display:flex;align-items:center;gap:7px;flex:1;min-width:0}.ck-gift.earned .ck-card__buy{flex:none}
       .ck-cats{display:flex;gap:7px;margin:0 0 10px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}.ck-cats::-webkit-scrollbar{display:none}
       .ck-cat-chip{flex:none;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:18px;padding:7px 14px;font-weight:700;font-size:12.5px;cursor:pointer;white-space:nowrap}
       .ck-cat-chip.on{background:linear-gradient(180deg,#ffe7a6,#eebf52 58%,#cf9a36);color:#5a2028;border-color:#ffe9b3}
+      .ck-biz{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:10px 12px;margin-bottom:9px;position:relative;opacity:0;animation:ckBizIn .34s ease-out forwards}
+      @keyframes ckBizIn{0%{opacity:0;transform:translateY(9px)}100%{opacity:1;transform:none}}
+      .ck-biz.locked{filter:saturate(.35) brightness(.82)}
+      .ck-biz.bump{animation:ckBizBump .32s ease-out}@keyframes ckBizBump{0%{transform:scale(1)}40%{transform:scale(1.03)}100%{transform:scale(1)}}
+      .ck-biz__art{width:64px;height:64px;flex:none;border-radius:14px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 3px 8px rgba(0,0,0,.3)}
+      .ck-biz__art::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 32% 22%,rgba(255,255,255,.18),transparent 60%);pointer-events:none;z-index:2}
+      .ck-biz__art img{width:100%;height:100%;object-fit:contain;position:relative;z-index:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
+      .ck-biz__art svg{width:30px;height:30px;color:#fff8ec;position:relative;z-index:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
+      .cat-boost .ck-biz__art{background:linear-gradient(150deg,#f0c24e,#9c6a1c)}
+      .cat-prod .ck-biz__art{background:linear-gradient(150deg,#d6a64c,#7c4a18)}
+      .cat-mkt .ck-biz__art{background:linear-gradient(150deg,#cc5e72,#7a2030)}
+      .cat-staff .ck-biz__art{background:linear-gradient(150deg,#8fae4f,#3f5e1e)}
+      .cat-net .ck-biz__art{background:linear-gradient(150deg,#6f76c2,#2f3470)}
+      .ck-biz__b{flex:1;min-width:0}.ck-biz__n{font-weight:700;font-size:15px;color:var(--ink)}
+      .ck-biz__meta{display:flex;align-items:center;gap:7px;margin-top:5px;flex-wrap:wrap}
+      .ck-biz__lvl{font-size:10.5px;font-weight:700;color:var(--muted);background:rgba(0,0,0,.26);padding:2px 8px;border-radius:9px;white-space:nowrap}
+      .ck-biz__prof{font-size:11.5px;font-weight:700;color:var(--gold-l);font-variant-numeric:tabular-nums;white-space:nowrap}
+      .ck-biz__lock{font-size:11px;font-weight:700;color:var(--muted);display:inline-flex;align-items:center;gap:4px}
+      .ck-biz__buy{display:inline-flex;align-items:center;gap:5px;flex:none;border:1px solid #ffe9b3;border-radius:12px;padding:9px 13px;min-height:44px;box-sizing:border-box;font-weight:800;font-size:13px;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;cursor:pointer;white-space:nowrap;font-variant-numeric:tabular-nums;box-shadow:0 4px 11px rgba(165,112,28,.38),inset 0 1px 0 rgba(255,255,255,.5)}
+      .ck-biz__buy:disabled{background:rgba(255,255,255,.07);color:var(--muted);border-color:transparent;box-shadow:none;cursor:default}
+      .ck-dovegrid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-bottom:6px}
+      .ck-dove{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 8px;text-align:center;opacity:0;animation:ckBizIn .34s ease-out forwards}
+      .ck-dove__art{position:relative;width:88px;height:88px;margin:0 auto;border-radius:14px;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,rgba(238,191,82,.18),rgba(238,191,82,.04));border:1px solid var(--line);overflow:hidden}
+      .ck-dove__art img{width:100%;height:100%;object-fit:contain;position:relative;z-index:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
+      .ck-dove.silh .ck-dove__art img{filter:brightness(0);opacity:.3}
+      .ck-dove__q{position:absolute;z-index:2;font-family:'Nunito',sans-serif;font-weight:800;font-size:34px;color:var(--muted)}
+      .ck-dove__n{margin-top:7px;font-weight:700;font-size:12.5px;color:var(--ink)}
+      .ck-dove.silh .ck-dove__n{color:var(--muted)}
+      .ck-dove__role{font-size:10.5px;color:var(--muted);margin-top:1px}
       .ck-card{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:11px 12px;margin-bottom:9px}
       .ck-card__ic{width:46px;height:46px;flex:none;border-radius:13px;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,rgba(238,191,82,.2),rgba(238,191,82,.04));border:1px solid var(--line);color:var(--gold-l)}
       .ck-card__b{flex:1;min-width:0}.ck-card__n{font-weight:700;font-size:15px;color:var(--ink)}.ck-card__s{color:var(--muted);font-size:12px;margin-top:2px;font-variant-numeric:tabular-nums}
-      .ck-card__buy{display:inline-flex;align-items:center;gap:5px;border:1px solid #ffe9b3;border-radius:12px;padding:9px 13px;font-weight:800;font-size:13px;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;cursor:pointer;white-space:nowrap;font-variant-numeric:tabular-nums;box-shadow:0 4px 11px rgba(165,112,28,.38),inset 0 1px 0 rgba(255,255,255,.5)}.ck-card__buy:disabled{background:rgba(255,255,255,.07);color:var(--muted);border-color:transparent;box-shadow:none;cursor:default}
+      .ck-card__buy{display:inline-flex;align-items:center;gap:5px;border:1px solid #ffe9b3;border-radius:12px;padding:9px 13px;min-height:44px;box-sizing:border-box;font-weight:800;font-size:13px;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;cursor:pointer;white-space:nowrap;font-variant-numeric:tabular-nums;box-shadow:0 4px 11px rgba(165,112,28,.38),inset 0 1px 0 rgba(255,255,255,.5)}.ck-card__buy:disabled{background:rgba(255,255,255,.07);color:var(--muted);border-color:transparent;box-shadow:none;cursor:default}
       .ck-row{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:7px}
       .ck-row .r{width:28px;font-weight:800;color:var(--gold);text-align:center;font-variant-numeric:tabular-nums}.ck-row .n{flex:1;font-weight:600;color:var(--ink)}.ck-row .v{font-weight:700;color:var(--gold);font-size:13px;display:inline-flex;align-items:center;gap:5px;font-variant-numeric:tabular-nums}.ck-row.me{background:rgba(238,191,82,.14);border-color:rgba(238,191,82,.34)}
       .ck-bonus{display:flex;flex-direction:column;align-items:stretch;gap:10px}
@@ -415,8 +616,8 @@
       .ck-daily.done{background:var(--panel);color:var(--muted);border-color:var(--line);box-shadow:none}
       .ck-nav{display:flex;border-top:1px solid var(--line);background:rgba(18,8,11,.5);backdrop-filter:blur(8px)}
       .ck-nav__b{flex:1;border:none;background:transparent;color:var(--muted);padding:9px 0 12px;font-weight:600;font-size:11.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px}.ck-nav__b.on{color:var(--gold-l)}
-      .ck-levelup{position:absolute;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;pointer-events:none}.ck-levelup span{font-family:'Playfair Display',serif;color:var(--gold-l);font-weight:700;font-size:26px;background:linear-gradient(180deg,rgba(46,17,25,.92),rgba(26,10,15,.92));border:1px solid var(--line);padding:14px 24px;border-radius:18px;opacity:0;box-shadow:0 12px 36px rgba(0,0,0,.5)}.ck-levelup span.show{animation:ckLU 1.6s ease-out}@keyframes ckLU{0%{opacity:0;transform:scale(.6)}20%{opacity:1;transform:scale(1.1)}80%{opacity:1}100%{opacity:0}}
-      .ck-pop{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9;background:linear-gradient(180deg,#2e1119,#1d0a11);border:1px solid var(--line);border-radius:20px;padding:24px;text-align:center;box-shadow:0 18px 50px rgba(0,0,0,.6);display:none;max-width:80%}.ck-pop.on{display:block}.ck-pop h3{margin:0 0 6px;font-family:'Playfair Display',serif;font-weight:700;font-size:20px;color:var(--cream)}.ck-pop .v{font-family:'Playfair Display',serif;font-size:32px;font-weight:700;color:var(--gold-l);margin:10px 0;display:inline-flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums}.ck-pop button{margin-top:10px;border:1px solid #ffe9b3;border-radius:14px;padding:12px 28px;font-weight:800;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;cursor:pointer}
+      .ck-levelup{position:absolute;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;pointer-events:none}.ck-levelup span{font-family:'Nunito',sans-serif;color:var(--gold-l);font-weight:700;font-size:26px;background:linear-gradient(180deg,rgba(46,17,25,.92),rgba(26,10,15,.92));border:1px solid var(--line);padding:14px 24px;border-radius:18px;opacity:0;box-shadow:0 12px 36px rgba(0,0,0,.5)}.ck-levelup span.show{animation:ckLU 1.6s ease-out}@keyframes ckLU{0%{opacity:0;transform:scale(.6)}20%{opacity:1;transform:scale(1.1)}80%{opacity:1}100%{opacity:0}}
+      .ck-pop{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9;background:linear-gradient(180deg,#2e1119,#1d0a11);border:1px solid var(--line);border-radius:20px;padding:24px;text-align:center;box-shadow:0 18px 50px rgba(0,0,0,.6);display:none;max-width:80%}.ck-pop.on{display:block}.ck-pop h3{margin:0 0 6px;font-family:'Nunito',sans-serif;font-weight:700;font-size:20px;color:var(--cream)}.ck-pop .v{font-family:'Nunito',sans-serif;font-size:32px;font-weight:700;color:var(--gold-l);margin:10px 0;display:inline-flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums}.ck-pop button{margin-top:10px;border:1px solid #ffe9b3;border-radius:14px;padding:12px 28px;font-weight:800;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;cursor:pointer}
     `;
     document.head.appendChild(s);
   }
@@ -442,6 +643,8 @@
         <div class="ck-energy"><div class="ck-energy__row" id="ck-enrow"><span id="ck-enpre">${ICON.bolt(15)}</span> <span id="ck-en">0</span> / <span id="ck-enmax">1000</span></div><div class="ck-energy__bar"><div class="ck-energy__fill" id="ck-enfill"></div></div></div>
       </div>
       <div class="ck-screen" id="ck-scr-up"><div class="ck-uphd"><div class="ck-bal" style="justify-content:center;font-size:30px">${COIN(26)} <span id="ck-bal2">0</span></div><div class="p" id="ck-prof2">${COIN(13)} +0 / час</div></div><div class="ck-uplist" id="ck-uplist"></div></div>
+      <div class="ck-screen" id="ck-scr-games"><div class="ck-uphd"><div class="b">${ICON.game(22)} Игры</div></div><div class="ck-uplist" id="ck-gameslist"></div></div>
+      <div class="ck-screen" id="ck-scr-dove"><div class="ck-uphd"><div class="b">${ICON.dove(22)} Голубятня</div></div><div class="ck-uplist" id="ck-dovelist"></div></div>
       <div class="ck-screen" id="ck-scr-tasks"><div class="ck-uphd"><div class="b">${ICON.list(22)} Задания</div></div><div class="ck-uplist" id="ck-taskslist"></div></div>
       <div class="ck-screen" id="ck-scr-top"><div class="ck-uphd"><div class="b">${ICON.trophy(22)} Рейтинг</div><div class="p" id="ck-myrank"></div></div><div class="ck-uplist" id="ck-toplist"></div></div>
       <div class="ck-fx" id="ck-fx"></div>
@@ -450,6 +653,8 @@
       <div class="ck-nav">
         <button class="ck-nav__b on" data-tab="cat">${ICON.paw(21)}Котик</button>
         <button class="ck-nav__b" data-tab="up">${ICON.bolt(21)}Прокачка</button>
+        <button class="ck-nav__b" data-tab="games">${ICON.game(21)}Игры</button>
+        <button class="ck-nav__b" data-tab="dove">${ICON.dove(21)}Голуби</button>
         <button class="ck-nav__b" data-tab="tasks">${ICON.list(21)}Задания</button>
         <button class="ck-nav__b" data-tab="top">${ICON.trophy(21)}Рейтинг</button>
       </div>`;
@@ -466,10 +671,14 @@
     tab = t;
     ov.querySelector('#ck-scr-cat').classList.toggle('on', t === 'cat');
     ov.querySelector('#ck-scr-up').classList.toggle('on', t === 'up');
+    ov.querySelector('#ck-scr-games').classList.toggle('on', t === 'games');
+    ov.querySelector('#ck-scr-dove').classList.toggle('on', t === 'dove');
     ov.querySelector('#ck-scr-tasks').classList.toggle('on', t === 'tasks');
     ov.querySelector('#ck-scr-top').classList.toggle('on', t === 'top');
     ov.querySelectorAll('.ck-nav__b').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
     if (t === 'up') renderUpgrades();
+    if (t === 'games') renderGames();
+    if (t === 'dove') renderDove();
     if (t === 'tasks') renderTasks();
     if (t === 'top') renderTop();
   }
@@ -477,7 +686,7 @@
   const turboOn = () => Date.now() < turboUntil;
   function onTap(e) {
     e.preventDefault(); ac();
-    if (st.energy < 1) { flashMsg('нет энергии ⚡'); return; }
+    if (st.energy < 1) { flashMsg('Нет энергии — подожди'); return; }
     const mult = turboOn() ? TURBO_MULT : 1;
     const gain = st.perTap * mult;
     st.energy -= 1; st.balance += gain; st.totalEarned += gain; pending++;
@@ -502,6 +711,7 @@
     setTimeout(() => el.remove(), 850);
   }
   function coinShower() {
+    if (reduceMotion()) return;
     const fx = ov.querySelector('#ck-fx'); const w = fx.clientWidth;
     for (let i = 0; i < 8; i++) { const c = document.createElement('div'); c.className = 'ck-coin'; c.innerHTML = COIN(22); c.style.left = (Math.random() * w) + 'px'; c.style.top = '-30px'; c.style.transition = 'transform 1s ease-in, opacity 1s'; fx.appendChild(c); requestAnimationFrame(() => { c.style.transform = `translateY(${fx.clientHeight + 40}px) rotate(${(Math.random() - .5) * 360}deg)`; c.style.opacity = '0.2'; }); setTimeout(() => c.remove(), 1000); }
   }
@@ -510,6 +720,7 @@
   // ── Анимации (juice) ─────────────────────────────────────────────────────────
   let lastFly = 0;
   function spawnSparks() {
+    if (reduceMotion()) return;
     const wrap = ov && ov.querySelector('#ck-catwrap'); if (!wrap || wrap.querySelector('.ck-spark')) return;
     for (let i = 0; i < 6; i++) { const s = document.createElement('div'); s.className = 'ck-spark'; s.style.left = (14 + Math.random() * 72) + '%'; s.style.top = (55 + Math.random() * 28) + '%'; s.style.animationDuration = (4 + Math.random() * 3).toFixed(1) + 's'; s.style.animationDelay = (-Math.random() * 6).toFixed(1) + 's'; wrap.appendChild(s); }
   }
@@ -525,6 +736,7 @@
   }
   function flash() { const fx = ov.querySelector('#ck-fx'); const el = document.createElement('div'); el.className = 'ck-flash'; fx.appendChild(el); setTimeout(() => el.remove(), 720); }
   function confettiBurst() {
+    if (reduceMotion()) return;
     const fx = ov.querySelector('#ck-fx'); const cx = fx.clientWidth / 2, cy = fx.clientHeight * 0.42;
     const cols = ['#ffe49c', '#eebf52', '#cf9a36', '#ffffff', '#ffd86b'];
     for (let i = 0; i < 26; i++) { const c = document.createElement('div'); c.className = 'ck-conf'; const sz = 5 + Math.random() * 5; c.style.width = sz + 'px'; c.style.height = (sz * 0.6) + 'px'; c.style.background = cols[i % cols.length]; c.style.left = cx + 'px'; c.style.top = cy + 'px'; c.style.transition = 'transform .9s cubic-bezier(.2,.6,.4,1),opacity .9s'; fx.appendChild(c); const ang = Math.random() * Math.PI * 2, dist = 60 + Math.random() * 120; requestAnimationFrame(() => { c.style.transform = `translate(${Math.cos(ang) * dist}px,${Math.sin(ang) * dist + 80}px) rotate(${Math.random() * 540}deg)`; c.style.opacity = '0'; }); setTimeout(() => c.remove(), 950); }
@@ -609,11 +821,11 @@
   // ── Сундук удачи ──────────────────────────────────────────────────────────────
   function rollChestGuest(level) {
     const r = Math.random(), sc = 1 + level * 0.25;
-    if (r < 0.42) return { type: 'coins', amount: Math.round((500 + Math.random() * 1800) * sc) };
-    if (r < 0.68) return { type: 'coins', amount: Math.round((2000 + Math.random() * 4000) * sc) };
+    if (r < 0.42) return { type: 'coins', amount: Math.round((300 + Math.random() * 1000) * sc) };
+    if (r < 0.68) return { type: 'coins', amount: Math.round((1200 + Math.random() * 2500) * sc) };
     if (r < 0.82) return { type: 'turbo' };
     if (r < 0.95) return { type: 'energy' };
-    return { type: 'jackpot', amount: Math.round(15000 + Math.random() * 35000) };
+    return { type: 'jackpot', amount: Math.round(5000 + Math.random() * 15000) };
   }
   function guestOpenChestRaw() {
     guestDerive(); const s = rawGet(); const today = irkToday(); if (s.chestDate === today) return null;
@@ -698,6 +910,26 @@
     else { const g = guestClaimRainRaw(score); if (g != null) { reward = g; st = guestDerive(); } }
     sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); coinShower(); dailyPopupRaw(ICON.rain(20) + ` Золотой дождь · ${score} монет`, reward || 0); renderAll(); renderTasks(); bumpBalance();
   }
+  // ── Хаб «Игры»: единый claim (clamp+гейт 1/день; для гостя — localStorage) ────
+  const GAME_CAP = { quiz_kids: { cap: 5, per: 1000 }, quiz_riddle: { cap: 4, per: 1200 }, count: { cap: 6, per: 400 }, memory: { cap: 100, per: 60 }, gems: { cap: 200, per: 45 }, tower: { cap: 200, per: 60 } };
+  // gamesDone приходит только в getClicker/claimGame; tap/buy его не несут → кэшируем
+  let gdCache = [];
+  function gamesDoneNow() { if (authed()) { if (st && Array.isArray(st.gamesDone)) gdCache = st.gamesDone; return gdCache; } return guestGamesDoneList(); }
+  function gameDone(g) { return gamesDoneNow().indexOf(g) >= 0; }
+  function guestGamesDoneList() { const s = rawGet(); const today = irkToday(); const g = s.gamesDone || {}; return Object.keys(g).filter(k => g[k] === today); }
+  function guestClaimGameRaw(game, score) {
+    const cfg = GAME_CAP[game]; if (!cfg) return null; guestDerive(); const s = rawGet(); const today = irkToday();
+    if (!s.gamesDone) s.gamesDone = {}; if (s.gamesDone[game] === today) return null;
+    const sc = Math.max(0, Math.min(cfg.cap, Math.floor(score || 0))); const reward = sc * cfg.per;
+    s.balance += reward; s.totalEarned += reward; s.gamesDone[game] = today; rawSave(s); return reward;
+  }
+  async function submitGame(game, score) {
+    let reward = 0;
+    if (authed()) { const d = await api('/api/clicker/game', { method: 'POST', body: JSON.stringify({ game, score }) }).catch(() => null); if (d && !d.error) { st = d; reward = d.reward || 0; } }
+    else { const g = guestClaimGameRaw(game, score); if (g != null) { reward = g; st = guestDerive(); } }
+    return reward;
+  }
+
   function guestClaimRainRaw(score) {
     guestDerive(); const s = rawGet(); const today = irkToday(); if (s.rainDate === today) return 0;
     const sc = Math.max(0, Math.min(120, Math.floor(score))); const lvl = leagueFor(s.totalEarned).level; const reward = Math.min(80000, sc * (60 + lvl * 20));
@@ -789,15 +1021,22 @@
 
   function renderUpgrades() {
     if (!ov || !st) return; const list = ov.querySelector('#ck-uplist');
-    const row = (icon, name, sub, price, dis, act, id, locked) => `<div class="ck-card"${locked ? ' style="opacity:.55"' : ''}><div class="ck-card__ic">${icon}</div><div class="ck-card__b"><div class="ck-card__n">${name}</div><div class="ck-card__s">${sub}</div></div>${locked ? `<button class="ck-card__buy" disabled>${ICON.lock(14)} ур.${id}</button>` : `<button class="ck-card__buy" data-act="${act}" data-id="${id || ''}" ${dis ? 'disabled' : ''}>${COIN(15)} ${fmt(price)}</button>`}</div>`;
+    const biz = (cat, art, name, metaHtml, buyHtml, idx) => `<div class="ck-biz cat-${cat.replace(' locked', '')}${cat.includes('locked') ? ' locked' : ''}" style="animation-delay:${(idx * 0.035).toFixed(2)}s"><div class="ck-biz__art">${art}</div><div class="ck-biz__b"><div class="ck-biz__n">${name}</div><div class="ck-biz__meta">${metaHtml}</div></div>${buyHtml}</div>`;
+    const buyBtn = (price, dis, act, id) => `<button class="ck-biz__buy" data-act="${act}" data-id="${id || ''}" ${dis ? 'disabled' : ''}>${COIN(15)} ${fmt(price)}</button>`;
     let h = rewardsBlock();
     h += '<div class="ck-sect">Бусты</div>';
-    h += row(ICON.tap(26), 'Мультитап', `+1 за тап · сейчас +${st.perTap}`, st.multitapPrice, st.balance < st.multitapPrice, 'multitap');
-    h += row(ICON.battery(26), 'Запас энергии', `+500 · сейчас ${st.energyMax}`, st.energyPrice, st.balance < st.energyPrice, 'energy');
+    h += biz('boost', cardArt('multitap'), 'Мультитап', `<span class="ck-biz__lvl">+1 за тап</span><span class="ck-biz__prof">сейчас +${st.perTap}</span>`, buyBtn(st.multitapPrice, st.balance < st.multitapPrice, 'multitap'), 0);
+    h += biz('boost', cardArt('energy'), 'Запас энергии', `<span class="ck-biz__lvl">+500 энергии</span><span class="ck-biz__prof">сейчас ${st.energyMax}</span>`, buyBtn(st.energyPrice, st.balance < st.energyPrice, 'energy'), 1);
     h += '<div class="ck-sect">Бизнесы — пассивный доход</div>';
     h += '<div class="ck-cats">' + CARD_CATS.map(ct => `<button class="ck-cat-chip${ct.id === upCat ? ' on' : ''}" data-cat="${ct.id}">${ct.name}</button>`).join('') + '</div>';
-    for (const c of st.cards) { if (c.cat !== upCat) continue; const sub = c.locked ? `Откроется на уровне ${c.req}` : `Ур. ${c.level} · +${fmt(c.profit)}/час`; h += row(cardIcon(c.id), c.name, sub, c.price, st.balance < c.price, 'card', c.locked ? c.req : c.id, c.locked); }
+    let i = 0;
+    for (const c of st.cards) {
+      if (c.cat !== upCat) continue;
+      if (c.locked) h += biz(c.cat + ' locked', cardArt(c.id), c.name, `<span class="ck-biz__lock">${ICON.lock(12)} с уровня ${c.req}</span>`, `<button class="ck-biz__buy" disabled>${ICON.lock(15)}</button>`, i++);
+      else h += biz(c.cat, cardArt(c.id), c.name, `<span class="ck-biz__lvl">Ур. ${c.level}</span><span class="ck-biz__prof">+${fmt(c.profit)}/час</span>`, buyBtn(c.price, st.balance < c.price, 'card', c.id), i++);
+    }
     list.innerHTML = h;
+    if (lastBought) { const el = list.querySelector(`[data-id="${lastBought}"]`); const card = el && el.closest('.ck-biz'); if (card) { card.classList.add('bump'); } lastBought = null; }
     list.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { upCat = b.dataset.cat; renderUpgrades(); });
     list.querySelectorAll('[data-act]').forEach(b => b.onclick = () => buy(b.dataset.act, b.dataset.id || undefined));
     list.querySelectorAll('[data-redeem]').forEach(b => b.onclick = () => redeem(b.dataset.redeem));
@@ -824,6 +1063,24 @@
     }).catch(() => flashMsg('Ошибка'));
   }
   function codePopup(code) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Награда твоя!</h3><div class="v" style="font-size:22px">${code}</div><div style="color:var(--muted);font-size:13px">Покажи код на кассе «Марии»</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
+  function renderDove() {
+    const list = ov.querySelector('#ck-dovelist'); if (!st) { list.innerHTML = ''; return; }
+    const owned = st.cards.filter(c => c.level > 0).length, total = st.cards.length;
+    let h = `<div style="text-align:center;color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.5">Собери всех помощников кота — <b style="color:var(--gold-l)">${owned}/${total}</b>. Заводи бизнесы в «Прокачке»; награды за комплект — в «Заданиях» → Достижения.</div>`;
+    for (const ct of CARD_CATS) {
+      const cards = st.cards.filter(c => c.cat === ct.id); const got = cards.filter(c => c.level > 0).length;
+      h += `<div class="ck-sect">${ct.name} · ${got}/${cards.length}</div><div class="ck-dovegrid">`;
+      let i = 0;
+      for (const c of cards) {
+        const has = c.level > 0;
+        const art = BIZ_ART_V ? `<img src="/assets/images/biz/${c.id}.png?v=${BIZ_ART_V}" alt="" loading="lazy">` : cardIcon(c.id, 36);
+        h += `<div class="ck-dove ${has ? 'got' : 'silh'}" style="animation-delay:${(i * 0.03).toFixed(2)}s"><div class="ck-dove__art">${art}${has ? '' : '<span class="ck-dove__q">?</span>'}</div><div class="ck-dove__n">${has ? c.name : '???'}</div><div class="ck-dove__role">${has ? 'Ур. ' + c.level : 'не открыт'}</div></div>`;
+        i++;
+      }
+      h += '</div>';
+    }
+    list.innerHTML = h;
+  }
   async function renderTop() {
     const list = ov.querySelector('#ck-toplist'); const rank = ov.querySelector('#ck-myrank');
     const left = fmtDur(seasonEndsTs() - Date.now());
@@ -859,22 +1116,53 @@
 
   // ── Рефералы + Задания ───────────────────────────────────────────────────────
   const linkOpened = {};
-  function refLink() { const code = st && st.refCode; return code ? `https://t.me/${BOT}?startapp=ckref_${code}` : `https://t.me/${BOT}`; }
+  // refLink: серверная платформо-зависимая ссылка (st.refLink), иначе фолбэк t.me
+  function refLink() { if (st && st.refLink) return st.refLink; const code = st && st.refCode; return code ? `https://t.me/${BOT}?start=ckref_${code}` : `https://t.me/${BOT}/app`; }
   function shareRef() {
     const link = refLink();
     const txt = `🐱 Играю в «Котик Комбат» от кондитерской «Мария» — тапай котика и качай уровни! Заходи по ссылке, нам обоим дадут монеты 🪙 ${link}`;
     if (window.App && App.share) App.share(txt); else if (navigator.share) navigator.share({ text: txt }).catch(() => {}); else if (window.App && App.openExternal) App.openExternal(link);
   }
-  async function maybeRegisterRef() {
-    if (!authed()) return;
+  // Надёжная регистрация реферала: ловим код из startParam → сохраняем; флаг
+  // «выполнено» ставим ТОЛЬКО после успеха сервера → при сбое повтор на след. заходе.
+  // Запускается и при открытии игры, и фоном при загрузке приложения (см. низ файла).
+  async function ensureRefRegistered() {
     try {
-      const sp = (window.App && App.startParam) || '';
+      if (!authed()) return;                                  // гость — реф невозможен, ждём авторизации
+      if (localStorage.getItem('maria_ck_ref_done')) { try { localStorage.removeItem('ck_pending_ref'); } catch (_) {} return; }
+      let code = '';
+      const sp = (window.App && App.startParam && App.startParam()) || '';
       const m = /^ckref_(\d+)$/.exec(sp);
-      if (!m) return;
-      if (localStorage.getItem('maria_ck_ref_done')) return;
-      localStorage.setItem('maria_ck_ref_done', '1');
-      const d = await api('/api/clicker/ref', { method: 'POST', body: JSON.stringify({ code: m[1] }) });
-      if (d && !d.error) { st = d; if (d.refReward) { dailyPopupRaw(ICON.gift(20) + ' Бонус за приглашение', d.refReward); } }
+      if (m) { code = m[1]; try { localStorage.setItem('ck_pending_ref', code); } catch (_) {} }
+      if (!code) { try { code = localStorage.getItem('ck_pending_ref') || ''; } catch (_) {} }
+      if (!code) return;
+      const d = await api('/api/clicker/ref', { method: 'POST', body: JSON.stringify({ code }) }).catch(() => null);
+      if (d && !d.error) {                                    // успех → фиксируем, чистим pending
+        st = d;
+        try { localStorage.setItem('maria_ck_ref_done', '1'); localStorage.removeItem('ck_pending_ref'); } catch (_) {}
+        if (d.refReward && ov && ov.classList.contains('on')) dailyPopupRaw(ICON.gift(20) + ' Бонус за приглашение', d.refReward);
+      }                                                       // сбой → pending остаётся, повтор позже
+    } catch (_) {}
+  }
+  // Реальные покупки у «Марии» → игровые монеты (за новые траты, троттлинг на сервере).
+  async function maybePurchaseBonus() {
+    try {
+      if (!authed()) return;
+      const d = await api('/api/clicker/purchase-sync', { method: 'POST', body: '{}' }).catch(() => null);
+      if (d && !d.error) { if (d.balance != null) st = d; if (d.bonus > 0) { sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); purchasePopup(d.bonus); } }
+    } catch (_) {}
+  }
+  function purchasePopup(amount) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Спасибо за покупки!</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><div style="color:var(--muted);font-size:13px">Бонус за покупки в «Марии» — чем больше заказываешь, тем больше монет в игре 🎂</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
+  // Перенос прогресса гостя на серверный аккаунт при первом входе (одна попытка).
+  async function maybeMigrateGuest() {
+    try {
+      if (!authed()) return;
+      if (localStorage.getItem('ck_migrated')) return;
+      const g = rawGet();
+      if (!g || (g.totalEarned || 0) < 1000) { try { localStorage.setItem('ck_migrated', '1'); } catch (_) {} return; }
+      const snap = { balance: g.balance, totalEarned: g.totalEarned, cards: g.cards, multitapLevel: g.multitapLevel, energyLevel: g.energyLevel, taps: g.taps };
+      const d = await api('/api/clicker/migrate', { method: 'POST', body: JSON.stringify(snap) }).catch(() => null);
+      if (d) { try { localStorage.setItem('ck_migrated', '1'); } catch (_) {} if (!d.error) { st = d; if (d.migrated) dailyPopupRaw(ICON.gift(20) + ' Прогресс перенесён', d.migrated); } }
     } catch (_) {}
   }
   function guestTaskList() {
@@ -928,14 +1216,51 @@
           : `<button class="ck-card__buy" disabled>+${fmt(a.reward)}</button>`;
       return `<div class="ck-card"${a.done ? ' style="opacity:.6"' : ''}><div class="ck-card__ic">${achIcon(a.icon)}</div><div class="ck-card__b"><div class="ck-card__n">${a.name}</div><div class="ck-card__s">${achDesc(a)}</div></div>${btn}</div>`;
     }).join('');
+    const progRows = await milestonesHtml();
     const promoCard = `<div class="ck-sect">Промокод</div><div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.gift(26)}</div><div class="ck-card__b"><div class="ck-card__n">Есть промокод?</div><div class="ck-card__s">Лови коды в соцсетях «Марии» → монеты</div></div></div><div style="display:flex;gap:8px"><input class="ck-cipher-in" id="ck-code-in" maxlength="24" placeholder="ВВЕДИ КОД" autocomplete="off" spellcheck="false"/><button class="ck-card__buy" id="ck-code-go" style="justify-content:center">Применить</button></div></div>`;
-    list.innerHTML = bonusBlock() + promoCard + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows + '<div class="ck-sect">Достижения</div>' + achRows;
+    list.innerHTML = bonusBlock() + promoCard + `<div class="ck-sect">${ICON.gift(13)} Награды за прогресс</div>` + progRows + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows + '<div class="ck-sect">Достижения</div>' + achRows;
     ov.querySelector('#ck-invite').onclick = shareRef;
     list.querySelectorAll('[data-open]').forEach(b => b.onclick = () => { const id = b.dataset.open, link = b.dataset.link; if (link) { if (window.App && App.openExternal) App.openExternal(link); else window.open(link, '_blank'); } linkOpened[id] = true; setTimeout(renderTasks, 400); });
     list.querySelectorAll('[data-claim]').forEach(b => b.onclick = () => claimTask(b.dataset.claim));
+    list.querySelectorAll('[data-ms]').forEach(b => b.onclick = () => { const g = b.dataset.ms; if (g === 'phone') requestPhone(); else claimMilestoneAct(g); });
     const cg = ov.querySelector('#ck-code-go'), ci = ov.querySelector('#ck-code-in');
     if (cg && ci) { cg.onclick = () => redeemCodeAct(ci.value); ci.onkeydown = (e) => { if (e.key === 'Enter') redeemCodeAct(ci.value); }; }
     wireBonus();
+  }
+  async function milestonesHtml() {
+    let data = null, pv = false;
+    if (authed()) { const d = await api('/api/clicker/milestones').catch(() => null); if (d && d.milestones) { data = d.milestones; pv = !!d.phoneVerified; } }
+    if (!data) { const gs = authed() ? st : guestDerive(); data = MILESTONES.map(m => ({ id: m.id, title: m.title, kind: m.kind, points: m.points || 0, perkText: m.perkText || '', reached: condMet({ type: m.cond.type, target: m.cond.target }, gs), granted: false })); }
+    return data.map(m => {
+      const rewardLabel = m.kind === 'both' ? `${COIN(13)} +${fmt(m.points)} баллов + ${ICON.gift(13)} ${m.perkText}` : m.kind === 'perk' ? `${ICON.gift(13)} ${m.perkText}` : `${COIN(13)} +${fmt(m.points)} баллов на карту`;
+      let btn;
+      if (m.granted) btn = `<button class="ck-card__buy" disabled>✓ Получено</button>`;
+      else if (!authed()) btn = `<button class="ck-card__buy" disabled>Войти</button>`;
+      else if (!m.reached) btn = `<button class="ck-card__buy" disabled>${ICON.lock(14)} Рано</button>`;
+      else if (pv) btn = `<button class="ck-card__buy" data-ms="${m.id}">Забрать</button>`;
+      else btn = `<button class="ck-card__buy" data-ms="phone">Телефон</button>`;
+      return `<div class="ck-card"${m.granted ? ' style="opacity:.55"' : ''}><div class="ck-card__ic">${m.kind === 'points' ? ICON.star(26) : ICON.gift(26)}</div><div class="ck-card__b"><div class="ck-card__n">${m.title}</div><div class="ck-card__s">${rewardLabel}</div></div>${btn}</div>`;
+    }).join('');
+  }
+  async function claimMilestoneAct(id) {
+    if (!authed()) { flashMsg('Войди через приложение «Мария»'); return; }
+    const d = await api('/api/clicker/milestone', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null);
+    if (d && !d.error) {
+      sfxLevel(); window.haptic && window.haptic('success'); confettiBurst();
+      if (d.promoCode) promoPopup(d.perkTitle, d.promoCode, d.minOrder, d.points); else giftPopup(d.points);
+      renderTasks();
+    } else flashMsg(d && d.error === 'need_phone' ? 'Сначала подтверди телефон' : d && d.error === 'already' ? 'Награда уже получена' : d && d.error === 'not_ready' ? 'Веха ещё не достигнута' : 'Не получилось, попробуй позже');
+  }
+  function promoPopup(title, code, minOrder, points) {
+    const pop = ov.querySelector('#ck-pop');
+    const ptsLine = points ? `<div style="font-size:13px;color:var(--gold-l);font-weight:700;margin:6px 0">${COIN(13)} +${fmt(points)} баллов на карту тоже начислено</div>` : '';
+    pop.innerHTML = `<h3>${ICON.gift(20)} Подарок!</h3><div style="font-size:18px;font-weight:800;color:var(--ink);margin:4px 0">${title || 'Подарок «Мария»'}</div>${ptsLine}<div style="margin:8px 0;font-size:13px;color:var(--muted)">Назови этот промокод менеджеру при заказе${minOrder ? ` от ${fmt(minOrder)}₽` : ''}:</div><div class="ck-morse" style="font-size:21px;letter-spacing:2px">${code}</div><div style="font-size:12px;color:var(--muted);margin-top:6px">Код действует 30 дней · сохранён в «Мои награды»</div><button id="ck-pop-ok">Сохранить</button>`;
+    pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
+  }
+  function giftPopup(points) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Подарок на карту!</h3><div class="v">+${points} баллов</div><div style="color:var(--muted);font-size:13px">Баллы «Мария» зачислены на твою карту клуба — трать при заказе тортов 🎂</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
+  function requestPhone() {
+    try { const tg = window.Telegram && window.Telegram.WebApp; if (tg && typeof tg.requestContact === 'function') { tg.requestContact((ok) => { if (ok) { flashMsg('Спасибо! Проверяем номер…'); setTimeout(renderTasks, 1500); } }); return; } } catch (_) {}
+    flashMsg('Открой бота «Мария» → кнопка «Поделиться телефоном»');
   }
   async function redeemCodeAct(code) {
     if (!code || !code.trim()) return;
@@ -970,7 +1295,7 @@
     const rainCard = `<div class="ck-card ck-bonus">
       <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.rain(26)}</div><div class="ck-card__b"><div class="ck-card__n">Золотой дождь</div><div class="ck-card__s">${rainAvail ? 'Лови монеты 20 секунд → бонус' : 'Сыграно — приходи завтра'}</div></div>
       ${rainAvail ? `<button class="ck-card__buy" id="ck-rain-play">Играть</button>` : `<button class="ck-card__buy" disabled>✓ Сыграно</button>`}</div>`;
-    return '<div class="ck-sect">Бонусы дня</div>' + chestCard + rainCard + comboCard + cipherCard;
+    return '<div class="ck-sect">Бонусы дня</div>' + chestCard + comboCard + cipherCard;
   }
   function wireBonus() {
     const cb = ov.querySelector('#ck-combo-claim'); if (cb) cb.onclick = claimCombo;
@@ -1015,13 +1340,262 @@
   async function open() {
     if (!ov) build();
     ov.classList.add('on'); window.scrollLock && window.scrollLock(); ac();
-    await load(); await maybeRegisterRef(); curLevel = leagueFor(st.totalEarned).level;
+    await load(); await maybeMigrateGuest(); await ensureRefRegistered(); await maybePurchaseBonus(); curLevel = leagueFor(st.totalEarned).level;
     ov.querySelector('#ck-cat').src = A(leagueFor(st.totalEarned).cat || 'idle.png');
     setTab('cat'); renderAll(); spawnSparks(); applySeason(); scheduleBonus();
     if (st.passiveEarned > 0) passivePopup(st.passiveEarned);
     lastTs = 0; syncT = 0; combo = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
   }
-  function close() { cancelAnimationFrame(raf); clearTimeout(bonusTimer); if (rainState) endRain(true); flush(); if (ov) ov.classList.remove('on'); window.scrollUnlock && window.scrollUnlock(); }
+  // ── Хаб «Игры»: рендер + квизы + «Собери торт» + «Ровный крем» ───────────────
+  let quizState = null, memState = null, towerState = null;
+  // Рисованные сладости (вместо эмодзи — правило бренда «никаких эмодзи как арта»).
+  // Грани карт памяти; совпадение по равенству строк, поэтому одинаковые SVG = пара.
+  const MEM_ICONS = [
+    `<svg width="34" height="34" viewBox="0 0 40 40"><path d="M12 18h16l-1.6 12.4a1.8 1.8 0 0 1-1.8 1.6H15.4a1.8 1.8 0 0 1-1.8-1.6z" fill="#e7c08a" stroke="#b98a4e" stroke-width="1.6" stroke-linejoin="round"/><path d="M10 18c-.4-3.6 3-5.6 5.2-5.6.8-3.2 8.8-3.2 9.6 0 2.2 0 5.6 2 5.2 5.6z" fill="#ff9ec4" stroke="#e0639a" stroke-width="1.6" stroke-linejoin="round"/><circle cx="20" cy="9.6" r="2.3" fill="#e8413f"/></svg>`,
+    `<svg width="34" height="34" viewBox="0 0 40 40"><g stroke="#9a6fc4" stroke-width="1.6" stroke-linejoin="round"><path d="M9 15c0-4 4.8-6 11-6s11 2 11 6c0 2-2 3.2-4 3.6H13c-2-.4-4-1.6-4-3.6z" fill="#c9a6e0"/><path d="M9 25c0 4 4.8 6 11 6s11-2 11-6c0-2-2-3.2-4-3.6H13c-2 .4-4 1.6-4 3.6z" fill="#c9a6e0"/></g><rect x="11" y="18" width="18" height="4.4" rx="2.2" fill="#ffe1ec" stroke="#e0a9c4" stroke-width="1.2"/></svg>`,
+    `<svg width="34" height="34" viewBox="0 0 40 40"><circle cx="20" cy="20" r="13" fill="#d6a25a" stroke="#a9762f" stroke-width="1.6"/><circle cx="15" cy="16" r="1.8" fill="#4a2c14"/><circle cx="24" cy="15" r="1.8" fill="#4a2c14"/><circle cx="26" cy="23" r="1.8" fill="#4a2c14"/><circle cx="17" cy="25" r="1.8" fill="#4a2c14"/><circle cx="21" cy="20" r="1.5" fill="#4a2c14"/></svg>`,
+    `<svg width="34" height="34" viewBox="0 0 40 40"><circle cx="20" cy="21" r="12" fill="#e7c08a" stroke="#b98a4e" stroke-width="1.6"/><path d="M20 9c6.6 0 12 5.4 12 12 0 2-.5 4-1.4 5.6C28 24 24 26 20 26s-8-2-10.6-.6A11.9 11.9 0 0 1 8 21C8 14.4 13.4 9 20 9z" fill="#7a4a2a" stroke="#5a3318" stroke-width="1.4" stroke-linejoin="round"/><circle cx="20" cy="21" r="4.2" fill="#1a1413"/><circle cx="16" cy="15" r="1" fill="#ff9ec4"/><circle cx="24" cy="14" r="1" fill="#7da33f"/><circle cx="27" cy="19" r="1" fill="#ffd24d"/><circle cx="13" cy="19" r="1" fill="#5aa8e8"/></svg>`,
+    `<svg width="34" height="34" viewBox="0 0 40 40"><path d="M8 31 20 12l12 19z" fill="#ffe0a6" stroke="#cf9a36" stroke-width="1.6" stroke-linejoin="round"/><path d="M13.5 25h13" stroke="#ff9ec4" stroke-width="3" stroke-linecap="round"/><circle cx="20" cy="13.5" r="2.2" fill="#e8413f"/></svg>`,
+    `<svg width="34" height="34" viewBox="0 0 40 40"><g stroke="#c0392b" stroke-width="1.6" stroke-linejoin="round"><path d="M11 20 4 13v14z" fill="#ff8a7a"/><path d="M29 20 36 13v14z" fill="#ff8a7a"/><ellipse cx="20" cy="20" rx="9" ry="8" fill="#ff6b5e"/></g><path d="M16 16c2.4 2.4 5.6 2.4 8 0" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".7"/></svg>`,
+  ];
+
+  function renderGames() {
+    const box = ov && ov.querySelector('#ck-gameslist'); if (!box) return;
+    const card = (id, icon, name, desc) => {
+      const done = gameDone(id);
+      return `<div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${icon}</div><div class="ck-card__b"><div class="ck-card__n">${name}</div><div class="ck-card__s">${done ? 'Сыграно — приходи завтра' : desc}</div></div>${done ? `<button class="ck-card__buy" disabled>✓ Сегодня</button>` : `<button class="ck-card__buy" data-game="${id}">Играть</button>`}</div></div>`;
+    };
+    const rainAvail = !st || st.rainAvailable;
+    const rainCard = `<div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.rain(26)}</div><div class="ck-card__b"><div class="ck-card__n">Золотой дождь</div><div class="ck-card__s">${rainAvail ? 'Лови монеты 20 секунд → бонус' : 'Сыграно — приходи завтра'}</div></div>${rainAvail ? `<button class="ck-card__buy" id="ck-games-rain">Играть</button>` : `<button class="ck-card__buy" disabled>✓ Сегодня</button>`}</div></div>`;
+    const gated = ['quiz_kids', 'quiz_riddle', 'count', 'memory', 'gems', 'tower'];
+    const total = gated.length + 1, doneN = gated.filter(gameDone).length + (rainAvail ? 0 : 1), remain = total - doneN;
+    const head = `<div class="ck-games-hd">${remain > 0 ? `Сегодня доступно игр: <b>${remain}</b> из ${total} · награды ждут ${COIN(14)}` : 'Все игры на сегодня пройдены — заходи завтра!'}</div>`;
+    box.innerHTML = head +
+      '<div class="ck-sect">Учимся и играем · детям</div>' +
+      card('quiz_kids', ICON.quiz(26), 'Котовикторина', '5 вопросов обо всём · +до 5000 ' + COIN(13)) +
+      card('quiz_riddle', ICON.paw(26), 'Загадки', 'Отгадай 4 загадки · +до 4800 ' + COIN(13)) +
+      card('count', ICON.cupcake(26), 'Счёт конфет', 'Сложи конфеты, малышам · +до 2400 ' + COIN(13)) +
+      card('memory', ICON.cake(26), 'Собери торт', 'Найди пары на память · +до 6000 ' + COIN(13)) +
+      '<div class="ck-sect">Казуальные · всем</div>' +
+      card('gems', ICON.gem(26), 'Сладкий ряд', 'Match-3: собирай 3+ конфеты в ряд · +до 9000 ' + COIN(13)) +
+      card('tower', ICON.cake(26), 'Башня тортов', 'Ставь коржи ровно, строй башню · +до 12000 ' + COIN(13)) +
+      rainCard;
+    box.querySelectorAll('.ck-card__buy[data-game]').forEach(b => b.onclick = () => startGame(b.dataset.game));
+    const rb = box.querySelector('#ck-games-rain'); if (rb) rb.onclick = openRain;
+  }
+  function startGame(g) { if (g === 'memory') openMemory(); else if (g === 'tower') openTower(); else if (g === 'gems') openGems(); else openQuiz(g); }
+  function resultPopup(title, amount, sub) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${title}</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><div style="color:var(--muted);font-size:13px">${sub || ''}</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
+
+  // — Квизы (Котовикторина / Загадки / Счёт конфет) —
+  function openQuiz(deck) {
+    if (gameDone(deck)) { flashMsg('Сыграно — приходи завтра'); return; }
+    const qs = quizQuestions(deck); if (!qs.length) return;
+    let el = ov.querySelector('#ck-quiz'); if (!el) { el = document.createElement('div'); el.id = 'ck-quiz'; el.className = 'ck-quiz'; ov.appendChild(el); }
+    quizState = { deck, qs, i: 0, correct: 0, locked: false }; el.classList.add('on'); renderQuizStep();
+  }
+  function renderQuizStep() {
+    const el = ov.querySelector('#ck-quiz'), s = quizState; if (!s) return; const q = s.qs[s.i]; const meta = GAME_META[s.deck];
+    const dots = s.qs.map((_, k) => `<i class="${k < s.i ? 'd' : ''} ${k === s.i ? 'c' : ''}"></i>`).join('');
+    el.innerHTML = `<div class="ck-quiz__hd"><div class="t">${meta.icon()} ${meta.name}</div><button class="x" id="ck-quiz-x">×</button></div><div class="ck-quiz__dots">${dots}</div><div class="ck-quiz__q">${q.q}</div><div class="ck-quiz__opts">${q.opts.map(o => `<button class="ck-quiz__o">${o}</button>`).join('')}</div>`;
+    el.querySelector('#ck-quiz-x').onclick = closeQuiz;
+    el.querySelectorAll('.ck-quiz__o').forEach(b => b.onclick = () => answerQuiz(b, q));
+  }
+  function answerQuiz(btn, q) {
+    const s = quizState; if (!s || s.locked) return; s.locked = true;
+    const ok = btn.textContent === q.a; const el = ov.querySelector('#ck-quiz');
+    el.querySelectorAll('.ck-quiz__o').forEach(b => { b.disabled = true; if (b.textContent === q.a) b.classList.add('ok'); else if (b === btn) b.classList.add('bad'); });
+    if (ok) { s.correct++; note(880, 0.12, 'triangle', 0.09, 1320); window.haptic && window.haptic('light'); } else { sfxError(); window.haptic && window.haptic('warning'); }
+    setTimeout(() => { s.i++; s.locked = false; if (s.i >= s.qs.length) finishQuiz(); else renderQuizStep(); }, 760);
+  }
+  async function finishQuiz() {
+    const s = quizState; if (!s) return; const deck = s.deck, correct = s.correct, total = s.qs.length, meta = GAME_META[deck]; closeQuiz();
+    const reward = await submitGame(deck, correct);
+    sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
+    resultPopup(`${meta.icon()} ${correct}/${total} верно!`, reward || 0, correct === total ? 'Идеально! 🌟' : 'Молодец, заходи завтра!');
+    renderAll(); renderGames(); bumpBalance();
+  }
+  function closeQuiz() { const el = ov.querySelector('#ck-quiz'); if (el) el.classList.remove('on'); quizState = null; }
+
+  // — «Собери торт» (память/пары) —
+  function openMemory() {
+    if (gameDone('memory')) { flashMsg('Сыграно — приходи завтра'); return; }
+    let el = ov.querySelector('#ck-mem'); if (!el) { el = document.createElement('div'); el.id = 'ck-mem'; el.className = 'ck-mem'; ov.appendChild(el); }
+    const cards = shuffleSeed([...MEM_ICONS, ...MEM_ICONS], dateSeed(irkToday(), 'mem')).map(v => ({ v, done: false }));
+    memState = { cards, flipped: [], matched: 0, moves: 0, t0: performance.now(), lock: false }; el.classList.add('on'); renderMemory();
+  }
+  function renderMemory() {
+    const el = ov.querySelector('#ck-mem'), s = memState; if (!s) return;
+    el.innerHTML = `<div class="ck-quiz__hd"><div class="t">${ICON.cake(20)} Собери торт</div><button class="x" id="ck-mem-x">×</button></div><div class="ck-mem__sub">Найди одинаковые пары · ходов: <span id="ck-mem-moves">0</span></div><div class="ck-mem__grid">${s.cards.map((c, k) => `<button class="ck-mem__c" data-k="${k}"><span class="f">?</span><span class="b">${c.v}</span></button>`).join('')}</div>`;
+    el.querySelector('#ck-mem-x').onclick = closeMemory;
+    el.querySelectorAll('.ck-mem__c').forEach(b => b.onclick = () => flipMem(parseInt(b.dataset.k, 10)));
+  }
+  function memCell(k) { return ov.querySelector(`.ck-mem__c[data-k="${k}"]`); }
+  function flipMem(k) {
+    const s = memState; if (!s || s.lock) return; const c = s.cards[k]; if (c.done || s.flipped.indexOf(k) >= 0) return;
+    memCell(k).classList.add('show'); s.flipped.push(k); note(740, 0.08, 'sine', 0.06);
+    if (s.flipped.length === 2) {
+      s.moves++; ov.querySelector('#ck-mem-moves').textContent = s.moves; s.lock = true;
+      const a = s.flipped[0], b = s.flipped[1];
+      if (s.cards[a].v === s.cards[b].v) { s.cards[a].done = s.cards[b].done = true; s.matched++; setTimeout(() => { memCell(a).classList.add('match'); memCell(b).classList.add('match'); s.flipped = []; s.lock = false; note(1046, 0.12, 'triangle', 0.08, 1320); window.haptic && window.haptic('light'); if (s.matched === MEM_ICONS.length) finishMemory(); }, 340); }
+      else { setTimeout(() => { memCell(a).classList.remove('show'); memCell(b).classList.remove('show'); s.flipped = []; s.lock = false; sfxError(); }, 720); }
+    }
+  }
+  async function finishMemory() {
+    const s = memState; if (!s) return; const secs = (performance.now() - s.t0) / 1000; const moves = s.moves;
+    const score = Math.max(20, Math.min(100, Math.round(100 - (moves - MEM_ICONS.length) * 5 - secs * 1.2))); closeMemory();
+    const reward = await submitGame('memory', score);
+    sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
+    resultPopup(`${ICON.cake(22)} Торт собран!`, reward || 0, `За ${moves} ходов · ${Math.round(secs)}с`);
+    renderAll(); renderGames(); bumpBalance();
+  }
+  function closeMemory() { const el = ov.querySelector('#ck-mem'); if (el) el.classList.remove('on'); memState = null; }
+
+  // — «Башня тортов» (стопка коржей, на канвасе). Тап → поставить корж ровно —
+  const TOWER_COLORS = ['#7a2d3a', '#c98a3c', '#e7c98f', '#9d5a3c', '#d98fb0', '#8c4a6b'];
+  function towerRoundRect(ctx, x, y, w, h, r) { r = Math.min(r, w / 2, h / 2); ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+  function towerLayer(ctx, x, y, w, h, color, glow) {
+    ctx.save(); if (glow) { ctx.shadowColor = 'rgba(255,210,110,.55)'; ctx.shadowBlur = 16; }
+    ctx.fillStyle = color; towerRoundRect(ctx, x, y, w, h, 6); ctx.fill(); ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,255,255,.20)'; towerRoundRect(ctx, x, y, w, Math.min(7, h / 2), 6); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,.16)'; ctx.fillRect(x, y + h - 4, w, 4);
+    ctx.restore();
+  }
+  function openTower() {
+    if (gameDone('tower')) { flashMsg('Сыграно — приходи завтра'); return; }
+    let el = ov.querySelector('#ck-tower'); if (!el) { el = document.createElement('div'); el.id = 'ck-tower'; el.className = 'ck-tower'; ov.appendChild(el); }
+    el.innerHTML = `<div class="ck-quiz__hd"><div class="t">${ICON.cake(20)} Башня тортов</div><button class="x" id="ck-tower-x">×</button></div><div class="ck-mem__sub">Тапни по экрану, чтобы поставить корж ровно. Чем выше башня — тем больше монет!</div><div class="ck-tower__score" id="ck-tower-score">0</div><canvas id="ck-tower-cv"></canvas>`;
+    el.classList.add('on');
+    el.querySelector('#ck-tower-x').onclick = closeTower;
+    startTower();
+  }
+  function startTower() {
+    const el = ov.querySelector('#ck-tower'), cv = el.querySelector('#ck-tower-cv');
+    const rect = cv.getBoundingClientRect();
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const W = Math.max(240, Math.floor(rect.width)), H = Math.max(320, Math.floor(rect.height));
+    cv.width = W * dpr; cv.height = H * dpr; const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+    const baseW = Math.floor(W * 0.5), LH = 28;
+    const base = { x: (W - baseW) / 2, w: baseW, color: TOWER_COLORS[0] };
+    towerState = { ctx, W, H, LH, stack: [base], score: 0, cam: 0, ended: false, raf: 0, last: performance.now(),
+      cur: { x: 0, w: baseW, dir: 1, speed: 150, color: TOWER_COLORS[1] } };
+    cv.onpointerdown = (e) => { e.preventDefault(); towerDrop(); };
+    towerState.raf = requestAnimationFrame(towerLoop);
+  }
+  function towerLoop(ts) {
+    const s = towerState; if (!s || s.ended) return;
+    const dt = Math.min(0.05, (ts - s.last) / 1000); s.last = ts; const c = s.cur;
+    c.x += c.dir * c.speed * dt;
+    if (c.x <= 0) { c.x = 0; c.dir = 1; } if (c.x + c.w >= s.W) { c.x = s.W - c.w; c.dir = -1; }
+    drawTower(); s.raf = requestAnimationFrame(towerLoop);
+  }
+  function drawTower() {
+    const s = towerState, ctx = s.ctx; ctx.clearRect(0, 0, s.W, s.H);
+    const towerTop = s.stack.length * s.LH;
+    s.cam += ((Math.max(0, towerTop - (s.H - 150))) - s.cam) * 0.16;
+    for (let i = 0; i < s.stack.length; i++) { const L = s.stack[i]; towerLayer(ctx, L.x, s.H - 44 - i * s.LH + s.cam, L.w, s.LH, L.color); }
+    const cy = s.H - 44 - s.stack.length * s.LH + s.cam; towerLayer(ctx, s.cur.x, cy, s.cur.w, s.LH, s.cur.color, true);
+  }
+  function towerDrop() {
+    const s = towerState; if (!s || s.ended) return;
+    const prev = s.stack[s.stack.length - 1], c = s.cur;
+    const l = Math.max(c.x, prev.x), r = Math.min(c.x + c.w, prev.x + prev.w), over = r - l;
+    if (over <= 4) { finishTower(); return; }
+    let nx = l, nw = over;
+    if (Math.abs(c.x - prev.x) < 7) { nx = prev.x; nw = prev.w; note(1318, 0.14, 'triangle', 0.1, 1760); window.haptic && window.haptic('medium'); }
+    else { note(820, 0.1, 'triangle', 0.08, 1150); window.haptic && window.haptic('light'); }
+    s.stack.push({ x: nx, w: nw, color: c.color });
+    s.score++; const se = ov.querySelector('#ck-tower-score'); if (se) se.textContent = s.score;
+    const ci = s.stack.length % TOWER_COLORS.length;
+    s.cur = { x: c.dir > 0 ? 0 : s.W - nw, w: nw, dir: c.dir > 0 ? 1 : -1, speed: 150 + s.score * 8, color: TOWER_COLORS[ci] };
+  }
+  async function finishTower() {
+    const s = towerState; if (!s || s.ended) return; s.ended = true; cancelAnimationFrame(s.raf);
+    const score = s.score; closeTower();
+    const reward = await submitGame('tower', score);
+    sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
+    resultPopup(`${ICON.cake(22)} Башня из ${score} коржей!`, reward || 0, score >= 20 ? 'Высоченная! 🎂' : 'Неплохо — завтра выше!');
+    renderAll(); renderGames(); bumpBalance();
+  }
+  function closeTower() { if (towerState) cancelAnimationFrame(towerState.raf); const el = ov.querySelector('#ck-tower'); if (el) el.classList.remove('on'); towerState = null; }
+
+  // — «Сладкий ряд» (match-3 на конфетах). Модель проверена юнит-тестом —
+  const GEMS = ['🍬', '🍭', '🍫', '🍓', '🫐'], GN = 7, GT = 5, GEM_SEC = 50;
+  let gemsState = null;
+  function findMatchesG(g, n) {
+    const m = new Set();
+    for (let r = 0; r < n; r++) { let run = 1; for (let c = 1; c <= n; c++) { if (c < n && g[r * n + c] >= 0 && g[r * n + c] === g[r * n + c - 1]) run++; else { if (run >= 3) for (let k = 1; k <= run; k++) m.add(r * n + c - k); run = 1; } } }
+    for (let c = 0; c < n; c++) { let run = 1; for (let r = 1; r <= n; r++) { if (r < n && g[r * n + c] >= 0 && g[r * n + c] === g[(r - 1) * n + c]) run++; else { if (run >= 3) for (let k = 1; k <= run; k++) m.add((r - k) * n + c); run = 1; } } }
+    return m;
+  }
+  function applyGravityG(g, n, rng) { for (let c = 0; c < n; c++) { let w = n - 1; for (let r = n - 1; r >= 0; r--) { if (g[r * n + c] >= 0) { g[w * n + c] = g[r * n + c]; if (w !== r) g[r * n + c] = -1; w--; } } for (let r = w; r >= 0; r--) g[r * n + c] = Math.floor(rng() * GT); } }
+  function makeGemBoard(n, rng) { const g = new Array(n * n); for (let i = 0; i < g.length; i++) g[i] = Math.floor(rng() * GT); let m = findMatchesG(g, n), guard = 0; while (m.size && guard++ < 800) { m.forEach(i => g[i] = Math.floor(rng() * GT)); m = findMatchesG(g, n); } return g; }
+  function adjG(a, b, n) { const ra = (a / n) | 0, ca = a % n, rb = (b / n) | 0, cb = b % n; return Math.abs(ra - rb) + Math.abs(ca - cb) === 1; }
+  function hasMoveG(g, n) { for (let a = 0; a < n * n; a++) { const cands = [a + 1, a + n]; for (const b of cands) { if (b < n * n && adjG(a, b, n)) { const t = g[a]; g[a] = g[b]; g[b] = t; const ok = findMatchesG(g, n).size > 0; const u = g[a]; g[a] = g[b]; g[b] = u; if (ok) return true; } } } return false; }
+  const wait = (ms) => new Promise(r => setTimeout(r, ms));
+
+  function openGems() {
+    if (gameDone('gems')) { flashMsg('Сыграно — приходи завтра'); return; }
+    let el = ov.querySelector('#ck-gems'); if (!el) { el = document.createElement('div'); el.id = 'ck-gems'; el.className = 'ck-gems'; ov.appendChild(el); }
+    gemsState = { g: makeGemBoard(GN, Math.random), n: GN, sel: -1, score: 0, lock: false, ended: false, tEnd: performance.now() + GEM_SEC * 1000, raf: 0 };
+    el.classList.add('on'); renderGemsUI();
+    cancelAnimationFrame(gemsState.raf); gemsState.raf = requestAnimationFrame(gemsTimer);
+  }
+  function renderGemsUI() {
+    const el = ov.querySelector('#ck-gems');
+    el.innerHTML = `<div class="ck-quiz__hd"><div class="t">${ICON.gem(20)} Сладкий ряд</div><button class="x" id="ck-gems-x">×</button></div><div class="ck-mem__sub">Меняй соседние конфеты, собирай 3+ в ряд · <span id="ck-gems-t">${GEM_SEC}</span>с · очки <span id="ck-gems-s">0</span></div><div class="ck-gems__grid" id="ck-gems-grid" style="grid-template-columns:repeat(${GN},1fr)"></div>`;
+    el.querySelector('#ck-gems-x').onclick = closeGems; renderGemsGrid();
+  }
+  function renderGemsGrid() {
+    const grid = ov.querySelector('#ck-gems-grid'), s = gemsState; if (!grid || !s) return;
+    grid.innerHTML = s.g.map((t, i) => `<button class="ck-gems__c ${i === s.sel ? 'sel' : ''}" data-i="${i}">${t < 0 ? '' : `<span class="cd cd${t}"></span>`}</button>`).join('');
+    grid.querySelectorAll('.ck-gems__c').forEach(b => b.onclick = () => tapGem(parseInt(b.dataset.i, 10)));
+  }
+  async function tapGem(i) {
+    const s = gemsState; if (!s || s.lock || s.ended) return;
+    if (s.sel < 0 || (s.sel !== i && !adjG(s.sel, i, s.n))) { s.sel = i; renderGemsGrid(); note(660, 0.06, 'sine', 0.05); return; }
+    if (i === s.sel) { s.sel = -1; renderGemsGrid(); return; }
+    const a = s.sel, b = i; s.sel = -1; s.lock = true;
+    const t = s.g[a]; s.g[a] = s.g[b]; s.g[b] = t; renderGemsGrid();
+    if (findMatchesG(s.g, s.n).size > 0) { window.haptic && window.haptic('light'); await resolveGemsAnimated(); }
+    else { await wait(170); const u = s.g[a]; s.g[a] = s.g[b]; s.g[b] = u; renderGemsGrid(); sfxError(); window.haptic && window.haptic('warning'); }
+    s.lock = false;
+  }
+  async function resolveGemsAnimated() {
+    const s = gemsState;
+    for (let guard = 0; guard < 60; guard++) {
+      const m = findMatchesG(s.g, s.n); if (!m.size) break;
+      const grid = ov.querySelector('#ck-gems-grid');
+      if (grid) m.forEach(idx => { const c = grid.querySelector(`.ck-gems__c[data-i="${idx}"]`); if (c) c.classList.add('clr'); });
+      s.score += m.size; const ss = ov.querySelector('#ck-gems-s'); if (ss) ss.textContent = s.score;
+      note(880, 0.1, 'triangle', 0.08, 1320);
+      await wait(230);
+      if (s.ended) return;
+      m.forEach(idx => s.g[idx] = -1); applyGravityG(s.g, s.n, Math.random); renderGemsGrid();
+      await wait(150);
+    }
+    if (!hasMoveG(s.g, s.n)) { s.g = makeGemBoard(s.n, Math.random); renderGemsGrid(); flashMsg('Перемешали!'); }
+  }
+  function gemsTimer() {
+    const s = gemsState; if (!s || s.ended) return;
+    const left = Math.max(0, (s.tEnd - performance.now()) / 1000); const tEl = ov.querySelector('#ck-gems-t'); if (tEl) tEl.textContent = Math.ceil(left);
+    if (left <= 0) { finishGems(); return; }
+    s.raf = requestAnimationFrame(gemsTimer);
+  }
+  async function finishGems() {
+    const s = gemsState; if (!s || s.ended) return; s.ended = true; cancelAnimationFrame(s.raf);
+    const score = s.score; closeGems();
+    const reward = await submitGame('gems', score);
+    sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
+    resultPopup(`${ICON.gem(22)} Собрано ${score} конфет!`, reward || 0, 'Сладко! Заходи завтра');
+    renderAll(); renderGames(); bumpBalance();
+  }
+  function closeGems() { if (gemsState) cancelAnimationFrame(gemsState.raf); const el = ov.querySelector('#ck-gems'); if (el) el.classList.remove('on'); gemsState = null; }
+
+  function close() { cancelAnimationFrame(raf); clearTimeout(bonusTimer); if (rainState) endRain(true); if (quizState) closeQuiz(); if (memState) closeMemory(); if (towerState) closeTower(); if (gemsState) closeGems(); flush(); if (ov) ov.classList.remove('on'); window.scrollUnlock && window.scrollUnlock(); }
   window.catClickOpen = open; window.catClickClose = close; window.catClickBonusNow = () => { if (ov && ov.classList.contains('on')) showFlyingBonus(); }; // превью/тест золотого бонуса
   window.addEventListener('resize', () => { if (ov && ov.classList.contains('on') && st) applyCostume(leagueFor(st.totalEarned)); });
+  // Реф регистрируем фоном уже при загрузке приложения (не дожидаясь открытия игры):
+  // друг перешёл по ckref-ссылке → бонус начислится, даже если в игру он не зайдёт.
+  function refBootstrap() { try { if (window.App && App.ready && App.ready.then) App.ready.then(() => ensureRefRegistered()); else ensureRefRegistered(); } catch (_) { ensureRefRegistered(); } }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(refBootstrap, 1500)); else setTimeout(refBootstrap, 1500);
 })();

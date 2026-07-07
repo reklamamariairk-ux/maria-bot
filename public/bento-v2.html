@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Бенто-пироги «Мария» — рассчитай свой торт за 1 минуту</title>
+<!-- favicon: line-SVG торт вместо эмодзи 🎂 -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238A2A3B' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 21h16M4 21v-7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7M12 12V8M12 5.5a1.5 1.5 0 1 0 0-1'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="/logo.png">
+<meta name="description" content="Новые бенто-пироги и торты на заказ от кондитерской «Мария». 20+ лет в Иркутске, 17 кафе. Рассчитай стоимость за минуту и закажи к 1 сентября или дню рождения.">
+<meta property="og:title" content="Бенто-пироги «Мария» — новинка сезона">
+<meta property="og:description" content="Рассчитай свой торт за минуту. 20 лет в Иркутске, свежесть как всегда.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Prata (дисплей-засечка, кириллица) · Onest (интерфейс) · JetBrains Mono (цифры) -->
+<link href="https://fonts.googleapis.com/css2?family=Prata&family=Onest:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* ── «Ганаш & золото» — токены бренда (светлая тема, maria-bot всегда светлый) ── */
+  --bg:#FAF7F2; --surface:#FFFFFF; --paper:#FFFFFF;
+  --ink:#211A1C; --ink-2:#6B5F62; --hint:#8B7D83; --line:#E9E1DA;
+  --accent:#8A2A3B; --accent-d:#6E2030; --accent-dd:#4E1622; --accent-ink:#FFFFFF;
+  --accent-soft:#F3E3E6;
+  --gold:#B98A3E; --gold-soft:#F2E7D2;
+  --positive:#2E7D5B; --positive-soft:#E8F3EC;
+  --shadow:0 1px 2px rgba(33,26,28,.04),0 8px 24px rgba(33,26,28,.06);
+  --shadow-lg:0 12px 44px rgba(78,22,34,.12);
+  --radius:16px; --radius-lg:24px;
+  --ease:cubic-bezier(.22,1,.36,1);
+  /* мера дисплей-шрифта и цифр */
+  --serif:'Prata',Georgia,'Times New Roman',serif;
+  --num:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Onest',system-ui,-apple-system,sans-serif;color:var(--ink);
+  background:var(--bg);line-height:1.5;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+img{max-width:100%;display:block}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:16px;border:none;cursor:pointer;
+  padding:16px 30px;border-radius:999px;transition:.2s var(--ease);box-shadow:0 6px 20px rgba(138,42,59,.24)}
+.btn:hover{background:var(--accent-d);transform:translateY(-2px);box-shadow:0 12px 28px rgba(138,42,59,.32)}
+.btn:active{transform:translateY(0)}
+.btn--ghost{background:#fff;color:var(--accent);border:1.5px solid var(--accent);box-shadow:none}
+.btn--ghost:hover{background:var(--accent-soft)}
+.btn--lg{font-size:17px;padding:18px 38px}
+.btn .arr{display:inline-block;transition:transform .2s var(--ease)}
+.btn:hover .arr{transform:translateX(4px)}
+.btn--pulse{animation:glow 2.8s ease-in-out infinite}
+@keyframes glow{0%,100%{box-shadow:0 6px 20px rgba(138,42,59,.24)}50%{box-shadow:0 10px 32px rgba(138,42,59,.40)}}
+.muted{color:var(--hint)}
+.center{text-align:center}
+/* числа — табличный моноширинный, чтобы колонки не «плясали» */
+.num{font-family:var(--num);font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+
+/* ── scroll-reveal (включается только при JS; без JS всё видно) ── */
+.reveal{opacity:1;transform:none}
+html.js .reveal{opacity:0;transform:translateY(26px);
+  transition:opacity .7s var(--ease),transform .7s var(--ease)}
+html.js .reveal.in{opacity:1;transform:none}
+html.js .reveal.d1{transition-delay:.09s}
+html.js .reveal.d2{transition-delay:.18s}
+html.js .reveal.d3{transition-delay:.27s}
+html.js .reveal.d4{transition-delay:.36s}
+html.js .reveal.d5{transition-delay:.45s}
+@media (prefers-reduced-motion: reduce){
+  html.js .reveal{opacity:1!important;transform:none!important;transition:none!important}
+  *{animation:none!important;scroll-behavior:auto!important}
+}
+
+/* ── header ── */
+header{position:sticky;top:0;z-index:40;background:rgba(250,247,242,.88);
+  backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.nav{display:flex;align-items:center;justify-content:space-between;height:64px}
+.logo{display:flex;align-items:center;gap:10px;font-family:var(--serif);font-size:24px;color:var(--accent);letter-spacing:.3px}
+.logo img{height:32px}
+.nav .phone{font-weight:600;color:var(--ink);white-space:nowrap}
+.nav .btn{padding:11px 22px;font-size:15px}
+@media(max-width:640px){.nav .phone{display:none}}
+
+/* ── hero ── */
+.hero{position:relative;overflow:hidden;
+  background:
+    radial-gradient(1100px 520px at 82% -12%,rgba(138,42,59,.07) 0,transparent 58%),
+    radial-gradient(900px 500px at 0% 110%,rgba(185,138,62,.12) 0,transparent 55%),
+    linear-gradient(180deg,#fff 0,var(--bg) 100%)}
+/* мягкое «зерно» для глубины */
+.hero::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E")}
+.hero-grid{position:relative;z-index:1;display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center;
+  padding:58px 0 64px}
+.badge{display:inline-flex;align-items:center;gap:7px;background:var(--gold-soft);color:var(--gold);
+  font-weight:700;font-size:12px;letter-spacing:.6px;text-transform:uppercase;
+  padding:7px 14px;border-radius:999px;margin-bottom:20px}
+.badge svg{width:14px;height:14px;fill:currentColor}
+.hero h1{font-family:var(--serif);font-size:clamp(32px,5.2vw,56px);line-height:1.1;font-weight:400;letter-spacing:-.2px}
+.hero h1 .accent{color:var(--accent)}
+.hero p.lead{font-size:18px;color:var(--ink-2);margin:20px 0 28px;max-width:520px}
+.hero-cta{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.trust{display:flex;gap:28px;flex-wrap:wrap;margin-top:32px}
+.trust .t{display:flex;flex-direction:column}
+.trust .t b{font-family:var(--num);font-variant-numeric:tabular-nums;font-size:26px;color:var(--accent);font-weight:600;line-height:1}
+.trust .t b.word{font-family:var(--serif);font-weight:400}
+.trust .t span{font-size:13px;color:var(--hint);margin-top:6px}
+.hero-art{position:relative;aspect-ratio:4/5;border-radius:var(--radius-lg);overflow:hidden;
+  will-change:transform;box-shadow:var(--shadow-lg);background:
+    radial-gradient(circle at 30% 30%,#f6e5e8,transparent 55%),
+    radial-gradient(circle at 75% 70%,#f3ead7,transparent 55%),
+    linear-gradient(135deg,#fbf2f3,#f7efe4);
+  display:flex;align-items:center;justify-content:center}
+.hero-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+  animation:heroImg 1.2s var(--ease) both}
+@keyframes heroImg{from{transform:scale(1.14);opacity:0}to{transform:scale(1);opacity:1}}
+/* фолбэк без эмодзи: рисованный торт line-SVG */
+.hero-art.noimg::after{content:"";width:120px;height:120px;
+  background:no-repeat center/contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238A2A3B' stroke-width='1.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 21h16M4 21v-7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7M3 16h18M12 12V8M12 5.5a1.5 1.5 0 1 0 0-1'/%3E%3C/svg%3E");opacity:.5}
+.hero-art .tag{position:absolute;left:18px;bottom:18px;z-index:2;background:#fff;border-radius:14px;
+  padding:10px 16px;font-weight:600;box-shadow:0 6px 18px rgba(33,26,28,.10);font-size:14px;
+  animation:tagIn 1s var(--ease) .5s both}
+@keyframes tagIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.hero-art .tag b{font-family:var(--num);color:var(--accent);font-weight:600}
+@media(max-width:860px){.hero-grid{grid-template-columns:1fr;gap:26px;padding:34px 0 40px}
+  .hero-art{max-width:340px;margin:0 auto;width:100%}}
+
+/* ── sections ── */
+section.block{padding:64px 0}
+.sec-title{font-family:var(--serif);font-size:clamp(26px,3.4vw,38px);font-weight:400;letter-spacing:-.2px;text-align:center;line-height:1.15}
+.sec-sub{text-align:center;color:var(--ink-2);font-size:17px;margin:14px auto 0;max-width:620px}
+
+/* feature cards */
+.cards3{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:42px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:28px;
+  box-shadow:var(--shadow);transition:transform .25s var(--ease),box-shadow .25s var(--ease)}
+.card:hover{transform:translateY(-5px);box-shadow:var(--shadow-lg)}
+.card .ic{width:54px;height:54px;border-radius:15px;background:var(--accent-soft);display:flex;
+  align-items:center;justify-content:center;margin-bottom:16px;transition:transform .25s var(--ease)}
+.card:hover .ic{transform:scale(1.08) rotate(-4deg)}
+.card .ic svg{width:26px;height:26px;stroke:var(--accent);fill:none;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.card h3{font-size:19px;font-weight:700;margin-bottom:8px}
+.card p{color:var(--ink-2);font-size:15px}
+@media(max-width:760px){.cards3{grid-template-columns:1fr}}
+
+/* social proof */
+.proof-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:18px;margin-top:40px}
+.proof{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:28px 20px;
+  text-align:center;box-shadow:var(--shadow)}
+.proof.big{background:linear-gradient(135deg,#fff,var(--accent-soft));border-color:#eccfd5}
+.proof .stars{color:var(--gold);font-size:24px;letter-spacing:3px;margin-bottom:8px}
+.proof .stars .half{opacity:.42}
+.proof-num{font-family:var(--num);font-variant-numeric:tabular-nums;font-size:38px;font-weight:600;color:var(--accent);line-height:1}
+.proof-lbl{font-size:13px;color:var(--hint);margin-top:8px}
+@media(max-width:760px){.proof-grid{grid-template-columns:1fr 1fr}}
+
+/* ── bento-grid галерея (асимметричная плитка) ── */
+.gallery{display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:172px;gap:14px;margin-top:38px}
+.g-item{margin:0;border-radius:18px;overflow:hidden;background:#f3e4d6;
+  box-shadow:var(--shadow);position:relative}
+.g-item:nth-child(1){grid-column:span 2;grid-row:span 2}
+.g-item img{width:100%;height:100%;object-fit:cover;transition:transform .45s var(--ease)}
+.g-item:hover img{transform:scale(1.07)}
+@media(max-width:760px){.gallery{grid-template-columns:repeat(2,1fr);grid-auto-rows:130px}
+  .g-item:nth-child(1){grid-column:span 2;grid-row:span 1}}
+
+/* ── QUIZ ── */
+.quiz-wrap{background:var(--surface);border-radius:var(--radius-lg);
+  border:1px solid var(--line);box-shadow:var(--shadow-lg);max-width:680px;margin:42px auto 0;
+  overflow:hidden}
+/* шапка квиза — светлая, с золотым прогрессом (вместо заливки вином) */
+.quiz-head{padding:24px 28px 20px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,var(--accent-soft),#fff)}
+.quiz-head h3{font-family:var(--serif);font-size:23px;font-weight:400;color:var(--accent)}
+.quiz-head p{color:var(--hint);font-size:13px;margin-top:4px;font-family:var(--num)}
+.progress{height:6px;background:var(--line);border-radius:999px;margin-top:16px;overflow:hidden}
+.progress .bar{height:100%;width:16%;border-radius:999px;transition:width .45s var(--ease);
+  background:linear-gradient(90deg,var(--gold),#dcb36a,var(--gold));background-size:200% 100%;
+  animation:shimmer 2.4s linear infinite}
+@keyframes shimmer{to{background-position:-200% 0}}
+.quiz-body{padding:28px}
+.step{display:none;animation:fade .35s var(--ease)}
+.step.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.q{font-family:var(--serif);font-size:22px;font-weight:400;margin-bottom:6px}
+.q-hint{color:var(--hint);font-size:14px;margin-bottom:18px}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.opts.one{grid-template-columns:1fr}
+/* опция: чистый селект с tick-индикатором, без эмодзи */
+.opt{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fff;
+  border:1.5px solid var(--line);border-radius:14px;padding:16px;cursor:pointer;font-weight:600;font-size:15px;
+  transition:transform .15s var(--ease),border-color .15s,background .15s,box-shadow .15s}
+.opt:hover{border-color:var(--accent);transform:translateY(-2px)}
+.opt:active{transform:scale(.98)}
+.opt.sel{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 3px rgba(138,42,59,.10);animation:pop .32s var(--ease)}
+@keyframes pop{0%{transform:scale(1)}45%{transform:scale(1.04)}100%{transform:scale(1)}}
+.opt .opt-txt{display:flex;flex-direction:column;min-width:0}
+.opt small{color:var(--hint);font-weight:500;font-size:12.5px;margin-top:2px}
+/* tick — кольцо, заполняется вином при выборе */
+.opt .tick{flex:0 0 auto;width:22px;height:22px;border-radius:50%;border:2px solid var(--line);
+  position:relative;transition:.15s var(--ease)}
+.opt:hover .tick{border-color:var(--accent)}
+.opt.sel .tick{border-color:var(--accent);background:var(--accent)}
+.opt.sel .tick::after{content:"";position:absolute;left:6px;top:3px;width:5px;height:9px;
+  border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+@media(max-width:520px){.opts{grid-template-columns:1fr}}
+.field{margin-top:6px}
+.field label{display:block;font-weight:600;margin-bottom:7px;font-size:15px}
+.field input{width:100%;padding:15px 16px;border:1.5px solid var(--line);border-radius:14px;
+  font-size:16px;font-family:inherit;background:#fff;transition:.15s;color:var(--ink)}
+.field input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(138,42,59,.10)}
+.field input.err{border-color:var(--accent);background:var(--accent-soft)}
+.nav-row{display:flex;justify-content:space-between;gap:12px;margin-top:24px}
+.nav-row .btn{flex:0 0 auto}
+.link-back{background:none;border:none;color:var(--hint);font-weight:600;cursor:pointer;
+  font-size:15px;font-family:inherit;padding:14px 6px}
+.link-back:hover{color:var(--ink)}
+
+/* result */
+.estimate{background:#fff;border:2px dashed var(--gold);border-radius:18px;padding:22px;
+  text-align:center;margin-bottom:22px;animation:pop .4s var(--ease)}
+.estimate .lbl{color:var(--hint);font-size:13px;text-transform:uppercase;letter-spacing:.6px}
+.estimate .price{font-family:var(--num);font-variant-numeric:tabular-nums;font-size:34px;font-weight:600;color:var(--accent);margin:6px 0 2px}
+.estimate .note{font-size:13px;color:var(--hint)}
+.summary{background:var(--bg);border-radius:14px;padding:14px 16px;font-size:14px;margin-bottom:20px;color:var(--ink-2)}
+.summary b{color:var(--accent)}
+
+/* success */
+.success{display:none;text-align:center;padding:40px 28px}
+.success.active{display:block;animation:fade .4s var(--ease)}
+.success .checkmark{width:84px;height:84px;border-radius:50%;background:var(--positive-soft);color:var(--positive);
+  font-size:46px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;
+  animation:pop .5s var(--ease)}
+.success h3{font-family:var(--serif);font-size:26px;font-weight:400;margin-bottom:10px}
+.success p{color:var(--ink-2);max-width:420px;margin:0 auto 22px}
+
+/* why us */
+.why{background:linear-gradient(180deg,var(--bg),#fff)}
+.why .cards3 .card{background:#fff}
+
+/* footer — «ганаш»: тёплый тёмный шоколад + золото, без заливки алым */
+footer{background:var(--ink);color:#F2EBE7;padding:54px 0 36px;margin-top:20px}
+.foot-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:30px}
+footer h4{font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:var(--gold);margin-bottom:14px}
+footer a,footer p{opacity:.88;font-size:15px;margin-bottom:8px;display:block}
+footer a:hover{opacity:1;color:var(--gold)}
+.foot-logo{font-family:var(--serif);font-size:28px;margin-bottom:12px;opacity:1}
+.foot-bottom{border-top:1px solid rgba(242,235,231,.14);margin-top:34px;padding-top:18px;
+  font-size:13px;opacity:.55;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+@media(max-width:760px){.foot-grid{grid-template-columns:1fr 1fr}.foot-grid>div:first-child{grid-column:1/-1}}
+
+/* sticky mobile CTA */
+.sticky-cta{position:fixed;left:0;right:0;bottom:0;z-index:50;background:#fff;
+  border-top:1px solid var(--line);padding:12px 16px;display:none;
+  box-shadow:0 -6px 20px rgba(33,26,28,.07)}
+.sticky-cta .btn{width:100%}
+@media(max-width:860px){.sticky-cta{display:block}body{padding-bottom:80px}}
+</style>
+</head>
+<body>
+
+<!-- ══════════ HEADER ══════════ -->
+<header>
+  <div class="wrap nav">
+    <a class="logo" href="#top"><img src="/logo.svg" alt="Мария" onerror="this.style.display='none'"> Мария</a>
+    <a class="phone" href="tel:+73952504080">+7 (3952) 50-40-80</a>
+    <a class="btn" href="#quiz">Рассчитать торт</a>
+  </div>
+</header>
+
+<!-- ══════════ HERO ══════════ -->
+<a id="top"></a>
+<div class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="badge reveal"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/></svg> Новинка сезона</span>
+      <h1 class="reveal d1">Бенто-пироги <span class="accent">«Мария»</span> — маленький торт с большим вкусом</h1>
+      <p class="lead reveal d2">Кондитерская с 20-летней историей в Иркутске выпустила новый формат.
+        Свежие, как всегда — теперь ещё и в стильной коробке. Идеально к 1 сентября,
+        дню рождения или просто порадовать.</p>
+      <div class="hero-cta reveal d3">
+        <a class="btn btn--lg btn--pulse" href="#quiz">Рассчитать за 1 минуту <span class="arr">→</span></a>
+        <a class="btn btn--ghost btn--lg" href="tel:+73952504080">Позвонить</a>
+      </div>
+      <div class="trust reveal d4">
+        <div class="t"><b><span data-count="20" data-suffix="+">20+</span></b><span>лет в Иркутске</span></div>
+        <div class="t"><b><span data-count="17">17</span></b><span>кафе в городе</span></div>
+        <div class="t"><b class="word">«Зебра»</b><span>наша легенда</span></div>
+      </div>
+    </div>
+    <!-- Реальное фото бенто из каталога 1С (через image-proxy → webp) -->
+    <div class="hero-art">
+      <img src="/img?u=https%3A%2F%2Fwww.maria-irk.ru%2Fupload%2Fiblock%2Ff1e%2Feu1whbpy0c514576dfily903ryfpzuir%2Fbento_tort_58.png"
+           alt="Бенто-пирог Мария" loading="eager" onerror="this.parentElement.classList.add('noimg');this.remove()">
+      <div class="tag">от <b id="hero-from">690 ₽</b> · готово за 1 день</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ ЧТО ТАКОЕ БЕНТО ══════════ -->
+<section class="block">
+  <div class="wrap">
+    <h2 class="sec-title reveal">Почему бенто-пирог — это удобно</h2>
+    <p class="sec-sub reveal d1">Тот самый вкус Марии в компактном формате на 1–2 человек</p>
+    <div class="cards3">
+      <div class="card reveal d1">
+        <div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C9 3 12 5 12 8 12 5 15 3 16.5 3a2.5 2.5 0 0 1 0 5"/></svg></div>
+        <h3>Готовый подарок</h3>
+        <p>В фирменной коробке с лентой. Можно подарить коллеге, учителю или себе — без повода.</p>
+      </div>
+      <div class="card reveal d2">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></div>
+        <h3>Любая надпись</h3>
+        <p>Поздравление, имя, признание прямо на пироге. Сделаем персонально под вас.</p>
+      </div>
+      <div class="card reveal d3">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg></div>
+        <h3>Быстро</h3>
+        <p>Готовим за 1 день. Заберёте в любом из 17 кафе или закажете доставку.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ СОЦИАЛЬНОЕ ДОКАЗАТЕЛЬСТВО (реальный рейтинг 2ГИС) ══════════ -->
+<section class="block" style="padding-top:0">
+  <div class="wrap">
+    <h2 class="sec-title reveal">Нам доверяют в Иркутске</h2>
+    <p class="sec-sub reveal d1">Реальный рейтинг сети «Мария» — по отзывам гостей в 2ГИС</p>
+    <div class="proof-grid">
+      <div class="proof big reveal d1">
+        <div class="stars">★★★★<span class="half">★</span></div>
+        <div class="proof-num">4,5</div>
+        <div class="proof-lbl">средняя оценка в 2ГИС</div>
+      </div>
+      <div class="proof reveal d2"><div class="proof-num"><span data-count="5700" data-suffix="+">5700+</span></div><div class="proof-lbl">оценок гостей</div></div>
+      <div class="proof reveal d3"><div class="proof-num"><span data-count="17">17</span></div><div class="proof-lbl">кафе в городе</div></div>
+      <div class="proof reveal d4"><div class="proof-num"><span data-count="20" data-suffix="+">20+</span></div><div class="proof-lbl">лет на рынке</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ ГАЛЕРЕЯ (bento-grid, реальные фото из каталога) ══════════ -->
+<section class="block" style="padding-top:0">
+  <div class="wrap">
+    <h2 class="sec-title reveal">Какими бывают наши бенто</h2>
+    <p class="sec-sub reveal d1">Реальные пироги из каталога «Марии» — от 690 ₽. Декор и надпись — на ваш вкус</p>
+    <div class="gallery">
+      <figure class="g-item reveal"><img loading="lazy" alt="Бенто-пирог Мария"
+        src="/img?u=https%3A%2F%2Fwww.maria-irk.ru%2Fupload%2Fiblock%2F075%2F7u9cnv1vtb97qu3kfjrwskuuf2r49g5n%2Fbento_tort_64.png"
+        onerror="this.closest('.g-item').remove()"></figure>
+      <figure class="g-item reveal d1"><img loading="lazy" alt="Бенто-пирог Мария"
+        src="/img?u=https%3A%2F%2Fwww.maria-irk.ru%2Fupload%2Fiblock%2Fcf7%2F93dstj0tc4bc8cljxek74zbmq72yc2f2%2Fbento_tort_62.png"
+        onerror="this.closest('.g-item').remove()"></figure>
+      <figure class="g-item reveal d2"><img loading="lazy" alt="Бенто-пирог Мария"
+        src="/img?u=https%3A%2F%2Fwww.maria-irk.ru%2Fupload%2Fiblock%2F268%2Fph0jtl5kcz8lkn6vn4w83fdu48al2rsa%2Fbento_tort_61.png"
+        onerror="this.closest('.g-item').remove()"></figure>
+      <figure class="g-item reveal d3"><img loading="lazy" alt="Бенто-пирог Мария"
+        src="/img?u=https%3A%2F%2Fwww.maria-irk.ru%2Fupload%2Fiblock%2Fcc8%2Fx1myscx4iwfb249ce7k3xossy7ct95n0%2Fbento_tort_60.png"
+        onerror="this.closest('.g-item').remove()"></figure>
+      <figure class="g-item reveal d4"><img loading="lazy" alt="Бенто-пирог Мария"
+        src="/img?u=https%3A%2F%2Fwww.maria-irk.ru%2Fupload%2Fiblock%2F25d%2Fq75l7v0w7e3blnyhdhkp9z8st68kc3os%2Fbento_tort_56.png"
+        onerror="this.closest('.g-item').remove()"></figure>
+      <figure class="g-item reveal d5"><img loading="lazy" alt="Бенто-пирог Мария"
+        src="/img?u=https%3A%2F%2Fwww.maria-irk.ru%2Fupload%2Fiblock%2F25a%2Fomaj8w5fy0ky2o0gi1042815hiwxyvu3%2Fbento_tort_54.png"
+        onerror="this.closest('.g-item').remove()"></figure>
+    </div>
+    <div class="center reveal" style="margin-top:30px"><a class="btn btn--lg" href="#quiz">Хочу такой же <span class="arr">→</span></a></div>
+  </div>
+</section>
+
+<!-- ══════════ QUIZ-КАЛЬКУЛЯТОР ══════════ -->
+<a id="quiz"></a>
+<section class="block" style="background:linear-gradient(180deg,var(--accent-soft),var(--bg));padding-top:48px">
+  <div class="wrap">
+    <h2 class="sec-title reveal">Калькулятор торта</h2>
+    <p class="sec-sub reveal d1">Ответьте на 5 вопросов — покажем примерную стоимость и перезвоним за 15 минут</p>
+
+    <div class="quiz-wrap reveal d1">
+      <div class="quiz-head">
+        <h3 id="qh-title">Что хотите заказать?</h3>
+        <p id="qh-step">Шаг 1 из 6</p>
+        <div class="progress"><div class="bar" id="qbar"></div></div>
+      </div>
+
+      <div class="quiz-body" id="quiz-body">
+        <!-- STEP 1: тип -->
+        <div class="step active" data-step="1">
+          <div class="q">Что хотите заказать?</div>
+          <div class="q-hint">Выберите формат — он влияет на расчёт</div>
+          <div class="opts" data-group="type">
+            <div class="opt" data-val="Бенто-пирог" data-base="690"><div class="opt-txt">Бенто-пирог<small>на 1–2 персоны</small></div><span class="tick"></span></div>
+            <div class="opt" data-val="Торт на заказ" data-base="2500"><div class="opt-txt">Торт на заказ<small>на компанию</small></div><span class="tick"></span></div>
+            <div class="opt" data-val="Набор пирожных" data-base="1200"><div class="opt-txt">Набор пирожных<small>ассорти</small></div><span class="tick"></span></div>
+            <div class="opt" data-val="Пока не решил" data-base="690"><div class="opt-txt">Пока не решил<small>подскажем</small></div><span class="tick"></span></div>
+          </div>
+        </div>
+
+        <!-- STEP 2: повод -->
+        <div class="step" data-step="2">
+          <div class="q">Какой повод?</div>
+          <div class="q-hint">Поможем подобрать оформление</div>
+          <div class="opts" data-group="occasion">
+            <div class="opt" data-val="1 сентября / учителю"><div class="opt-txt">1 сентября / учителю</div><span class="tick"></span></div>
+            <div class="opt" data-val="День рождения"><div class="opt-txt">День рождения</div><span class="tick"></span></div>
+            <div class="opt" data-val="Просто порадовать"><div class="opt-txt">Просто порадовать</div><span class="tick"></span></div>
+            <div class="opt" data-val="Корпоратив / в офис"><div class="opt-txt">Корпоратив / в офис</div><span class="tick"></span></div>
+          </div>
+        </div>
+
+        <!-- STEP 3: персоны -->
+        <div class="step" data-step="3">
+          <div class="q">На сколько человек?</div>
+          <div class="q-hint">Поможем не прогадать с размером</div>
+          <div class="opts" data-group="portions">
+            <div class="opt" data-val="1–2" data-mult="1"><div class="opt-txt">1–2 человека</div><span class="tick"></span></div>
+            <div class="opt" data-val="3–6" data-mult="5"><div class="opt-txt">3–6 человек</div><span class="tick"></span></div>
+            <div class="opt" data-val="7–12" data-mult="10"><div class="opt-txt">7–12 человек</div><span class="tick"></span></div>
+            <div class="opt" data-val="13+" data-mult="18"><div class="opt-txt">13 и больше</div><span class="tick"></span></div>
+          </div>
+        </div>
+
+        <!-- STEP 4: вкус -->
+        <div class="step" data-step="4">
+          <div class="q">Любимый вкус?</div>
+          <div class="q-hint">Под него подберём начинку</div>
+          <div class="opts" data-group="flavor">
+            <div class="opt" data-val="Шоколад" data-prem="1"><div class="opt-txt">Шоколадный</div><span class="tick"></span></div>
+            <div class="opt" data-val="Ягоды / фрукты" data-prem="1"><div class="opt-txt">Ягоды / фрукты</div><span class="tick"></span></div>
+            <div class="opt" data-val="Ваниль / сливки" data-prem="1"><div class="opt-txt">Ваниль / сливки</div><span class="tick"></span></div>
+            <div class="opt" data-val="Орех / карамель" data-prem="1.15"><div class="opt-txt">Орех / карамель</div><span class="tick"></span></div>
+            <div class="opt" data-val="Без сахара / ПП" data-prem="1.15"><div class="opt-txt">Без сахара / ПП</div><span class="tick"></span></div>
+            <div class="opt" data-val="Доверюсь кондитеру" data-prem="1"><div class="opt-txt">Доверюсь вам</div><span class="tick"></span></div>
+          </div>
+        </div>
+
+        <!-- STEP 5: декор -->
+        <div class="step" data-step="5">
+          <div class="q">Нужен декор или надпись?</div>
+          <div class="q-hint">Сделаем персонально</div>
+          <div class="opts" data-group="decor">
+            <div class="opt" data-val="Без надписи" data-add="0"><div class="opt-txt">Без надписи</div><span class="tick"></span></div>
+            <div class="opt" data-val="С надписью" data-add="0"><div class="opt-txt">С надписью<small>бесплатно</small></div><span class="tick"></span></div>
+            <div class="opt" data-val="Топперы / декор" data-add="500"><div class="opt-txt">Топперы / декор</div><span class="tick"></span></div>
+            <div class="opt" data-val="Фигурки на заказ" data-add="800"><div class="opt-txt">Фигурки на заказ</div><span class="tick"></span></div>
+          </div>
+        </div>
+
+        <!-- STEP 6: дата + контакты + результат -->
+        <div class="step" data-step="6">
+          <div class="estimate">
+            <div class="lbl">Примерная стоимость</div>
+            <div class="price" id="est-price">— ₽</div>
+            <div class="note">Это предварительная оценка. Точную цену подтвердит кондитер при звонке.</div>
+          </div>
+          <div class="summary" id="est-summary"></div>
+          <div class="q" style="font-size:18px">Куда перезвонить?</div>
+          <div class="q-hint">Перезвоним за 15 минут, поможем определиться и оформим заказ</div>
+          <div class="field">
+            <label for="f-name">Как вас зовут</label>
+            <input id="f-name" type="text" placeholder="Ваше имя" autocomplete="name">
+          </div>
+          <div class="field" style="margin-top:14px">
+            <label for="f-phone">Телефон</label>
+            <input id="f-phone" type="tel" placeholder="+7 (___) ___-__-__" autocomplete="tel" inputmode="tel">
+          </div>
+          <div class="field" style="margin-top:14px">
+            <label for="f-date">Когда нужен торт <span class="muted">(необязательно)</span></label>
+            <input id="f-date" type="date">
+          </div>
+        </div>
+
+        <!-- nav -->
+        <div class="nav-row" id="nav-row">
+          <button class="link-back" id="btn-back" style="visibility:hidden">← Назад</button>
+          <button class="btn" id="btn-next">Далее →</button>
+        </div>
+      </div>
+
+      <!-- success -->
+      <div class="success" id="success">
+        <div class="checkmark">✓</div>
+        <h3>Заявка принята!</h3>
+        <p>Спасибо! Кондитер «Марии» перезвонит вам в течение 15 минут, поможет с выбором и оформит заказ.</p>
+        <a class="btn" href="https://www.maria-irk.ru" target="_blank" rel="noopener">Посмотреть каталог</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ ПОЧЕМУ МАРИЯ ══════════ -->
+<section class="block why">
+  <div class="wrap">
+    <h2 class="sec-title reveal">Почему «Мария»</h2>
+    <p class="sec-sub reveal d1">Нам доверяют сладкие моменты больше 20 лет</p>
+    <div class="cards3">
+      <div class="card reveal d1">
+        <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg></div>
+        <h3>20 лет репутации</h3>
+        <p>Та самая «Зебра», которую готовят больше двадцати лет. Настоящая кондитерская, а не цех.</p>
+      </div>
+      <div class="card reveal d2">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6"/></svg></div>
+        <h3>Свежесть каждый день</h3>
+        <p>Готовим из свежих продуктов под заказ. Никаких заморозок и «вчерашнего».</p>
+      </div>
+      <div class="card reveal d3">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></div>
+        <h3>Клуб «Мария для своих»</h3>
+        <p>Кэшбэк до 10%, оплата баллами, скидка в день рождения. Копите бонусы с первого заказа.</p>
+      </div>
+    </div>
+    <div class="center reveal" style="margin-top:36px">
+      <a class="btn btn--lg" href="#quiz">Рассчитать свой торт <span class="arr">→</span></a>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ FOOTER ══════════ -->
+<footer>
+  <div class="wrap foot-grid">
+    <div>
+      <div class="foot-logo">Мария</div>
+      <p>Кондитерская в Иркутске с 20-летней историей. 17 кафе по городу. Торты на заказ, бенто-пироги, пирожные.</p>
+    </div>
+    <div>
+      <h4>Контакты</h4>
+      <a href="tel:+73952504080">+7 (3952) 50-40-80</a>
+      <a href="https://www.maria-irk.ru" target="_blank" rel="noopener">maria-irk.ru</a>
+    </div>
+    <div>
+      <h4>Заказать</h4>
+      <a href="#quiz">Рассчитать торт</a>
+      <a href="https://www.maria-irk.ru" target="_blank" rel="noopener">Весь каталог</a>
+    </div>
+  </div>
+  <div class="wrap foot-bottom">
+    <span>© Кондитерская «Мария», Иркутск</span>
+    <span>Сделано с любовью к деталям</span>
+  </div>
+</footer>
+
+<!-- sticky mobile CTA -->
+<div class="sticky-cta"><a class="btn" href="#quiz">Рассчитать торт за 1 минуту</a></div>
+
+<script>
+(function(){
+  "use strict";
+
+  var prefersReduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ── scroll-reveal + count-up (включаем только если уважаем движение) ──
+  function revealAll(){ document.querySelectorAll(".reveal").forEach(function(el){ el.classList.add("in"); }); }
+  function runCount(el){
+    var target = parseFloat(el.dataset.count), suf = el.dataset.suffix || "", dur = 1100, t0 = null;
+    function step(ts){
+      if(!t0) t0 = ts;
+      var p = Math.min((ts - t0) / dur, 1);
+      var eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(target * eased).toLocaleString("ru-RU") + suf;
+      if(p < 1) requestAnimationFrame(step);
+      else el.textContent = target.toLocaleString("ru-RU") + suf;
+    }
+    el.textContent = "0" + suf;
+    requestAnimationFrame(step);
+  }
+
+  if(prefersReduced || !("IntersectionObserver" in window)){
+    revealAll(); // без анимаций — всё сразу видно, цифры остаются как в HTML
+  } else {
+    document.documentElement.classList.add("js"); // включает скрытое стартовое состояние
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(!en.isIntersecting) return;
+        en.target.classList.add("in");
+        en.target.querySelectorAll("[data-count]").forEach(function(c){
+          if(!c._counted){ c._counted = true; runCount(c); }
+        });
+        io.unobserve(en.target);
+      });
+    }, { threshold: 0.14, rootMargin: "0px 0px -8% 0px" });
+    document.querySelectorAll(".reveal").forEach(function(el){ io.observe(el); });
+    // страховка: если что-то пошло не так — показать всё через 2.5с
+    setTimeout(function(){ document.querySelectorAll(".reveal:not(.in)").forEach(function(el){
+      var r = el.getBoundingClientRect();
+      if(r.top < window.innerHeight) el.classList.add("in");
+    }); }, 2500);
+  }
+
+  // ── Лёгкий parallax в hero: фото плывёт при скролле + слегка следует за курсором ──
+  (function(){
+    if(prefersReduced) return;
+    var art = document.querySelector(".hero-art");
+    var hero = document.querySelector(".hero");
+    if(!art || !hero) return;
+    var sy = 0, px = 0, py = 0, ticking = false;
+    function apply(){
+      art.style.transform = "translate3d(" + px.toFixed(1) + "px," + (sy + py).toFixed(1) + "px,0)";
+      ticking = false;
+    }
+    function schedule(){ if(!ticking){ ticking = true; requestAnimationFrame(apply); } }
+    function onScroll(){
+      var y = window.pageYOffset || 0;
+      if(y > hero.offsetHeight + 100) return;   // считаем только пока герой рядом
+      sy = y * 0.14;                             // фото отстаёт от скролла → глубина
+      schedule();
+    }
+    window.addEventListener("scroll", onScroll, { passive:true });
+    onScroll();
+    // указатель — только на устройствах с точным курсором (десктоп)
+    if(window.matchMedia && window.matchMedia("(pointer:fine)").matches){
+      hero.addEventListener("mousemove", function(e){
+        var r = hero.getBoundingClientRect();
+        px = ((e.clientX - r.left) / r.width  - 0.5) * 14;
+        py = ((e.clientY - r.top)  / r.height - 0.5) * 10;
+        schedule();
+      });
+      hero.addEventListener("mouseleave", function(){ px = 0; py = 0; schedule(); });
+    }
+  })();
+
+  // ─────────────────────────────────────────────────────────────
+  // ⚙️ ПРАЙС — откалиброван по ЖИВОМУ каталогу 1С (08.06.2026):
+  //   • bentoBase 690 = реальная мин. цена бенто-пирога в каталоге (690–890 ₽).
+  //   • cakeBase 2500 + perPortion 320: на тире 7–12 чел даёт ~5380 ₽ —
+  //     совпадает с реальной медианой тортов на заказ (5300 ₽, 2–3 кг).
+  //   Это вилка-ОЦЕНКА для лендинга, точную цену подтверждает кондитер.
+  //   При смене прайса в 1С — сверить эти 3 числа.
+  // ─────────────────────────────────────────────────────────────
+  var PRICING = {
+    perPortion: 320,
+    bentoBase:  690,
+    minOrder:   690,
+    rangeLow:   0.95,
+    rangeHigh:  1.20
+  };
+
+  var TOTAL_STEPS = 6;
+  var state = { type:"", base:990, occasion:"", portions:"", mult:1, flavor:"", prem:1, decor:"", add:0, date:"" };
+  var cur = 1;
+
+  var $ = function(s,r){ return (r||document).querySelector(s); };
+  var $$ = function(s,r){ return Array.prototype.slice.call((r||document).querySelectorAll(s)); };
+
+  // UTM-метки из URL → сохраняем, прикладываем к лиду (атрибуция каналов в CRM)
+  var utm = {};
+  (function(){
+    var p = new URLSearchParams(location.search);
+    ["utm_source","utm_medium","utm_campaign","utm_content","utm_term"].forEach(function(k){
+      var v = p.get(k); if(v) utm[k]=v;
+    });
+  })();
+
+  var stepTitles = {
+    1:"Что хотите заказать?", 2:"Какой повод?", 3:"На сколько человек?",
+    4:"Любимый вкус?", 5:"Декор и надпись", 6:"Почти готово!"
+  };
+
+  function show(step){
+    cur = step;
+    $$(".step").forEach(function(el){ el.classList.toggle("active", +el.dataset.step===step); });
+    $("#qbar").style.width = Math.round(step/TOTAL_STEPS*100)+"%";
+    $("#qh-title").textContent = stepTitles[step];
+    $("#qh-step").textContent = "Шаг "+step+" из "+TOTAL_STEPS;
+    $("#btn-back").style.visibility = step>1 ? "visible" : "hidden";
+    $("#btn-next").textContent = step===TOTAL_STEPS ? "Отправить заявку" : "Далее →";
+    if(step===TOTAL_STEPS){ recalc(); }
+    if(window.innerWidth<860){ $(".quiz-wrap").scrollIntoView({behavior:"smooth",block:"start"}); }
+  }
+
+  // выбор опции
+  $$(".opts").forEach(function(group){
+    group.addEventListener("click", function(e){
+      var opt = e.target.closest(".opt"); if(!opt) return;
+      $$(".opt",group).forEach(function(o){ o.classList.remove("sel"); });
+      opt.classList.add("sel");
+      var g = group.dataset.group;
+      if(g==="type"){ state.type=opt.dataset.val; state.base=+opt.dataset.base||990; }
+      if(g==="occasion"){ state.occasion=opt.dataset.val; }
+      if(g==="portions"){ state.portions=opt.dataset.val; state.mult=+opt.dataset.mult||1; }
+      if(g==="flavor"){ state.flavor=opt.dataset.val; state.prem=+opt.dataset.prem||1; }
+      if(g==="decor"){ state.decor=opt.dataset.val; state.add=+opt.dataset.add||0; }
+      setTimeout(function(){ if(cur<TOTAL_STEPS) show(cur+1); }, 260);
+    });
+  });
+
+  function rub(n){ return (Math.round(n/10)*10).toLocaleString("ru-RU")+" ₽"; }
+
+  function calcMid(){
+    var v;
+    if(state.type==="Бенто-пирог" || (state.type==="Пока не решил" && state.mult<=1)){
+      v = PRICING.bentoBase * Math.max(1, state.mult/1);
+      if(state.mult>1){ v = PRICING.bentoBase + PRICING.perPortion*(state.mult-1); }
+    } else {
+      v = state.base + PRICING.perPortion*Math.max(0, state.mult-1);
+    }
+    v = v*state.prem + state.add;
+    return Math.max(PRICING.minOrder, v);
+  }
+
+  function recalc(){
+    var mid = calcMid();
+    var lo = mid*PRICING.rangeLow, hi = mid*PRICING.rangeHigh;
+    $("#est-price").textContent = rub(lo)+" – "+rub(hi);
+    var parts = [];
+    if(state.type)     parts.push("<b>"+state.type+"</b>");
+    if(state.portions) parts.push(state.portions+" чел.");
+    if(state.flavor)   parts.push(state.flavor.toLowerCase());
+    if(state.occasion) parts.push("повод: "+state.occasion.toLowerCase());
+    if(state.decor && state.decor!=="Без надписи") parts.push(state.decor.toLowerCase());
+    $("#est-summary").innerHTML = "Ваш выбор: "+parts.join(" · ");
+  }
+
+  $("#btn-back").addEventListener("click", function(){ if(cur>1) show(cur-1); });
+  $("#btn-next").addEventListener("click", function(){
+    if(cur<TOTAL_STEPS){ show(cur+1); return; }
+    submit();
+  });
+
+  // телефон: мягкая маска
+  var phone = $("#f-phone");
+  phone.addEventListener("input", function(){
+    var d = phone.value.replace(/\D/g,"");
+    if(d.startsWith("8")) d = "7"+d.slice(1);
+    if(!d.startsWith("7")) d = "7"+d;
+    d = d.slice(0,11);
+    var out = "+7";
+    if(d.length>1) out += " ("+d.slice(1,4);
+    if(d.length>=4) out += ") "+d.slice(4,7);
+    if(d.length>=7) out += "-"+d.slice(7,9);
+    if(d.length>=9) out += "-"+d.slice(9,11);
+    phone.value = out;
+    phone.classList.remove("err");
+  });
+
+  function validPhone(){ return phone.value.replace(/\D/g,"").length>=11; }
+
+  (function(){
+    var d = new Date(); d.setDate(d.getDate()+1);
+    $("#f-date").min = d.toISOString().slice(0,10);
+  })();
+
+  function submit(){
+    var name = $("#f-name").value.trim();
+    var ok = true;
+    if(!name){ $("#f-name").classList.add("err"); ok=false; } else { $("#f-name").classList.remove("err"); }
+    if(!validPhone()){ phone.classList.add("err"); ok=false; }
+    if(!ok) return;
+
+    state.date = $("#f-date").value || "";
+    var mid = calcMid();
+    var estStr = rub(mid*PRICING.rangeLow)+" – "+rub(mid*PRICING.rangeHigh);
+
+    var description = [state.type, state.flavor].filter(Boolean).join(" · ");
+    var commentLines = [
+      "Повод: "+(state.occasion||"—"),
+      "Декор: "+(state.decor||"—"),
+      "Предв. оценка (лендинг): "+estStr
+    ];
+
+    var payload = {
+      name: name,
+      phone: phone.value,
+      description: description || "Бенто/торт с лендинга",
+      portions: state.portions || "",
+      date: state.date,
+      comment: commentLines.join(" | "),
+      source: "Лендинг бенто (сайт)",
+      utm: utm
+    };
+
+    var btn = $("#btn-next");
+    btn.disabled = true; btn.textContent = "Отправляем…";
+
+    fetch("/api/lead", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify(payload)
+    }).then(function(r){ return r.json().catch(function(){return {};}); })
+      .then(function(res){
+        if(res && res.error){ throw new Error(res.error); }
+        try{ if(window.ym && window.YM_ID){ ym(window.YM_ID,"reachGoal","lead_bento"); } }catch(e){}
+        try{ if(window.VK && VK.Goal){ VK.Goal("lead"); } }catch(e){}
+        $("#quiz-body").style.display="none";
+        $("#nav-row") && ($("#nav-row").style.display="none");
+        $("#success").classList.add("active");
+        $(".quiz-wrap").scrollIntoView({behavior:"smooth",block:"start"});
+      })
+      .catch(function(err){
+        btn.disabled=false; btn.textContent="Отправить заявку";
+        alert("Не удалось отправить заявку. Позвоните нам: +7 (3952) 50-40-80\n("+(err.message||"ошибка сети")+")");
+      });
+  }
+
+  $("#hero-from").textContent = rub(PRICING.bentoBase);
+
+  show(1);
+})();
+</script>
+</body>
+</html>
