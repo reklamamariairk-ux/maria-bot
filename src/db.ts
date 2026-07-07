@@ -986,3 +986,23 @@ export async function markBirthdayNotified(chatId: number) {
     [chatId]
   );
 }
+
+// ─── User rewards (персональные коды из клубной системы) ─────────────────────
+export async function findUserReward(chatId: number, code: string): Promise<
+  { reward_type: string; discount_value: number; min_order: number; expires_at: Date; used_at: Date | null } | null> {
+  const { rows } = await pool.query(
+    `SELECT rc.reward_type, rc.discount_value, rc.min_order, ur.expires_at, ur.used_at
+       FROM user_rewards ur JOIN rewards_catalog rc ON rc.id = ur.reward_id
+      WHERE ur.promo_code = $1 AND ur.chat_id = $2`,
+    [String(code).toUpperCase(), chatId]
+  );
+  return rows[0] ?? null;
+}
+
+export async function markUserRewardUsed(code: string, chatId: number, orderId: string | null): Promise<void> {
+  await pool.query(
+    `UPDATE user_rewards SET used_at = NOW(), used_order_id = $3
+      WHERE promo_code = $1 AND chat_id = $2 AND used_at IS NULL`,
+    [String(code).toUpperCase(), chatId, orderId]
+  );
+}
