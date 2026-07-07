@@ -476,8 +476,6 @@
       .ck-ov.on{display:flex}.ck-ov.turbo{background:radial-gradient(130% 100% at 50% -10%,#3a2a20 0%,#241712 55%,#120c0a 100%)}
       .ck-screen{position:relative;z-index:1;flex:1;display:none;flex-direction:column;align-items:center;overflow:hidden}.ck-screen.on{display:flex}
       .ck-x{position:absolute;top:12px;right:12px;z-index:9;width:34px;height:34px;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.28);color:var(--cream);font-size:17px;cursor:pointer}
-      .ck-shop{position:absolute;top:12px;left:12px;z-index:9;display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border:1px solid #ffe9b3;border-radius:17px;background:linear-gradient(180deg,#ffe7a6,#eebf52 58%,#cf9a36);color:#5a2028;font-weight:800;font-size:13px;cursor:pointer;box-shadow:0 6px 15px rgba(170,115,30,.38),inset 0 1px 0 rgba(255,255,255,.55)}
-      .ck-shop .ck-i{vertical-align:-.16em}
       .ck-i{display:inline-block;vertical-align:-.16em}.ck-coin-i{display:inline-block;vertical-align:-.18em;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4))}
       .ck-daily{margin-top:13px;display:inline-flex;align-items:center;gap:7px;background:linear-gradient(180deg,#ffe7a6,#eebf52 58%,#cf9a36);color:#5a2028;font-weight:800;border:1px solid #ffe9b3;border-radius:14px;padding:9px 18px;font-size:13px;cursor:pointer;box-shadow:0 7px 18px rgba(170,115,30,.4),inset 0 1px 0 rgba(255,255,255,.55)}
       .ck-lvl{margin-top:13px;color:var(--gold-l);font-family:'Nunito',sans-serif;font-weight:700;font-size:17px;letter-spacing:.2px}
@@ -728,7 +726,6 @@
     ov = document.createElement('div'); ov.className = 'ck-ov';
     ov.innerHTML = `
       ${COIN_SPRITE}
-      <button class="ck-shop" id="ck-shop">${ICON.shop(15)} Магазин</button>
       <button class="ck-x" id="ck-x">×</button>
       <div class="ck-screen on" id="ck-scr-cat">
         <button class="ck-daily" id="ck-daily" style="display:none"></button>
@@ -765,7 +762,6 @@
       </div>`;
     document.body.appendChild(ov);
     ov.querySelector('#ck-x').onclick = close;
-    ov.querySelector('#ck-shop').onclick = () => { window.haptic && window.haptic('light'); close(); };
     ov.querySelector('#ck-cat').addEventListener('pointerdown', onTap);
     ov.querySelector('#ck-daily').onclick = dailyBtn;
     ov.querySelector('#ck-bt-turbo').onclick = () => boost('turbo');
