@@ -370,7 +370,21 @@
   }
 
   async function api(path, opts) { const r = await fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', ...(App.authHeader ? App.authHeader() : {}) } }); return r.json(); }
-  async function load() { st = authed() ? await api('/api/clicker').catch(() => guestDerive()) : guestDerive(); turboUntil = Date.now() + (st.turboMsLeft || 0); }
+  async function load() { let q = ''; try { const sp = (window.App && App.startParam && App.startParam()) || ''; const m = /^src[_-]([a-zA-Z0-9_-]{1,32})/.exec(sp); if (m) q = '?source=' + encodeURIComponent(m[1]); } catch (_) {} st = authed() ? await api('/api/clicker' + q).catch(() => guestDerive()) : guestDerive(); turboUntil = Date.now() + (st.turboMsLeft || 0); }
+  // T5: welcome-промокод новичку (первая победа). Показ 1 раз; сервер решает eligibility.
+  async function maybeWelcomePromo() {
+    if (!authed()) return;
+    try {
+      const d = await api('/api/clicker/welcome').catch(() => null);
+      if (!d || !d.promo) return;
+      const pop = ov.querySelector('#ck-pop');
+      pop.innerHTML = `<h3>${ICON.gift(20)} Подарок новичку!</h3><div class="v" style="font-size:22px">${d.promo}</div><div style="color:var(--muted);font-size:13px;max-width:240px">${(d.desc || '').replace(/</g, '&lt;')}</div><div style="display:flex;gap:8px;justify-content:center;margin-top:12px"><button class="ck-card__buy" id="ck-wc-copy" style="justify-content:center">Скопировать</button><a class="ck-card__buy" href="https://maria-irk.ru/" target="_blank" rel="noopener" style="text-decoration:none;justify-content:center">Заказать</a></div><button id="ck-pop-ok" style="margin-top:10px">Закрыть</button>`;
+      pop.classList.add('on');
+      const done = () => { pop.classList.remove('on'); api('/api/clicker/welcome/seen', { method: 'POST', body: '{}' }).catch(() => {}); };
+      const cp = pop.querySelector('#ck-wc-copy'); if (cp) cp.onclick = () => { try { navigator.clipboard && navigator.clipboard.writeText(d.promo); cp.textContent = 'Скопировано'; } catch (_) {} };
+      pop.querySelector('#ck-pop-ok').onclick = done;
+    } catch (_) {}
+  }
   async function flush() { if (pending <= 0 || !authed()) return; const n = pending; pending = 0; try { const d = await api('/api/clicker/tap', { method: 'POST', body: JSON.stringify({ taps: n }) }); st = d; } catch (_) { pending += n; } }
 
   async function buy(type, id) {
@@ -1576,6 +1590,7 @@
     let _seenTut = true; try { _seenTut = !!localStorage.getItem('ck_tut_v1'); } catch (e) {}
     if (!_seenTut) showTutorial();
     else if (st.passiveEarned > 0) passivePopup(st.passiveEarned);
+    else maybeWelcomePromo();
     lastTs = 0; syncT = 0; combo = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
   }
   // ── Хаб «Игры»: рендер + квизы + «Собери торт» + «Ровный крем» ───────────────

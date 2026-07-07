@@ -221,6 +221,36 @@ export async function earnPoints(
   }
 }
 
+/**
+ * Воронка T2: игроки, у которых реальные `points` сгорают в ближайшие `days` дней.
+ * Возвращает сумму сгорающих в окне баллов (не больше текущего баланса) и дату
+ * ближайшего сгорания. Только положительные балансы. Спенды не вычитаем из окна
+ * точно (FIFO-учёт TTL не ведём) — поэтому клампим к актуальному `points`.
+ */
+export async function getExpiringPointsUsers(
+  days: number
+): Promise<{ chatId: number; amount: number; soonest: Date }[]> {
+  const { rows } = await pool.query(
+    `SELECT pt.chat_id,
+            LEAST(SUM(pt.amount), COALESCE(MAX(ub.points), 0))::bigint AS amount,
+            MIN(pt.expires_at) AS soonest
+       FROM point_transactions pt
+       JOIN user_balances ub ON ub.chat_id = pt.chat_id
+      WHERE pt.kind = 'earn'
+        AND pt.expires_at IS NOT NULL
+        AND pt.expires_at > NOW()
+        AND pt.expires_at <= NOW() + ($1 || ' days')::interval
+      GROUP BY pt.chat_id
+     HAVING LEAST(SUM(pt.amount), COALESCE(MAX(ub.points), 0)) > 0`,
+    [String(Math.max(1, Math.floor(days)))]
+  );
+  return rows.map((r: any) => ({
+    chatId: Number(r.chat_id),
+    amount: Number(r.amount),
+    soonest: new Date(r.soonest),
+  }));
+}
+
 // ─── Stars: earn ─────────────────────────────────────────────────────────────
 export async function earnStars(
   chatId: number,

@@ -788,6 +788,46 @@ export async function registerRef(chatId: number, code: string): Promise<{ ok: b
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
+// ─── Воронка MVP ─────────────────────────────────────────────────────────────
+
+/** T4: приглашённые, чей первый заказ ещё не вознаграждён (для крона реф-бонуса). */
+export async function getRefOrderCandidates(): Promise<{ invitee: number; referrer: number }[]> {
+  const { rows } = await pool.query(
+    `SELECT chat_id, referred_by FROM clicker_state
+      WHERE referred_by IS NOT NULL AND ref_order_rewarded = FALSE`
+  );
+  return rows.map((r: any) => ({ invitee: Number(r.chat_id), referrer: Number(r.referred_by) }));
+}
+
+/** T4: пометить, что реф-бонус за первый заказ приглашённого выдан (идемпотентно). */
+export async function markRefOrderRewarded(invitee: number): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `UPDATE clicker_state SET ref_order_rewarded = TRUE
+      WHERE chat_id = $1 AND ref_order_rewarded = FALSE`,
+    [invitee]
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+/** T5: показывался ли уже welcome-промокод игроку. */
+export async function welcomePromoShown(chatId: number): Promise<boolean> {
+  const { rows } = await pool.query(
+    `SELECT welcome_promo_at FROM clicker_state WHERE chat_id = $1`,
+    [chatId]
+  );
+  return rows.length > 0 && rows[0].welcome_promo_at != null;
+}
+
+/** T5: пометить, что welcome-промокод выдан (один раз). Возвращает true если только что пометили. */
+export async function markWelcomePromoShown(chatId: number): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `UPDATE clicker_state SET welcome_promo_at = NOW()
+      WHERE chat_id = $1 AND welcome_promo_at IS NULL`,
+    [chatId]
+  );
+  return (rowCount ?? 0) > 0;
+}
+
 /**
  * Перенос прогресса гостя (localStorage) на серверный аккаунт при первом входе.
  * ТОЛЬКО в свежий аккаунт (total=0, нет карт, нет тапов) — чтобы не затереть

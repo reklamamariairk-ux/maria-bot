@@ -28,7 +28,7 @@ import { createPushService } from "./push";
 import { createVkSender } from "./vk/sender";
 import { createVkCallbackRouter } from "./vk/callback";
 import { createVkRouter } from "./routes/vk";
-import { miniAppLink, withAppLinkForVk } from "./links";
+import { miniAppLink, withAppLinkForVk, clickerReferralLink } from "./links";
 import { createReferralRouter } from "./routes/referral";
 import { createWheelStreakRouter } from "./routes/wheel-streak";
 import { pool as _dbPoolForRouters } from "./db";
@@ -37,8 +37,8 @@ import gameRouter from "./routes/game";
 import petRouter from "./routes/pet";
 import { initPetSchema } from "./pet";
 import clickerRouter from "./routes/clicker";
-import { initClickerSchema, registerRef, closeWeeklySeason, pushWeeklyWinners } from "./clicker";
-import { initAnalyticsSchema } from "./analytics";
+import { initClickerSchema, registerRef, closeWeeklySeason, pushWeeklyWinners, getRefOrderCandidates, markRefOrderRewarded } from "./clicker";
+import { initAnalyticsSchema, trackEvent, wasFunnelSent, markFunnelSent, getDormantPlayers } from "./analytics";
 import { initClickerPushSchema, runClickerRetentionPush } from "./clicker-push";
 import { initBonusSchema, startBonusWorker } from "./bonus1c";
 import cartRouter from "./routes/cart";
@@ -58,6 +58,8 @@ import {
   getHistory,
   getDailyStatus,
   CONVERSION_TIERS,
+  earnPoints,
+  getExpiringPointsUsers,
 } from "./club";
 import { requireTgUser, getTgUser, tryGetTgUser, tryGetUser } from "./auth";
 import { getPartners, getPartnersMeta, syncPartners } from "./partners";
@@ -230,6 +232,89 @@ async function pushCartAbandonments() {
   if (sent > 0) console.log(`[CART ABANDON] notified ${sent} subscribers`);
 }
 
+// ─── Воронка «Котик Комбат» (MVP T2/T3/T4) ──────────────────────────────────
+// Все пуши/начисления по умолчанию ВЫКЛЮЧЕНЫ (env-флаги OFF) — крон считает и
+// логирует в dry-run, но НЕ шлёт людям и НЕ начисляет баллы, пока флаг не поднят.
+// Включение — outward-facing действие: включает Маша/владелец, когда готов.
+const FUNNEL_RETENTION_ENABLED = process.env.FUNNEL_RETENTION_ENABLED === "1";
+const FUNNEL_REF_BONUS_ENABLED = process.env.FUNNEL_REF_BONUS_ENABLED === "1";
+const FUNNEL_EXPIRE_DAYS = Math.max(1, Number(process.env.FUNNEL_EXPIRE_DAYS) || 5);
+const FUNNEL_REACT_DAYS = Math.max(3, Number(process.env.FUNNEL_REACT_DAYS) || 14);
+const FUNNEL_REF_ORDER_POINTS = Math.max(0, Number(process.env.FUNNEL_REF_ORDER_POINTS) || 100);
+
+function pluralRu(n: number, one: string, few: string, many: string): string {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+  return many;
+}
+
+// T2 — пуш «баллы сгорают»: реальные points, истекающие ≤ FUNNEL_EXPIRE_DAYS дней.
+async function pushExpiringPoints() {
+  const users = await getExpiringPointsUsers(FUNNEL_EXPIRE_DAYS).catch(() => []);
+  if (users.length === 0) return;
+  let sent = 0, dry = 0, skipped = 0;
+  for (const u of users) {
+    if (await wasFunnelSent(u.chatId, "points_expiry", FUNNEL_EXPIRE_DAYS + 1).catch(() => false)) { skipped++; continue; }
+    const daysLeft = Math.max(1, Math.ceil((u.soonest.getTime() - Date.now()) / 86_400_000));
+    const msg = `⏳ *Баллы скоро сгорают*\n\nУ тебя ${u.amount.toLocaleString("ru-RU")} бонусных ${pluralRu(u.amount, "балл", "балла", "баллов")} сгорят через ${daysLeft} ${pluralRu(daysLeft, "день", "дня", "дней")}. 1 балл = 1 ₽ — потрать их в заказе на maria-irk.ru, чтобы не потерять 🍰`;
+    if (!FUNNEL_RETENTION_ENABLED) { dry++; continue; }
+    const ok = await sendPushSafely(u.chatId, "marketing_promo", withAppLinkForVk(u.chatId, msg));
+    if (ok) { sent++; await markFunnelSent(u.chatId, "points_expiry"); }
+  }
+  console.log(`[FUNNEL expiry] users=${users.length} sent=${sent} dry=${dry} skipped=${skipped} enabled=${FUNNEL_RETENTION_ENABLED}`);
+}
+
+// T3 — реактивация «Василий скучает»: игроки, уснувшие ≥ FUNNEL_REACT_DAYS дней.
+async function pushReactivation() {
+  const dormant = await getDormantPlayers(FUNNEL_REACT_DAYS, 90).catch(() => []);
+  if (dormant.length === 0) return;
+  let sent = 0, dry = 0, skipped = 0;
+  for (const chatId of dormant) {
+    if (await wasFunnelSent(chatId, "reactivation", FUNNEL_REACT_DAYS).catch(() => false)) { skipped++; continue; }
+    const msg = `🐱 *Василий скучает!*\n\nДавно тебя не было в «Котик Комбат» — бизнес заскучал. Загляни, забери накопленные монеты и открой новых голубей-помощников!`;
+    if (!FUNNEL_RETENTION_ENABLED) { dry++; continue; }
+    const full = withAppLinkForVk(chatId, `${msg}\n\n${miniAppLink(chatId, "click")}`);
+    const ok = await sendPushSafely(chatId, "marketing_game", full);
+    if (ok) { sent++; await markFunnelSent(chatId, "reactivation"); }
+  }
+  console.log(`[FUNNEL reactivate] dormant=${dormant.length} sent=${sent} dry=${dry} skipped=${skipped} enabled=${FUNNEL_RETENTION_ENABLED}`);
+}
+
+// T4 — реф-бонус за ПЕРВЫЙ заказ приглашённого: реальные points рефереру.
+// Анти-абуз: только по реальному завершённому заказу приглашённого; дедуп флагом.
+async function checkReferralFirstOrders() {
+  const cands = await getRefOrderCandidates().catch(() => []);
+  if (cands.length === 0) return;
+  let paid = 0, checked = 0, dry = 0;
+  for (const { invitee, referrer } of cands) {
+    const phone = await getVerifiedPhone(invitee).catch(() => null);
+    if (!phone) continue; // без верифицированного телефона заказы не видим
+    const lk = await fetchLk(invitee).catch(() => null);
+    if (!lk?.ok || !lk.data?.configured) continue;
+    const orders = Array.isArray(lk.data.orders) ? lk.data.orders : [];
+    const hasCompleted = orders.some((o) =>
+      /выдан|доставлен|доставлено|выполнен|завершён|завершен/.test(String(o.status ?? "").toLowerCase())
+    );
+    checked++;
+    if (!hasCompleted) continue;
+    if (!FUNNEL_REF_BONUS_ENABLED) { dry++; continue; }
+    // Помечаем ДО начисления — атомарный дедуп (никогда не задвоим реальные баллы).
+    const claimed = await markRefOrderRewarded(invitee).catch(() => false);
+    if (!claimed) continue;
+    try {
+      await earnPoints(referrer, FUNNEL_REF_ORDER_POINTS, "referral_first_order", { invitee });
+      trackEvent(referrer, "referral_order", { invitee });
+      const msg = `🎉 *Твой друг сделал первый заказ!*\n\nСпасибо, что привёл друга в «Марию» — тебе начислено ${FUNNEL_REF_ORDER_POINTS} бонусных ${pluralRu(FUNNEL_REF_ORDER_POINTS, "балл", "балла", "баллов")} (1 балл = 1 ₽). Потрать их в следующем заказе 🎂`;
+      await sendPushSafely(referrer, "marketing_rewards", withAppLinkForVk(referrer, msg));
+      paid++;
+    } catch (e) {
+      log.error({ err: e, referrer, invitee }, "[FUNNEL ref-order] earnPoints failed");
+    }
+  }
+  console.log(`[FUNNEL ref-order] cands=${cands.length} checked=${checked} paid=${paid} dry=${dry} enabled=${FUNNEL_REF_BONUS_ENABLED}`);
+}
+
 // Order status diff — обходит подписчиков с verified phone, тянет /api/lk, diff'ит статусы
 const STATUS_EMOJI: Record<string, string> = {
   "новый":             "📋",
@@ -311,9 +396,9 @@ async function checkOrderStatusChanges() {
       const ok = await sendPushSafely(s.chat_id, "transactional", msg);
       if (ok) pushed++;
       await setOrderStatus(s.chat_id, orderId, status).catch(() => {});
-      // Если терминальный статус — больше не отслеживаем (но запись остаётся в DB)
-      if (isTerminalStatus(status)) {
-        // optional: можно удалять старые записи cleanup-кроном, но не критично
+      // T6: событие воронки — заказ дошёл до завершённого (не отменённого) статуса.
+      if (isTerminalStatus(status) && !/отмен/.test(status.toLowerCase())) {
+        trackEvent(s.chat_id, "order_completed", { orderId });
       }
     }
   }
@@ -1382,6 +1467,21 @@ app.post("/api/admin/clicker/push", requireAdminToken, async (_req, res) => {
   catch (e) { log.error({ err: e }, "[CLICKER PUSH MANUAL]"); res.status(500).json({ error: "internal" }); }
 });
 
+// Админ: ручные триггеры вороночных кронов (T2/T3/T4) — для теста.
+// В dry-run (флаги OFF) считают и логируют, но не шлют/не начисляют.
+app.post("/api/admin/funnel/expiry", requireAdminToken, async (_req, res) => {
+  try { await pushExpiringPoints(); res.json({ ok: true, enabled: FUNNEL_RETENTION_ENABLED }); }
+  catch (e) { log.error({ err: e }, "[FUNNEL EXPIRY MANUAL]"); res.status(500).json({ error: "internal" }); }
+});
+app.post("/api/admin/funnel/reactivate", requireAdminToken, async (_req, res) => {
+  try { await pushReactivation(); res.json({ ok: true, enabled: FUNNEL_RETENTION_ENABLED }); }
+  catch (e) { log.error({ err: e }, "[FUNNEL REACTIVATE MANUAL]"); res.status(500).json({ error: "internal" }); }
+});
+app.post("/api/admin/funnel/ref-orders", requireAdminToken, async (_req, res) => {
+  try { await checkReferralFirstOrders(); res.json({ ok: true, enabled: FUNNEL_REF_BONUS_ENABLED }); }
+  catch (e) { log.error({ err: e }, "[FUNNEL REF-ORDER MANUAL]"); res.status(500).json({ error: "internal" }); }
+});
+
 // Админ: ручное закрытие недельного сезона + пуш победителям (для теста).
 app.post("/api/admin/clicker/weekly-close", requireAdminToken, async (_req, res) => {
   try { const close = await closeWeeklySeason(); const push = await pushWeeklyWinners(_pushService); res.json({ ok: true, ...close, pushed: push.sent }); }
@@ -1971,6 +2071,20 @@ async function main() {
     runClickerRetentionPush(_pushService).catch((e) => log.error({ err: e }, "[CLICKER PUSH CRON]"));
   });
   console.log("[STARTUP] Clicker retention-push cron scheduled (daily 17:00 Irkutsk)");
+
+  // Воронка T2 — «баллы сгорают»: ежедневно 11:00 Иркутск (03:00 UTC).
+  cron.schedule("0 3 * * *", () => {
+    pushExpiringPoints().catch((e) => log.error({ err: e }, "[FUNNEL EXPIRY CRON]"));
+  });
+  // Воронка T3 — реактивация «Василий скучает»: ежедневно 12:00 Иркутск (04:00 UTC).
+  cron.schedule("0 4 * * *", () => {
+    pushReactivation().catch((e) => log.error({ err: e }, "[FUNNEL REACTIVATE CRON]"));
+  });
+  // Воронка T4 — реф-бонус за первый заказ приглашённого: каждый час :37.
+  cron.schedule("37 * * * *", () => {
+    checkReferralFirstOrders().catch((e) => log.error({ err: e }, "[FUNNEL REF-ORDER CRON]"));
+  });
+  console.log(`[STARTUP] Funnel MVP crons scheduled (retention=${FUNNEL_RETENTION_ENABLED} ref-bonus=${FUNNEL_REF_BONUS_ENABLED}; OFF=dry-run)`);
 
   // Закрытие недельного сезона «Котик Комбат» — понедельник 00:02 Иркутск (вс 16:02 UTC),
   // ДО обнуления week_base активными игроками. Фиксирует топ-3 + начисляет призы.

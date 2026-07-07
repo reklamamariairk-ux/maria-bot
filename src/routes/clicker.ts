@@ -5,7 +5,7 @@
  * POST /api/clicker/boost {type:turbo|energy} · GET /api/clicker/top
  */
 import { Router } from "express";
-import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements, getRewards, redeemReward, claimBonus, openChest, claimRain, claimGame, getMilestones, claimMilestone, syncPurchaseBonus, migrateGuest, redeemCode, getSquads, joinSquad, prestigeReset } from "../clicker";
+import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements, getRewards, redeemReward, claimBonus, openChest, claimRain, claimGame, getMilestones, claimMilestone, syncPurchaseBonus, migrateGuest, redeemCode, getSquads, joinSquad, prestigeReset, welcomePromoShown, markWelcomePromoShown } from "../clicker";
 import { rateLimit, requireAdminToken } from "../middleware";
 import { requireTgUser, getTgUser } from "../auth";
 import { getBonusQueue, ackBonusQueue, queueAuthOk } from "../bonus1c";
@@ -16,7 +16,37 @@ const router = Router();
 
 router.get("/api/clicker", requireTgUser, rateLimit(120), async (req, res) => {
   const u = getTgUser(req)!;
-  try { res.json(await getClicker(u.id)); trackActivity(u.id, { open: true }); } catch (e) { log.error({ err: e, chatId: u.id }, "[GET /api/clicker]"); res.status(500).json({ error: "internal" }); }
+  try {
+    res.json(await getClicker(u.id));
+    trackActivity(u.id, { open: true });
+    // T6: разметка источника открытия (deep-link несёт ?source=<мультик|соцсеть|упаковка>).
+    const source = String(req.query.source || "").trim().slice(0, 32).replace(/[^a-zA-Z0-9_-]/g, "");
+    if (source) trackEvent(u.id, "open", { source });
+  } catch (e) { log.error({ err: e, chatId: u.id }, "[GET /api/clicker]"); res.status(500).json({ error: "internal" }); }
+});
+
+// T5 — Welcome-квест: реальный промокод новичку после первой мини-победы.
+// Включается env WELCOME_PROMO (код) + WELCOME_PROMO_DESC (текст). Пусто = выключено.
+// Выдаётся один раз, только с уровня ≥ 2 (первая победа). Не трогает выключенный обмен REWARDS.
+const WELCOME_PROMO = (process.env.WELCOME_PROMO || "").trim();
+const WELCOME_PROMO_DESC = (process.env.WELCOME_PROMO_DESC || "−10% на первый заказ на maria-irk.ru").trim();
+router.get("/api/clicker/welcome", requireTgUser, rateLimit(30), async (req, res) => {
+  const u = getTgUser(req)!;
+  try {
+    if (!WELCOME_PROMO) { res.json({ promo: null }); return; }
+    if (await welcomePromoShown(u.id)) { res.json({ promo: null }); return; }
+    const st = await getClicker(u.id);
+    if ((st.level || 1) < 2) { res.json({ promo: null, pending: true }); return; } // ещё не «первая победа»
+    res.json({ promo: WELCOME_PROMO, desc: WELCOME_PROMO_DESC });
+  } catch (e) { log.error({ err: e, chatId: u.id }, "[clicker/welcome]"); res.status(500).json({ error: "internal" }); }
+});
+router.post("/api/clicker/welcome/seen", requireTgUser, rateLimit(30), async (req, res) => {
+  const u = getTgUser(req)!;
+  try {
+    const first = await markWelcomePromoShown(u.id);
+    if (first && WELCOME_PROMO) trackEvent(u.id, "welcome_promo", { code: WELCOME_PROMO });
+    res.json({ ok: true });
+  } catch (e) { log.error({ err: e, chatId: u.id }, "[clicker/welcome/seen]"); res.status(500).json({ error: "internal" }); }
 });
 
 router.post("/api/clicker/tap", requireTgUser, rateLimit(120), async (req, res) => {

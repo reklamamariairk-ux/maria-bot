@@ -45,6 +45,17 @@ export async function initAnalyticsSchema(): Promise<void> {
 
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS notified_level INT NOT NULL DEFAULT 0;
+    -- Воронка MVP: реф-бонус за первый заказ приглашённого (T4) + welcome-промокод (T5).
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS ref_order_rewarded BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS welcome_promo_at TIMESTAMPTZ;
+
+    -- Дедуп вороночных пушей: не слать один и тот же тип чаще, чем раз в N дней.
+    CREATE TABLE IF NOT EXISTS funnel_dedup (
+      chat_id BIGINT NOT NULL,
+      tag     TEXT   NOT NULL,
+      at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (chat_id, tag)
+    );
   `);
   // Бэкфилл для уже существовавших игроков: ADD COLUMN проставил created_at=NOW()
   // всем старым рядам (искусственно «зарегистрированы сегодня»). Приближаем к
@@ -58,6 +69,26 @@ export function trackEvent(chatId: number, event: string, meta?: Record<string, 
     .query(`INSERT INTO clicker_events (chat_id, event, meta, day) VALUES ($1, $2, $3::jsonb, $4)`,
       [chatId, event, meta ? JSON.stringify(meta) : null, irkToday()])
     .catch((e) => log.warn({ err: e, event }, "[analytics event]"));
+}
+
+/** Воронка: слался ли пуш с этим `tag` этому юзеру за последние `days` дней. */
+export async function wasFunnelSent(chatId: number, tag: string, days: number): Promise<boolean> {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM funnel_dedup WHERE chat_id=$1 AND tag=$2 AND at > NOW() - ($3||' days')::interval`,
+    [chatId, tag, String(Math.max(1, Math.floor(days)))]
+  );
+  return rows.length > 0;
+}
+
+/** Пометить, что пуш с `tag` отправлен юзеру (обновляет время при повторе). */
+export async function markFunnelSent(chatId: number, tag: string): Promise<void> {
+  await pool
+    .query(
+      `INSERT INTO funnel_dedup (chat_id, tag, at) VALUES ($1,$2,NOW())
+       ON CONFLICT (chat_id, tag) DO UPDATE SET at = NOW()`,
+      [chatId, tag]
+    )
+    .catch((e) => log.warn({ err: e, tag }, "[funnel dedup]"));
 }
 
 /** Fire-and-forget дневная активность (upsert по игроку+дню). */
@@ -78,6 +109,18 @@ export function trackActivity(
       [chatId, irkToday(), taps, open ? 1 : 0, earned]
     )
     .catch((e) => log.warn({ err: e }, "[analytics activity]"));
+}
+
+/** T3: игроки, «уснувшие» между minDays и maxDays назад (для реактивации). */
+export async function getDormantPlayers(minDays: number, maxDays = 90): Promise<number[]> {
+  const { rows } = await pool.query(
+    `SELECT chat_id FROM clicker_activity
+      GROUP BY chat_id
+     HAVING MAX(last_seen) < NOW() - ($1||' days')::interval
+        AND MAX(last_seen) > NOW() - ($2||' days')::interval`,
+    [String(Math.max(1, Math.floor(minDays))), String(Math.max(1, Math.floor(maxDays)))]
+  );
+  return rows.map((r: any) => Number(r.chat_id));
 }
 
 // ── Дашборд ────────────────────────────────────────────────────────────────
