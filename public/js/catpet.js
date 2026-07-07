@@ -1,5 +1,5 @@
-/* ── «Котик Марии» — виртуальный питомец (тамагочи) ───────────────────────────
- * Кот живёт в приложении, ХОДИТ по 4 локациям, у него потребности (голод/настроение/
+/* ── «Дом Василия» — виртуальный питомец (тамагочи) ───────────────────────────
+ * Василий живёт в приложении, ХОДИТ по 4 локациям, у него потребности (голод/настроение/
  * энергия/чистота), за ним ухаживаешь. Состояние — на сервере (/api/pet) для
  * авторизованных, на localStorage для гостей. Мини-игры открываются в Игровой.
  * Арт: cat/walk1..4.png (ходьба сбоку), idle/happy/full/hungry/open/chew (анфас),
@@ -7,18 +7,31 @@
  * ───────────────────────────────────────────────────────────────────────────── */
 (function () {
   const A = (s) => `/assets/images/cat/${s}`;
+  const SVG = (p, s = 18) => `<svg class="pet-i" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+  const PIC = {
+    feed:    (s) => SVG('<path d="M4 20h16"/><path d="M6 20V9a6 6 0 0 1 12 0v11"/><path d="M12 3v3"/>', s),   // кекс/еда
+    sleep:   (s) => SVG('<path d="M3 12h6l-6 6h6"/><path d="M14 5h7l-7 7h7"/>', s),                            // Zzz
+    play:    (s) => SVG('<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18"/><path d="M3 12h18"/>', s), // клубок/мяч
+    pet:     (s) => SVG('<path d="M12 21s-7-4.6-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.4-7 10-7 10z"/>', s),  // сердечко
+    hunger:  (s) => SVG('<path d="M4 20h16"/><path d="M6 20V9a6 6 0 0 1 12 0v11"/>', s),
+    mood:    (s) => SVG('<circle cx="12" cy="12" r="9"/><path d="M8 14a4 4 0 0 0 8 0"/><path d="M9 9h.01M15 9h.01"/>', s), // улыбка
+    energy:  (s) => SVG('<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>', s),                                          // молния
+    hygiene: (s) => SVG('<path d="M12 3c3 4 5 6 5 9a5 5 0 0 1-10 0c0-3 2-5 5-9z"/>', s),                       // капля
+  };
+  const NAV_ICON = { feed: PIC.feed, sleep: PIC.sleep, play: PIC.play, walk: PIC.pet };
   const WALK = ['walk1.png', 'walk2.png', 'walk3.png', 'walk4.png'];
   const LOC = {
-    kitchen:  { bg: 'bakery-bg.jpg', name: 'Кухня',   icon: '🍰', action: 'feed',  label: '🍖 Покормить', need: 'hunger' },
-    bedroom:  { bg: 'bg-bedroom.jpg', name: 'Спальня', icon: '🛏', action: 'sleep', label: '💤 Уложить спать', need: 'energy' },
-    playroom: { bg: 'bg-playroom.jpg', name: 'Игровая', icon: '🎮', action: 'play',  label: '🎮 Играть', need: 'mood' },
-    yard:     { bg: 'bg-yard.jpg', name: 'Двор',     icon: '🌳', action: 'walk',  label: '✨ Погладить', need: 'mood' },
+    kitchen:  { bg: 'bakery-bg.jpg',  name: 'Кухня',   action: 'feed',  label: PIC.feed(18) + ' Покормить',    need: 'hunger' },
+    bedroom:  { bg: 'bg-bedroom.jpg', name: 'Спальня', action: 'sleep', label: PIC.sleep(18) + ' Уложить спать', need: 'energy' },
+    playroom: { bg: 'bg-playroom.jpg',name: 'Игровая', action: 'play',  label: PIC.play(18) + ' Поиграть',      need: 'mood' },
+    yard:     { bg: 'bg-yard.jpg',    name: 'Двор',    action: 'walk',  label: PIC.pet(18) + ' Погладить',      need: 'mood' },
   };
   const ORDER = ['kitchen', 'bedroom', 'playroom', 'yard'];
   const NEEDS = [
-    { k: 'hunger', icon: '🍖', name: 'Сытость' },
-    { k: 'mood', icon: '😺', name: 'Настроение' },
-    { k: 'energy', icon: '💤', name: 'Энергия' },
+    { k: 'hunger', ic: PIC.hunger, name: 'Сытость' },
+    { k: 'mood',   ic: PIC.mood,   name: 'Настроение' },
+    { k: 'energy', ic: PIC.energy, name: 'Энергия' },
+    { k: 'hygiene',ic: PIC.hygiene,name: 'Чистота' },
   ];
   const LS = 'maria_pet_v1';
   // Магазин (цены — источник правды на бэке; здесь зеркало + арт и посадка на голову)
@@ -89,7 +102,8 @@
     if (document.getElementById('catpet-css')) return;
     const s = document.createElement('style'); s.id = 'catpet-css';
     s.textContent = `
-      .pet-ov{position:fixed;inset:0;z-index:9999;display:none;flex-direction:column;overflow:hidden;background:#f3e2cf center/cover no-repeat;touch-action:none;user-select:none}
+      .pet-i{display:inline-block;vertical-align:-.18em}
+      .pet-ov{position:fixed;inset:0;z-index:9999;display:none;flex-direction:column;overflow:hidden;background:#fdfaf3 center/cover no-repeat;touch-action:none;user-select:none}
       .pet-ov.on{display:flex}
       .pet-top{position:relative;z-index:3;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:10px 12px;background:linear-gradient(180deg,rgba(0,0,0,.28),transparent)}
       .pet-need{display:flex;align-items:center;gap:5px;flex:1 1 44%}
@@ -141,7 +155,7 @@
       <div class="pet-top" id="pet-needs"></div>
       <div class="pet-lvl" id="pet-lvl"></div>
       <button class="pet-x" id="pet-x">×</button>
-      <button class="pet-shop-btn" id="pet-shop-btn">🎩</button>
+      <button class="pet-shop-btn" id="pet-shop-btn"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.57a1 1 0 0 0 .99.84H5v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V10h1.15a1 1 0 0 0 .99-.84l.58-3.57a2 2 0 0 0-1.34-2.23z"/></svg></button>
       <div class="pet-stage" id="pet-stage">
         <div class="pet-name" id="pet-locname"></div>
         <img class="pet-cat" id="pet-cat" draggable="false"/>
@@ -150,19 +164,19 @@
         <div class="pet-action" id="pet-action"></div>
       </div>
       <div class="pet-shop" id="pet-shop">
-        <div class="pet-shop__h"><span>🎩 Магазин · <span id="pet-shop-coins">0</span> 🪙</span><button id="pet-shop-close">Готово</button></div>
+        <div class="pet-shop__h"><span>Наряды Василия · <span id="pet-shop-coins">0</span> монет</span><button id="pet-shop-close">Готово</button></div>
         <div class="pet-shop__grid" id="pet-shop-grid"></div>
       </div>
       <div class="pet-nav" id="pet-nav"></div>
       <div class="pet-play" id="pet-play"><div class="pet-play__card"><h3>Во что поиграем?</h3><div class="pet-play__g">
-        <button id="pet-g-feed">🍰 Накорми</button><button id="pet-g-catch">🥧 Ловилка</button>
+        <button id="pet-g-feed">Накорми</button><button id="pet-g-catch">Ловилка</button>
       </div><div style="margin-top:14px"><button id="pet-g-cancel" style="background:#eee;color:#7a3b12;border:none;border-radius:14px;padding:10px 18px;font-weight:700;cursor:pointer">Назад</button></div></div></div>
     `;
     document.body.appendChild(ov);
     ov.querySelector('#pet-x').onclick = close;
     // nav
     const nav = ov.querySelector('#pet-nav');
-    nav.innerHTML = ORDER.map(k => `<button class="pet-nav__b" data-loc="${k}"><span class="i">${LOC[k].icon}</span>${LOC[k].name}</button>`).join('');
+    nav.innerHTML = ORDER.map(k => `<button class="pet-nav__b" data-loc="${k}"><span class="i">${NAV_ICON[LOC[k].action](20)}</span>${LOC[k].name}</button>`).join('');
     nav.querySelectorAll('.pet-nav__b').forEach(b => b.onclick = () => goLoc(b.dataset.loc));
     // play menu
     ov.querySelector('#pet-g-feed').onclick = () => { hidePlay(); window.catFeedOpen?.(); afterPlay(); };
@@ -173,7 +187,7 @@
     ov.querySelector('#pet-shop-close').onclick = () => ov.querySelector('#pet-shop').classList.remove('on');
     // needs skeleton
     ov.querySelector('#pet-needs').innerHTML = NEEDS.map(n => `
-      <div class="pet-need"><span class="pet-need__i">${n.icon}</span><div class="pet-need__bar"><div class="pet-need__fill" id="need-${n.k}"></div></div></div>`).join('');
+      <div class="pet-need"><span class="pet-need__i">${n.ic(15)}</span><div class="pet-need__bar"><div class="pet-need__fill" id="need-${n.k}"></div></div></div>`).join('');
   }
 
   function renderNeeds() {
@@ -183,12 +197,12 @@
       const v = state[n.k] ?? 0; el.style.width = v + '%';
       el.style.background = v > 50 ? 'linear-gradient(90deg,#7ed957,#aee571)' : v > 25 ? 'linear-gradient(90deg,#ffb347,#ffd23f)' : 'linear-gradient(90deg,#ff5a5a,#ff8a8a)';
     });
-    ov.querySelector('#pet-lvl').innerHTML = `Ур. ${state.level} · 🪙 ${state.coins}<br><span style="font-weight:600;opacity:.85">${state.xp}/${state.xpNext} XP</span>`;
+    ov.querySelector('#pet-lvl').innerHTML = `Ур. ${state.level} · ${state.coins} монет<br><span style="font-weight:600;opacity:.85">${state.xp}/${state.xpNext} XP</span>`;
   }
 
   function renderLoc() {
     ov.style.backgroundImage = `url(${A(LOC[loc].bg)})`;
-    ov.querySelector('#pet-locname').textContent = LOC[loc].icon + ' ' + LOC[loc].name;
+    ov.querySelector('#pet-locname').innerHTML = NAV_ICON[LOC[loc].action](16) + ' ' + LOC[loc].name;
     ov.querySelectorAll('.pet-nav__b').forEach(b => b.classList.toggle('on', b.dataset.loc === loc));
     const act = ov.querySelector('#pet-action');
     act.innerHTML = `<button class="pet-action__btn" id="pet-do">${LOC[loc].label}</button>`;
@@ -240,7 +254,7 @@
     ov.querySelector('#pet-shop-grid').innerHTML = SHOP.map(h => {
       const own = owned.includes(h.id), on = eq === h.id;
       let btn;
-      if (!own) btn = `<button class="pet-item__b buy" data-buy="${h.id}" ${(state.coins ?? 0) < h.price ? 'disabled' : ''}>${h.price} 🪙</button>`;
+      if (!own) btn = `<button class="pet-item__b buy" data-buy="${h.id}" ${(state.coins ?? 0) < h.price ? 'disabled' : ''}>${h.price} монет</button>`;
       else if (on) btn = `<button class="pet-item__b on" data-equip="">Снять</button>`;
       else btn = `<button class="pet-item__b equip" data-equip="${h.id}">Надеть</button>`;
       return `<div class="pet-item"><img src="${A(h.img)}"/><div class="pet-item__n">${h.name}</div>${btn}</div>`;
