@@ -476,6 +476,8 @@
       .ck-ov.on{display:flex}.ck-ov.turbo{background:radial-gradient(130% 100% at 50% -10%,#3a2a20 0%,#241712 55%,#120c0a 100%)}
       .ck-screen{position:relative;z-index:1;flex:1;display:none;flex-direction:column;align-items:center;overflow:hidden}.ck-screen.on{display:flex}
       .ck-x{position:absolute;top:12px;right:12px;z-index:9;width:34px;height:34px;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.28);color:var(--cream);font-size:17px;cursor:pointer}
+      .ck-shop{position:absolute;top:12px;left:12px;z-index:9;display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border:1px solid #ffe9b3;border-radius:17px;background:linear-gradient(180deg,#ffe7a6,#eebf52 58%,#cf9a36);color:#5a2028;font-weight:800;font-size:13px;cursor:pointer;box-shadow:0 6px 15px rgba(170,115,30,.38),inset 0 1px 0 rgba(255,255,255,.55)}
+      .ck-shop .ck-i{vertical-align:-.16em}
       .ck-i{display:inline-block;vertical-align:-.16em}.ck-coin-i{display:inline-block;vertical-align:-.18em;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4))}
       .ck-daily{margin-top:13px;display:inline-flex;align-items:center;gap:7px;background:linear-gradient(180deg,#ffe7a6,#eebf52 58%,#cf9a36);color:#5a2028;font-weight:800;border:1px solid #ffe9b3;border-radius:14px;padding:9px 18px;font-size:13px;cursor:pointer;box-shadow:0 7px 18px rgba(170,115,30,.4),inset 0 1px 0 rgba(255,255,255,.55)}
       .ck-lvl{margin-top:13px;color:var(--gold-l);font-family:'Nunito',sans-serif;font-weight:700;font-size:17px;letter-spacing:.2px}
@@ -726,6 +728,7 @@
     ov = document.createElement('div'); ov.className = 'ck-ov';
     ov.innerHTML = `
       ${COIN_SPRITE}
+      <button class="ck-shop" id="ck-shop">${ICON.shop(15)} Магазин</button>
       <button class="ck-x" id="ck-x">×</button>
       <div class="ck-screen on" id="ck-scr-cat">
         <button class="ck-daily" id="ck-daily" style="display:none"></button>
@@ -762,6 +765,7 @@
       </div>`;
     document.body.appendChild(ov);
     ov.querySelector('#ck-x').onclick = close;
+    ov.querySelector('#ck-shop').onclick = () => { window.haptic && window.haptic('light'); close(); };
     ov.querySelector('#ck-cat').addEventListener('pointerdown', onTap);
     ov.querySelector('#ck-daily').onclick = dailyBtn;
     ov.querySelector('#ck-bt-turbo').onclick = () => boost('turbo');
@@ -1583,7 +1587,7 @@
   }
   async function open() {
     if (!ov) build();
-    ov.classList.add('on'); window.scrollLock && window.scrollLock(); ac();
+    ov.classList.add('on'); document.documentElement.classList.remove('ck-gamefirst'); window.scrollLock && window.scrollLock(); ac();
     await load(); await maybeMigrateGuest(); await ensureRefRegistered(); await maybePurchaseBonus(); curLevel = leagueFor(st.totalEarned).level;
     ov.querySelector('#ck-cat').src = A(leagueFor(st.totalEarned).cat || 'idle.png');
     setTab('cat'); renderAll(); spawnSparks(); applySeason(); scheduleBonus();
@@ -1847,5 +1851,8 @@
   // Deep-link из пуша-возврата (?startapp=click) → сразу открываем игру.
   function clickAutoOpen() { try { const sp = (window.App && App.startParam && App.startParam()) || ''; if (sp === 'click' || sp === 'game') { try { window.catClickOpen(); } catch (_) {} } } catch (_) {} }
   function clickBootstrap() { try { if (window.App && App.ready && App.ready.then) App.ready.then(clickAutoOpen); else clickAutoOpen(); } catch (_) { clickAutoOpen(); } }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(clickBootstrap, 600)); else setTimeout(clickBootstrap, 600);
+  // Гейм-first (сплэш уже на экране, магазин под ним): открываем игру сразу, без задержки-«моргания».
+  const _ckGameFirst = document.documentElement.classList.contains('ck-gamefirst');
+  const _ckDelay = _ckGameFirst ? 0 : 600;
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(clickBootstrap, _ckDelay)); else setTimeout(clickBootstrap, _ckDelay);
 })();

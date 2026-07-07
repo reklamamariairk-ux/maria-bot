@@ -29,8 +29,24 @@
   <script src="/js/icons-3d.js"></script>
   <script src="/js/sweet-prizes.js"></script>
   <link rel="stylesheet" href="/css/style.css"/>
+  <!-- Гейм-first вход: запуск из TG с ?startapp=game|click открывает «Котик Комбат» сразу,
+       не показывая магазин. Сплэш перекрывает первый кадр магазина, снимается в catclick.js open(). -->
+  <style>
+    #ck-splash{position:fixed;inset:0;z-index:9998;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:radial-gradient(130% 100% at 50% -10%,#2c2320 0%,#1a1413 52%,#0e0a09 100%);font-family:'Nunito','Onest',system-ui,sans-serif}
+    html.ck-gamefirst{background:#0e0a09}
+    html.ck-gamefirst #ck-splash{display:flex}
+    #ck-splash .r{width:46px;height:46px;border-radius:50%;border:4px solid rgba(240,194,78,.22);border-top-color:#f0c24e;animation:cksp .8s linear infinite}
+    #ck-splash .t{color:#eee7dd;font-weight:800;font-size:15px;letter-spacing:.2px}
+    @keyframes cksp{to{transform:rotate(360deg)}}
+  </style>
+  <script>
+    // Ставим класс до первого кадра body — магазин не «моргнёт» перед игрой.
+    try { var _sp = (window.App && App.startParam && App.startParam()) || '';
+      if (_sp === 'game' || _sp === 'click') document.documentElement.classList.add('ck-gamefirst'); } catch (e) {}
+  </script>
 </head>
 <body>
+<div id="ck-splash"><div class="r"></div><div class="t">Котик Комбат загружается…</div></div>
 
 <!-- HEADER -->
 <header class="header">
@@ -1283,7 +1299,7 @@
 <script src="/js/catfeed.js" defer></script>
 <script src="/js/catpet.js" defer></script>
 <script src="/js/catlive.js" defer></script>
-<script src="/js/catclick.js?v=86" defer></script>
+<script src="/js/catclick.js?v=87" defer></script>
 <!-- /js/bakery.js удалён — Игры убраны до новой геймификации (см. game.js — wheel/streak/secret) -->
 <script src="/js/chat.js" defer></script>
 <script src="/js/catalog.js" defer></script>
