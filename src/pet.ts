@@ -40,7 +40,6 @@ const RESTORE: Record<PetAction, Partial<Record<PetNeed, number>>> = {
   walk:  { mood: 18, energy: -4 },
 };
 const XP_PER_ACTION = 12;
-const COINS_PER_ACTION = 3;
 const LOCATIONS: PetLocation[] = ["kitchen", "bedroom", "playroom", "yard"];
 
 const clamp = (v: number) => Math.max(0, Math.min(100, Math.round(v)));
@@ -142,15 +141,15 @@ export async function getPet(chatId: number): Promise<PetState> {
 export async function buyPetItem(chatId: number, id: string): Promise<{ ok: boolean; state?: PetState; reason?: string }> {
   const shopItem = SHOP.find((s) => s.id === id);
   if (!shopItem) return { ok: false, reason: "bad_item" };
-  await getPet(chatId);
+  await getPet(chatId); // decay + миграция + строки
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const { rows } = await client.query(`SELECT coins FROM pet_state WHERE chat_id=$1 FOR UPDATE`, [chatId]);
+    const bal = await client.query(`SELECT balance FROM clicker_state WHERE chat_id=$1 FOR UPDATE`, [chatId]);
     const owned = await client.query(`SELECT 1 FROM pet_items WHERE chat_id=$1 AND item=$2`, [chatId, id]);
     if (owned.rows.length) { await client.query("ROLLBACK"); return { ok: false, reason: "already_owned" }; }
-    if ((rows[0]?.coins ?? 0) < shopItem.price) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
-    await client.query(`UPDATE pet_state SET coins = coins - $2, updated_at=NOW() WHERE chat_id=$1`, [chatId, shopItem.price]);
+    if (Number(bal.rows[0]?.balance ?? 0) < shopItem.price) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
+    await client.query(`UPDATE clicker_state SET balance = balance - $2, updated_at=NOW() WHERE chat_id=$1`, [chatId, shopItem.price]);
     await client.query(`INSERT INTO pet_items (chat_id, item, equipped) VALUES ($1,$2,FALSE) ON CONFLICT DO NOTHING`, [chatId, id]);
     await client.query("COMMIT");
     return { ok: true, state: await getPet(chatId) };
@@ -173,10 +172,12 @@ export async function equipPetItem(chatId: number, id: string): Promise<{ ok: bo
   return { ok: true, state: await getPet(chatId) };
 }
 
-/** Действие ухода: поднимает потребности, начисляет опыт/монеты, считает уровень. */
-export async function doPetAction(chatId: number, action: PetAction): Promise<{ ok: boolean; state?: PetState; reason?: string }> {
+/** Действие ухода: поднимает потребности, начисляет опыт, считает уровень и стрик заботы. */
+export async function doPetAction(
+  chatId: number, action: PetAction
+): Promise<{ ok: boolean; state?: PetState; reason?: string; streakBonus?: number; careStreak?: number }> {
   if (!RESTORE[action]) return { ok: false, reason: "unknown_action" };
-  await getPet(chatId); // применить decay
+  await getPet(chatId); // применить decay + гарантировать миграцию/строки
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -187,16 +188,28 @@ export async function doPetAction(chatId: number, action: PetAction): Promise<{ 
     if (delta.mood) r.mood = clamp(r.mood + delta.mood);
     if (delta.energy) r.energy = clamp(r.energy + delta.energy);
     if (delta.hygiene) r.hygiene = clamp(r.hygiene + delta.hygiene);
-    // опыт + уровень
     r.xp += XP_PER_ACTION;
-    r.coins += COINS_PER_ACTION;
     while (r.xp >= xpForNext(r.level)) { r.xp -= xpForNext(r.level); r.level += 1; }
+    // стрик заботы: засчитываем 1 раз в сутки (первое действие ухода за день)
+    const today = irkDay(0), yest = irkDay(1);
+    let streakBonus = 0;
+    if (r.care_date !== today) {
+      r.care_streak = (r.care_date === yest) ? r.care_streak + 1 : 1;
+      r.care_date = today;
+      streakBonus = careStreakBonus(r.care_streak);
+    }
     await client.query(
-      `UPDATE pet_state SET hunger=$2,mood=$3,energy=$4,hygiene=$5,xp=$6,level=$7,coins=$8,updated_at=NOW() WHERE chat_id=$1`,
-      [chatId, r.hunger, r.mood, r.energy, r.hygiene, r.xp, r.level, r.coins]
+      `UPDATE pet_state SET hunger=$2,mood=$3,energy=$4,hygiene=$5,xp=$6,level=$7,
+         care_streak=$8,care_date=$9,updated_at=NOW() WHERE chat_id=$1`,
+      [chatId, r.hunger, r.mood, r.energy, r.hygiene, r.xp, r.level, r.care_streak, r.care_date]
     );
+    await addClickerBalance(chatId, streakBonus, client); // no-op если streakBonus<=0; атомарно в этой транзакции
+    const balRow = await client.query(`SELECT balance FROM clicker_state WHERE chat_id=$1`, [chatId]);
     await client.query("COMMIT");
-    return { ok: true, state: toState(r) };
+    const state = toState(r);
+    state.coins = Number(balRow.rows[0]?.balance ?? 0);
+    state.items = await getItems(chatId);
+    return { ok: true, state, streakBonus, careStreak: r.care_streak };
   } catch (e) {
     await client.query("ROLLBACK").catch(() => {});
     throw e;
