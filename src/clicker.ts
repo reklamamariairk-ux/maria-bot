@@ -126,9 +126,10 @@ function leagueFor(total: number) { let l = LEAGUES[0]; for (const x of LEAGUES)
 function nextNeed(total: number): number | null { const n = LEAGUES.find((x) => x.need > total); return n ? n.need : null; }
 
 // ── Реальные награды (обмен монет → скидка/бонусы). ⚠️ ВЫКЛ до согласования Маши ──
-// Когда Маша утвердит: курс монет, что выдаём (промокод/бонусы на карту), лимиты —
-// поставить REWARDS_ENABLED=true, заполнить реальные cost/выдачу, подключить выдачу кода/бонусов.
-export const REWARDS_ENABLED = false;
+// Включение — env CLICKER_REWARDS_ENABLED=1 в bot.env + пересоздание контейнера
+// (docker compose up -d --force-recreate). Числа (cost/points) — константы ниже:
+// при решениях Маши правим числа и включаем env, нового кода не нужно.
+export const REWARDS_ENABLED = process.env.CLICKER_REWARDS_ENABLED === "1";
 export const REWARDS = [
   { id: "promo5",   name: "Промокод −5%",         cost: 100000, kind: "promo",   catalog: "discount_5",   note: "скидка на заказ" },
   { id: "promo10",  name: "Промокод −10%",        cost: 250000, kind: "promo",   catalog: "discount_10",  note: "скидка на заказ" },
