@@ -66,12 +66,11 @@
   ].filter(t => t.type !== 'link' || t.link);
   const leagueFor = (t) => { let l = LEAGUES[0]; for (const x of LEAGUES) if (t >= x.need) l = x; return l; };
   const nextNeed = (t) => { const n = LEAGUES.find(x => x.need > t); return n ? n.need : null; };
-  // Прогрессия размера: кот растёт с уровнем, взрывнее к концу (ур.1 = 55% → ур.19 = 100%).
-  // Жёсткая ВЫСОТА (не contain-бокс): рост строго монотонный — широкие кадры (шар/дон) не проседают.
-  const catScale = (level) => 0.55 + 0.45 * Math.pow((Math.min(19, Math.max(1, level)) - 1) / 18, 1.9);
-  function applyCatSize(catEl, level) {
-    const s = catScale(level);
-    catEl.style.height = (94 * s).toFixed(1) + '%';
+  // Размер-прогрессия по уровням ОТМЕНЕНА (решение юзера 08.07: разница читалась
+  // слишком резко). Кот всегда крупный, эволюция — обликом (19 образов) и фоном
+  // (тиры). Жёсткая высота вместо contain-бокса: широкие кадры (шар/дон) не проседают.
+  function applyCatSize(catEl) {
+    catEl.style.height = '94%';
     catEl.style.width = 'auto';
     catEl.style.maxWidth = '96%';  // страховка для очень широких кадров на узких экранах
     catEl.style.maxHeight = 'none';
@@ -1232,7 +1231,7 @@
     hat.style.display = 'none'; // шапки-наклейки убраны — костюм = смена всей картинки кота
     const src = A(lg.cat || 'idle.png');
     if (cat.getAttribute('src') !== src) cat.src = src;
-    applyCatSize(cat, lg.level);
+    applyCatSize(cat);
   }
   function levelUp(lg) {
     sfxLevel(); window.haptic && window.haptic('success');
@@ -1603,7 +1602,7 @@
     ov.classList.add('on'); document.documentElement.classList.remove('ck-gamefirst'); window.scrollLock && window.scrollLock(); ac();
     await load(); await maybeMigrateGuest(); await ensureRefRegistered(); await maybePurchaseBonus(); curLevel = leagueFor(st.totalEarned).level;
     ov.querySelector('#ck-cat').src = A(leagueFor(st.totalEarned).cat || 'idle.png');
-    applyCatSize(ov.querySelector('#ck-cat'), leagueFor(st.totalEarned).level);
+    applyCatSize(ov.querySelector('#ck-cat'));
     setTab('cat'); renderAll(); spawnSparks(); applySeason(); scheduleBonus();
     if (authed()) api('/api/clicker/rewards').then(d => { if (d && typeof d.enabled === 'boolean' && d.enabled !== rewardsEnabled) { rewardsEnabled = d.enabled; if (tab === 'up') renderUpgrades(); } }).catch(() => {});
     let _seenTut = true; try { _seenTut = !!localStorage.getItem('ck_tut_v1'); } catch (e) {}
