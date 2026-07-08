@@ -17,7 +17,16 @@
     mood:    (s) => SVG('<circle cx="12" cy="12" r="9"/><path d="M8 14a4 4 0 0 0 8 0"/><path d="M9 9h.01M15 9h.01"/>', s), // улыбка
     energy:  (s) => SVG('<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>', s),                                          // молния
     hygiene: (s) => SVG('<path d="M12 3c3 4 5 6 5 9a5 5 0 0 1-10 0c0-3 2-5 5-9z"/>', s),                       // капля
+    gift:    (s) => SVG('<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/>', s), // подарок
   };
+  // Пороги care-вех — зеркало src/clicker.ts MILESTONES ms_care* (менять синхронно)
+  const CARE_MILESTONES = [
+    { d: 7,   label: '200 баллов' },
+    { d: 14,  label: 'промокод −5%' },
+    { d: 30,  label: '500 баллов' },
+    { d: 60,  label: 'десерт в подарок' },
+    { d: 100, label: '1000 баллов' },
+  ];
   const NAV_ICON = { feed: PIC.feed, sleep: PIC.sleep, play: PIC.play, walk: PIC.pet };
   const WALK = ['walk1.png', 'walk2.png', 'walk3.png', 'walk4.png'];
   const LOC = {
@@ -104,6 +113,7 @@
       bonus = Number(state._streakBonus || 0);
     }
     renderNeeds();
+    renderGift(state);
     if (bonus > 0) showCareBonus(bonus, state.careStreak);
   }
   function showCareBonus(bonus, streak) {
@@ -173,6 +183,10 @@
       .pet-item__b.equip{background:#ff7a2d;color:#fff}
       .pet-item__b.on{background:#7ed957;color:#fff}
       .pet-streak{position:absolute;top:10px;right:52px;z-index:6;font-weight:800;font-size:13px;color:#c2882a;background:rgba(255,255,255,.7);border-radius:12px;padding:5px 10px}
+      .pet-gift{position:absolute;left:50%;transform:translateX(-50%);bottom:172px;z-index:6;display:flex;align-items:center;gap:7px;border:0;cursor:pointer;font:inherit;font-weight:800;font-size:13px;color:#7a5a13;background:rgba(255,248,231,.92);border-radius:14px;padding:7px 12px;box-shadow:0 2px 10px rgba(0,0,0,.12)}
+      .pet-gift.ready{color:#fff;background:linear-gradient(120deg,#e0a93c,#c2882a);animation:petgift 1.6s ease-in-out infinite}
+      @keyframes petgift{0%,100%{transform:translateX(-50%) scale(1)}50%{transform:translateX(-50%) scale(1.05)}}
+      @media (prefers-reduced-motion: reduce){.pet-gift.ready{animation:none}}
       .pet-toast{position:absolute;left:50%;top:54px;transform:translateX(-50%);z-index:8;max-width:88%;text-align:center;background:linear-gradient(180deg,#ffe7a6,#eebf52);color:#5a2028;font-weight:800;font-size:13px;border-radius:14px;padding:9px 14px;opacity:0;transition:opacity .3s;pointer-events:none}
       .pet-toast.on{opacity:1}
     `;
@@ -186,6 +200,7 @@
       <div class="pet-top" id="pet-needs"></div>
       <div class="pet-lvl" id="pet-lvl"></div>
       <div class="pet-streak" id="pet-streak"></div>
+      <button class="pet-gift" id="pet-gift" style="display:none" type="button"></button>
       <button class="pet-x" id="pet-x">×</button>
       <button class="pet-shop-btn" id="pet-shop-btn"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.57a1 1 0 0 0 .99.84H5v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V10h1.15a1 1 0 0 0 .99-.84l.58-3.57a2 2 0 0 0-1.34-2.23z"/></svg></button>
       <div class="pet-stage" id="pet-stage">
@@ -206,6 +221,7 @@
     `;
     document.body.appendChild(ov);
     ov.querySelector('#pet-x').onclick = close;
+    ov.querySelector('#pet-gift').onclick = openGiftLadder;
     // nav
     const nav = ov.querySelector('#pet-nav');
     nav.innerHTML = ORDER.map(k => `<button class="pet-nav__b" data-loc="${k}"><span class="i">${NAV_ICON[LOC[k].action](20)}</span>${LOC[k].name}</button>`).join('');
@@ -220,6 +236,33 @@
     // needs skeleton
     ov.querySelector('#pet-needs').innerHTML = NEEDS.map(n => `
       <div class="pet-need"><span class="pet-need__i">${n.ic(15)}</span><div class="pet-need__bar"><div class="pet-need__fill" id="need-${n.k}"></div></div></div>`).join('');
+  }
+
+  let careGranted = null; // Set id забранных care-вех (authed); null = ещё не загружено
+  async function loadCareGranted() {
+    if (!authed()) { careGranted = new Set(); return; }
+    try {
+      const d = await api('/api/clicker/milestones');
+      careGranted = new Set((d && d.milestones || []).filter(m => m.granted && m.id.indexOf('ms_care') === 0).map(m => m.id));
+    } catch (_) { careGranted = new Set(); }
+  }
+  function renderGift(state) {
+    const el = ov.querySelector('#pet-gift'); if (!el || !state) return;
+    const best = Math.max(Number(state.careStreakBest || 0), Number(state.careStreak || 0), Number(state.care_streak || 0));
+    const granted = careGranted || new Set();
+    const next = CARE_MILESTONES.find(m => !granted.has('ms_care' + m.d));
+    if (!next) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    if (best >= next.d) { el.classList.add('ready'); el.innerHTML = PIC.gift(15) + ' Тебя ждёт подарок: ' + next.label + '!'; }
+    else { el.classList.remove('ready'); el.innerHTML = PIC.gift(15) + ' До подарка «' + next.label + '»: ещё ' + (next.d - best) + ' дн. заботы'; }
+  }
+  function openGiftLadder() {
+    close();
+    try {
+      const ck = document.querySelector('.ck-ov');
+      if (ck && ck.classList.contains('on')) { window.ckSetTab && window.ckSetTab('tasks'); }
+      else if (window.catClickOpen) { Promise.resolve(window.catClickOpen()).then(() => { window.ckSetTab && window.ckSetTab('tasks'); }); }
+    } catch (_) {}
   }
 
   function renderNeeds() {
@@ -368,6 +411,7 @@
     walkImgs = WALK.map(w => { const i = new Image(); i.src = A(w); return i; });
     try { await loadState(); } catch (_) { state = localGet(); }
     renderNeeds(); renderLoc(); renderHat();
+    renderGift(state); loadCareGranted().then(() => renderGift(state));
     ov.querySelector('#pet-cat').src = A('idle.png');
     cat = { x: 0.5, dir: 1, vx: 0.04, mode: 'walk', frame: 0, t: 0, busy: false };
     lastTs = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
