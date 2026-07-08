@@ -66,6 +66,13 @@
   ].filter(t => t.type !== 'link' || t.link);
   const leagueFor = (t) => { let l = LEAGUES[0]; for (const x of LEAGUES) if (t >= x.need) l = x; return l; };
   const nextNeed = (t) => { const n = LEAGUES.find(x => x.need > t); return n ? n.need : null; };
+  // Прогрессия размера: кот растёт с уровнем (ур.1 ≈ 60% бокса → ур.19 = 100%).
+  const catScale = (level) => 0.60 + 0.40 * (Math.min(19, Math.max(1, level)) - 1) / 18;
+  function applyCatSize(catEl, level) {
+    const s = catScale(level);
+    catEl.style.maxWidth = (62 * s).toFixed(1) + '%';
+    catEl.style.maxHeight = (94 * s).toFixed(1) + '%';
+  }
   const fmt = (n) => Math.floor(n).toLocaleString('ru-RU');
   const irkToday = () => new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
   const priceMultitap = (l) => Math.round(200 * Math.pow(2, l));
@@ -1222,6 +1229,7 @@
     hat.style.display = 'none'; // шапки-наклейки убраны — костюм = смена всей картинки кота
     const src = A(lg.cat || 'idle.png');
     if (cat.getAttribute('src') !== src) cat.src = src;
+    applyCatSize(cat, lg.level);
   }
   function levelUp(lg) {
     sfxLevel(); window.haptic && window.haptic('success');
@@ -1592,6 +1600,7 @@
     ov.classList.add('on'); document.documentElement.classList.remove('ck-gamefirst'); window.scrollLock && window.scrollLock(); ac();
     await load(); await maybeMigrateGuest(); await ensureRefRegistered(); await maybePurchaseBonus(); curLevel = leagueFor(st.totalEarned).level;
     ov.querySelector('#ck-cat').src = A(leagueFor(st.totalEarned).cat || 'idle.png');
+    applyCatSize(ov.querySelector('#ck-cat'), leagueFor(st.totalEarned).level);
     setTab('cat'); renderAll(); spawnSparks(); applySeason(); scheduleBonus();
     if (authed()) api('/api/clicker/rewards').then(d => { if (d && typeof d.enabled === 'boolean' && d.enabled !== rewardsEnabled) { rewardsEnabled = d.enabled; if (tab === 'up') renderUpgrades(); } }).catch(() => {});
     let _seenTut = true; try { _seenTut = !!localStorage.getItem('ck_tut_v1'); } catch (e) {}
