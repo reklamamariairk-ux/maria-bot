@@ -270,6 +270,11 @@
     { id: 'ms_col_all', title: 'Вся коллекция голубей', cond: { type: 'collect', target: 'all' }, kind: 'perk', perkText: 'Бенто-торт в подарок (от 2000₽)' },
     { id: 'ms_ref3', title: 'Пригласил 3 друзей', cond: { type: 'ref', target: 3 }, kind: 'points', points: 500 },
     { id: 'ms_ref10', title: 'Пригласил 10 друзей', cond: { type: 'ref', target: 10 }, kind: 'perk', perkText: 'Промокод −10% (от 1000₽)' },
+    { id: 'ms_care7', title: 'Забота о Василии: 7 дней', cond: { type: 'care_streak', target: 7 }, kind: 'points', points: 200 },
+    { id: 'ms_care14', title: 'Забота о Василии: 14 дней', cond: { type: 'care_streak', target: 14 }, kind: 'perk', perkText: 'Промокод −5% (от 500₽)' },
+    { id: 'ms_care30', title: 'Забота о Василии: 30 дней', cond: { type: 'care_streak', target: 30 }, kind: 'points', points: 500 },
+    { id: 'ms_care60', title: 'Забота о Василии: 60 дней', cond: { type: 'care_streak', target: 60 }, kind: 'perk', perkText: 'Бесплатный десерт (к торту от 2000₽)' },
+    { id: 'ms_care100', title: 'Забота о Василии: 100 дней', cond: { type: 'care_streak', target: 100 }, kind: 'points', points: 1000 },
   ];
   function condMet(t, s) {
     if (t.type === 'link') return !!linkOpened[t.id];
@@ -280,12 +285,14 @@
     if (t.type === 'taps') return (s.taps || 0) >= t.target;
     if (t.type === 'cards') return (s.cardsOwned || 0) >= t.target;
     if (t.type === 'collect') { const cs = s.cards || []; if (t.target === 'all') return cs.length > 0 && cs.every(c => c.level > 0); const ic = cs.filter(c => c.cat === t.target); return ic.length > 0 && ic.every(c => c.level > 0); }
+    if (t.type === 'care_streak') { let ps = null; try { ps = JSON.parse(localStorage.getItem('maria_pet_v1')); } catch (_) {} return Number((ps && ps.care_streak) || 0) >= t.target; }
     return false;
   }
   function fmtDur(ms) { const h = Math.max(0, Math.floor(ms / 3600e3)); const d = Math.floor(h / 24); return d > 0 ? `${d}д ${h % 24}ч` : `${h}ч`; }
 
-  // ── Реальные награды (витрина). ⚠️ redeem ВЫКЛ до согласования Маши (зеркало clicker.ts) ──
-  const REWARDS_ENABLED = false;
+  // ── Реальные награды (витрина). Флаг приходит с бэка (/api/clicker/rewards ← env
+  // CLICKER_REWARDS_ENABLED); до включения Машей и для гостей — false («Скоро»). ──
+  let rewardsEnabled = false;
   const REWARDS = [
     { id: 'promo5', name: 'Промокод −5%', cost: 100000, note: 'скидка на заказ' },
     { id: 'promo10', name: 'Промокод −10%', cost: 250000, note: 'скидка на заказ' },
@@ -1247,13 +1254,13 @@
   }
   function rewardsBlock() {
     const bal = (st && st.balance) || 0;
-    const banner = !REWARDS_ENABLED
+    const banner = !rewardsEnabled
       ? `<div class="ck-card" style="background:linear-gradient(90deg,rgba(238,191,82,.18),rgba(238,191,82,.05))"><div class="ck-card__ic">${ICON.gift(26)}</div><div class="ck-card__b"><div class="ck-card__n">Обменивай монеты на реальное</div><div class="ck-card__s">Скидки и бонусы «Марии» — скоро открываем!</div></div></div>`
       : '';
     const RMETA = { promo5: { ic: ICON.medal, cls: 'r-promo' }, promo10: { ic: ICON.gem, cls: 'r-promo' }, bonus300: { ic: ICON.wallet, cls: 'r-bonus' }, dessert: { ic: ICON.cupcake, cls: 'r-dessert' } };
     const cards = REWARDS.map(r => {
       const m = RMETA[r.id] || { ic: ICON.gift, cls: '' };
-      const right = !REWARDS_ENABLED
+      const right = !rewardsEnabled
         ? `<span class="ck-soon">Скоро</span>`
         : `<button class="ck-card__buy" data-redeem="${r.id}" ${bal >= r.cost ? '' : 'disabled'}>${COIN(14)} ${fmt(r.cost)}</button>`;
       return `<div class="ck-reward ${m.cls}"><div class="ck-reward__ic">${m.ic(24)}</div><div class="ck-reward__b"><div class="ck-card__n">${r.name}</div><div class="ck-card__s">${r.note} · ${fmt(r.cost)} монет</div></div>${right}</div>`;
@@ -1261,14 +1268,15 @@
     return '<div class="ck-sect">Награды «Марии»</div>' + banner + cards;
   }
   function redeem(id) {
-    if (!REWARDS_ENABLED) { flashMsg('Скоро откроем'); return; }
+    if (!rewardsEnabled) { flashMsg('Скоро откроем'); return; }
     if (!authed()) { flashMsg('Войди через приложение «Мария»'); return; }
     api('/api/clicker/redeem', { method: 'POST', body: JSON.stringify({ id }) }).then(d => {
-      if (d && !d.error && d.code) { st = d; sfxLevel(); window.haptic && window.haptic('success'); codePopup(d.code); renderAll(); renderUpgrades(); }
-      else flashMsg(d && d.error === 'daily_limit' ? 'Лимит на сегодня' : d && d.error === 'disabled' ? 'Скоро откроем' : 'Не хватает монет');
+      if (d && !d.error && (d.code || d.points)) { st = d; sfxLevel(); window.haptic && window.haptic('success'); if (d.code) codePopup(d.code); else pointsPopup(d.points); renderAll(); renderUpgrades(); }
+      else flashMsg(d && d.error === 'daily_limit' ? 'Лимит на сегодня' : d && d.error === 'need_phone' ? 'Сначала подтверди телефон в профиле' : d && d.error === 'disabled' ? 'Скоро откроем' : 'Не хватает монет');
     }).catch(() => flashMsg('Ошибка'));
   }
   function codePopup(code) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Награда твоя!</h3><div class="v" style="font-size:22px">${code}</div><div style="color:var(--muted);font-size:13px">Применить в корзине или показать кассиру</div><div style="display:flex;gap:8px;justify-content:center;margin-top:12px"><button class="ck-card__buy" id="ck-pop-copy" style="justify-content:center">Скопировать</button></div><button id="ck-pop-ok" style="margin-top:10px">Класс!</button>`; pop.classList.add('on'); const cp = pop.querySelector('#ck-pop-copy'); if (cp) cp.onclick = () => { const done = () => { cp.textContent = 'Скопировано'; }; if (navigator.clipboard) { navigator.clipboard.writeText(code).then(done, done); } else { done(); } }; pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
+  function pointsPopup(points) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Баллы на карте!</h3><div class="v" style="font-size:22px">+${fmt(points)}</div><div style="color:var(--muted);font-size:13px">Реальные баллы клуба «Мария» — спишутся при заказе</div><button id="ck-pop-ok" style="margin-top:10px">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
   function renderDove() {
     const list = ov.querySelector('#ck-dovelist'); if (!st) { list.innerHTML = ''; return; }
     const owned = st.cards.filter(c => c.level > 0).length, total = st.cards.length;
@@ -1585,6 +1593,7 @@
     await load(); await maybeMigrateGuest(); await ensureRefRegistered(); await maybePurchaseBonus(); curLevel = leagueFor(st.totalEarned).level;
     ov.querySelector('#ck-cat').src = A(leagueFor(st.totalEarned).cat || 'idle.png');
     setTab('cat'); renderAll(); spawnSparks(); applySeason(); scheduleBonus();
+    if (authed()) api('/api/clicker/rewards').then(d => { if (d && typeof d.enabled === 'boolean' && d.enabled !== rewardsEnabled) { rewardsEnabled = d.enabled; if (tab === 'up') renderUpgrades(); } }).catch(() => {});
     let _seenTut = true; try { _seenTut = !!localStorage.getItem('ck_tut_v1'); } catch (e) {}
     if (!_seenTut) showTutorial();
     else if (st.passiveEarned > 0) passivePopup(st.passiveEarned);
@@ -1837,6 +1846,7 @@
 
   function close() { cancelAnimationFrame(raf); clearTimeout(bonusTimer); if (rainState) endRain(true); if (quizState) closeQuiz(); if (memState) closeMemory(); if (towerState) closeTower(); if (gemsState) closeGems(); flush(); if (ov) ov.classList.remove('on'); window.scrollUnlock && window.scrollUnlock(); }
   window.catClickOpen = open; window.catClickClose = close; window.catClickBonusNow = () => { if (ov && ov.classList.contains('on')) showFlyingBonus(); }; // превью/тест золотого бонуса
+  window.ckSetTab = setTab; // для виджета «Дома кота»: открыть лестницу вех (setTab('tasks'))
   window.addEventListener('resize', () => { if (ov && ov.classList.contains('on') && st) applyCostume(leagueFor(st.totalEarned)); });
   // Реф регистрируем фоном уже при загрузке приложения (не дожидаясь открытия игры):
   // друг перешёл по ckref-ссылке → бонус начислится, даже если в игру он не зайдёт.
