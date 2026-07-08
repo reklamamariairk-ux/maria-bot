@@ -43,7 +43,7 @@ import { initClickerPushSchema, runClickerRetentionPush } from "./clicker-push";
 import { initBonusSchema, startBonusWorker } from "./bonus1c";
 import cartRouter from "./routes/cart";
 import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, fetchProductById, reloadDietaryOverrides, detectDietary, Product } from "./scraper";
-import { initDb, addSubscriber, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind, getNotificationPrefs, setNotificationPrefs, saveCartSnapshot, clearCartSnapshot, getAbandonedCarts, markCartAbandonedPushed, getSpinStatus, recordSpin, WHEEL_PRIZES, touchVisitStreak, setSecretOfDay, getSecretOfDay, getUnusedRewards, consumeRewards, hasHolidayPushSent, markHolidayPushSent, getReviewsForProduct, getReviewStats, getReviewStatsBatch, getMyReview, upsertReview, deleteMyReview, setReviewHidden, countReviewsLast24h, createWishlistShare, getWishlistShare, incrementWishlistShareOpens, countWishlistSharesLast24h, getOrderRating, upsertOrderRating, hasRatingPromptSent, markRatingPromptSent, countPromoUses, hasUserUsedPromo, recordPromoUse } from "./db";
+import { initDb, addSubscriber, setSubscriberSourceOnce, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind, getNotificationPrefs, setNotificationPrefs, saveCartSnapshot, clearCartSnapshot, getAbandonedCarts, markCartAbandonedPushed, getSpinStatus, recordSpin, WHEEL_PRIZES, touchVisitStreak, setSecretOfDay, getSecretOfDay, getUnusedRewards, consumeRewards, hasHolidayPushSent, markHolidayPushSent, getReviewsForProduct, getReviewStats, getReviewStatsBatch, getMyReview, upsertReview, deleteMyReview, setReviewHidden, countReviewsLast24h, createWishlistShare, getWishlistShare, incrementWishlistShareOpens, countWishlistSharesLast24h, getOrderRating, upsertOrderRating, hasRatingPromptSent, markRatingPromptSent, countPromoUses, hasUserUsedPromo, recordPromoUse } from "./db";
 import {
   initClubSchema,
   getBalance,
@@ -518,6 +518,20 @@ const HELP_TEXT = `
 Пишите — ответим быстро! 💌
 `.trim();
 
+// Приветствие для пришедших по QR с чека/POS/упаковки (/start qr_*).
+// Задача воронки: перевести покупателя из платных SMS в бесплатный push,
+// крючок — реальные 100 баллов клуба за подтверждение номера (BONUS_VERIFY_PHONE).
+const QR_WELCOME = `
+👋 Добро пожаловать в «Марию»!
+
+Вы отсканировали наш QR — теперь всё сладкое здесь:
+🎁 *100 баллов* сразу за подтверждение номера в приложении
+🎂 Акции и торт месяца — раньше всех
+🎮 Игра «Котик Комбат» с призами-купонами
+
+Жмите кнопку и заходите 👇
+`.trim();
+
 bot.command("start", async (ctx) => {
   if (ctx.from) {
     await addSubscriber(ctx.from.id, ctx.from.username, ctx.from.first_name).catch(() => {});
@@ -525,6 +539,13 @@ bot.command("start", async (ctx) => {
     // Referral payload: /start ref_MARIA-XXX (code-based, активная схема)
     // Старый numeric-формат (/start ref_12345) — deprecated, игнорируется.
     const payload = ctx.match?.trim();
+    // QR-воронка (чек/POS/упаковка): /start qr_<источник> — фиксируем источник
+    // и показываем приветствие с бонусом за номер.
+    if (payload && /^qr_[a-z0-9_-]{1,32}$/i.test(payload)) {
+      await setSubscriberSourceOnce(ctx.from.id, payload.toLowerCase()).catch(() => {});
+      await ctx.reply(QR_WELCOME, { parse_mode: "Markdown", reply_markup: webAppButton(QR_WELCOME) });
+      return;
+    }
     // Реферал кликера: /start ckref_<internalId пригласившего>. Надёжный путь
     // (?start= всегда доходит до бота, в отличие от Mini App ?startapp=).
     if (payload && payload.startsWith("ckref_")) {

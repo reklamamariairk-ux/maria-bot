@@ -26,6 +26,10 @@ export async function initDb() {
     -- VK-порт: разрешил ли юзер сообщения от сообщества
     -- (NULL = неизвестно; ставится callback-событиями message_allow / message_deny)
     ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS vk_messages_allowed BOOLEAN;
+    -- Источник привлечения: payload /start qr_* (QR на чеке/POS/упаковке).
+    -- Пишется один раз при первом заходе, не перетирается (setSubscriberSourceOnce).
+    ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS source TEXT;
+    ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS source_at TIMESTAMPTZ;
 
     CREATE TABLE IF NOT EXISTS wishlist_subs (
       chat_id    BIGINT NOT NULL,
@@ -937,6 +941,19 @@ export async function addSubscriber(chatId: number, username: string | undefined
 export async function getAllSubscribers(): Promise<{ chat_id: number }[]> {
   const { rows } = await pool.query(`SELECT chat_id FROM subscribers`);
   return rows;
+}
+
+/**
+ * Источник привлечения (/start qr_check, qr_pos_<точка>, qr_box…).
+ * Пишется только если source ещё пуст: первый источник — самый честный,
+ * повторные сканы/переходы его не перетирают.
+ */
+export async function setSubscriberSourceOnce(chatId: number, source: string) {
+  await pool.query(
+    `UPDATE subscribers SET source = $2, source_at = NOW()
+     WHERE chat_id = $1 AND source IS NULL`,
+    [chatId, source]
+  );
 }
 
 // ─── VK: разрешение сообщений от сообщества ──────────────────────────────────
