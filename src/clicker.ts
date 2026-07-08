@@ -130,10 +130,9 @@ function nextNeed(total: number): number | null { const n = LEAGUES.find((x) => 
 // поставить REWARDS_ENABLED=true, заполнить реальные cost/выдачу, подключить выдачу кода/бонусов.
 export const REWARDS_ENABLED = false;
 export const REWARDS = [
-  { id: "promo5",   name: "Промокод −5%",        cost: 100000, kind: "promo",   note: "скидка на заказ" },
-  { id: "promo10",  name: "Промокод −10%",       cost: 250000, kind: "promo",   note: "скидка на заказ" },
-  { id: "bonus300", name: "300 бонусов на карту", cost: 200000, kind: "loyalty", note: "клуб «Мария»" },
-  { id: "dessert",  name: "Десерт в подарок",     cost: 500000, kind: "promo",   note: "при заказе" },
+  { id: "promo5",   name: "Промокод −5%",         cost: 100000, kind: "promo",   catalog: "discount_5",   note: "скидка на заказ" },
+  { id: "promo10",  name: "Промокод −10%",        cost: 250000, kind: "promo",   catalog: "discount_10",  note: "скидка на заказ" },
+  { id: "dessert",  name: "Десерт в подарок",     cost: 500000, kind: "promo",   catalog: "free_dessert", note: "при заказе" },
 ];
 const REWARD_BY_ID = Object.fromEntries(REWARDS.map((r) => [r.id, r]));
 const REDEEM_PER_DAY = 1; // анти-абуз: не больше N обменов в день
@@ -873,26 +872,44 @@ export async function getRewards(chatId: number): Promise<{ enabled: boolean; ba
 
 /**
  * Обмен монет на реальную награду. ⚠️ Пока REWARDS_ENABLED=false → всегда отказ.
- * Когда включат: атомарно списывает монеты, пишет в clicker_redemptions, лимит REDEEM_PER_DAY/день.
- * TODO выдача: промокод (генерация/Bitrix promo) или бонусы на карту (loyalty API) — по решению Маши.
+ * Когда включат: атомарно списывает монеты + пишет PENDING-redemption, затем вне tx
+ * вызывает grantRewardByCode (club.ts) → реальный промокод в user_rewards.
+ * При сбое выдачи — компенсация: монеты возвращаются, PENDING-запись удаляется.
  */
 export async function redeemReward(chatId: number, id: string): Promise<{ ok: boolean; code?: string; state?: ClickerState; reason?: string }> {
   if (!REWARDS_ENABLED) return { ok: false, reason: "disabled" };
   const rw = REWARD_BY_ID[id]; if (!rw) return { ok: false, reason: "bad_reward" };
+  if (!rw.catalog) return { ok: false, reason: "bad_reward" };
   const client = await pool.connect();
+  let r!: any, cl!: Record<string, number>;
   try {
     await client.query("BEGIN");
-    const { r, cl } = await refresh(client, chatId);
+    ({ r, cl } = await refresh(client, chatId));
     const used = await client.query(`SELECT COUNT(*)::int AS n FROM clicker_redemptions WHERE chat_id=$1 AND created_at > NOW() - INTERVAL '1 day'`, [chatId]);
     if (used.rows[0].n >= REDEEM_PER_DAY) { await client.query("ROLLBACK"); return { ok: false, reason: "daily_limit" }; }
     if (Number(r.balance) < rw.cost) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough" }; }
     r.balance = Number(r.balance) - rw.cost; // total_earned НЕ трогаем (уровень/сезон сохраняются)
-    const code = "MARIA-" + String(Math.abs(chatId)).slice(-4) + "-" + id.toUpperCase(); // TODO: реальная генерация
-    await client.query(`INSERT INTO clicker_redemptions (chat_id, reward_id, cost, code) VALUES ($1,$2,$3,$4)`, [chatId, id, rw.cost, code]);
+    await client.query(`INSERT INTO clicker_redemptions (chat_id, reward_id, cost, code) VALUES ($1,$2,$3,$4)`, [chatId, id, rw.cost, "PENDING"]);
     await client.query(`UPDATE clicker_state SET balance=$2, updated_at=NOW() WHERE chat_id=$1`, [chatId, r.balance]);
     await client.query("COMMIT");
-    return { ok: true, code, state: buildState(r, cl, 0) };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+  // выдать реальный код (вне tx). При сбое — вернуть монеты (компенсация).
+  let grant;
+  try {
+    grant = await grantRewardByCode(chatId, rw.catalog);
+  } catch (e) {
+    await pool.query(`UPDATE clicker_state SET balance=balance+$2 WHERE chat_id=$1`, [chatId, rw.cost]).catch((err) => console.error("[redeem] refund failed", err));
+    await pool.query(`DELETE FROM clicker_redemptions WHERE chat_id=$1 AND code='PENDING' AND reward_id=$2 AND created_at > NOW()-INTERVAL '1 minute'`, [chatId, id]).catch((err) => console.error("[redeem] pending cleanup failed", err));
+    console.error("[redeem] grantRewardByCode threw", e);
+    return { ok: false, reason: "grant_failed" };
+  }
+  if (!grant.ok || !grant.promoCode) {
+    await pool.query(`UPDATE clicker_state SET balance=balance+$2 WHERE chat_id=$1`, [chatId, rw.cost]).catch((err) => console.error("[redeem] refund failed", err));
+    await pool.query(`DELETE FROM clicker_redemptions WHERE chat_id=$1 AND code='PENDING' AND reward_id=$2 AND created_at > NOW()-INTERVAL '1 minute'`, [chatId, id]).catch((err) => console.error("[redeem] pending cleanup failed", err));
+    return { ok: false, reason: "grant_failed" };
+  }
+  await pool.query(`UPDATE clicker_redemptions SET code=$3 WHERE chat_id=$1 AND reward_id=$2 AND code='PENDING' AND created_at > NOW()-INTERVAL '1 minute'`, [chatId, id, grant.promoCode]).catch((err) => console.error("[redeem] code stamp failed", err));
+  return { ok: true, code: grant.promoCode, state: buildState(r, cl, 0) };
 }
 
 /**
