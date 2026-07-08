@@ -5,7 +5,7 @@ import helmet from "helmet";
 import path from "path";
 import https from "https";
 import cron from "node-cron";
-import { Bot, webhookCallback, InlineKeyboard } from "grammy";
+import { Bot, webhookCallback, InlineKeyboard, Keyboard } from "grammy";
 import { log, requestLogger, sentryExpressErrorHandler, captureError } from "./logger";
 import { rateLimit, requireAdminToken } from "./middleware";
 import sweetCheckRouter, { loadSweetCheckPrizes } from "./routes/sweet-check";
@@ -35,6 +35,7 @@ import { pool as _dbPoolForRouters } from "./db";
 import userRouter from "./routes/user";
 import gameRouter from "./routes/game";
 import petRouter from "./routes/pet";
+import appAuthRouter, { initAppAuthSchema, attachAppLoginChat, completeAppLogin } from "./routes/app-auth";
 import { initPetSchema } from "./pet";
 import clickerRouter from "./routes/clicker";
 import { initClickerSchema, registerRef, closeWeeklySeason, pushWeeklyWinners, getRefOrderCandidates, markRefOrderRewarded } from "./clicker";
@@ -419,7 +420,7 @@ if (needsScrape) {
 
 // Обновление каждые 24 часа
 // Каталог обновляем каждый час — синхронизация с правками на сайте
-setInterval(refreshCatalog, 60 * 60 * 1000);
+setInterval(refreshCatalog, 10 * 60 * 1000); // 10 мин: правки каталога на сайте доезжают в приложение быстро
 
 // Очистка старых файлов в /tmp (img_cache > 7 дней, lead_photos > 90 дней)
 function cleanupTmpDir(dir: string, maxAgeMs: number) {
@@ -539,6 +540,20 @@ bot.command("start", async (ctx) => {
     // Referral payload: /start ref_MARIA-XXX (code-based, активная схема)
     // Старый numeric-формат (/start ref_12345) — deprecated, игнорируется.
     const payload = ctx.match?.trim();
+    // Вход в maria-app: /start applogin_<nonce> — привязать чат к nonce и
+    // попросить контакт (криптографическая верификация, как в клубе).
+    if (payload && /^applogin_[a-f0-9]{32}$/.test(payload)) {
+      const okAttach = await attachAppLoginChat(payload.slice(9), ctx.from.id).catch(() => false);
+      if (okAttach) {
+        await ctx.reply(
+          "🔐 Вход в приложение «Мария»\n\nНажмите кнопку ниже, чтобы подтвердить номер телефона — и приложение узнает вас и ваши бонусы.",
+          { reply_markup: new Keyboard().requestContact("📱 Поделиться номером").resized().oneTime() }
+        );
+      } else {
+        await ctx.reply("⏳ Ссылка входа устарела. Вернитесь в приложение и нажмите «Войти через Telegram» ещё раз.");
+      }
+      return;
+    }
     // QR-воронка (чек/POS/упаковка): /start qr_<источник> — фиксируем источник
     // и показываем приветствие с бонусом за номер.
     if (payload && /^qr_[a-z0-9_-]{1,32}$/i.test(payload)) {
@@ -588,9 +603,18 @@ bot.on(":contact", async (ctx) => {
     return;
   }
   await addSubscriber(ctx.from.id, ctx.from.username, ctx.from.first_name).catch(() => {});
+  // Вход в maria-app: если у чата есть свежий pending-nonce — завершаем device-flow.
+  const appLoginDone = await completeAppLogin(ctx.from.id, c.phone_number).catch(() => false);
   try {
     const result = await verifyPhone(ctx.from.id, c.phone_number);
-    if (result.alreadyVerified) {
+    if (appLoginDone) {
+      await ctx.reply(
+        `✅ Готово! Вход подтверждён — вернитесь в приложение «Мария».${result.alreadyVerified ? "" : `
+
+💎 Бонус: +${result.bonusAwarded} баллов за подтверждение номера.`}`,
+        { reply_markup: { remove_keyboard: true } }
+      );
+    } else if (result.alreadyVerified) {
       await ctx.reply("✅ Номер уже подтверждён");
     } else {
       await ctx.reply(
@@ -1468,6 +1492,9 @@ app.use(gameRouter);
 // Виртуальный питомец → src/routes/pet.ts
 app.use(petRouter);
 
+// Вход maria-app через Telegram (device-flow) → src/routes/app-auth.ts
+app.use("/api/app", appAuthRouter);
+
 // Кликер «Котик Комбат» → src/routes/clicker.ts
 app.use(clickerRouter);
 
@@ -2063,6 +2090,7 @@ async function main() {
   await initAnalyticsSchema();
   await initClickerPushSchema();
   await initBonusSchema();
+  await initAppAuthSchema();
   startBonusWorker();
 
   // Sentry error handler — после всех routes, до listen
