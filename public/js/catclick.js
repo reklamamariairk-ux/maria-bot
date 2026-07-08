@@ -66,12 +66,15 @@
   ].filter(t => t.type !== 'link' || t.link);
   const leagueFor = (t) => { let l = LEAGUES[0]; for (const x of LEAGUES) if (t >= x.need) l = x; return l; };
   const nextNeed = (t) => { const n = LEAGUES.find(x => x.need > t); return n ? n.need : null; };
-  // Прогрессия размера: кот растёт с уровнем (ур.1 ≈ 60% бокса → ур.19 = 100%).
-  const catScale = (level) => 0.60 + 0.40 * (Math.min(19, Math.max(1, level)) - 1) / 18;
+  // Прогрессия размера: кот растёт с уровнем, взрывнее к концу (ур.1 = 55% → ур.19 = 100%).
+  // Жёсткая ВЫСОТА (не contain-бокс): рост строго монотонный — широкие кадры (шар/дон) не проседают.
+  const catScale = (level) => 0.55 + 0.45 * Math.pow((Math.min(19, Math.max(1, level)) - 1) / 18, 1.9);
   function applyCatSize(catEl, level) {
     const s = catScale(level);
-    catEl.style.maxWidth = (62 * s).toFixed(1) + '%';
-    catEl.style.maxHeight = (94 * s).toFixed(1) + '%';
+    catEl.style.height = (94 * s).toFixed(1) + '%';
+    catEl.style.width = 'auto';
+    catEl.style.maxWidth = '96%';  // страховка для очень широких кадров на узких экранах
+    catEl.style.maxHeight = 'none';
   }
   const fmt = (n) => Math.floor(n).toLocaleString('ru-RU');
   const irkToday = () => new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
