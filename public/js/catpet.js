@@ -51,6 +51,30 @@
   ];
   const HAT = (id) => SHOP.find(h => h.id === id);
 
+  // Кадры кота рисованы в разном пиксельном масштабе → пер-кадровый коэффициент
+  // CSS-высоты (иначе лежачий кот-гигант и мелкий шагающий). Подобрано по монтажу
+  // scripts/pet-hat-bake.mjs / _strip*.png.
+  const FRAME_K = { 'full.png': 0.62, 'walk1.png': 1.10, 'walk2.png': 1.10, 'walk3.png': 1.10, 'walk4.png': 1.10 };
+  const CAT_H = 46;      // базовая высота кота, % высоты сцены
+  const CAT_MAXH = 320;  // базовый потолок высоты, px
+  const HAT_PAD = 1.25;  // у шляпных webp-кадров холст выше на 25% (запас под шляпу)
+  const HAT_FRAMES = ['idle.png', 'happy.png', 'full.png', 'walk1.png', 'walk2.png', 'walk3.png', 'walk4.png'];
+
+  // Шляпа ВПЕЧЕНА в готовые webp-варианты кадров (scripts/pet-hat-bake.mjs) —
+  // рантайм-позиционирования шляпы больше нет, она не может «съехать».
+  function catSrc(frame) {
+    const id = state && state.items && state.items.equipped;
+    return (id && HAT(id) && HAT_FRAMES.indexOf(frame) !== -1) ? frame.replace('.png', '-' + id + '.webp') : frame;
+  }
+  function setCatFrame(el, frame) {
+    const src = catSrc(frame);
+    el.dataset.frame = frame;
+    if (!el.src || el.src.indexOf('/' + src) === -1) el.src = A(src); // не дёргать src без смены
+    const k = (FRAME_K[frame] || 1) * (src === frame ? 1 : HAT_PAD);
+    el.style.height = (CAT_H * k) + '%';
+    el.style.maxHeight = Math.round(CAT_MAXH * k) + 'px';
+  }
+
   let ov, state, loc = 'kitchen', cat = { x: 0.5, dir: 1, vx: 0.04, mode: 'walk', frame: 0, t: 0, busy: false };
   let raf, lastTs = 0, walkImgs = [];
 
@@ -151,7 +175,7 @@
       .pet-lvl{position:absolute;top:10px;right:48px;color:#fff;font-weight:800;font-size:13px;text-shadow:0 1px 3px rgba(0,0,0,.5);text-align:right;line-height:1.2}
       .pet-x{position:absolute;top:8px;right:8px;width:34px;height:34px;border:none;border-radius:50%;background:rgba(0,0,0,.3);color:#fff;font-size:19px;cursor:pointer;z-index:4}
       .pet-stage{position:relative;flex:1;overflow:hidden}
-      .pet-cat{position:absolute;bottom:23%;height:46%;width:auto;max-height:320px;filter:drop-shadow(0 12px 14px rgba(0,0,0,.3));transform-origin:bottom center;will-change:left,transform}
+      .pet-cat{position:absolute;bottom:23%;height:46%;width:auto;max-height:320px;filter:drop-shadow(0 12px 14px rgba(0,0,0,.3));transform-origin:bottom center;will-change:left,transform} /* height/max-height переопределяет setCatFrame() пер-кадрово */
       .pet-fx{position:absolute;inset:0;pointer-events:none;z-index:4}
       .pet-name{position:absolute;top:10px;left:12px;color:#fff;font-weight:900;font-size:18px;text-shadow:0 2px 5px rgba(0,0,0,.5);z-index:3}
       .pet-action{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);z-index:5}
@@ -168,7 +192,6 @@
       .pet-play__g{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
       .pet-play__g button{border:none;border-radius:16px;padding:14px 18px;font-weight:800;cursor:pointer;background:#ff7a2d;color:#fff;font-size:15px}
       .pet-shop-btn{position:absolute;top:8px;right:88px;z-index:4;width:34px;height:34px;border:none;border-radius:50%;background:rgba(0,0,0,.3);color:#fff;font-size:17px;cursor:pointer}
-      .pet-hat{position:absolute;z-index:2;pointer-events:none;will-change:left,top,transform;filter:drop-shadow(0 4px 5px rgba(0,0,0,.25))}
       .pet-shop{position:absolute;inset:0;z-index:7;display:none;flex-direction:column;background:rgba(40,20,8,.55);backdrop-filter:blur(3px)}
       .pet-shop.on{display:flex}
       .pet-shop__h{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;color:#fff;font-weight:900;font-size:18px}
@@ -206,7 +229,6 @@
       <div class="pet-stage" id="pet-stage">
         <div class="pet-name" id="pet-locname"></div>
         <img class="pet-cat" id="pet-cat" draggable="false"/>
-        <img class="pet-hat" id="pet-hat" draggable="false" style="display:none"/>
         <div class="pet-fx" id="pet-fx"></div>
         <div class="pet-action" id="pet-action"></div>
       </div>
@@ -296,12 +318,13 @@
     if (cfg.action === 'play') { showPlay(); return; }
     cat.busy = true;
     const catEl = ov.querySelector('#pet-cat');
-    if (cfg.action === 'feed') { catEl.src = A('happy.png'); bubble('Ням!'); hearts(); }
-    else if (cfg.action === 'sleep') { catEl.src = A('full.png'); bubble('Zzz'); }
-    else { catEl.src = A('happy.png'); bubble('Мур!'); hearts(); }
+    if (cfg.action === 'feed') { setCatFrame(catEl, 'happy.png'); bubble('Ням!'); hearts(); }
+    else if (cfg.action === 'sleep') { setCatFrame(catEl, 'full.png'); bubble('Zzz'); }
+    else { setCatFrame(catEl, 'happy.png'); bubble('Мур!'); hearts(); }
     window.haptic?.('light');
     await doAction(cfg.action);
-    setTimeout(() => { cat.busy = false; }, 1400);
+    // после действия возвращаемся в idle — иначе поза (особенно лежачая) залипала до следующей ходьбы
+    setTimeout(() => { cat.busy = false; setCatFrame(catEl, 'idle.png'); }, 1400);
   }
 
   function bubble(text) {
@@ -342,10 +365,9 @@
     ov.querySelectorAll('#pet-shop-grid [data-equip]').forEach(b => b.onclick = () => equipItem(b.dataset.equip));
   }
   function renderHat() {
-    const hatEl = ov.querySelector('#pet-hat'); if (!hatEl) return;
-    const id = state && state.items && state.items.equipped;
-    if (!id || !HAT(id)) { hatEl.style.display = 'none'; return; }
-    hatEl.src = A(HAT(id).img); hatEl.style.display = ''; // позиция — в loop
+    // Шляпа впечена в webp-кадры — просто пере-применяем текущий кадр с учётом надетого.
+    const catEl = ov.querySelector('#pet-cat'); if (!catEl) return;
+    setCatFrame(catEl, catEl.dataset.frame || 'idle.png');
   }
 
   function showPlay() { ov.querySelector('#pet-play').classList.add('on'); }
@@ -374,32 +396,16 @@
         if (cat.x > 0.88) { cat.x = 0.88; cat.dir = -1; }
         // смена кадров ходьбы
         cat.frame = (cat.frame + dt * 8) % WALK.length;
-        catEl.src = A(WALK[Math.floor(cat.frame)]);
+        setCatFrame(catEl, WALK[Math.floor(cat.frame)]);
         catEl.style.transform = `scaleX(${cat.dir})`;
-        if (cat.t > 1.2 + Math.random() * 1.4) { cat.mode = 'idle'; cat.t = 0; catEl.src = A('idle.png'); catEl.style.transform = 'scaleX(1)'; }
+        if (cat.t > 1.2 + Math.random() * 1.4) { cat.mode = 'idle'; cat.t = 0; setCatFrame(catEl, 'idle.png'); catEl.style.transform = 'scaleX(1)'; }
       } else { // idle — кот в основном стоит анфас (шапка видна, нет дрожания кадров)
         if (cat.t > 4 + Math.random() * 4) { cat.mode = 'walk'; cat.t = 0; cat.dir = Math.random() < 0.5 ? -1 : 1; }
       }
     }
     const catW = catEl.offsetWidth;
-    catEl.style.left = (cat.x * W - catW / 2) + 'px';
-    // шапка на голове — чисто на фронтальной позе; во время ходьбы (вид сбоку) прячем
-    const hatEl = ov.querySelector('#pet-hat');
-    if (hatEl && hatEl.style.display !== 'none' && hatEl.src) {
-      // параметры шапки берём из уже проставленного src (renderHat), а не из state —
-      // устойчивее к рассинхрону состояния между рендером и циклом
-      const h = SHOP.find(x => hatEl.src.indexOf(x.img) !== -1);
-      const walking = cat.mode === 'walk' && !cat.busy;
-      hatEl.style.opacity = walking ? '0' : '1';
-      if (h && !walking) {
-        const cr = catEl.getBoundingClientRect(), sr = stage.getBoundingClientRect();
-        const hw = cr.width * h.w; hatEl.style.width = hw + 'px';
-        const cx = (cr.left - sr.left) + cr.width * (0.5 + h.dx);
-        hatEl.style.left = (cx - hw / 2) + 'px';
-        hatEl.style.top = ((cr.top - sr.top) + cr.height * h.dy) + 'px';
-        hatEl.style.transform = 'none';
-      }
-    }
+    // клэмп по фактической ширине кадра — широкий лежачий кадр не должен резаться краями сцены
+    catEl.style.left = Math.max(0, Math.min(W - catW, cat.x * W - catW / 2)) + 'px';
     raf = requestAnimationFrame(loop);
   }
 
@@ -407,12 +413,12 @@
   async function open() {
     if (!ov) build();
     ov.classList.add('on'); window.scrollLock?.();
-    // префетч кадров ходьбы
-    walkImgs = WALK.map(w => { const i = new Image(); i.src = A(w); return i; });
     try { await loadState(); } catch (_) { state = localGet(); }
+    // префетч кадров ходьбы — после loadState, чтобы префетчить вариант с надетой шляпой
+    walkImgs = WALK.map(w => { const i = new Image(); i.src = A(catSrc(w)); return i; });
     renderNeeds(); renderLoc(); renderHat();
     renderGift(state); loadCareGranted().then(() => renderGift(state));
-    ov.querySelector('#pet-cat').src = A('idle.png');
+    setCatFrame(ov.querySelector('#pet-cat'), 'idle.png');
     cat = { x: 0.5, dir: 1, vx: 0.04, mode: 'walk', frame: 0, t: 0, busy: false };
     lastTs = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
   }
