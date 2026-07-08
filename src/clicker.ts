@@ -86,7 +86,7 @@ export const ACHIEVEMENTS = [
   { id: "ach_earn50k", name: "Первые полста",     icon: "wallet", reward: 5000,   type: "balance", target: 50000 },
   { id: "ach_biz5",    name: "Бизнес-империя",    icon: "shop",   reward: 8000,   type: "cards",   target: 5 },
   { id: "ach_lvl10",   name: "Высшая лига",       icon: "trophy", reward: 25000,  type: "level",   target: 10 },
-  { id: "ach_lvl19",   name: "Повелитель котов",  icon: "star",   reward: 100000, type: "level",   target: 19 },
+  { id: "ach_lvl19",   name: "Император выпечки", icon: "star",   reward: 100000, type: "level",   target: 19 },
   { id: "ach_streak7", name: "Неделя верности",   icon: "fire",   reward: 7000,   type: "streak",  target: 7 },
   { id: "ach_ref3",    name: "Душа компании",     icon: "users",  reward: 15000,  type: "ref",     target: 3 },
   // Коллекция голубей: собрать всех в категории / всех вообще (level>0 у бизнесов категории)
@@ -100,27 +100,28 @@ const TASK_BY_ID = Object.fromEntries(TASKS.map((t) => [t.id, t]));
 const ALL_BY_ID: Record<string, any> = Object.fromEntries([...TASKS, ...ACHIEVEMENTS].map((t) => [t.id, t]));
 const dailyReward = (streak: number) => 250 * Math.min(Math.max(1, streak), 10); // день1=250 … день10+=2500
 
-// ⚠️ Лестница продублирована во фронте public/js/catclick.js (там же поле cat) — менять синхронно.
+// «Кондитерская карьера Василия» (арт-комплект 08.07.2026) — имена синхронно с
+// public/js/catclick.js LEAGUES (там же поле cat); пороги need НЕ менялись.
 export const LEAGUES = [
-  { level: 1,  name: "Тощий котик",        need: 0 },
-  { level: 2,  name: "Обычный котик",      need: 1000 },
-  { level: 3,  name: "Сытый котик",        need: 3000 },
-  { level: 4,  name: "Толстый котик",      need: 8000 },
-  { level: 5,  name: "Котик на спорте",    need: 18000 },
-  { level: 6,  name: "Подкачанный котик",  need: 38000 },
-  { level: 7,  name: "Котик в тонусе",     need: 70000 },
-  { level: 8,  name: "Котик-бодибилдер",   need: 120000 },
-  { level: 9,  name: "Котик-силач",        need: 200000 },
-  { level: 10, name: "Котик-рэпер",        need: 320000 },
-  { level: 11, name: "Котик при деньгах",  need: 500000 },
-  { level: 12, name: "Котик-делец",        need: 800000 },
-  { level: 13, name: "Котик-бизнесмен",    need: 1300000 },
-  { level: 14, name: "Котик-босс",         need: 2000000 },
-  { level: 15, name: "Котик-магнат",       need: 3500000 },
-  { level: 16, name: "Котик-воротила",     need: 8000000 },
-  { level: 17, name: "Котик-олигарх",      need: 30000000 },
-  { level: 18, name: "Котик-дон",          need: 150000000 },
-  { level: 19, name: "Повелитель котов",   need: 1200000000 },
+  { level: 1,  name: "Котёнок-стажёр",     need: 0 },
+  { level: 2,  name: "Помощник пекаря",    need: 1000 },
+  { level: 3,  name: "Ученик",             need: 3000 },
+  { level: 4,  name: "Тестомес",           need: 8000 },
+  { level: 5,  name: "Пекарь",             need: 18000 },
+  { level: 6,  name: "Мастер круассанов",  need: 38000 },
+  { level: 7,  name: "Юный кондитер",      need: 70000 },
+  { level: 8,  name: "Тортодел",           need: 120000 },
+  { level: 9,  name: "Шоколатье",          need: 200000 },
+  { level: 10, name: "Су-шеф",             need: 320000 },
+  { level: 11, name: "Шеф-кондитер",       need: 500000 },
+  { level: 12, name: "Художник десертов",  need: 800000 },
+  { level: 13, name: "Управляющий",        need: 1300000 },
+  { level: 14, name: "Владелец кафе",      need: 2000000 },
+  { level: 15, name: "Ресторатор",         need: 3500000 },
+  { level: 16, name: "Магнат выпечки",     need: 8000000 },
+  { level: 17, name: "Легенда",            need: 30000000 },
+  { level: 18, name: "Король тортов",      need: 150000000 },
+  { level: 19, name: "Император выпечки",  need: 1200000000 },
 ];
 function leagueFor(total: number) { let l = LEAGUES[0]; for (const x of LEAGUES) if (total >= x.need) l = x; return l; }
 function nextNeed(total: number): number | null { const n = LEAGUES.find((x) => x.need > total); return n ? n.need : null; }
@@ -1018,7 +1019,7 @@ export const MILESTONES: { id: string; title: string; cond: { type: string; targ
   { id: "ms_lvl13",    title: "Уровень 13",               cond: { type: "level", target: 13 },    perk: "discount_5",   perkText: "Промокод −5% (от 500₽)" },
   { id: "ms_lvl15",    title: "Уровень 15",               cond: { type: "level", target: 15 },    points: 1000 },
   { id: "ms_lvl17",    title: "Уровень 17",               cond: { type: "level", target: 17 },    perk: "discount_500", perkText: "Скидка 500₽ (от 3000₽)" },
-  { id: "ms_lvl19",    title: "Последний уровень — Повелитель котов", cond: { type: "level", target: 19 }, points: 20000, perk: "free_bento_top", perkText: "Бенто-торт в подарок (от 1000₽)" },
+  { id: "ms_lvl19",    title: "Последний уровень — Император выпечки", cond: { type: "level", target: 19 }, points: 20000, perk: "free_bento_top", perkText: "Бенто-торт в подарок (от 1000₽)" },
   { id: "ms_col_prod", title: "Все голуби «Производство»", cond: { type: "collect", target: "prod" },  points: 300 },
   { id: "ms_col_mkt",  title: "Все голуби «Маркетинг»",    cond: { type: "collect", target: "mkt" },   points: 300 },
   { id: "ms_col_staff",title: "Все голуби «Персонал»",     cond: { type: "collect", target: "staff" }, points: 300 },

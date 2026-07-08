@@ -30,26 +30,29 @@
   ];
   const LEAGUES = [
     // cat = картинка кота на уровне (эволюция «глоу-ап»: тощий уличный → кот-император)
-    // 19 уровней под арт Маши. ⚠️ Лестница продублирована в src/clicker.ts — менять синхронно.
-    { level: 1,  name: 'Тощий котик',        need: 0,       cat: 'cat-stage1.png' },
-    { level: 2,  name: 'Обычный котик',      need: 1000,    cat: 'cat-stage2.png' },
-    { level: 3,  name: 'Сытый котик',        need: 3000,    cat: 'cat-stage3.png' },
-    { level: 4,  name: 'Толстый котик',      need: 8000,    cat: 'cat-stage4.png' },
-    { level: 5,  name: 'Котик на спорте',    need: 18000,   cat: 'cat-stage5.png' },
-    { level: 6,  name: 'Подкачанный котик',  need: 38000,   cat: 'cat-stage6.png' },
-    { level: 7,  name: 'Котик в тонусе',     need: 70000,   cat: 'cat-stage7.png' },
-    { level: 8,  name: 'Котик-бодибилдер',   need: 120000,  cat: 'cat-stage8.png' },
-    { level: 9,  name: 'Котик-силач',        need: 200000,  cat: 'cat-stage9.png' },
-    { level: 10, name: 'Котик-рэпер',        need: 320000,  cat: 'cat-stage10.png' },
-    { level: 11, name: 'Котик при деньгах',  need: 500000,  cat: 'cat-stage11.png' },
-    { level: 12, name: 'Котик-делец',        need: 800000,  cat: 'cat-stage12.png' },
-    { level: 13, name: 'Котик-бизнесмен',    need: 1300000, cat: 'cat-stage13.png' },
-    { level: 14, name: 'Котик-босс',         need: 2000000, cat: 'cat-stage14.png' },
-    { level: 15, name: 'Котик-магнат',       need: 3500000,  cat: 'cat-stage15.png' },
-    { level: 16, name: 'Котик-воротила',     need: 8000000,  cat: 'cat-stage16.png' },
-    { level: 17, name: 'Котик-олигарх',      need: 30000000, cat: 'cat-stage17.png' },
-    { level: 18, name: 'Котик-дон',          need: 150000000, cat: 'cat-stage18.png' },
-    { level: 19, name: 'Повелитель котов',   need: 1200000000, cat: 'cat-stage19.png' },
+    // 19 уровней «Кондитерская карьера Василия» (арт-комплект 08.07.2026, спека
+    // docs/superpowers/specs/2026-07-08-vasily-art-set-design.md). Кот ОДИН и тот же,
+    // прогрессия — одеждой/аксессуарами/фоном. Пороги need НЕ менялись (прогресс игроков).
+    // ⚠️ Лестница продублирована в src/clicker.ts (name) — менять синхронно.
+    { level: 1,  name: 'Котёнок-стажёр',     need: 0,       cat: 'vasily-stage1.webp' },
+    { level: 2,  name: 'Помощник пекаря',    need: 1000,    cat: 'vasily-stage2.webp' },
+    { level: 3,  name: 'Ученик',             need: 3000,    cat: 'vasily-stage3.webp' },
+    { level: 4,  name: 'Тестомес',           need: 8000,    cat: 'vasily-stage4.webp' },
+    { level: 5,  name: 'Пекарь',             need: 18000,   cat: 'vasily-stage5.webp' },
+    { level: 6,  name: 'Мастер круассанов',  need: 38000,   cat: 'vasily-stage6.webp' },
+    { level: 7,  name: 'Юный кондитер',      need: 70000,   cat: 'vasily-stage7.webp' },
+    { level: 8,  name: 'Тортодел',           need: 120000,  cat: 'vasily-stage8.webp' },
+    { level: 9,  name: 'Шоколатье',          need: 200000,  cat: 'vasily-stage9.webp' },
+    { level: 10, name: 'Су-шеф',             need: 320000,  cat: 'vasily-stage10.webp' },
+    { level: 11, name: 'Шеф-кондитер',       need: 500000,  cat: 'vasily-stage11.webp' },
+    { level: 12, name: 'Художник десертов',  need: 800000,  cat: 'vasily-stage12.webp' },
+    { level: 13, name: 'Управляющий',        need: 1300000, cat: 'vasily-stage13.webp' },
+    { level: 14, name: 'Владелец кафе',      need: 2000000, cat: 'vasily-stage14.webp' },
+    { level: 15, name: 'Ресторатор',         need: 3500000,  cat: 'vasily-stage15.webp' },
+    { level: 16, name: 'Магнат выпечки',     need: 8000000,  cat: 'vasily-stage16.webp' },
+    { level: 17, name: 'Легенда',            need: 30000000, cat: 'vasily-stage17.webp' },
+    { level: 18, name: 'Король тортов',      need: 150000000, cat: 'vasily-stage18.webp' },
+    { level: 19, name: 'Император выпечки',  need: 1200000000, cat: 'vasily-stage19.webp' },
   ];
   const REF_REFERRER = 5000, REF_INVITEE = 2500, BOT = 'mariatortik_bot';
   // Соцссылки «Марии» — зеркало SOCIAL в src/clicker.ts (менять синхронно). Пустая = задание скрыто.
@@ -253,7 +256,7 @@
     { id: 'ach_earn50k', name: 'Первые полста', icon: 'wallet', reward: 5000, type: 'balance', target: 50000 },
     { id: 'ach_biz5', name: 'Бизнес-империя', icon: 'shop', reward: 8000, type: 'cards', target: 5 },
     { id: 'ach_lvl10', name: 'Высшая лига', icon: 'trophy', reward: 25000, type: 'level', target: 10 },
-    { id: 'ach_lvl19', name: 'Повелитель котов', icon: 'star', reward: 100000, type: 'level', target: 19 },
+    { id: 'ach_lvl19', name: 'Император выпечки', icon: 'star', reward: 100000, type: 'level', target: 19 },
     { id: 'ach_streak7', name: 'Неделя верности', icon: 'fire', reward: 7000, type: 'streak', target: 7 },
     { id: 'ach_ref3', name: 'Душа компании', icon: 'users', reward: 15000, type: 'ref', target: 3 },
     { id: 'col_prod', name: 'Цех в сборе', icon: 'dove', reward: 10000, type: 'collect', target: 'prod' },
@@ -271,7 +274,7 @@
     { id: 'ms_lvl13', title: 'Уровень 13', cond: { type: 'level', target: 13 }, kind: 'perk', perkText: 'Промокод −5% (от 500₽)' },
     { id: 'ms_lvl15', title: 'Уровень 15', cond: { type: 'level', target: 15 }, kind: 'points', points: 1000 },
     { id: 'ms_lvl17', title: 'Уровень 17', cond: { type: 'level', target: 17 }, kind: 'perk', perkText: 'Скидка 500₽ (от 3000₽)' },
-    { id: 'ms_lvl19', title: 'Последний уровень — Повелитель котов', cond: { type: 'level', target: 19 }, kind: 'both', points: 20000, perkText: 'Бенто-торт в подарок (от 1000₽)' },
+    { id: 'ms_lvl19', title: 'Последний уровень — Император выпечки', cond: { type: 'level', target: 19 }, kind: 'both', points: 20000, perkText: 'Бенто-торт в подарок (от 1000₽)' },
     { id: 'ms_col_prod', title: 'Все голуби «Производство»', cond: { type: 'collect', target: 'prod' }, kind: 'points', points: 300 },
     { id: 'ms_col_mkt', title: 'Все голуби «Маркетинг»', cond: { type: 'collect', target: 'mkt' }, kind: 'points', points: 300 },
     { id: 'ms_col_staff', title: 'Все голуби «Персонал»', cond: { type: 'collect', target: 'staff' }, kind: 'points', points: 300 },
@@ -668,8 +671,7 @@
       .ck-catwrap::before{top:62%;z-index:1}.ck-catwrap::after{bottom:8%;z-index:1}.ck-cat{z-index:2}
       .ck-scene{position:absolute;inset:0;z-index:0;background-position:center center;background-size:cover;background-repeat:no-repeat;filter:brightness(.62) saturate(.92)}
       .ck-scene::after{content:'';position:absolute;inset:0;background:radial-gradient(70% 42% at 50% 46%,transparent,rgba(0,0,0,.34) 100%),linear-gradient(180deg,rgba(0,0,0,.74),rgba(0,0,0,.34) 16%,transparent 38%,transparent 60%,rgba(0,0,0,.52) 88%,rgba(0,0,0,.66))}
-      .ck-ov[data-tier="2"] .ck-scene::after,.ck-ov[data-tier="3"] .ck-scene::after,.ck-ov[data-tier="4"] .ck-scene::after{background:radial-gradient(70% 42% at 50% 46%,transparent,rgba(0,0,0,.36) 100%),linear-gradient(180deg,rgba(0,0,0,.82),rgba(0,0,0,.45) 18%,rgba(0,0,0,.08) 40%,transparent 58%,rgba(0,0,0,.55) 88%,rgba(0,0,0,.68))}
-      .ck-ov[data-tier="1"] .ck-scene{background-image:url(/assets/images/scene/tier1.webp)}.ck-ov[data-tier="2"] .ck-scene{background-image:url(/assets/images/scene/tier2.webp)}.ck-ov[data-tier="3"] .ck-scene{background-image:url(/assets/images/scene/tier3.webp)}.ck-ov[data-tier="4"] .ck-scene{background-image:url(/assets/images/scene/tier4.webp)}.ck-ov[data-tier="5"] .ck-scene{background-image:url(/assets/images/scene/tier5.webp)}.ck-ov[data-tier="6"] .ck-scene{background-image:url(/assets/images/scene/tier6.webp)}
+      ${Array.from({ length: 19 }, (_, i) => `.ck-ov[data-tier="${i + 1}"] .ck-scene{background-image:url(/assets/images/scene/career-${i + 1}.webp)}`).join('')}
       #ck-scr-cat>:not(.ck-scene){position:relative;z-index:1}
       .ck-combo{z-index:8;top:13%}
       .ck-lvl{text-shadow:0 1px 4px rgba(0,0,0,.75)}.ck-prog__t{color:#c2c7cf;text-shadow:0 1px 3px rgba(0,0,0,.8)}
@@ -1225,7 +1227,8 @@
     const tier = bgTier(lg.level); if (ov.dataset.tier !== '' + tier) ov.dataset.tier = '' + tier;
     applyCostume(lg);
   }
-  function bgTier(l) { return l <= 3 ? 1 : l <= 6 ? 2 : l <= 10 ? 3 : l <= 13 ? 4 : l <= 16 ? 5 : 6; }
+  // Пер-уровневые сцены карьеры: фон = уровень 1..19 (career-N.webp)
+  function bgTier(l) { return Math.min(19, Math.max(1, l)); }
   function applyCostume(lg) {
     const cat = ov.querySelector('#ck-cat'), hat = ov.querySelector('#ck-hat');
     hat.style.display = 'none'; // шапки-наклейки убраны — костюм = смена всей картинки кота
