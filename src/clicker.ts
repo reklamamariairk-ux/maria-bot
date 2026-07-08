@@ -877,6 +877,7 @@ export async function getRewards(chatId: number): Promise<{ enabled: boolean; ba
  * Когда включат: атомарно списывает монеты + пишет PENDING-redemption, затем вне tx
  * вызывает grantRewardByCode (club.ts) → реальный промокод в user_rewards.
  * При сбое выдачи — компенсация: монеты возвращаются, PENDING-запись удаляется.
+ * Loyalty-награды (kind:"loyalty") начисляют реальные баллы карты через earnPoints (телефон обязателен).
  */
 export async function redeemReward(chatId: number, id: string): Promise<{ ok: boolean; code?: string; points?: number; state?: ClickerState; reason?: string }> {
   if (!REWARDS_ENABLED) return { ok: false, reason: "disabled" };
