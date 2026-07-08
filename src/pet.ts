@@ -16,6 +16,7 @@ export interface PetState {
   hunger: number; mood: number; energy: number; hygiene: number;
   level: number; xp: number; xpNext: number; coins: number;
   careStreak: number;
+  careStreakBest: number;
   location: PetLocation;
   items?: { owned: string[]; equipped: string | null };
 }
@@ -76,7 +77,10 @@ export async function initPetSchema(): Promise<void> {
     ALTER TABLE pet_state ADD COLUMN IF NOT EXISTS care_streak      INT NOT NULL DEFAULT 0;
     ALTER TABLE pet_state ADD COLUMN IF NOT EXISTS care_date        TEXT;
     ALTER TABLE pet_state ADD COLUMN IF NOT EXISTS pet_coins_merged BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE pet_state ADD COLUMN IF NOT EXISTS care_streak_best INT NOT NULL DEFAULT 0;
   `);
+  // backfill рекорда из текущего стрика (идемпотентно: только если рекорд отстал)
+  await pool.query(`UPDATE pet_state SET care_streak_best = care_streak WHERE care_streak > care_streak_best`);
 }
 
 function toState(r: any): PetState {
@@ -84,6 +88,7 @@ function toState(r: any): PetState {
     hunger: r.hunger, mood: r.mood, energy: r.energy, hygiene: r.hygiene,
     level: r.level, xp: r.xp, xpNext: xpForNext(r.level), coins: r.coins,
     careStreak: r.care_streak ?? 0,
+    careStreakBest: r.care_streak_best ?? 0,
     location: LOCATIONS.includes(r.location) ? r.location : "kitchen",
   };
 }
@@ -195,13 +200,14 @@ export async function doPetAction(
     let streakBonus = 0;
     if (r.care_date !== today) {
       r.care_streak = (r.care_date === yest) ? r.care_streak + 1 : 1;
+      r.care_streak_best = Math.max(Number(r.care_streak_best || 0), r.care_streak);
       r.care_date = today;
       streakBonus = careStreakBonus(r.care_streak);
     }
     await client.query(
       `UPDATE pet_state SET hunger=$2,mood=$3,energy=$4,hygiene=$5,xp=$6,level=$7,
-         care_streak=$8,care_date=$9,updated_at=NOW() WHERE chat_id=$1`,
-      [chatId, r.hunger, r.mood, r.energy, r.hygiene, r.xp, r.level, r.care_streak, r.care_date]
+         care_streak=$8,care_date=$9,care_streak_best=$10,updated_at=NOW() WHERE chat_id=$1`,
+      [chatId, r.hunger, r.mood, r.energy, r.hygiene, r.xp, r.level, r.care_streak, r.care_date, r.care_streak_best]
     );
     await addClickerBalance(chatId, streakBonus, client); // no-op если streakBonus<=0; атомарно в этой транзакции
     const balRow = await client.query(`SELECT balance FROM clicker_state WHERE chat_id=$1`, [chatId]);
