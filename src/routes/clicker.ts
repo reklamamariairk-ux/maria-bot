@@ -182,7 +182,7 @@ router.get("/api/clicker/rewards", requireTgUser, rateLimit(60), async (req, res
 
 router.post("/api/clicker/redeem", requireTgUser, rateLimit(20), async (req, res) => {
   const u = getTgUser(req)!; const id = String((req.body as { id?: string }).id || "");
-  try { const r = await redeemReward(u.id, id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ code: r.code, ...r.state }); trackEvent(u.id, "redeem", { id }); }
+  try { const r = await redeemReward(u.id, id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ code: r.code, points: r.points, ...r.state }); trackEvent(u.id, "redeem", { id }); }
   catch (e) { log.error({ err: e, chatId: u.id }, "[redeem]"); res.status(500).json({ error: "internal" }); }
 });
 

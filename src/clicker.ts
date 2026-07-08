@@ -130,9 +130,10 @@ function nextNeed(total: number): number | null { const n = LEAGUES.find((x) => 
 // (docker compose up -d --force-recreate). Числа (cost/points) — константы ниже:
 // при решениях Маши правим числа и включаем env, нового кода не нужно.
 export const REWARDS_ENABLED = process.env.CLICKER_REWARDS_ENABLED === "1";
-export const REWARDS = [
+export const REWARDS: { id: string; name: string; cost: number; kind: "promo" | "loyalty"; catalog?: string; points?: number; note: string }[] = [
   { id: "promo5",   name: "Промокод −5%",         cost: 100000, kind: "promo",   catalog: "discount_5",   note: "скидка на заказ" },
   { id: "promo10",  name: "Промокод −10%",        cost: 250000, kind: "promo",   catalog: "discount_10",  note: "скидка на заказ" },
+  { id: "bonus300", name: "300 баллов на карту",  cost: 200000, kind: "loyalty", points: 300,             note: "клуб «Мария»" },
   { id: "dessert",  name: "Десерт в подарок",     cost: 500000, kind: "promo",   catalog: "free_dessert", note: "при заказе" },
 ];
 const REWARD_BY_ID = Object.fromEntries(REWARDS.map((r) => [r.id, r]));
@@ -877,10 +878,13 @@ export async function getRewards(chatId: number): Promise<{ enabled: boolean; ba
  * вызывает grantRewardByCode (club.ts) → реальный промокод в user_rewards.
  * При сбое выдачи — компенсация: монеты возвращаются, PENDING-запись удаляется.
  */
-export async function redeemReward(chatId: number, id: string): Promise<{ ok: boolean; code?: string; state?: ClickerState; reason?: string }> {
+export async function redeemReward(chatId: number, id: string): Promise<{ ok: boolean; code?: string; points?: number; state?: ClickerState; reason?: string }> {
   if (!REWARDS_ENABLED) return { ok: false, reason: "disabled" };
   const rw = REWARD_BY_ID[id]; if (!rw) return { ok: false, reason: "bad_reward" };
-  if (!rw.catalog) return { ok: false, reason: "bad_reward" };
+  if (rw.kind === "loyalty") {
+    if (!rw.points) return { ok: false, reason: "bad_reward" };
+    if (!(await isPhoneVerified(chatId).catch(() => false))) return { ok: false, reason: "need_phone" };
+  } else if (!rw.catalog) return { ok: false, reason: "bad_reward" };
   const client = await pool.connect();
   let r!: any, cl!: Record<string, number>;
   try {
@@ -894,10 +898,23 @@ export async function redeemReward(chatId: number, id: string): Promise<{ ok: bo
     await client.query(`UPDATE clicker_state SET balance=$2, updated_at=NOW() WHERE chat_id=$1`, [chatId, r.balance]);
     await client.query("COMMIT");
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+  // loyalty: начислить реальные баллы карты (вне tx). При сбое — компенсация монет.
+  if (rw.kind === "loyalty") {
+    try {
+      await earnPoints(chatId, rw.points!, "clicker_redeem", { reward: id });
+    } catch (e) {
+      await pool.query(`UPDATE clicker_state SET balance=balance+$2 WHERE chat_id=$1`, [chatId, rw.cost]).catch((err) => console.error("[redeem] refund failed", err));
+      await pool.query(`DELETE FROM clicker_redemptions WHERE chat_id=$1 AND code='PENDING' AND reward_id=$2 AND created_at > NOW()-INTERVAL '1 minute'`, [chatId, id]).catch((err) => console.error("[redeem] pending cleanup failed", err));
+      console.error("[redeem] earnPoints threw", e);
+      return { ok: false, reason: "grant_failed" };
+    }
+    await pool.query(`UPDATE clicker_redemptions SET code=$3 WHERE chat_id=$1 AND reward_id=$2 AND code='PENDING' AND created_at > NOW()-INTERVAL '1 minute'`, [chatId, id, `POINTS:${rw.points}`]).catch((err) => console.error("[redeem] code stamp failed", err));
+    return { ok: true, points: rw.points, state: buildState(r, cl, 0) };
+  }
   // выдать реальный код (вне tx). При сбое — вернуть монеты (компенсация).
   let grant;
   try {
-    grant = await grantRewardByCode(chatId, rw.catalog);
+    grant = await grantRewardByCode(chatId, rw.catalog!);
   } catch (e) {
     await pool.query(`UPDATE clicker_state SET balance=balance+$2 WHERE chat_id=$1`, [chatId, rw.cost]).catch((err) => console.error("[redeem] refund failed", err));
     await pool.query(`DELETE FROM clicker_redemptions WHERE chat_id=$1 AND code='PENDING' AND reward_id=$2 AND created_at > NOW()-INTERVAL '1 minute'`, [chatId, id]).catch((err) => console.error("[redeem] pending cleanup failed", err));
