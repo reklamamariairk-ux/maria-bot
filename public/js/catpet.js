@@ -66,17 +66,13 @@
     const id = state && state.items && state.items.equipped;
     return (id && HAT(id) && HAT_FRAMES.indexOf(frame) !== -1) ? frame.replace('.png', '-' + id + '.webp') : frame;
   }
-  // Рост с уровнем питомца: ур.1 = 70% базы → 100% к ур.15 (дальше кап). Лёгкое
-  // ускорение к концу (^1.3) — как прогрессия в кликере.
-  function petScale() {
-    const lvl = Math.max(1, (state && state.level) || 1);
-    return 0.70 + 0.30 * Math.pow(Math.min(14, lvl - 1) / 14, 1.3);
-  }
   function setCatFrame(el, frame) {
     const src = catSrc(frame);
     el.dataset.frame = frame;
     if (!el.src || el.src.indexOf('/' + src) === -1) el.src = A(src); // не дёргать src без смены
-    const k = (FRAME_K[frame] || 1) * (src === frame ? 1 : HAT_PAD) * petScale();
+    // Размер кота ПОСТОЯННЫЙ (не растёт с уровнем — решение юзера 08.07); FRAME_K
+    // выравнивает позы между собой: лежачий ниже стоячего, шагающий чуть крупнее.
+    const k = (FRAME_K[frame] || 1) * (src === frame ? 1 : HAT_PAD);
     el.style.height = (CAT_H * k) + '%';
     el.style.maxHeight = Math.round(CAT_MAXH * k) + 'px';
   }
