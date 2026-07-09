@@ -4,7 +4,7 @@
  * лидерборд. Сервер /api/clicker* для авторизованных, localStorage у гостей.
  * ───────────────────────────────────────────────────────────────────────────── */
 (function () {
-  const A = (s) => `/assets/images/cat/${s}?v=22`;  // v22: реген stage7/9/13/16 без «М» на одежде
+  const A = (s) => `/assets/images/cat/${s}?v=23`;  // v23: тени под котами тёмные (не белёсые), stage7 rembg-вырез
   const LS = 'maria_click_v2';
   const REGEN = 1.5, PASSIVE_CAP_H = 3, TURBO_MULT = 5, TURBO_SEC = 20, DAILY_BOOSTS = 6;
   // ⚠️ Зеркало CARDS/CARD_CATS из src/clicker.ts — менять синхронно (+ cardIcon по id).
