@@ -85,7 +85,24 @@ export async function completeAppLogin(chatId: number, phone: string): Promise<b
 
 const router = Router();
 
-router.post("/auth/start", async (_req, res) => {
+// Rate-limit на выдачу nonce: без него любой может спамить app_login_nonces.
+// 10 запросов/мин на IP; окно скользящее, карта чистится лениво.
+const startHits = new Map<string, number[]>();
+function startRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const arr = (startHits.get(ip) ?? []).filter((t) => now - t < 60_000);
+  if (arr.length >= 10) { startHits.set(ip, arr); return true; }
+  arr.push(now);
+  startHits.set(ip, arr);
+  if (startHits.size > 5000) {
+    for (const [k, v] of startHits) if (!v.some((t) => now - t < 60_000)) startHits.delete(k);
+  }
+  return false;
+}
+
+router.post("/auth/start", async (req, res) => {
+  const ip = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+  if (startRateLimited(ip)) { res.status(429).json({ ok: false, error: "rate_limited" }); return; }
   const nonce = crypto.randomBytes(16).toString("hex");
   await pool.query(`INSERT INTO app_login_nonces (nonce) VALUES ($1)`, [nonce]);
   // Ленивая уборка протухших nonce (дешёвая, раз на выдачу)
@@ -115,8 +132,12 @@ router.get("/lk", async (req, res) => {
   if (!auth) { res.status(401).json({ ok: false, error: "unauthorized" }); return; }
   if (!APP_BRIDGE_URL || !APP_BRIDGE_TOKEN) { res.status(503).json({ ok: false, error: "bridge_not_configured" }); return; }
   try {
+    // Аутентификация к мосту — HMAC-подпись `phone:ts`, а не сырой токен: секрет
+    // не уходит в сеть, подпись живёт 60с и валидна только для этого телефона.
+    const ts = String(Date.now());
+    const sig = crypto.createHmac("sha256", APP_BRIDGE_TOKEN).update(auth.phone + ":" + ts).digest("hex");
     const r = await fetch(`${APP_BRIDGE_URL}/api/app-bridge/lk?phone=${encodeURIComponent(auth.phone)}`, {
-      headers: { "X-Bridge-Token": APP_BRIDGE_TOKEN },
+      headers: { "X-Bridge-Ts": ts, "X-Bridge-Sig": sig },
       signal: AbortSignal.timeout(15000),
     });
     const data = await r.json();
