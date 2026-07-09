@@ -4,7 +4,7 @@
  * лидерборд. Сервер /api/clicker* для авторизованных, localStorage у гостей.
  * ───────────────────────────────────────────────────────────────────────────── */
 (function () {
-  const A = (s) => `/assets/images/cat/${s}?v=20`;  // v20: чистый вырез без светлого ободка
+  const A = (s) => `/assets/images/cat/${s}?v=21`;  // v21: реген stage7/9/16 без «М» на одежде
   const LS = 'maria_click_v2';
   const REGEN = 1.5, PASSIVE_CAP_H = 3, TURBO_MULT = 5, TURBO_SEC = 20, DAILY_BOOSTS = 6;
   // ⚠️ Зеркало CARDS/CARD_CATS из src/clicker.ts — менять синхронно (+ cardIcon по id).
@@ -671,7 +671,7 @@
       .ck-catwrap::before{top:62%;z-index:1}.ck-catwrap::after{bottom:8%;z-index:1}.ck-cat{z-index:2}
       .ck-scene{position:absolute;inset:0;z-index:0;background-position:center center;background-size:cover;background-repeat:no-repeat;filter:brightness(.62) saturate(.92)}
       .ck-scene::after{content:'';position:absolute;inset:0;background:radial-gradient(70% 42% at 50% 46%,transparent,rgba(0,0,0,.34) 100%),linear-gradient(180deg,rgba(0,0,0,.74),rgba(0,0,0,.34) 16%,transparent 38%,transparent 60%,rgba(0,0,0,.52) 88%,rgba(0,0,0,.66))}
-      ${Array.from({ length: 19 }, (_, i) => `.ck-ov[data-tier="${i + 1}"] .ck-scene{background-image:url(/assets/images/scene/career-${i + 1}.webp)}`).join('')}
+      ${Array.from({ length: 19 }, (_, i) => `.ck-ov[data-tier="${i + 1}"] .ck-scene{background-image:url(/assets/images/scene/career-${i + 1}.webp?v=2)}`).join('')}
       #ck-scr-cat>:not(.ck-scene){position:relative;z-index:1}
       .ck-combo{z-index:8;top:13%}
       .ck-lvl{text-shadow:0 1px 4px rgba(0,0,0,.75)}.ck-prog__t{color:#c2c7cf;text-shadow:0 1px 3px rgba(0,0,0,.8)}
