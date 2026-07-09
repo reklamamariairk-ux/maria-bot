@@ -6,7 +6,7 @@
  *      bakery-bg.jpg (кухня) + bg-bedroom/playroom/yard.jpg
  * ───────────────────────────────────────────────────────────────────────────── */
 (function () {
-  const A = (s) => `/assets/images/cat/${s}`;
+  const A = (s) => `/assets/images/cat/${s}?v=2`;  // v2: кадры дома = канон-Василий (фаза 2 арт-комплекта)
   const SVG = (p, s = 18) => `<svg class="pet-i" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
   const PIC = {
     feed:    (s) => SVG('<path d="M4 20h16"/><path d="M6 20V9a6 6 0 0 1 12 0v11"/><path d="M12 3v3"/>', s),   // кекс/еда
@@ -54,7 +54,7 @@
   // Кадры кота рисованы в разном пиксельном масштабе → пер-кадровый коэффициент
   // CSS-высоты (иначе лежачий кот-гигант и мелкий шагающий). Подобрано по монтажу
   // scripts/pet-hat-bake.mjs / _strip*.png.
-  const FRAME_K = { 'full.png': 0.62, 'walk1.png': 1.10, 'walk2.png': 1.10, 'walk3.png': 1.10, 'walk4.png': 1.10 };
+  const FRAME_K = { 'full.png': 0.60, 'happy.png': 1.08, 'walk1.png': 0.78, 'walk2.png': 0.78, 'walk3.png': 0.78, 'walk4.png': 0.78 };
   const CAT_H = 46;      // базовая высота кота, % высоты сцены
   const CAT_MAXH = 320;  // базовый потолок высоты, px
   const HAT_PAD = 1.25;  // у шляпных webp-кадров холст выше на 25% (запас под шляпу)
