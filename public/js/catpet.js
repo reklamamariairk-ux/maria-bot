@@ -81,12 +81,15 @@
       el.style.maxHeight = Math.round(CAT_MAXH * k) + 'px';
     };
     if (!changing) { applySize(); return; } // тот же кадр уже на экране — высота уже верная
+    if (el.dataset.pendingFrame === frame) return; // decode этого кадра уже в полёте (rAF-цикл ходьбы зовёт нас ~60/с)
+    el.dataset.pendingFrame = frame;
     // Новый кадр: меняем src и высоту ТОЛЬКО когда картинка уже декодирована — иначе
     // старый кадр на миг растягивается в чужой масштаб (жалоба «кот дёргается»).
     const my = ++frameSeq;
     const pre = new Image();
     pre.src = full;
     const swap = () => {
+      if (el.dataset.pendingFrame === frame) delete el.dataset.pendingFrame;
       if (my !== frameSeq || el.dataset.frame !== frame) return; // запросили другой кадр раньше, чем этот успел
       el.src = full;
       applySize();
