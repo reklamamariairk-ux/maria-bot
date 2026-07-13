@@ -22,6 +22,7 @@
      App.allowMessages()        VK: запрос разрешения сообщений сообщества
      App.verifyPhoneVk()        VK: GetPhoneNumber → POST /api/vk/verify-phone
      App.main / App.back        = tgMain / tgBack
+     App.close()                закрыть Mini App (TG close / VK VKWebAppClose; guest no-op)
 */
 (function(){
   // ─── Детекция платформы ────────────────────────────────────────────────────
@@ -374,6 +375,12 @@
       } catch {
         return { ok: false, error: 'network' };
       }
+    },
+
+    /** Закрыть Mini App (используется pure-режимом game.html). Гость — no-op. */
+    close() {
+      if (PLATFORM === 'tg' && tg?.close) { try { tg.close(); return; } catch {} }
+      if (PLATFORM === 'vk' && _vkBridge) { try { _vkBridge.send('VKWebAppClose', { status: 'success' }); } catch {} }
     },
 
     main: window.tgMain,
