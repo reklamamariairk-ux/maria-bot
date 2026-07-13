@@ -113,7 +113,7 @@
       if (attempts >= 2) return;
       attempts++;
       const failedSrc = el.src;
-      setTimeout(() => { if (el.src === failedSrc) el.src = failedSrc; }, attempts === 1 ? 1000 : 3000);
+      setTimeout(() => { if (el.src === failedSrc) { el.removeAttribute('src'); el.src = failedSrc; } }, attempts === 1 ? 1000 : 3000); // сброс атрибута — иначе одинаковый src не перезапускает загрузку
     });
   }
 
