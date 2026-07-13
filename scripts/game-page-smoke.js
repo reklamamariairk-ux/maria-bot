@@ -1,4 +1,5 @@
 /* Смоук game.html (pure) + регресс index.html (гость). Запуск: node scripts/game-page-smoke.js */
+/* Зависимость не в package.json (не тащим в прод-образ): перед запуском `npm i --no-save playwright` + `npx playwright install chromium`. */
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
