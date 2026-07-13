@@ -4,6 +4,7 @@
  * дневной кап + личный рекорд). Работает в TG и VK, гость может играть.
  * ───────────────────────────────────────────────────────────────────────── */
 (function () {
+  const PURE = document.documentElement.classList.contains('ck-pure');
   const GAME_KEY = 'cat_catch';
   const CAT_SRC = '/assets/images/cat-mascot-cut.png';
   const LIVES = 3;
@@ -243,12 +244,14 @@
           body: JSON.stringify({ game: GAME_KEY, score: state.score }),
         });
         const d = await r.json();
-        if (d.gated) rewardLine = '🔓 Подтверди номер в Профиле — и за игру будут капать звёзды.';
+        if (PURE) {
+          // pure-режим: без клубных звёзд/CTA в UI, рекорд уже показан в тексте ниже
+        } else if (d.gated) rewardLine = '🔓 Подтверди номер в Профиле — и за игру будут капать звёзды.';
         else if (d.starsAwarded > 0) rewardLine = `⭐ +${d.starsAwarded} ${d.capped ? '(дневной лимит достигнут)' : ''}`;
         else if (d.capped) rewardLine = '⭐ Дневной лимит звёзд достигнут — рекорд засчитан!';
-        if (typeof d.balance?.stars === 'number') rewardLine += rewardLine ? ` · всего ⭐ ${d.balance.stars}` : `Всего ⭐ ${d.balance.stars}`;
+        if (!PURE && typeof d.balance?.stars === 'number') rewardLine += rewardLine ? ` · всего ⭐ ${d.balance.stars}` : `Всего ⭐ ${d.balance.stars}`;
       } catch (_) {}
-    } else {
+    } else if (!PURE) {
       rewardLine = 'Открой игру через приложение «Марии» — и за рекорды будут звёзды.';
     }
 

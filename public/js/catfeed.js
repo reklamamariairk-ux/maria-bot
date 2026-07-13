@@ -5,6 +5,7 @@
  * Ассеты: /assets/images/cat/{idle,open,chew,happy,hungry,full}.png + bakery-bg.jpg
  * ───────────────────────────────────────────────────────────────────────────── */
 (function () {
+  const PURE = document.documentElement.classList.contains('ck-pure');
   const GAME_KEY = 'cat_feed';
   const DUR = 60;
   const ASSET = (s) => `/assets/images/cat/${s}.png`;
@@ -244,12 +245,14 @@
       try {
         const resp = await fetch('/api/game-result', { method: 'POST', headers: { 'Content-Type': 'application/json', ...App.authHeader() }, body: JSON.stringify({ game: GAME_KEY, score: r.score }) });
         const d = await resp.json();
-        if (d.gated) reward = '🔓 Подтверди номер в Профиле — и за игру будут звёзды.';
+        if (PURE) {
+          // pure-режим: без клубных звёзд/CTA в UI, рекорд уже показан в тексте ниже
+        } else if (d.gated) reward = '🔓 Подтверди номер в Профиле — и за игру будут звёзды.';
         else if (d.starsAwarded > 0) reward = `⭐ +${d.starsAwarded}${d.capped ? ' (дневной лимит)' : ''}`;
         else if (d.capped) reward = '⭐ Дневной лимит звёзд достигнут — рекорд засчитан!';
-        if (typeof d.balance?.stars === 'number') reward += (reward ? ' · ' : '') + `всего ⭐ ${d.balance.stars}`;
+        if (!PURE && typeof d.balance?.stars === 'number') reward += (reward ? ' · ' : '') + `всего ⭐ ${d.balance.stars}`;
       } catch (_) {}
-    } else reward = 'Открой через приложение «Марии» — и получай звёзды за рекорды.';
+    } else if (!PURE) reward = 'Открой через приложение «Марии» — и получай звёзды за рекорды.';
     const panel = root.querySelector('.cf2-panel');
     panel.innerHTML = `
       <div class="cf2-big">${r.isRec ? '🏆' : '😻'}</div>

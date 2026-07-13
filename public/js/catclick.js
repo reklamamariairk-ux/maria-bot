@@ -1324,17 +1324,18 @@
     const list = ov.querySelector('#ck-toplist'); const rank = ov.querySelector('#ck-myrank');
     const left = fmtDur(seasonEndsTs() - Date.now());
     const brag = `<button class="ck-card__buy" id="ck-brag" style="width:100%;justify-content:center;margin-bottom:12px">${ICON.trophy(15)} Похвастаться карточкой</button>`;
+    const ref = PURE ? refCard('ck-invite2') : '';
     const sq = await squadBlock();
-    const wire = () => { const bb = ov.querySelector('#ck-brag'); if (bb) bb.onclick = shareCard; sq.wire(); };
-    if (!authed()) { rank.textContent = `Сезон недели · до сброса ${left}`; list.innerHTML = brag + sq.html + '<div class="ck-sect">Топ недели</div>' + emptyState(ICON.trophy(30), 'Личный рейтинг закрыт', 'Войди через приложение «Мария» — копи монеты и попадай в топ недели.'); wire(); return; }
-    list.innerHTML = brag + sq.html + '<div class="ck-sect">Топ недели</div>' + skelRows(5); wire();
+    const wire = () => { const bb = ov.querySelector('#ck-brag'); if (bb) bb.onclick = shareCard; const inv = ov.querySelector('#ck-invite2'); if (inv) inv.onclick = shareRef; sq.wire(); };
+    if (!authed()) { rank.textContent = `Сезон недели · до сброса ${left}`; list.innerHTML = brag + ref + sq.html + '<div class="ck-sect">Топ недели</div>' + emptyState(ICON.trophy(30), 'Личный рейтинг закрыт', PURE ? 'Открой игру в Telegram — копи монеты и попадай в топ недели.' : 'Войди через приложение «Мария» — копи монеты и попадай в топ недели.'); wire(); return; }
+    list.innerHTML = brag + ref + sq.html + '<div class="ck-sect">Топ недели</div>' + skelRows(5); wire();
     const d = await loadTop();
     const ends = d && d.seasonEndsTs ? fmtDur(d.seasonEndsTs - Date.now()) : left;
     rank.textContent = `Сезон недели · до сброса ${ends}` + (d && d.myRank ? ` · ты #${d.myRank}` : '');
-    const wk = weeklyPrizeCard(d && d.weekly);
+    const wk = PURE ? '' : weeklyPrizeCard(d && d.weekly);
     const head = '<div class="ck-sect">Топ недели</div>';
-    if (!d || !d.top || !d.top.length) { list.innerHTML = brag + wk + sq.html + head + emptyState(ICON.trophy(30), 'Сезон только начался', 'Заработай монеты и стань первым в топе недели!'); wire(); return; }
-    list.innerHTML = brag + wk + sq.html + head + d.top.map((r, i) => `<div class="ck-row${r.me ? ' me' : ''}"><div class="r">${i < 3 ? ICON.medal(20) : i + 1}</div><div class="n">${(r.name || '').replace(/</g, '&lt;')}${r.prestige > 0 ? ` <span class="ck-pbadge ck-pbadge--sm">★${r.prestige}</span>` : ''}</div><div class="v">${COIN(14)} ${fmt(r.total)}</div></div>`).join('');
+    if (!d || !d.top || !d.top.length) { list.innerHTML = brag + ref + wk + sq.html + head + emptyState(ICON.trophy(30), 'Сезон только начался', 'Заработай монеты и стань первым в топе недели!'); wire(); return; }
+    list.innerHTML = brag + ref + wk + sq.html + head + d.top.map((r, i) => `<div class="ck-row${r.me ? ' me' : ''}"><div class="r">${i < 3 ? ICON.medal(20) : i + 1}</div><div class="n">${(r.name || '').replace(/</g, '&lt;')}${r.prestige > 0 ? ` <span class="ck-pbadge ck-pbadge--sm">★${r.prestige}</span>` : ''}</div><div class="v">${COIN(14)} ${fmt(r.total)}</div></div>`).join('');
     wire();
   }
   function weeklyPrizeCard(w) {
@@ -1358,7 +1359,7 @@
   async function squadBlock() {
     if (!authed()) {
       const chips = SQUADS.map(s => `<button class="ck-cat-chip" disabled>${s.name}</button>`).join('');
-      return { html: `<div class="ck-sect">Команды</div><div class="ck-cats">${chips}</div><div style="color:var(--muted);font-size:12px;text-align:center;margin:2px 0 6px">Войди через «Марию» — вступай в команду и тащи её в топ</div>`, wire: () => {} };
+      return { html: `<div class="ck-sect">Команды</div><div class="ck-cats">${chips}</div><div style="color:var(--muted);font-size:12px;text-align:center;margin:2px 0 6px">${PURE ? 'Открой игру в Telegram — вступай в команду и тащи её в топ' : 'Войди через «Марию» — вступай в команду и тащи её в топ'}</div>`, wire: () => {} };
     }
     const d = await api('/api/clicker/squads').catch(() => null);
     if (!d || !d.squads) return { html: '', wire: () => {} };
@@ -1380,6 +1381,16 @@
     const link = refLink();
     const txt = `🐱 Играю в «Котик Комбат» от кондитерской «Мария» — тапай котика и качай уровни! Заходи по ссылке, нам обоим дадут монеты 🪙 ${link}`;
     if (window.App && App.share) App.share(txt); else if (navigator.share) navigator.share({ text: txt }).catch(() => {}); else if (window.App && App.openExternal) App.openExternal(link);
+  }
+  // Карточка «Пригласи друзей». Вынесена, т.к. в PURE нужна и в Задании (скрыты),
+  // и в Рейтинге (доступен) — id параметризован, чтобы избежать дубля #ck-invite
+  // в DOM (оба контейнера ck-scr-tasks/ck-scr-top существуют одновременно).
+  function refCard(idAttr) {
+    const refCount = (st && st.referrals) || 0;
+    return `<div class="ck-card" style="background:linear-gradient(90deg,rgba(238,191,82,.18),rgba(238,191,82,.05))">
+      <div class="ck-card__ic">${ICON.users(26)}</div><div class="ck-card__b"><div class="ck-card__n">Пригласи друзей</div>
+      <div class="ck-card__s">Друзей: ${refCount} · +${fmt(REF_REFERRER)} ${COIN(13)} тебе и +${fmt(REF_INVITEE)} другу</div></div>
+      <button class="ck-card__buy" id="${idAttr || 'ck-invite'}">Позвать</button></div>`;
   }
   // Надёжная регистрация реферала: ловим код из startParam → сохраняем; флаг
   // «выполнено» ставим ТОЛЬКО после успеха сервера → при сбое повтор на след. заходе.
@@ -1449,11 +1460,7 @@
   async function renderTasks() {
     const list = ov.querySelector('#ck-taskslist');
     if (authed()) list.innerHTML = skelRows(6);
-    const refCount = (st && st.referrals) || 0;
-    const refBlock = `<div class="ck-card" style="background:linear-gradient(90deg,rgba(238,191,82,.18),rgba(238,191,82,.05))">
-      <div class="ck-card__ic">${ICON.users(26)}</div><div class="ck-card__b"><div class="ck-card__n">Пригласи друзей</div>
-      <div class="ck-card__s">Друзей: ${refCount} · +${fmt(REF_REFERRER)} ${COIN(13)} тебе и +${fmt(REF_INVITEE)} другу</div></div>
-      <button class="ck-card__buy" id="ck-invite">Позвать</button></div>`;
+    const refBlock = refCard();
     let tasks;
     if (authed()) { const d = await api('/api/clicker/tasks').catch(() => null); tasks = d && d.tasks; }
     else tasks = guestTaskList();
@@ -1603,7 +1610,7 @@
     t.innerHTML = `<div class="ck-tut__card">
       <div class="ck-tut__ic">${ICON.paw(36)}</div>
       <h3>Котик Комбат</h3>
-      <div class="ck-tut__sub">Помоги котику дорасти от подвала до тронного зала — 19 уровней и реальные награды «Марии».</div>
+      <div class="ck-tut__sub">${PURE ? 'Помоги котику дорасти от подвала до тронного зала — 19 уровней.' : 'Помоги котику дорасти от подвала до тронного зала — 19 уровней и реальные награды «Марии».'}</div>
       <div class="ck-tut__step"><div class="si">${ICON.paw(20)}</div><div><div class="st">Тапай котика</div><div class="sd">Каждый тап — монеты, лови комбо ×N</div></div></div>
       <div class="ck-tut__step"><div class="si">${ICON.shop(20)}</div><div><div class="st">Заводи бизнесы</div><div class="sd">В «Прокачке» — монеты копятся сами, даже офлайн</div></div></div>
       <div class="ck-tut__step"><div class="si">${ICON.gift(20)}</div><div><div class="st">Заходи каждый день</div><div class="sd">${PURE ? 'Ежедневные награды, комбо дня и шифр' : 'Награды, комбо дня и баллы на карту «Марии»'}</div></div></div>
