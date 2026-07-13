@@ -380,7 +380,7 @@
     /** Закрыть Mini App (используется pure-режимом game.html). Гость — no-op. */
     close() {
       if (PLATFORM === 'tg' && tg?.close) { try { tg.close(); return; } catch {} }
-      if (PLATFORM === 'vk' && _vkBridge) { try { _vkBridge.send('VKWebAppClose', { status: 'success' }); } catch {} }
+      if (PLATFORM === 'vk' && _vkBridge) { _vkBridge.send('VKWebAppClose', { status: 'success' }).catch(() => {}); }
     },
 
     main: window.tgMain,

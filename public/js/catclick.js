@@ -1303,7 +1303,7 @@
   function renderDove() {
     const list = ov.querySelector('#ck-dovelist'); if (!st) { list.innerHTML = ''; return; }
     const owned = st.cards.filter(c => c.level > 0).length, total = st.cards.length;
-    let h = `<div style="text-align:center;color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.5">Собери всех помощников кота — <b style="color:var(--gold-l)">${owned}/${total}</b>. Заводи бизнесы в «Прокачке»; награды за комплект — в «Заданиях» → Достижения.</div>`;
+    let h = `<div style="text-align:center;color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.5">Собери всех помощников кота — <b style="color:var(--gold-l)">${owned}/${total}</b>. Заводи бизнесы в «Прокачке»; ${PURE ? 'награды за комплект — игровые монеты' : 'награды за комплект — в «Заданиях» → Достижения'}.</div>`;
     for (const ct of CARD_CATS) {
       const cards = st.cards.filter(c => c.cat === ct.id); const got = cards.filter(c => c.level > 0).length;
       h += `<div class="ck-sect">${ct.name} · ${got}/${cards.length}</div><div class="ck-dovegrid">`;
