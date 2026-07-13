@@ -80,29 +80,36 @@
 
   let ov, state, loc = 'kitchen', cat = { x: 0.5, dir: 1, vx: 0.04, mode: 'walk', frame: 0, t: 0, busy: false };
   let raf, lastTs = 0, walkImgs = [];
+  let memState = null; // in-memory фолбэк локального состояния — переживает сломанный/недоступный localStorage
 
   // ── Состояние: сервер или localStorage ──────────────────────────────────────
   function authed() { return !!(window.App && App.isAuthed && App.isAuthed()); }
   function localDefault() { return { hunger: 80, mood: 80, energy: 80, hygiene: 80, level: 1, xp: 0, xpNext: 100, coins: 0, location: 'kitchen', items: { owned: [], equipped: null }, care_streak: 0, care_date: null, _ts: Date.now() }; }
+  // Best-effort обёртки над localStorage — в кривых webview getItem/setItem кидают, это не должно валить игру.
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
   function localGet() {
-    let s; try { s = JSON.parse(localStorage.getItem(LS)); } catch (_) {}
-    if (!s) s = localDefault();
+    let s; try { s = JSON.parse(lsGet(LS)); } catch (_) {}
+    // Хранилище недоступно/пусто/битое — берём последнее известное состояние из памяти,
+    // а не localDefault() (иначе прогресс визуально «не растёт»: каждое действие стартует с нуля).
+    if (!s) s = memState || localDefault();
     if (!s.items) s.items = { owned: [], equipped: null };
     const hrs = Math.max(0, (Date.now() - (s._ts || Date.now())) / 3600000);
     const dec = { hunger: 6, mood: 4, energy: 3, hygiene: 2.5 };
     ['hunger', 'mood', 'energy', 'hygiene'].forEach(k => s[k] = Math.max(0, Math.min(100, Math.round(s[k] - dec[k] * hrs))));
     s.careStreak = s.care_streak || 0;  // гостевой стрик: snake→camel для renderNeeds
-    s._ts = Date.now(); localStorage.setItem(LS, JSON.stringify(s));
+    s._ts = Date.now();
+    memState = s; lsSet(LS, JSON.stringify(s));
     return s;
   }
   function localBuy(id) {
     const s = localGet(); const it = HAT(id); if (!it) return s;
     if (!s.items.owned.includes(id) && s.coins >= it.price) { s.coins -= it.price; s.items.owned.push(id); }
-    localStorage.setItem(LS, JSON.stringify(s)); return s;
+    memState = s; lsSet(LS, JSON.stringify(s)); return s;
   }
   function localEquip(id) {
     const s = localGet(); s.items.equipped = (id && s.items.owned.includes(id)) ? id : null;
-    localStorage.setItem(LS, JSON.stringify(s)); return s;
+    memState = s; lsSet(LS, JSON.stringify(s)); return s;
   }
   function localAction(action) {
     const s = localGet();
@@ -121,36 +128,46 @@
     }
     s.careStreak = s.care_streak;  // для единообразия с сервером
     s._streakBonus = sb;
-    s._ts = Date.now(); localStorage.setItem(LS, JSON.stringify(s)); return s;
+    s._ts = Date.now();
+    memState = s; lsSet(LS, JSON.stringify(s)); return s;
   }
   async function api(path, opts) {
     const r = await fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', ...(App.authHeader ? App.authHeader() : {}) } });
+    if (!r.ok) throw new Error('http ' + r.status);
     return r.json();
   }
   async function loadState() { state = authed() ? await api('/api/pet') : localGet(); loc = state.location && LOC[state.location] ? state.location : 'kitchen'; }
   async function doAction(action) {
     let bonus = 0;
-    if (authed()) {
-      try {
-        const resp = await api('/api/pet/action', { method: 'POST', body: JSON.stringify({ action }) });
-        state = resp; bonus = Number(resp.streakBonus || 0);
-      } catch (_) {}
-    } else {
-      state = localAction(action);
-      bonus = Number(state._streakBonus || 0);
+    try {
+      if (authed()) {
+        try {
+          const resp = await api('/api/pet/action', { method: 'POST', body: JSON.stringify({ action }) });
+          state = resp; bonus = Number(resp.streakBonus || 0);
+        } catch (_) { showSyncFail(); }
+      } else {
+        // localAction никогда не кидает (localGet/lsSet — best-effort), но подстрахуемся ещё раз.
+        try { state = localAction(action); bonus = Number((state && state._streakBonus) || 0); }
+        catch (_) { state = state || memState || localDefault(); }
+      }
+    } finally {
+      // Перерисовка ОБЯЗАНА произойти всегда — иначе экран замирает до следующего действия.
+      renderNeeds();
+      renderGift(state);
     }
-    renderNeeds();
-    renderGift(state);
     if (bonus > 0) showCareBonus(bonus, state.careStreak);
   }
-  function showCareBonus(bonus, streak) {
+  function showToast(html) {
+    if (!ov) return;
     let t = ov.querySelector('#pet-toast');
     if (!t) { t = document.createElement('div'); t.id = 'pet-toast'; t.className = 'pet-toast'; ov.appendChild(t); }
-    t.innerHTML = 'Василий рад! Забота ' + streak + ' дн. подряд · +' + bonus + ' монет';
+    t.innerHTML = html;
     t.classList.add('on');
     clearTimeout(t._tm); t._tm = setTimeout(() => t.classList.remove('on'), 2600);
   }
-  async function saveLoc() { if (authed()) { api('/api/pet/location', { method: 'POST', body: JSON.stringify({ location: loc }) }).catch(() => {}); } else { const s = localGet(); s.location = loc; localStorage.setItem(LS, JSON.stringify(s)); } }
+  function showCareBonus(bonus, streak) { showToast('Василий рад! Забота ' + streak + ' дн. подряд · +' + bonus + ' монет'); }
+  function showSyncFail() { showToast('Нет связи — прогресс не сохранён'); }
+  async function saveLoc() { if (authed()) { api('/api/pet/location', { method: 'POST', body: JSON.stringify({ location: loc }) }).catch(() => {}); } else { const s = localGet(); s.location = loc; memState = s; lsSet(LS, JSON.stringify(s)); } }
   async function buyItem(id) {
     if (authed()) { try { const r = await api('/api/pet/buy', { method: 'POST', body: JSON.stringify({ item: id }) }); if (!r.error) state = r; } catch (_) {} }
     else state = localBuy(id);

@@ -4,6 +4,9 @@
  * лидерборд. Сервер /api/clicker* для авторизованных, localStorage у гостей.
  * ───────────────────────────────────────────────────────────────────────────── */
 (function () {
+  // Диагностика (startapp=debug / 7 тапов по бейджу уровня) — копим последние ошибки страницы.
+  const ckDiagErrors = [];
+  window.addEventListener('error', (e) => { if (ckDiagErrors.length < 5) ckDiagErrors.push(String((e && e.message) || e)); });
   const A = (s) => `/assets/images/cat/${s}?v=25`;  // v25: анатомия — 4 лапы у всех (реген 2/6/8/10/14/15/17/18), кулон вместо «М»-медальона
   const LS = 'maria_click_v2';
   const REGEN = 1.5, PASSIVE_CAP_H = 3, TURBO_MULT = 5, TURBO_SEC = 20, DAILY_BOOSTS = 6;
@@ -794,6 +797,7 @@
     ov.querySelector('#ck-bt-energy').onclick = () => boost('energy');
     ov.querySelector('#ck-prestige').onclick = prestigeConfirm;
     ov.querySelectorAll('.ck-nav__b').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+    ckDiagWireTapTrigger();
   }
 
   function setTab(t) {
@@ -1884,8 +1888,81 @@
   // друг перешёл по ckref-ссылке → бонус начислится, даже если в игру он не зайдёт.
   function refBootstrap() { try { if (window.App && App.ready && App.ready.then) App.ready.then(() => ensureRefRegistered()); else ensureRefRegistered(); } catch (_) { ensureRefRegistered(); } }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(refBootstrap, 1500)); else setTimeout(refBootstrap, 1500);
+  // ── Диагностическая панель (startapp=debug ИЛИ 7 тапов по бейджу уровня) ─────
+  // Ничего никуда не отправляет — только показывает на экране сведения о платформе/
+  // хранилищах/сети, чтобы разобраться, почему у гостя не сохраняется прогресс.
+  function ckDiagLine(k, v) { return '<div>' + k + ': ' + v + '</div>'; }
+  function ckDiag() {
+    if (document.getElementById('ck-diag')) return; // уже открыта
+    const panel = document.createElement('div');
+    panel.id = 'ck-diag';
+    panel.style.cssText = 'position:fixed;top:8px;left:8px;right:8px;z-index:99999;max-width:480px;margin:0 auto;'
+      + 'background:rgba(10,8,6,.94);color:#9fe870;font:11px/1.5 "JetBrains Mono",monospace;padding:10px 12px;'
+      + 'border-radius:10px;max-height:80vh;overflow:auto;white-space:pre-wrap;word-break:break-all;box-shadow:0 8px 24px rgba(0,0,0,.5)';
+    document.body.appendChild(panel);
+    const body = document.createElement('div'); panel.appendChild(body);
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'закрыть';
+    closeBtn.style.cssText = 'margin-top:8px;padding:5px 12px;border:none;border-radius:8px;background:#9fe870;color:#0e0a09;font:700 11px inherit;cursor:pointer';
+    closeBtn.onclick = () => panel.remove();
+    panel.appendChild(closeBtn);
+
+    const st_ = {
+      platform: '…', initLen: '…', authed: '…', ss: '…', ls: '…',
+      clicker: '…', pet: '…', ver: 'catclick v105', errors: '…',
+    };
+    function render() {
+      body.innerHTML = ''
+        + ckDiagLine('platform', st_.platform)
+        + ckDiagLine('initData len', st_.initLen)
+        + ckDiagLine('authed', st_.authed)
+        + ckDiagLine('sessionStorage', st_.ss)
+        + ckDiagLine('localStorage', st_.ls)
+        + ckDiagLine('GET /api/clicker', st_.clicker)
+        + ckDiagLine('GET /api/pet', st_.pet)
+        + ckDiagLine('ver', st_.ver)
+        + ckDiagLine('errors', st_.errors);
+    }
+    st_.platform = (window.App && App.platform) || 'н/д';
+    st_.initLen = String(((window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) || '').length);
+    st_.authed = String(!!(window.App && App.isAuthed && App.isAuthed()));
+    try { sessionStorage.setItem('ck_diag', '1'); sessionStorage.removeItem('ck_diag'); st_.ss = 'ok'; }
+    catch (e) { st_.ss = 'FAIL ' + (e && e.message); }
+    try { localStorage.setItem('ck_diag', '1'); localStorage.removeItem('ck_diag'); st_.ls = 'ok'; }
+    catch (e) { st_.ls = 'FAIL ' + (e && e.message); }
+    st_.errors = ckDiagErrors.length ? ckDiagErrors.join(' | ') : '—';
+    render();
+
+    const hdr = (window.App && App.authHeader) ? App.authHeader() : {};
+    fetch('/api/clicker', { headers: hdr }).then(r => { st_.clicker = String(r.status); render(); }).catch(e => { st_.clicker = 'ERR ' + (e && e.message); render(); });
+    fetch('/api/pet', { headers: hdr }).then(r => { st_.pet = String(r.status); render(); }).catch(e => { st_.pet = 'ERR ' + (e && e.message); render(); });
+    // ещё раз обновим errors чуть позже — на случай, если что-то упало во время самой диагностики
+    setTimeout(() => { st_.errors = ckDiagErrors.length ? ckDiagErrors.join(' | ') : '—'; render(); }, 500);
+  }
+  // 7 быстрых тапов по бейджу уровня (#ck-lvl) — фолбэк на случай, если диплинк не передал start_param.
+  function ckDiagWireTapTrigger() {
+    const el = ov && ov.querySelector('#ck-lvl'); if (!el) return;
+    let n = 0, tm = null;
+    el.addEventListener('click', () => {
+      n++; clearTimeout(tm); tm = setTimeout(() => { n = 0; }, 3000);
+      if (n >= 7) { n = 0; ckDiag(); }
+    });
+  }
   // Deep-link из пуша-возврата (?startapp=click) → сразу открываем игру.
-  function clickAutoOpen() { try { const sp = (window.App && App.startParam && App.startParam()) || ''; const gf = document.documentElement.classList.contains('ck-gamefirst'); if (sp === 'click' || sp === 'game' || gf) { try { window.catClickOpen(); } catch (_) {} } } catch (_) {} }
+  function clickAutoOpen() {
+    try {
+      const sp = (window.App && App.startParam && App.startParam()) || '';
+      let qsp = ''; try { qsp = new URLSearchParams(location.search).get('startapp') || ''; } catch (_) {}
+      const gf = document.documentElement.classList.contains('ck-gamefirst');
+      const isDebug = sp === 'debug' || qsp === 'debug';
+      if (sp === 'click' || sp === 'game' || gf || isDebug) {
+        try {
+          const p = window.catClickOpen && window.catClickOpen();
+          if (isDebug) Promise.resolve(p).then(() => ckDiag(), () => ckDiag());
+        } catch (_) { if (isDebug) { try { ckDiag(); } catch (_) {} } }
+      }
+    } catch (_) {}
+  }
   function clickBootstrap() { try { if (window.App && App.ready && App.ready.then) App.ready.then(clickAutoOpen); else clickAutoOpen(); } catch (_) { clickAutoOpen(); } }
   // Гейм-first (сплэш уже на экране, магазин под ним): открываем игру сразу, без задержки-«моргания».
   const _ckGameFirst = document.documentElement.classList.contains('ck-gamefirst');
