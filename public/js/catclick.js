@@ -57,6 +57,8 @@
   const REF_REFERRER = 5000, REF_INVITEE = 2500, BOT = 'mariatortik_bot';
   // Соцссылки «Марии» — зеркало SOCIAL в src/clicker.ts (менять синхронно). Пустая = задание скрыто.
   const SOCIAL = { review: 'https://yandex.ru/maps/?text=Мария кондитерская Иркутск', vk: '', tg: '' };
+  // Режим «чистой игры» (game.html): вся коммерция скрыта. См. спеку 2026-07-13.
+  const PURE = document.documentElement.classList.contains('ck-pure');
   const TASKS = [
     { id: 'site', name: 'Заглянуть на сайт «Мария»', icon: '🌐', reward: 1500, type: 'link', link: 'https://www.maria-irk.ru/' },
     { id: 'review', name: 'Оставить отзыв о «Марии»', icon: '⭐', reward: 5000, type: 'link', link: SOCIAL.review },
@@ -392,6 +394,7 @@
   async function load() { let q = ''; try { const sp = (window.App && App.startParam && App.startParam()) || ''; const m = /^src[_-]([a-zA-Z0-9_-]{1,32})/.exec(sp); if (m) q = '?source=' + encodeURIComponent(m[1]); } catch (_) {} st = authed() ? await api('/api/clicker' + q).catch(() => guestDerive()) : guestDerive(); turboUntil = Date.now() + (st.turboMsLeft || 0); }
   // T5: welcome-промокод новичку (первая победа). Показ 1 раз; сервер решает eligibility.
   async function maybeWelcomePromo() {
+    if (PURE) return;
     if (!authed()) return;
     try {
       const d = await api('/api/clicker/welcome').catch(() => null);
@@ -778,7 +781,13 @@
         <button class="ck-nav__b" data-tab="top">${ICON.trophy(21)}Рейтинг</button>
       </div>`;
     document.body.appendChild(ov);
-    ov.querySelector('#ck-x').onclick = close;
+    const xBtn = ov.querySelector('#ck-x');
+    if (PURE) {
+      // Выходить «в магазин» некуда: в Mini App крестик закрывает приложение, в госте скрыт.
+      if (window.App && App.platform !== 'guest') xBtn.onclick = () => { try { App.close(); } catch (_) {} };
+      else xBtn.style.display = 'none';
+    } else xBtn.onclick = close;
+    if (PURE) { const tb = ov.querySelector('.ck-nav__b[data-tab="tasks"]'); if (tb) tb.style.display = 'none'; }
     ov.querySelector('#ck-cat').addEventListener('pointerdown', onTap);
     ov.querySelector('#ck-daily').onclick = dailyBtn;
     ov.querySelector('#ck-bt-turbo').onclick = () => boost('turbo');
@@ -788,6 +797,7 @@
   }
 
   function setTab(t) {
+    if (PURE && t === 'tasks') t = 'cat';
     if (t === 'home') { window.haptic && window.haptic('light'); try { window.catPetOpen && window.catPetOpen(); } catch (_) {} return; }
     tab = t;
     ov.querySelector('#ck-scr-cat').classList.toggle('on', t === 'cat');
@@ -1247,7 +1257,7 @@
     if (!ov || !st) return; const list = ov.querySelector('#ck-uplist');
     const biz = (cat, art, name, metaHtml, buyHtml, idx) => `<div class="ck-biz cat-${cat.replace(' locked', '')}${cat.includes('locked') ? ' locked' : ''}" style="animation-delay:${(idx * 0.035).toFixed(2)}s"><div class="ck-biz__art">${art}</div><div class="ck-biz__b"><div class="ck-biz__n">${name}</div><div class="ck-biz__meta">${metaHtml}</div></div>${buyHtml}</div>`;
     const buyBtn = (price, dis, act, id) => `<button class="ck-biz__buy" data-act="${act}" data-id="${id || ''}" ${dis ? 'disabled' : ''}>${COIN(15)} ${fmt(price)}</button>`;
-    let h = rewardsBlock();
+    let h = PURE ? '' : rewardsBlock();
     h += '<div class="ck-sect">Бусты</div>';
     h += biz('boost', cardArt('multitap'), 'Мультитап', `<span class="ck-biz__lvl">+1 за тап</span><span class="ck-biz__prof">сейчас +${st.perTap}</span>`, buyBtn(st.multitapPrice, st.balance < st.multitapPrice, 'multitap'), 0);
     h += biz('boost', cardArt('energy'), 'Запас энергии', `<span class="ck-biz__lvl">+500 энергии</span><span class="ck-biz__prof">сейчас ${st.energyMax}</span>`, buyBtn(st.energyPrice, st.balance < st.energyPrice, 'energy'), 1);
@@ -1394,6 +1404,7 @@
   }
   // Реальные покупки у «Марии» → игровые монеты (за новые траты, троттлинг на сервере).
   async function maybePurchaseBonus() {
+    if (PURE) return;
     try {
       if (!authed()) return;
       const d = await api('/api/clicker/purchase-sync', { method: 'POST', body: '{}' }).catch(() => null);
@@ -1595,7 +1606,7 @@
       <div class="ck-tut__sub">Помоги котику дорасти от подвала до тронного зала — 19 уровней и реальные награды «Марии».</div>
       <div class="ck-tut__step"><div class="si">${ICON.paw(20)}</div><div><div class="st">Тапай котика</div><div class="sd">Каждый тап — монеты, лови комбо ×N</div></div></div>
       <div class="ck-tut__step"><div class="si">${ICON.shop(20)}</div><div><div class="st">Заводи бизнесы</div><div class="sd">В «Прокачке» — монеты копятся сами, даже офлайн</div></div></div>
-      <div class="ck-tut__step"><div class="si">${ICON.gift(20)}</div><div><div class="st">Заходи каждый день</div><div class="sd">Награды, комбо дня и баллы на карту «Марии»</div></div></div>
+      <div class="ck-tut__step"><div class="si">${ICON.gift(20)}</div><div><div class="st">Заходи каждый день</div><div class="sd">${PURE ? 'Ежедневные награды, комбо дня и шифр' : 'Награды, комбо дня и баллы на карту «Марии»'}</div></div></div>
       <button class="ck-tut__go" id="ck-tut-go">Поехали!</button></div>`;
     ov.appendChild(t);
     t.querySelector('#ck-tut-go').onclick = () => { try { localStorage.setItem('ck_tut_v1', '1'); } catch (e) {} t.remove(); window.haptic && window.haptic('light'); };
