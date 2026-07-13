@@ -83,6 +83,19 @@
     catEl.style.maxWidth = '96%';  // страховка для очень широких кадров на узких экранах
     catEl.style.maxHeight = 'none';
   }
+  // ── Ретрай при сетевом сбое («кот не прогружается») — до 2 повторов с бэкофом 1с/3с ──
+  function attachCatRetry(el) {
+    if (el._retryBound) return; el._retryBound = true;
+    let attempts = 0, curSrc = '';
+    el.addEventListener('load', () => { attempts = 0; });
+    el.addEventListener('error', () => {
+      if (el.src !== curSrc) { curSrc = el.src; attempts = 0; }
+      if (attempts >= 2) return;
+      attempts++;
+      const failedSrc = el.src;
+      setTimeout(() => { if (el.src === failedSrc) el.src = failedSrc; }, attempts === 1 ? 1000 : 3000);
+    });
+  }
   const fmt = (n) => Math.floor(n).toLocaleString('ru-RU');
   const irkToday = () => new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
   const priceMultitap = (l) => Math.round(200 * Math.pow(2, l));
@@ -792,6 +805,7 @@
     } else xBtn.onclick = close;
     if (PURE) { const tb = ov.querySelector('.ck-nav__b[data-tab="tasks"]'); if (tb) tb.style.display = 'none'; }
     ov.querySelector('#ck-cat').addEventListener('pointerdown', onTap);
+    attachCatRetry(ov.querySelector('#ck-cat'));
     ov.querySelector('#ck-daily').onclick = dailyBtn;
     ov.querySelector('#ck-bt-turbo').onclick = () => boost('turbo');
     ov.querySelector('#ck-bt-energy').onclick = () => boost('energy');

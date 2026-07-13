@@ -67,15 +67,45 @@
     const id = state && state.items && state.items.equipped;
     return (id && HAT(id) && HAT_FRAMES.indexOf(frame) !== -1) ? frame.replace('.png', '-' + id + '.webp') : frame;
   }
+  let frameSeq = 0; // токен «последний запрошенный кадр» — гасит гонки decode() между setCatFrame()
   function setCatFrame(el, frame) {
     const src = catSrc(frame);
+    const full = A(src);
+    const changing = !el.src || el.src.indexOf('/' + src) === -1; // не дёргать src без смены
     el.dataset.frame = frame;
-    if (!el.src || el.src.indexOf('/' + src) === -1) el.src = A(src); // не дёргать src без смены
     // Размер кота ПОСТОЯННЫЙ (не растёт с уровнем — решение юзера 08.07); FRAME_K
     // выравнивает позы между собой: лежачий ниже стоячего, шагающий чуть крупнее.
     const k = (FRAME_K[frame] || 1) * (src === frame ? 1 : HAT_PAD);
-    el.style.height = (CAT_H * k) + '%';
-    el.style.maxHeight = Math.round(CAT_MAXH * k) + 'px';
+    const applySize = () => {
+      el.style.height = (CAT_H * k) + '%';
+      el.style.maxHeight = Math.round(CAT_MAXH * k) + 'px';
+    };
+    if (!changing) { applySize(); return; } // тот же кадр уже на экране — высота уже верная
+    // Новый кадр: меняем src и высоту ТОЛЬКО когда картинка уже декодирована — иначе
+    // старый кадр на миг растягивается в чужой масштаб (жалоба «кот дёргается»).
+    const my = ++frameSeq;
+    const pre = new Image();
+    pre.src = full;
+    const swap = () => {
+      if (my !== frameSeq || el.dataset.frame !== frame) return; // запросили другой кадр раньше, чем этот успел
+      el.src = full;
+      applySize();
+    };
+    if (pre.decode) pre.decode().catch(() => {}).then(swap);
+    else { pre.onload = swap; pre.onerror = swap; }
+  }
+  // ── Ретрай при сетевом сбое («кот не прогружается») — до 2 повторов с бэкофом 1с/3с ──
+  function attachImgRetry(el) {
+    if (el._retryBound) return; el._retryBound = true;
+    let attempts = 0, curSrc = '';
+    el.addEventListener('load', () => { attempts = 0; });
+    el.addEventListener('error', () => {
+      if (el.src !== curSrc) { curSrc = el.src; attempts = 0; }
+      if (attempts >= 2) return;
+      attempts++;
+      const failedSrc = el.src;
+      setTimeout(() => { if (el.src === failedSrc) el.src = failedSrc; }, attempts === 1 ? 1000 : 3000);
+    });
   }
 
   let ov, state, loc = 'kitchen', cat = { x: 0.5, dir: 1, vx: 0.04, mode: 'walk', frame: 0, t: 0, busy: false };
@@ -438,8 +468,12 @@
     try { await loadState(); } catch (_) { state = localGet(); }
     // префетч кадров ходьбы — после loadState, чтобы префетчить вариант с надетой шляпой
     walkImgs = WALK.map(w => { const i = new Image(); i.src = A(catSrc(w)); return i; });
+    // + кадры действий (покормить/уложить спать) — та же причина «дёргается» была на них,
+    // просто реже, т.к. они грузились впервые только по нажатию кнопки.
+    ['happy.png', 'full.png'].forEach(f => { const i = new Image(); i.src = A(catSrc(f)); walkImgs.push(i); });
     renderNeeds(); renderLoc(); renderHat();
     renderGift(state); loadCareGranted().then(() => renderGift(state));
+    attachImgRetry(ov.querySelector('#pet-cat'));
     setCatFrame(ov.querySelector('#pet-cat'), 'idle.png');
     cat = { x: 0.5, dir: 1, vx: 0.04, mode: 'walk', frame: 0, t: 0, busy: false };
     lastTs = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
