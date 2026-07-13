@@ -45,6 +45,7 @@ export async function runPetHungryPush(push: PushService): Promise<{ sent: numbe
     `SELECT chat_id FROM pet_state
       WHERE care_date IS DISTINCT FROM $1
         AND updated_at > NOW() - INTERVAL '14 days'
+      ORDER BY updated_at ASC
       LIMIT $2`,
     [today, CANDIDATE_LIMIT]
   );
@@ -76,6 +77,7 @@ export async function runPetEnergyPush(push: PushService): Promise<{ sent: numbe
         AND energy < (${ENERGY_BASE} + ${ENERGY_PER_LEVEL} * energy_limit_level) * 0.1
         AND updated_at < NOW() - (INTERVAL '1 second'
               * CEIL((${ENERGY_BASE} + ${ENERGY_PER_LEVEL} * energy_limit_level)::numeric / ${REGEN_PER_SEC}))
+      ORDER BY updated_at ASC
       LIMIT $1`,
     [CANDIDATE_LIMIT]
   );

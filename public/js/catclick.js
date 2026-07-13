@@ -380,7 +380,7 @@
     const root = opts.root || ov;
     if (!root) return;
     const anchor = typeof anchorSel === 'string' ? root.querySelector(anchorSel) : anchorSel;
-    if (!anchor) return;
+    if (!anchor || !anchor.offsetParent) return; // якорь скрыт (чужая вкладка/оверлей) — не показывать и не «сжигать» показ
     styles();
     coachMarkSeen(id);
     coachActiveId = id;
@@ -1302,7 +1302,7 @@
     else pb.hidden = true;
     ov.querySelector('#ck-en').textContent = Math.floor(st.energy); ov.querySelector('#ck-enmax').textContent = st.energyMax;
     ov.querySelector('#ck-enfill').style.width = Math.min(100, st.energy / st.energyMax * 100) + '%';
-    if (!energyHintFired && st.energyMax > 0 && st.energy / st.energyMax < 0.15) { energyHintFired = true; coach('energy', COACH.energy.t, '.ck-energy', { icon: ICON[COACH.energy.icon](18) }); }
+    if (!energyHintFired && tab === 'cat' && st.energyMax > 0 && st.energy / st.energyMax < 0.15) { energyHintFired = true; coach('energy', COACH.energy.t, '.ck-energy', { icon: ICON[COACH.energy.icon](18) }); }
     const nn = nextNeed(st.totalEarned), prog = ov.querySelector('#ck-prog'), progt = ov.querySelector('#ck-progt');
     if (nn) { const pct = Math.min(100, (st.totalEarned - lg.need) / (nn - lg.need) * 100); prog.style.width = pct + '%'; progt.innerHTML = `${fmt(st.totalEarned)} / ${fmt(nn)} ${COIN(12)} до ур. ${lg.level + 1}`; }
     else { prog.style.width = '100%'; progt.textContent = 'Максимальный уровень!'; }
