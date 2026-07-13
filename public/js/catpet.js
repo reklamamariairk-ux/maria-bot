@@ -33,7 +33,18 @@
   const COACH_PET = {
     home:     'Это Дом Василия: корми, гладь и играй с ним каждый день — за заботу капают монеты',
     homePlay: 'В Игровой — мини-игры: «Накорми» и «Ловилка». Рекорды сохраняются',
+    petNeeds: 'Шкалы убывают со временем — заходи ухаживать за Василием каждый день',
+    hats:     'В магазине Двора — шляпы за монеты Василия. Заработай их заботой и мини-играми',
   };
+  // Счётчик открытий Дома (переживает сессии в localStorage) — нужен, чтобы отличить
+  // первое открытие (там срабатывает хинт 'home') от второго+ (там — 'petNeeds').
+  function bumpHomeOpenCount() {
+    let n = 0;
+    try { n = parseInt(localStorage.getItem('ck_pet_opens') || '0', 10) || 0; } catch (_) {}
+    n++;
+    try { localStorage.setItem('ck_pet_opens', String(n)); } catch (_) {}
+    return n;
+  }
   const NAV_ICON = { feed: PIC.feed, sleep: PIC.sleep, play: PIC.play, walk: PIC.pet };
   const WALK = ['walk1.png', 'walk2.png', 'walk3.png', 'walk4.png'];
   const LOC = {
@@ -376,6 +387,7 @@
     if (window.ckCoachClose) { try { window.ckCoachClose(); } catch (_) {} }
     loc = k; cat.x = 0.5; saveLoc(); renderLoc();
     if (k === 'playroom' && window.ckCoach) { try { window.ckCoach('homePlay', COACH_PET.homePlay, '#pet-do', { icon: PIC.play(18), root: ov }); } catch (_) {} }
+    if (k === 'yard' && window.ckCoach) { try { window.ckCoach('hats', COACH_PET.hats, '#pet-shop-btn', { icon: PIC.gift(18), root: ov }); } catch (_) {} }
   }
 
   // ── Действия ухода ──────────────────────────────────────────────────────────
@@ -486,7 +498,13 @@
     // просто реже, т.к. они грузились впервые только по нажатию кнопки.
     ['happy.png', 'full.png'].forEach(f => { const i = new Image(); i.src = A(catSrc(f)); walkImgs.push(i); });
     renderNeeds(); renderLoc(); renderHat();
-    if (window.ckCoach) { try { window.ckCoach('home', COACH_PET.home, '#pet-do', { icon: PIC.pet(18), root: ov }); } catch (_) {} }
+    const openN = bumpHomeOpenCount();
+    if (window.ckCoach) {
+      try {
+        if (openN <= 1) window.ckCoach('home', COACH_PET.home, '#pet-do', { icon: PIC.pet(18), root: ov });
+        else window.ckCoach('petNeeds', COACH_PET.petNeeds, '#pet-do', { icon: PIC.hunger(18), root: ov });
+      } catch (_) {}
+    }
     renderGift(state); loadCareGranted().then(() => renderGift(state));
     attachImgRetry(ov.querySelector('#pet-cat'));
     setCatFrame(ov.querySelector('#pet-cat'), 'idle.png');

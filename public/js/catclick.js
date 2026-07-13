@@ -332,7 +332,7 @@
 
   let ov, audio, raf, lastTs = 0, pending = 0, syncT = 0, curLevel = 1, tab = 'cat';
   let st = null, turboUntil = 0, combo = 0, comboT = 0, bonusTimer = 0, rainState = null, rainRAF = 0, upCat = 'prod', lastBought = null;
-  let sessionTapCount = 0, energyHintFired = false;
+  let sessionTapCount = 0, energyHintFired = false, boostsHintFired = false, bizCoachPending = false;
 
   function authed() { return !!(window.App && App.isAuthed && App.isAuthed()); }
 
@@ -347,6 +347,9 @@
     dove:   { icon: 'dove',    t: 'Голуби-помощники открываются, когда заводишь бизнесы в Прокачке' },
     top:    { icon: 'trophy',  t: 'Рейтинг недели: очки копятся с понедельника. Зови друзей — вместе веселее' },
     energy: { icon: 'battery', t: 'Энергия кончилась? Она восстанавливается сама — возвращайся чуть позже' },
+    combo:    { icon: 'fire',   t: 'Это комбо: тапай без пауз — множитель растёт' },
+    bizFirst: { icon: 'shop',   t: 'Бизнес работает сам — монеты капают даже офлайн. Смотри строку +N/час' },
+    boosts:   { icon: 'rocket', t: 'Турбо и Энергия — бесплатные бусты, обновляются каждый день' },
   };
   const coachSeenMem = new Set();
   function coachSeen(id) { try { return !!localStorage.getItem('ck_coach_' + id); } catch (_) { return coachSeenMem.has(id); } }
@@ -484,10 +487,11 @@
   async function flush() { if (pending <= 0 || !authed()) return; const n = pending; pending = 0; try { const d = await api('/api/clicker/tap', { method: 'POST', body: JSON.stringify({ taps: n }) }); st = d; } catch (_) { pending += n; } }
 
   async function buy(type, id) {
+    const wasNoBiz = type === 'card' && !!st && !st.cardsOwned; // до покупки бизнесов не было — для коуч-хинта bizFirst
     let ok = false;
     if (authed()) { try { const d = await api('/api/clicker/buy', { method: 'POST', body: JSON.stringify({ type, id }) }); if (!d.error) { st = d; ok = true; } } catch (_) {} }
     else { const s = guestBuyRaw(type, id); if (s) { st = guestDerive(); ok = true; } }
-    if (ok) { lastBought = type === 'card' ? id : null; sfxBuy(); window.haptic && window.haptic('medium'); renderAll(); renderUpgrades(); } else { sfxError(); flashMsg('Не хватает монет'); }
+    if (ok) { lastBought = type === 'card' ? id : null; bizCoachPending = type === 'card' && wasNoBiz; sfxBuy(); window.haptic && window.haptic('medium'); renderAll(); renderUpgrades(); } else { sfxError(); flashMsg('Не хватает монет'); }
   }
   function guestBuyRaw(type, id) {
     guestDerive(); const s = rawGet(); let cost = 0;
@@ -823,6 +827,23 @@
       .ck-coach__t{font-size:12.5px;line-height:1.42;color:#eee7dd}
       .ck-coach__ok{display:block;margin:9px 0 0 auto;border:1px solid #ffe9b3;border-radius:10px;padding:6px 14px;font-weight:800;font-size:12px;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;cursor:pointer}
       .ck-coach-glow{outline:2px solid rgba(238,191,82,.85);outline-offset:3px;border-radius:10px}
+      /* Гайд «Как играть» — полный справочник по механикам, открывается кнопкой ? и из тьюториала */
+      .ck-guide-btn{position:absolute;top:12px;left:12px;z-index:9;width:34px;height:34px;border:1px solid rgba(238,191,82,.55);border-radius:50%;background:rgba(0,0,0,.28);color:var(--gold-l);font-weight:800;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+      .ck-guide{position:absolute;inset:0;z-index:20000;display:none;flex-direction:column;background:linear-gradient(180deg,#211a16,#140f0d);animation:ckGuideIn .18s ease-out}
+      .ck-guide.on{display:flex}
+      @keyframes ckGuideIn{from{opacity:0}to{opacity:1}}
+      @media (prefers-reduced-motion:reduce){.ck-guide{animation:none}}
+      .ck-guide__hd{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 16px 10px;flex:none}
+      .ck-guide__t{display:flex;align-items:center;gap:8px;font-family:'Nunito',sans-serif;font-weight:800;font-size:19px;color:var(--cream)}
+      .ck-guide__t .ck-i{color:var(--gold-l)}
+      .ck-guide__x{width:34px;height:34px;flex:none;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.28);color:var(--cream);font-size:17px;cursor:pointer}
+      .ck-guide__body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:4px 16px 26px}
+      .ck-guide__card{display:flex;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:13px 14px;margin-bottom:10px}
+      .ck-guide__ic{width:40px;height:40px;flex:none;border-radius:12px;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,rgba(238,191,82,.2),rgba(238,191,82,.04));border:1px solid var(--line);color:var(--gold-l)}
+      .ck-guide__b{min-width:0}
+      .ck-guide__n{font-weight:800;font-size:14.5px;color:var(--ink);margin-bottom:4px}
+      .ck-guide__s{font-size:13px;line-height:1.5;color:var(--cream);opacity:.88}
+      .ck-tut__guide{display:block;margin-top:10px;width:100%;border:none;background:none;color:var(--gold-l);font-weight:700;font-size:12.5px;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
     `;
     document.head.appendChild(s);
   }
@@ -834,6 +855,7 @@
       ${COIN_SPRITE}
       <button class="ck-x" id="ck-x">×</button>
       <div class="ck-screen on" id="ck-scr-cat">
+        <button class="ck-guide-btn" id="ck-guide-btn" type="button" aria-label="Как играть">?</button>
         <button class="ck-daily" id="ck-daily" style="display:none"></button>
         <div class="ck-lvl" id="ck-lvl"></div>
         <div class="ck-greet" id="ck-greet"></div>
@@ -857,6 +879,10 @@
       <div class="ck-fx" id="ck-fx"></div>
       <div class="ck-levelup" id="ck-levelup"><span id="ck-levelup-t"></span></div>
       <div class="ck-pop" id="ck-pop"></div>
+      <div class="ck-guide" id="ck-guide">
+        <div class="ck-guide__hd"><div class="ck-guide__t">${ICON.list(20)} Как играть</div><button class="ck-guide__x" id="ck-guide-x" type="button" aria-label="Закрыть">×</button></div>
+        <div class="ck-guide__body" id="ck-guide-body"></div>
+      </div>
       <div class="ck-nav">
         <button class="ck-nav__b on" data-tab="cat">${ICON.paw(21)}Котик</button>
         <button class="ck-nav__b" data-tab="up">${ICON.bolt(21)}Прокачка</button>
@@ -880,8 +906,44 @@
     ov.querySelector('#ck-bt-energy').onclick = () => boost('energy');
     ov.querySelector('#ck-prestige').onclick = prestigeConfirm;
     ov.querySelectorAll('.ck-nav__b').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+    ov.querySelector('#ck-guide-btn').onclick = () => { window.haptic && window.haptic('light'); openGuide(); };
+    ov.querySelector('#ck-guide-x').onclick = closeGuide;
+    ov.querySelector('#ck-guide-body').innerHTML = guideHtml();
     ckDiagWireTapTrigger();
   }
+
+  // ── Гайд «Как играть» — полный справочник по механикам (кнопка ? / ссылка в тьюториале) ──
+  function guideSections() {
+    const s = [
+      { ic: ICON.tap(20), t: 'Тап и комбо', d: 'Тапай Василия — каждый тап приносит монеты, а сколько монет за один тап, растёт вместе с уровнем. Держи темп без пауз дольше пяти тапов подряд — над котиком загорится комбо-счётчик ×N, а на каждой десятке комбо экран вспыхивает искрами. Энергия тратится на каждый тап и сама восстанавливается со временем — если она кончилась, просто вернись чуть позже.' },
+      { ic: ICON.star(20), t: 'Уровни и карьера Василия', d: 'Все монеты, что ты когда-либо заработал, двигают Василия по карьерной лестнице — девятнадцать ступеней, от Котёнка-стажёра до Императора выпечки. На каждом новом уровне у кота меняется образ и сцена вокруг — костюм, атрибуты, фон. Полоска под балансом показывает прогресс до следующего уровня, а рядом — силуэт того, кем Василий станет дальше.' },
+      { ic: ICON.rocket(20), t: 'Бусты', d: 'Турбо и Энергия — два бесплатных буста на вкладке «Котик». Турбо на 20 секунд даёт монеты за тап ×5, Энергия сразу наполняет шкалу энергии до максимума. Каждый буст доступен до 6 раз в день, а на следующий день лимит обновляется — счётчик рядом с кнопкой показывает, сколько попыток осталось.' },
+      { ic: ICON.shop(20), t: 'Прокачка и бизнесы', d: 'В «Прокачке» — четыре направления: Производство, Маркетинг, Персонал и Сеть. Каждый бизнес, который ты завёл, дальше сам приносит монеты в час — доход капает даже когда игра закрыта, а следующий уровень бизнеса поднимает доход ещё выше. Часть бизнесов открывается только с определённого уровня игрока — до этого карточка показана силуэтом с замком. Там же можно докупить Мультитап (больше монет за тап) и Запас энергии (выше потолок энергии).' },
+      { ic: ICON.gift(20), t: 'Награда дня', d: 'Каждый день, когда заходишь в игру впервые, тебе доступна награда дня — забери её кнопкой сверху экрана. Награда растёт вместе со стриком: чем больше дней подряд ты заходишь, тем она весомее, а пропущенный день сбрасывает счётчик. Календарь на семь дней вперёд показывает, сколько причитается в каждый из ближайших дней.' },
+      { ic: ICON.gem(20), t: 'Комбо дня и Шифр', d: 'В «Прокачке» каждый день выбираются три случайных бизнеса — прокачай (купи хотя бы один уровень) все три, и получишь бонус +12 000 монет. Там же — Шифр дня: сегодняшнее слово, зашифрованное азбукой Морзе, точками и тире. Переведи морзянку и впиши разгаданное слово в поле рядом — угадаешь верно, получишь +3 000 монет. Оба бонуса обновляются раз в сутки.' },
+      { ic: ICON.chest(20), t: 'Сундук и Золотой дождь', d: 'Иногда на главном экране пролетает золотая монетка — тронь её, пока не улетела, и получишь бонусные монеты. В «Прокачке» раз в день можно открыть Сундук удачи — там монеты, буст или неожиданный джекпот. Там же раз в день доступна мини-игра «Золотой дождь»: двадцать секунд лови падающие монеты, золотые монеты стоят втрое больше обычных.' },
+      { ic: ICON.paw(20), t: 'Дом Василия', d: 'В Доме Василия — четыре комнаты: Кухня, Спальня, Игровая и Двор. В каждой — своё действие (покормить, уложить спать, поиграть, погладить), которое поднимает нужную шкалу — сытость, энергию или настроение — и приносит коту немного опыта. Если заботиться о Василии каждый день подряд, раз в сутки капают монеты питомца — награда растёт с каждым днём серии и с десятого дня держится на максимуме. В Игровой, кроме заботы, есть две мини-игры — «Накорми» и «Ловилка», рекорды в них сохраняются. Во Дворе — магазин шляп для Василия: покупай их за монеты питомца, накопленные заботой.' },
+      { ic: ICON.dove(20), t: 'Голубятня', d: 'Шестнадцать голубей-помощников — по четыре на каждое из четырёх направлений «Прокачки». Как только заводишь бизнес хотя бы на первом уровне, голубь открывается и занимает своё место в коллекции — до этого на его месте молчаливый силуэт с замком. Собирай коллекцию по направлениям или полностью — Голубятня показывает прогресс по каждому разделу.' },
+      { ic: ICON.trophy(20), t: 'Рейтинг и команды', d: 'Рейтинг недели показывает игроков по количеству монет, заработанных с начала недели — отсчёт идёт с понедельника, а в конце недели сезон обнуляется и начинается заново. Здесь же можно вступить в одну из четырёх команд — Шоколадные, Ванильные, Карамельные или Ягодные — и соревноваться вместе с командой в общем зачёте по сумме очков всех участников.' },
+      { ic: ICON.users(20), t: 'Друзья', d: 'Позови друга в игру по своей ссылке — как только он присоединится, тебе начислится 5 000 монет, а другу — 2 500 монет на старт. Ссылку можно скопировать или отправить прямо из игры кнопкой «Позвать».' },
+    ];
+    if (!PURE) {
+      s.push({ ic: ICON.list(20), t: 'Задания', d: 'На вкладке «Задания» — простые поручения за монеты: заглянуть на сайт «Марии», оставить отзыв, подписаться на соцсети (когда ссылка доступна), пригласить друга или просто держать серию заходов и баланс. Выполнил условие — жми кнопку с наградой рядом с заданием. Ниже, в Достижениях — более долгие цели вроде количества тапов, уровня, собранных бизнесов или дней подряд, тоже с наградой в монетах.' });
+      s.push({ ic: ICON.medal(20), t: 'Награды «Марии»', d: 'Здесь же — витрина настоящих призов «Марии»: промокоды на скидку, баллы на карту клуба, десерт в подарок. Обменивать монеты на них можно будет, когда «Мария» откроет витрину — сейчас место для неё уже готово, она появится по мере запуска. А лестница «Награды за прогресс» уже работает: доходишь до нужного уровня, собираешь коллекцию голубей, приглашаешь друзей или заботишься о Василии подряд несколько дней — и получаешь баллы на карту клуба или купон.' });
+    }
+    return s;
+  }
+  function guideHtml() {
+    return guideSections().map(x => `<div class="ck-guide__card"><div class="ck-guide__ic">${x.ic}</div><div class="ck-guide__b"><div class="ck-guide__n">${x.t}</div><div class="ck-guide__s">${x.d}</div></div></div>`).join('');
+  }
+  function openGuide() {
+    if (!ov) return;
+    closeActiveCoach();
+    const g = ov.querySelector('#ck-guide'); if (!g) return;
+    g.classList.add('on');
+    const body = ov.querySelector('#ck-guide-body'); if (body) body.scrollTop = 0;
+  }
+  function closeGuide() { const g = ov && ov.querySelector('#ck-guide'); if (g) g.classList.remove('on'); }
 
   function setTab(t) {
     closeActiveCoach();
@@ -930,6 +992,7 @@
     el.style.fontSize = Math.min(46, 22 + combo) + 'px';
     el.classList.add('show'); el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
     clearTimeout(comboHideT); comboHideT = setTimeout(() => el.classList.remove('show'), 950);
+    coach('combo', COACH.combo.t, '#ck-combo', { icon: ICON[COACH.combo.icon](18) });
     if (combo >= 10 && combo % 10 === 0) comboMilestone(tier);
   }
   function comboMilestone(tier) {
@@ -1303,6 +1366,7 @@
     ov.querySelector('#ck-en').textContent = Math.floor(st.energy); ov.querySelector('#ck-enmax').textContent = st.energyMax;
     ov.querySelector('#ck-enfill').style.width = Math.min(100, st.energy / st.energyMax * 100) + '%';
     if (!energyHintFired && tab === 'cat' && st.energyMax > 0 && st.energy / st.energyMax < 0.15) { energyHintFired = true; coach('energy', COACH.energy.t, '.ck-energy', { icon: ICON[COACH.energy.icon](18) }); }
+    if (!boostsHintFired && tab === 'cat' && lg.level >= 2) { boostsHintFired = true; coach('boosts', COACH.boosts.t, '.ck-boosts', { icon: ICON[COACH.boosts.icon](18) }); }
     const nn = nextNeed(st.totalEarned), prog = ov.querySelector('#ck-prog'), progt = ov.querySelector('#ck-progt');
     if (nn) { const pct = Math.min(100, (st.totalEarned - lg.need) / (nn - lg.need) * 100); prog.style.width = pct + '%'; progt.innerHTML = `${fmt(st.totalEarned)} / ${fmt(nn)} ${COIN(12)} до ур. ${lg.level + 1}`; }
     else { prog.style.width = '100%'; progt.textContent = 'Максимальный уровень!'; }
@@ -1361,7 +1425,7 @@
       else h += biz(c.cat, cardArt(c.id), c.name, `<span class="ck-biz__lvl">Ур. ${c.level}</span><span class="ck-biz__prof">+${fmt(c.profit)}/час</span>`, buyBtn(c.price, st.balance < c.price, 'card', c.id), i++);
     }
     list.innerHTML = h;
-    if (lastBought) { const el = list.querySelector(`[data-id="${lastBought}"]`); const card = el && el.closest('.ck-biz'); if (card) { card.classList.add('bump'); } lastBought = null; }
+    if (lastBought) { const el = list.querySelector(`[data-id="${lastBought}"]`); const card = el && el.closest('.ck-biz'); if (card) { card.classList.add('bump'); if (bizCoachPending) coach('bizFirst', COACH.bizFirst.t, card, { icon: ICON[COACH.bizFirst.icon](18) }); } bizCoachPending = false; lastBought = null; }
     list.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { upCat = b.dataset.cat; renderUpgrades(); });
     list.querySelectorAll('[data-act]').forEach(b => b.onclick = () => buy(b.dataset.act, b.dataset.id || undefined));
     list.querySelectorAll('[data-redeem]').forEach(b => b.onclick = () => redeem(b.dataset.redeem));
@@ -1705,9 +1769,11 @@
       <div class="ck-tut__step"><div class="si">${ICON.paw(20)}</div><div><div class="st">Тапай котика</div><div class="sd">Каждый тап — монеты, лови комбо ×N</div></div></div>
       <div class="ck-tut__step"><div class="si">${ICON.shop(20)}</div><div><div class="st">Заводи бизнесы</div><div class="sd">В «Прокачке» — монеты копятся сами, даже офлайн</div></div></div>
       <div class="ck-tut__step"><div class="si">${ICON.gift(20)}</div><div><div class="st">Заходи каждый день</div><div class="sd">${PURE ? 'Ежедневные награды, комбо дня и шифр' : 'Награды, комбо дня и баллы на карту «Марии»'}</div></div></div>
-      <button class="ck-tut__go" id="ck-tut-go">Поехали!</button></div>`;
+      <button class="ck-tut__go" id="ck-tut-go">Поехали!</button>
+      <button class="ck-tut__guide" id="ck-tut-guide" type="button">Полный гайд — как всё устроено</button></div>`;
     ov.appendChild(t);
     t.querySelector('#ck-tut-go').onclick = () => { try { localStorage.setItem('ck_tut_v1', '1'); } catch (e) {} t.remove(); window.haptic && window.haptic('light'); coach('tap', COACH.tap.t, '#ck-cat', { icon: ICON[COACH.tap.icon](18) }); };
+    t.querySelector('#ck-tut-guide').onclick = () => { try { localStorage.setItem('ck_tut_v1', '1'); } catch (e) {} t.remove(); window.haptic && window.haptic('light'); openGuide(); };
   }
   async function open() {
     if (!ov) build();
