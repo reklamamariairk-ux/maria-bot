@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ru" class="ck-gamefirst ck-pure">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+  <meta name="theme-color" content="#0e0a09"/>
+  <title>Котик Комбат — Мария</title>
+  <meta name="description" content="Котик Комбат: помоги коту Василию дорасти от котёнка-стажёра до Императора выпечки. 19 уровней."/>
+  <link rel="apple-touch-icon" href="/logo.png"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400..800&family=Playfair+Display:wght@600;700;800&family=JetBrains+Mono:wght@500;600&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="/js/utils.js"></script>
+  <script src="/js/tg-bridge.js"></script>
+  <style>
+    html,body{margin:0;padding:0;background:#0e0a09}
+    #ck-splash{position:fixed;inset:0;z-index:9998;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:radial-gradient(130% 100% at 50% -10%,#2c2320 0%,#1a1413 52%,#0e0a09 100%);font-family:'Nunito','Onest',system-ui,sans-serif}
+    html.ck-gamefirst #ck-splash{display:flex}
+    #ck-splash .r{width:46px;height:46px;border-radius:50%;border:4px solid rgba(240,194,78,.22);border-top-color:#f0c24e;animation:cksp .8s linear infinite}
+    #ck-splash .t{color:#eee7dd;font-weight:800;font-size:15px;letter-spacing:.2px}
+    @keyframes cksp{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+<div id="ck-splash"><div class="r"></div><div class="t">Котик Комбат загружается…</div></div>
+<script src="/js/catgame.js" defer></script>
+<script src="/js/catfeed.js" defer></script>
+<script src="/js/catpet.js?v=10" defer></script>
+<script src="/js/catclick.js?v=102" defer></script>
+</body>
+</html>
