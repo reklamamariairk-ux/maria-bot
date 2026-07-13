@@ -28,6 +28,12 @@
     { d: 100, label: '1000 баллов' },
   ];
   const PURE = document.documentElement.classList.contains('ck-pure'); // чистая игра: без реальных призов
+  // Коуч-хинты новичку (одноразовые, БЕЗ коммерции) — используют общий движок coach()
+  // из catclick.js (window.ckCoach/window.ckCoachClose). Вызов гейтится их наличием.
+  const COACH_PET = {
+    home:     'Это Дом Василия: корми, гладь и играй с ним каждый день — за заботу капают монеты',
+    homePlay: 'В Игровой — мини-игры: «Накорми» и «Ловилка». Рекорды сохраняются',
+  };
   const NAV_ICON = { feed: PIC.feed, sleep: PIC.sleep, play: PIC.play, walk: PIC.pet };
   const WALK = ['walk1.png', 'walk2.png', 'walk3.png', 'walk4.png'];
   const LOC = {
@@ -365,7 +371,12 @@
     act.querySelector('#pet-do').onclick = onAction;
   }
 
-  function goLoc(k) { if (k === loc) return; loc = k; cat.x = 0.5; saveLoc(); renderLoc(); }
+  function goLoc(k) {
+    if (k === loc) return;
+    if (window.ckCoachClose) { try { window.ckCoachClose(); } catch (_) {} }
+    loc = k; cat.x = 0.5; saveLoc(); renderLoc();
+    if (k === 'playroom' && window.ckCoach) { try { window.ckCoach('homePlay', COACH_PET.homePlay, '#pet-do', { icon: PIC.play(18), root: ov }); } catch (_) {} }
+  }
 
   // ── Действия ухода ──────────────────────────────────────────────────────────
   async function onAction() {
@@ -475,13 +486,14 @@
     // просто реже, т.к. они грузились впервые только по нажатию кнопки.
     ['happy.png', 'full.png'].forEach(f => { const i = new Image(); i.src = A(catSrc(f)); walkImgs.push(i); });
     renderNeeds(); renderLoc(); renderHat();
+    if (window.ckCoach) { try { window.ckCoach('home', COACH_PET.home, '#pet-do', { icon: PIC.pet(18), root: ov }); } catch (_) {} }
     renderGift(state); loadCareGranted().then(() => renderGift(state));
     attachImgRetry(ov.querySelector('#pet-cat'));
     setCatFrame(ov.querySelector('#pet-cat'), 'idle.png');
     cat = { x: 0.5, dir: 1, vx: 0.04, mode: 'walk', frame: 0, t: 0, busy: false };
     lastTs = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
   }
-  function close() { cancelAnimationFrame(raf); if (ov) ov.classList.remove('on'); window.scrollUnlock?.(); }
+  function close() { cancelAnimationFrame(raf); if (window.ckCoachClose) { try { window.ckCoachClose(); } catch (_) {} } if (ov) ov.classList.remove('on'); window.scrollUnlock?.(); }
   window.catPetOpen = open;
   window.catPetClose = close;
 })();

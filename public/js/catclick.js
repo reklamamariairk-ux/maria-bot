@@ -332,8 +332,66 @@
 
   let ov, audio, raf, lastTs = 0, pending = 0, syncT = 0, curLevel = 1, tab = 'cat';
   let st = null, turboUntil = 0, combo = 0, comboT = 0, bonusTimer = 0, rainState = null, rainRAF = 0, upCat = 'prod', lastBought = null;
+  let sessionTapCount = 0, energyHintFired = false;
 
   function authed() { return !!(window.App && App.isAuthed && App.isAuthed()); }
+
+  // ── Коуч-хинты новичку: одноразовые тултипы по механикам, БЕЗ коммерции (работают
+  // одинаково в PURE и полной игре). Показ строго один раз — ключ ck_coach_<id> в
+  // localStorage; если storage сломан — держим показанные в памяти на сессию. Не
+  // больше одного бабла разом; очередь не нужна — следующий покажется при своём триггере.
+  const COACH = {
+    tap:    { icon: 'tap',     t: 'Тапай Василия — каждый тап приносит монеты. Быстрая серия — комбо ×2 и больше' },
+    level:  { icon: 'star',    t: 'Копи монеты — на новом уровне Василий сменит образ, а сцена — интерьер' },
+    up:     { icon: 'bolt',    t: 'Бусты усиливают тап, а бизнесы приносят монеты сами — даже когда игра закрыта' },
+    dove:   { icon: 'dove',    t: 'Голуби-помощники открываются, когда заводишь бизнесы в Прокачке' },
+    top:    { icon: 'trophy',  t: 'Рейтинг недели: очки копятся с понедельника. Зови друзей — вместе веселее' },
+    energy: { icon: 'battery', t: 'Энергия кончилась? Она восстанавливается сама — возвращайся чуть позже' },
+  };
+  const coachSeenMem = new Set();
+  function coachSeen(id) { try { return !!localStorage.getItem('ck_coach_' + id); } catch (_) { return coachSeenMem.has(id); } }
+  function coachMarkSeen(id) { try { localStorage.setItem('ck_coach_' + id, '1'); } catch (_) { coachSeenMem.add(id); } }
+  let coachBubbleEl = null, coachAnchorEl = null, coachActiveId = null;
+  function closeActiveCoach() {
+    if (coachBubbleEl) { coachBubbleEl.remove(); coachBubbleEl = null; }
+    if (coachAnchorEl) { coachAnchorEl.classList.remove('ck-coach-glow'); coachAnchorEl = null; }
+    coachActiveId = null;
+  }
+  // Анкор может быть высоким (напр. весь список) — прижимаем «точку прицела» к его верху,
+  // чтобы бабл не улетал к самому низу списка.
+  function positionCoach(bubble, anchor, arrowEl) {
+    const rr = anchor.getBoundingClientRect();
+    const r = { top: rr.top, bottom: rr.top + Math.min(rr.height, 120), left: rr.left, right: rr.right, width: rr.width };
+    const margin = 10, bw = bubble.offsetWidth, bh = bubble.offsetHeight;
+    const below = r.top < window.innerHeight / 2;
+    let top = below ? r.bottom + margin : r.top - bh - margin;
+    top = Math.max(8, Math.min(window.innerHeight - bh - 8, top));
+    let left = r.left + r.width / 2 - bw / 2;
+    left = Math.max(8, Math.min(window.innerWidth - bw - 8, left));
+    bubble.style.top = top + 'px'; bubble.style.left = left + 'px';
+    arrowEl.classList.toggle('top', below); arrowEl.classList.toggle('bottom', !below);
+    arrowEl.style.left = Math.max(14, Math.min(bw - 14, r.left + r.width / 2 - left)) + 'px';
+  }
+  // Одноразовый тултип-бабл у anchorSel. opts: {icon, root} — root по умолчанию текущий
+  // оверлей игры; из catpet.js передавай root: свой оверлей (экспорт — window.ckCoach ниже).
+  function coach(id, html, anchorSel, opts) {
+    opts = opts || {};
+    if (coachActiveId || coachSeen(id)) return;
+    const root = opts.root || ov;
+    if (!root) return;
+    const anchor = typeof anchorSel === 'string' ? root.querySelector(anchorSel) : anchorSel;
+    if (!anchor) return;
+    styles();
+    coachMarkSeen(id);
+    coachActiveId = id;
+    const bubble = document.createElement('div'); bubble.className = 'ck-coach';
+    bubble.innerHTML = `<div class="ck-coach__arr"></div><div class="ck-coach__row"><div class="ck-coach__ic">${opts.icon || ''}</div><div class="ck-coach__t">${html}</div></div><button class="ck-coach__ok" type="button">Понятно</button>`;
+    root.appendChild(bubble);
+    anchor.classList.add('ck-coach-glow');
+    coachBubbleEl = bubble; coachAnchorEl = anchor;
+    positionCoach(bubble, anchor, bubble.querySelector('.ck-coach__arr'));
+    bubble.querySelector('.ck-coach__ok').onclick = () => { window.haptic && window.haptic('light'); closeActiveCoach(); };
+  }
   // ── Звук: мастер-шина с ревером + богатый синтез (без файлов) ─────────────────
   let bus, comboFx;
   function ac() {
@@ -708,7 +766,7 @@
       .ck-skel{position:relative;overflow:hidden;background:rgba(255,255,255,.05)}.ck-skel::after{content:'';position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(255,255,255,.10),transparent);animation:ckShimmer 1.2s ease-in-out infinite}@keyframes ckShimmer{100%{transform:translateX(100%)}}
       .ck-skrow{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:7px}.ck-skrow .sk-r{width:24px;height:24px;border-radius:50%;flex:none}.ck-skrow .sk-n{height:12px;border-radius:6px;flex:1}.ck-skrow .sk-v{width:62px;height:12px;border-radius:6px;flex:none}
       .ck-empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding:30px 18px;color:var(--muted)}.ck-empty__ic{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(238,191,82,.08);border:1px solid var(--line);color:var(--gold);margin-bottom:12px}.ck-empty__ic svg{width:30px;height:30px}.ck-empty__t{font-weight:800;font-size:15px;color:var(--cream);margin-bottom:4px}.ck-empty__s{font-size:12.5px;line-height:1.5;max-width:240px}
-      @media (prefers-reduced-motion:reduce){.ck-screen.on,.ck-skel::after,.ck-conf,.ck-coin,.ck-flyc,.ck-ripple,.ck-flash,.ck-balpop,.ck-bonus-fly{animation:none!important}}
+      @media (prefers-reduced-motion:reduce){.ck-screen.on,.ck-skel::after,.ck-conf,.ck-coin,.ck-flyc,.ck-ripple,.ck-flash,.ck-balpop,.ck-bonus-fly,.ck-coach{animation:none!important}}
       /* Онбординг-туториал (показ один раз) */
       .ck-tut{position:absolute;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;background:rgba(8,5,6,.74);backdrop-filter:blur(4px);padding:24px;animation:ckScreenIn .25s ease-out}
       .ck-tut__card{max-width:330px;width:100%;background:linear-gradient(180deg,#2e1119,#1d0a11);border:1px solid var(--line);border-radius:22px;padding:22px 20px;text-align:center;box-shadow:0 18px 50px rgba(0,0,0,.6)}
@@ -754,6 +812,17 @@
       .ck-pbadge .ck-i{color:#5a2028}.ck-pbadge--sm{font-size:9.5px;padding:0 6px}
       .ck-prestige{margin-top:9px;border:1px solid #ffe9b3;border-radius:13px;padding:9px 16px;font-weight:800;font-size:13px;background:linear-gradient(180deg,#ffe7a6,#cf9a36);color:#5a2028;cursor:pointer;display:inline-flex;align-items:center;gap:7px;box-shadow:0 4px 12px rgba(165,112,28,.4)}
       .ck-prestige[hidden]{display:none}.ck-prestige .ck-i{color:#5a2028}
+      /* Коуч-хинты новичку (одноразовые тултипы — см. coach()/window.ckCoach) */
+      .ck-coach{position:fixed;z-index:50;max-width:250px;background:linear-gradient(180deg,#2e1119,#1d0a11);border:1px solid rgba(238,191,82,.55);border-radius:16px;padding:11px 13px;box-shadow:0 12px 30px rgba(0,0,0,.55);font-family:'Nunito','Inter',system-ui,sans-serif;animation:ckCoachIn .18s ease-out}
+      @keyframes ckCoachIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+      .ck-coach__arr{position:absolute;width:12px;height:12px;left:50%;background:#1d0a11;border:1px solid rgba(238,191,82,.55);transform:translateX(-50%) rotate(45deg)}
+      .ck-coach__arr.top{top:-7px;border-right:none;border-bottom:none}
+      .ck-coach__arr.bottom{bottom:-7px;border-left:none;border-top:none}
+      .ck-coach__row{display:flex;align-items:flex-start;gap:8px}
+      .ck-coach__ic{flex:none;color:#ffe39c;margin-top:1px}
+      .ck-coach__t{font-size:12.5px;line-height:1.42;color:#eee7dd}
+      .ck-coach__ok{display:block;margin:9px 0 0 auto;border:1px solid #ffe9b3;border-radius:10px;padding:6px 14px;font-weight:800;font-size:12px;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;cursor:pointer}
+      .ck-coach-glow{outline:2px solid rgba(238,191,82,.85);outline-offset:3px;border-radius:10px}
     `;
     document.head.appendChild(s);
   }
@@ -815,6 +884,7 @@
   }
 
   function setTab(t) {
+    closeActiveCoach();
     if (PURE && t === 'tasks') t = 'cat';
     if (t === 'home') { window.haptic && window.haptic('light'); try { window.catPetOpen && window.catPetOpen(); } catch (_) {} return; }
     tab = t;
@@ -824,10 +894,10 @@
     ov.querySelector('#ck-scr-tasks').classList.toggle('on', t === 'tasks');
     ov.querySelector('#ck-scr-top').classList.toggle('on', t === 'top');
     ov.querySelectorAll('.ck-nav__b').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
-    if (t === 'up') renderUpgrades();
-    if (t === 'dove') renderDove();
+    if (t === 'up') { renderUpgrades(); coach('up', COACH.up.t, '#ck-uplist', { icon: ICON[COACH.up.icon](18) }); }
+    if (t === 'dove') { renderDove(); coach('dove', COACH.dove.t, '#ck-dovelist', { icon: ICON[COACH.dove.icon](18) }); }
     if (t === 'tasks') renderTasks();
-    if (t === 'top') renderTop();
+    if (t === 'top') { renderTop(); coach('top', COACH.top.t, '#ck-toplist', { icon: ICON[COACH.top.icon](18) }); }
   }
 
   const turboOn = () => Date.now() < turboUntil;
@@ -848,6 +918,8 @@
     if (combo >= 5) showCombo();
     if (combo >= 12 && combo % 3 === 0) coinShower();
     renderTop2();
+    sessionTapCount++;
+    if (sessionTapCount === 30) coach('level', COACH.level.t, '.ck-progwrap', { icon: ICON[COACH.level.icon](18) });
   }
   let comboHideT = 0;
   function showCombo() {
@@ -1230,6 +1302,7 @@
     else pb.hidden = true;
     ov.querySelector('#ck-en').textContent = Math.floor(st.energy); ov.querySelector('#ck-enmax').textContent = st.energyMax;
     ov.querySelector('#ck-enfill').style.width = Math.min(100, st.energy / st.energyMax * 100) + '%';
+    if (!energyHintFired && st.energyMax > 0 && st.energy / st.energyMax < 0.15) { energyHintFired = true; coach('energy', COACH.energy.t, '.ck-energy', { icon: ICON[COACH.energy.icon](18) }); }
     const nn = nextNeed(st.totalEarned), prog = ov.querySelector('#ck-prog'), progt = ov.querySelector('#ck-progt');
     if (nn) { const pct = Math.min(100, (st.totalEarned - lg.need) / (nn - lg.need) * 100); prog.style.width = pct + '%'; progt.innerHTML = `${fmt(st.totalEarned)} / ${fmt(nn)} ${COIN(12)} до ур. ${lg.level + 1}`; }
     else { prog.style.width = '100%'; progt.textContent = 'Максимальный уровень!'; }
@@ -1634,7 +1707,7 @@
       <div class="ck-tut__step"><div class="si">${ICON.gift(20)}</div><div><div class="st">Заходи каждый день</div><div class="sd">${PURE ? 'Ежедневные награды, комбо дня и шифр' : 'Награды, комбо дня и баллы на карту «Марии»'}</div></div></div>
       <button class="ck-tut__go" id="ck-tut-go">Поехали!</button></div>`;
     ov.appendChild(t);
-    t.querySelector('#ck-tut-go').onclick = () => { try { localStorage.setItem('ck_tut_v1', '1'); } catch (e) {} t.remove(); window.haptic && window.haptic('light'); };
+    t.querySelector('#ck-tut-go').onclick = () => { try { localStorage.setItem('ck_tut_v1', '1'); } catch (e) {} t.remove(); window.haptic && window.haptic('light'); coach('tap', COACH.tap.t, '#ck-cat', { icon: ICON[COACH.tap.icon](18) }); };
   }
   async function open() {
     if (!ov) build();
@@ -1646,8 +1719,11 @@
     if (authed()) api('/api/clicker/rewards').then(d => { if (d && typeof d.enabled === 'boolean' && d.enabled !== rewardsEnabled) { rewardsEnabled = d.enabled; if (tab === 'up') renderUpgrades(); } }).catch(() => {});
     let _seenTut = true; try { _seenTut = !!localStorage.getItem('ck_tut_v1'); } catch (e) {}
     if (!_seenTut) showTutorial();
-    else if (st.passiveEarned > 0) passivePopup(st.passiveEarned);
-    else maybeWelcomePromo();
+    else {
+      coach('tap', COACH.tap.t, '#ck-cat', { icon: ICON[COACH.tap.icon](18) });
+      if (st.passiveEarned > 0) passivePopup(st.passiveEarned);
+      else maybeWelcomePromo();
+    }
     lastTs = 0; syncT = 0; combo = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
   }
   // ── Хаб «Игры»: рендер + квизы + «Собери торт» + «Ровный крем» ───────────────
@@ -1894,9 +1970,10 @@
   }
   function closeGems() { if (gemsState) cancelAnimationFrame(gemsState.raf); const el = ov.querySelector('#ck-gems'); if (el) el.classList.remove('on'); gemsState = null; }
 
-  function close() { cancelAnimationFrame(raf); clearTimeout(bonusTimer); if (rainState) endRain(true); if (quizState) closeQuiz(); if (memState) closeMemory(); if (towerState) closeTower(); if (gemsState) closeGems(); flush(); if (ov) ov.classList.remove('on'); window.scrollUnlock && window.scrollUnlock(); }
+  function close() { cancelAnimationFrame(raf); clearTimeout(bonusTimer); closeActiveCoach(); if (rainState) endRain(true); if (quizState) closeQuiz(); if (memState) closeMemory(); if (towerState) closeTower(); if (gemsState) closeGems(); flush(); if (ov) ov.classList.remove('on'); window.scrollUnlock && window.scrollUnlock(); }
   window.catClickOpen = open; window.catClickClose = close; window.catClickBonusNow = () => { if (ov && ov.classList.contains('on')) showFlyingBonus(); }; // превью/тест золотого бонуса
   window.ckSetTab = setTab; // для виджета «Дома кота»: открыть лестницу вех (setTab('tasks'))
+  window.ckCoach = coach; window.ckCoachClose = closeActiveCoach; // экспорт для коуч-хинта «Дом» из catpet.js
   window.addEventListener('resize', () => { if (ov && ov.classList.contains('on') && st) applyCostume(leagueFor(st.totalEarned)); });
   // Реф регистрируем фоном уже при загрузке приложения (не дожидаясь открытия игры):
   // друг перешёл по ckref-ссылке → бонус начислится, даже если в игру он не зайдёт.
