@@ -129,7 +129,8 @@
   }
 
   let ov, state, loc = 'kitchen', cat = { x: 0.5, dir: 1, vx: 0.04, mode: 'walk', frame: 0, t: 0, busy: false };
-  let raf, lastTs = 0, walkImgs = [];
+  let raf, lastTs = 0, walkImgs = [], renderAcc = 0;
+  const FRAME_BUDGET = 1 / 30; // кап рендера цикла «кот ходит» на 30fps — мобильный GPU не должен перерисовывать каждый natively-60fps тик
   let memState = null; // in-memory фолбэк локального состояния — переживает сломанный/недоступный localStorage
 
   // ── Состояние: сервер или localStorage ──────────────────────────────────────
@@ -237,15 +238,17 @@
       .pet-i{display:inline-block;vertical-align:-.18em}
       .pet-ov{position:fixed;inset:0;z-index:9999;display:none;flex-direction:column;overflow:hidden;background:#fdfaf3 center/cover no-repeat;touch-action:none;user-select:none;max-width:480px;margin:0 auto;box-shadow:0 0 0 100vmax rgba(20,14,10,.5)}
       .pet-ov.on{display:flex}
-      .pet-top{position:relative;z-index:3;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:10px 12px;background:linear-gradient(180deg,rgba(0,0,0,.28),transparent)}
+      .pet-topwrap{position:relative;z-index:3;display:flex;flex-direction:column;background:linear-gradient(180deg,rgba(0,0,0,.28),transparent)}
+      .pet-top{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:10px 12px 4px}
       .pet-need{display:flex;align-items:center;gap:5px;flex:1 1 44%}
       .pet-need__i{font-size:15px}
       .pet-need__bar{flex:1;height:9px;border-radius:6px;background:rgba(255,255,255,.45);overflow:hidden}
       .pet-need__fill{height:100%;border-radius:6px;transition:width .4s}
-      .pet-lvl{position:absolute;top:10px;right:48px;color:#fff;font-weight:800;font-size:13px;text-shadow:0 1px 3px rgba(0,0,0,.5);text-align:right;line-height:1.2}
+      .pet-row2{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:0 12px 8px}
+      .pet-lvl{color:#fff;font-weight:800;font-size:13px;text-shadow:0 1px 3px rgba(0,0,0,.5);line-height:1.2}
       .pet-x{position:absolute;top:8px;right:8px;width:34px;height:34px;border:none;border-radius:50%;background:rgba(0,0,0,.3);color:#fff;font-size:19px;cursor:pointer;z-index:4}
       .pet-stage{position:relative;flex:1;overflow:hidden}
-      .pet-cat{position:absolute;bottom:23%;height:46%;width:auto;max-height:320px;filter:drop-shadow(0 12px 14px rgba(0,0,0,.3));transform-origin:bottom center;will-change:left,transform} /* height/max-height переопределяет setCatFrame() пер-кадрово */
+      .pet-cat{position:absolute;bottom:23%;height:46%;width:auto;max-height:320px;transform-origin:bottom center;will-change:left,transform} /* тень уже запечена в кадры (rembg); filter:drop-shadow тут заставлял GPU перерастеризовывать кота каждый кадр ходьбы — жалоба «тормозит». height/max-height переопределяет setCatFrame() пер-кадрово */
       .pet-fx{position:absolute;inset:0;pointer-events:none;z-index:4}
       .pet-name{position:absolute;top:10px;left:12px;color:#fff;font-weight:900;font-size:18px;text-shadow:0 2px 5px rgba(0,0,0,.5);z-index:3}
       .pet-action{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);z-index:5}
@@ -275,12 +278,12 @@
       .pet-item__b.buy:disabled{background:#e7ddcf;color:#b3a48f;cursor:default}
       .pet-item__b.equip{background:#ff7a2d;color:#fff}
       .pet-item__b.on{background:#7ed957;color:#fff}
-      .pet-streak{position:absolute;top:10px;right:52px;z-index:6;font-weight:800;font-size:13px;color:#c2882a;background:rgba(255,255,255,.7);border-radius:12px;padding:5px 10px}
+      .pet-streak{position:static;margin-left:auto;font-weight:800;font-size:13px;color:#c2882a;background:rgba(255,255,255,.7);border-radius:12px;padding:5px 10px;white-space:nowrap}
       .pet-gift{position:absolute;left:50%;transform:translateX(-50%);bottom:172px;z-index:6;display:flex;align-items:center;gap:7px;border:0;cursor:pointer;font:inherit;font-weight:800;font-size:13px;color:#7a5a13;background:rgba(255,248,231,.92);border-radius:14px;padding:7px 12px;box-shadow:0 2px 10px rgba(0,0,0,.12)}
       .pet-gift.ready{color:#fff;background:linear-gradient(120deg,#e0a93c,#c2882a);animation:petgift 1.6s ease-in-out infinite}
       @keyframes petgift{0%,100%{transform:translateX(-50%) scale(1)}50%{transform:translateX(-50%) scale(1.05)}}
       @media (prefers-reduced-motion: reduce){.pet-gift.ready{animation:none}}
-      .pet-toast{position:absolute;left:50%;top:54px;transform:translateX(-50%);z-index:8;max-width:88%;text-align:center;background:linear-gradient(180deg,#ffe7a6,#eebf52);color:#5a2028;font-weight:800;font-size:13px;border-radius:14px;padding:9px 14px;opacity:0;transition:opacity .3s;pointer-events:none}
+      .pet-toast{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);z-index:8;max-width:88%;text-align:center;background:linear-gradient(180deg,#ffe7a6,#eebf52);color:#5a2028;font-weight:800;font-size:13px;border-radius:14px;padding:9px 14px;opacity:0;transition:opacity .3s;pointer-events:none}
       .pet-toast.on{opacity:1}
     `;
     document.head.appendChild(s);
@@ -290,9 +293,13 @@
     styles();
     ov = document.createElement('div'); ov.className = 'pet-ov';
     ov.innerHTML = `
-      <div class="pet-top" id="pet-needs"></div>
-      <div class="pet-lvl" id="pet-lvl"></div>
-      <div class="pet-streak" id="pet-streak"></div>
+      <div class="pet-topwrap">
+        <div class="pet-top" id="pet-needs"></div>
+        <div class="pet-row2">
+          <div class="pet-lvl" id="pet-lvl"></div>
+          <div class="pet-streak" id="pet-streak"></div>
+        </div>
+      </div>
       <button class="pet-gift" id="pet-gift" style="display:none" type="button"></button>
       <button class="pet-x" id="pet-x">×</button>
       <button class="pet-shop-btn" id="pet-shop-btn"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.57a1 1 0 0 0 .99.84H5v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V10h1.15a1 1 0 0 0 .99-.84l.58-3.57a2 2 0 0 0-1.34-2.23z"/></svg></button>
@@ -460,8 +467,11 @@
 
   // ── Цикл «кот ходит» ─────────────────────────────────────────────────────────
   function loop(ts) {
-    if (!ov || !ov.classList.contains('on')) return;
-    const dt = lastTs ? (ts - lastTs) / 1000 : 0.016; lastTs = ts;
+    if (!ov || !ov.classList.contains('on') || document.hidden) return;
+    const dtFull = lastTs ? (ts - lastTs) / 1000 : 0.016; lastTs = ts;
+    renderAcc += dtFull;
+    if (renderAcc < FRAME_BUDGET) { raf = requestAnimationFrame(loop); return; } // кап 30fps: копим dt, рисуем раз в ~33мс
+    const dt = renderAcc; renderAcc = 0;
     const catEl = ov.querySelector('#pet-cat');
     const stage = ov.querySelector('#pet-stage');
     if (!catEl || !stage) { raf = requestAnimationFrame(loop); return; }
@@ -509,9 +519,15 @@
     attachImgRetry(ov.querySelector('#pet-cat'));
     setCatFrame(ov.querySelector('#pet-cat'), 'idle.png');
     cat = { x: 0.5, dir: 1, vx: 0.04, mode: 'walk', frame: 0, t: 0, busy: false };
-    lastTs = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
+    lastTs = 0; renderAcc = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
   }
   function close() { cancelAnimationFrame(raf); if (window.ckCoachClose) { try { window.ckCoachClose(); } catch (_) {} } if (ov) ov.classList.remove('on'); window.scrollUnlock?.(); }
+  // Вкладка ушла в фон — останавливаем rAF-цикл ходьбы (жалоба «тормозит», лишние тики впустую);
+  // вернулись — перезапускаем, только если Дом всё ещё открыт.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { cancelAnimationFrame(raf); }
+    else if (ov && ov.classList.contains('on')) { lastTs = 0; renderAcc = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop); }
+  });
   window.catPetOpen = open;
   window.catPetClose = close;
 })();
