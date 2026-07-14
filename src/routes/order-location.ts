@@ -12,7 +12,7 @@
  */
 
 import { Router, type Request } from "express";
-import { rateLimit } from "../middleware";
+import { rateLimit, safeEq } from "../middleware";
 import { log } from "../logger";
 
 const router = Router();
@@ -44,7 +44,7 @@ function num(v: unknown): number | null {
 // ── Курьер → сервер (частые пинги: ~1/10с) ──────────────────────────────────
 router.post("/api/order/location", rateLimit(30), (req, res) => {
   const token = bearer(req);
-  if (!process.env.DELIVERY_TOKEN || token !== process.env.DELIVERY_TOKEN) {
+  if (!process.env.DELIVERY_TOKEN || !safeEq(token, process.env.DELIVERY_TOKEN)) {
     res.status(401).json({ error: "unauthorized" });
     return;
   }

@@ -712,17 +712,24 @@ export async function closeWeeklySeason(): Promise<{ week: string; recorded: num
     let prizePoints = 0, didAward = false;
     if (WEEKLY_PRIZES_ENABLED && prize) {
       const verified = await isPhoneVerified(chatId).catch(() => false);
-      if (verified) {
-        await earnPoints(chatId, prize.points, "clicker_weekly_top", { rank, week: endedKey }).catch(() => {});
-        prizePoints = prize.points; didAward = true; awarded++;
-      }
+      if (verified) { prizePoints = prize.points; didAward = true; }
     }
-    await pool.query(
+    // INSERT строки-победителя = мьютекс дедупа. Раньше earnPoints вызывался ДО
+    // вставки → два параллельных прогона крона начисляли реальные баллы дважды
+    // (ON CONFLICT дедупил только строку, не начисление). Теперь баллы получает
+    // только прогон, реально вставивший строку.
+    const ins = await pool.query(
       `INSERT INTO clicker_week_winners (week_key, rank, chat_id, points, prize_points, awarded)
-       VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (week_key, rank) DO NOTHING`,
+       VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (week_key, rank) DO NOTHING
+       RETURNING rank`,
       [endedKey, rank, chatId, pts, prizePoints, didAward]
     );
+    if ((ins.rowCount ?? 0) === 0) continue; // строку уже записал другой прогон
     recorded++;
+    if (didAward) {
+      await earnPoints(chatId, prize!.points, "clicker_weekly_top", { rank, week: endedKey }).catch(() => {});
+      awarded++;
+    }
   }
   log.info({ endedKey, recorded, awarded, enabled: WEEKLY_PRIZES_ENABLED }, "[weekly] season closed");
   return { week: endedKey, recorded, awarded };
@@ -1116,10 +1123,12 @@ export async function syncPurchaseBonus(chatId: number): Promise<{ ok: boolean; 
   if (!lk || !lk.ok || !lk.data || !lk.data.configured) return { ok: true, granted: 0 };
   const yearSpent = Math.max(0, Math.floor(Number(lk.data.year_spent || 0)));
   const delta = Math.max(0, yearSpent - spentSynced); // откат/новый год → 0, watermark подвинем
-  // Двигаем watermark всегда (в т.ч. при rollover вниз), чтобы не копить ложный delta.
-  await pool.query(`UPDATE clicker_purchase_sync SET spent_synced=$2 WHERE chat_id=$1`, [chatId, yearSpent]);
   const grant = Math.min(delta * PURCHASE_RATE, PURCHASE_CAP);
-  if (grant <= 0) return { ok: true, granted: 0, yearSpent };
+  if (grant <= 0) {
+    // Начислять нечего — двигаем watermark отдельно (потери монет тут быть не может).
+    await pool.query(`UPDATE clicker_purchase_sync SET spent_synced=$2 WHERE chat_id=$1`, [chatId, yearSpent]);
+    return { ok: true, granted: 0, yearSpent };
+  }
 
   const client = await pool.connect();
   try {
@@ -1127,6 +1136,10 @@ export async function syncPurchaseBonus(chatId: number): Promise<{ ok: boolean; 
     const { r, cl } = await refresh(client, chatId);
     r.balance = Number(r.balance) + grant; r.total_earned = Number(r.total_earned) + grant;
     await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, updated_at=NOW() WHERE chat_id=$1`, [chatId, r.balance, r.total_earned]);
+    // Watermark двигаем в ТОЙ ЖЕ транзакции, что и начисление: раньше он сдвигался
+    // отдельным query ДО начисления → краш между ними терял бонус навсегда
+    // (следующая сверка дала бы delta=0).
+    await client.query(`UPDATE clicker_purchase_sync SET spent_synced=$2 WHERE chat_id=$1`, [chatId, yearSpent]);
     const st = buildState(r, cl, 0); st.gamesDone = await gamesDoneToday(client, chatId);
     await client.query("COMMIT");
     return { ok: true, granted: grant, yearSpent, state: st };

@@ -42,7 +42,10 @@ export function verifyInitData(initData: string): TgUser | null {
 
   const secretKey = crypto.createHmac("sha256", "WebAppData").update(BOT_TOKEN).digest();
   const calcHash = crypto.createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
-  if (calcHash !== hash) return null;
+  // Constant-time сравнение (как в auth-vk.ts / app-auth.ts) — не течём длиной префикса.
+  const bCalc = Buffer.from(calcHash);
+  const bHash = Buffer.from(hash);
+  if (bCalc.length !== bHash.length || !crypto.timingSafeEqual(bCalc, bHash)) return null;
 
   // Reject if older than 24h
   const authDate = Number(params.get("auth_date") ?? 0);

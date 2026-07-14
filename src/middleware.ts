@@ -6,7 +6,21 @@
  * requireTgUser/getTgUser/tryGetTgUser лежат в `src/auth.ts` (не трогаем).
  */
 
+import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
+
+/**
+ * Constant-time сравнение секретов (токены, HMAC). Обычный `===`/`!==` завершается
+ * на первом различающемся байте → тайминг выдаёт длину совпавшего префикса.
+ * Возвращает false для пустых/разной длины строк без раскрытия тайминга.
+ */
+export function safeEq(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false;
+  const ba = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ba.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ba, bb);
+}
 
 // ── Rate limit ──────────────────────────────────────────────────────────────
 // Простой sliding window per-IP + per-path. Bucket очищается каждые 5 мин.
@@ -14,9 +28,10 @@ const rateBuckets = new Map<string, number[]>();
 
 export function rateLimit(maxPerMinute: number) {
   return (req: Request, res: Response, next: NextFunction) => {
-    const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim()
-            || req.socket.remoteAddress
-            || "unknown";
+    // req.ip уважает `app.set("trust proxy", 1)` — берёт реальный клиентский IP,
+    // добавленный Caddy справа в X-Forwarded-For. Раньше здесь брался ЛЕВЫЙ элемент
+    // XFF (клиентский, подделываемый) → лимит обходился любым заголовком.
+    const ip = req.ip || req.socket.remoteAddress || "unknown";
     const key = `${ip}:${req.path}`;
     const now = Date.now();
     const win = 60_000;
@@ -51,7 +66,7 @@ export function requireAdminToken(req: Request, res: Response, next: NextFunctio
   const token = req.header("x-user-token")
              || (req.body as { token?: string })?.token
              || (req.query.token as string | undefined);
-  if (!token || token !== process.env.ADMIN_TOKEN) {
+  if (!process.env.ADMIN_TOKEN || !safeEq(token, process.env.ADMIN_TOKEN)) {
     res.status(403).json({ error: "forbidden" });
     return;
   }

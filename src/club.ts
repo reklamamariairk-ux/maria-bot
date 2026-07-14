@@ -386,28 +386,36 @@ export interface VerifyResult {
 export async function verifyPhone(chatId: number, phone: string): Promise<VerifyResult> {
   const cleanPhone = phone.replace(/[^\d+]/g, "");
 
-  const { rows } = await pool.query(
-    `SELECT phone_verified_at FROM subscribers WHERE chat_id = $1`,
-    [chatId]
-  );
-
-  if (rows[0]?.phone_verified_at) {
-    // Already verified — just update phone if changed
-    await pool.query(
-      `UPDATE subscribers SET phone = $2 WHERE chat_id = $1`,
-      [chatId, cleanPhone]
-    );
-    return { alreadyVerified: true, bonusAwarded: 0 };
-  }
-
-  // First-time verify
-  await pool.query(
-    `INSERT INTO subscribers (chat_id, phone, phone_verified_at)
-     VALUES ($1, $2, NOW())
-     ON CONFLICT (chat_id) DO UPDATE
-       SET phone = $2, phone_verified_at = NOW()`,
+  // Атомарно определяем «первый раз»: без этого два параллельных запроса
+  // верификации оба читали phone_verified_at=null и оба начисляли BONUS_VERIFY_PHONE
+  // (реальные баллы в 1С) → 200 вместо 100. Теперь ровно один запрос ставит
+  // phone_verified_at и получает бонус (row-lock под READ COMMITTED).
+  const upd = await pool.query(
+    `UPDATE subscribers SET phone = $2, phone_verified_at = NOW()
+       WHERE chat_id = $1 AND phone_verified_at IS NULL
+     RETURNING chat_id`,
     [chatId, cleanPhone]
   );
+  let firstTime = (upd.rowCount ?? 0) > 0;
+
+  if (!firstTime) {
+    // Строки могло не быть вовсе — создаём её как верифицированную атомарно.
+    const ins = await pool.query(
+      `INSERT INTO subscribers (chat_id, phone, phone_verified_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (chat_id) DO NOTHING
+       RETURNING chat_id`,
+      [chatId, cleanPhone]
+    );
+    if ((ins.rowCount ?? 0) > 0) {
+      firstTime = true;
+    } else {
+      // Строка есть и уже верифицирована ранее — просто обновим телефон.
+      await pool.query(`UPDATE subscribers SET phone = $2 WHERE chat_id = $1`, [chatId, cleanPhone]);
+    }
+  }
+
+  if (!firstTime) return { alreadyVerified: true, bonusAwarded: 0 };
 
   await earnPoints(chatId, BONUS_VERIFY_PHONE, "phone_verification", { phone: cleanPhone });
   return { alreadyVerified: false, bonusAwarded: BONUS_VERIFY_PHONE };
