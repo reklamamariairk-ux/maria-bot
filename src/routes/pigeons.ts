@@ -6,8 +6,7 @@
  * POST /api/pigeons/mail {breed,to,sticker} · POST /api/pigeons/mail/thanks {id,sticker}
  * GET  /api/pigeons/mail             · GET  /api/pigeons/recipients
  * POST /api/pigeons/feed {breed}     · POST /api/pigeons/showcase {breeds}
- *
- * Гонка стаи (race/enter, race) — Task 7, здесь не мontируется.
+ * POST /api/pigeons/race/enter {breed} · GET /api/pigeons/race — за флагом PIGEON_RACE_ENABLED
  *
  * sendMail нужен PushService для пуша получателю — роутер собирается фабрикой
  * createPigeonsRouter(push), как createWheelStreakRouter/createReferralRouter.
@@ -16,6 +15,7 @@ import { Router } from "express";
 import {
   getPigeonsOverview, claimSet, getTradeBoard, createTrade, acceptTrade, cancelTrade,
   sendMail, getInbox, thankMail, getMailRecipients, feedPigeon, setShowcase,
+  enterRace, getRace,
 } from "../pigeons";
 import type { PushService } from "../push";
 import { requireTgUser, getTgUser } from "../auth";
@@ -126,6 +126,18 @@ export function createPigeonsRouter(push: PushService): Router {
       if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
       res.json(r);
     } catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/showcase]"); res.status(500).json({ error: "internal" }); }
+  });
+
+  router.post("/api/pigeons/race/enter", requireTgUser, rateLimit(20), async (req, res) => {
+    const u = getTgUser(req)!; const breed = String((req.body as { breed?: string }).breed || "");
+    try { const r = await enterRace(u.id, breed); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json(r); }
+    catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/race/enter]"); res.status(500).json({ error: "internal" }); }
+  });
+
+  router.get("/api/pigeons/race", requireTgUser, rateLimit(60), async (req, res) => {
+    const u = getTgUser(req)!;
+    try { res.json(await getRace(u.id)); }
+    catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/race]"); res.status(500).json({ error: "internal" }); }
   });
 
   return router;

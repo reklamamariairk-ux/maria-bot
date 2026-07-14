@@ -42,6 +42,14 @@ export async function currentWeekKey(): Promise<string> {
   return weekKey();
 }
 
+// Прошлая (только что завершившаяся) неделя — тот же паттерн, что closeWeeklySeason
+// (clicker.ts:724): String(weekMonday() - 7). weekMonday() экспортирован из clicker.ts
+// специально для этого; ленивый импорт по тем же причинам, что currentWeekKey выше.
+export async function previousWeekKey(): Promise<string> {
+  const { weekMonday } = await import("./clicker");
+  return String(weekMonday() - 7);
+}
+
 // Сеты: награда монетами (v1 — только игровое). Полный альбом = 16 сетовых пород.
 export const PIGEON_SETS: { id: string; name: string; reward: number }[] = [
   { id: "city",  name: "Городские",        reward: 25000 },
@@ -584,4 +592,68 @@ export async function getMailRecipients(chatId: number):
         AND c.chat_id<>$1 AND c.updated_at > NOW() - INTERVAL '${MAIL_ACTIVE_WINDOW}'
       LIMIT 20`, [chatId]);
   return { squad: mapRows(squadRows), refs: mapRows(refR.rows) };
+}
+
+// ── Гонка стаи ────────────────────────────────────────────────────────────
+// Флаг: гонка выключена по умолчанию (v1 фичи почты/обменов/сетов не зависят от неё).
+export const RACE_ENABLED = process.env.PIGEON_RACE_ENABLED === "true";
+const RACE_PRIZES = [50000, 25000, 10000, 5000, 5000, 2500, 2500, 2500, 2500, 2500];
+
+// Заявка фиксирует очки сразу (raceScore зависит от текущих stars породы) — птица
+// НЕ списывается, гонка не сжигает коллекцию. Одна заявка на неделю (PK week,chat_id).
+export async function enterRace(chatId: number, breed: string): Promise<{ ok: boolean; reason?: string }> {
+  if (!RACE_ENABLED) return { ok: false, reason: "disabled" };
+  if (!BREED_BY_ID.has(breed)) return { ok: false, reason: "unknown_breed" };
+  const inv = await pool.query(
+    `SELECT stars FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 AND count>0`, [chatId, breed]);
+  if (!inv.rowCount) return { ok: false, reason: "not_owned" };
+  const score = raceScore(breed, inv.rows[0].stars, Math.random());
+  const week = await currentWeekKey();
+  const ins = await pool.query(
+    `INSERT INTO pigeon_race_entries (week, chat_id, breed, score) VALUES ($1,$2,$3,$4)
+     ON CONFLICT (week, chat_id) DO NOTHING RETURNING 1`,
+    [week, chatId, breed, score]);
+  return ins.rowCount ? { ok: true } : { ok: false, reason: "already" };
+}
+
+export async function getRace(chatId: number) {
+  const week = await currentWeekKey();
+  const [mine, last, entrants] = await Promise.all([
+    pool.query(`SELECT breed FROM pigeon_race_entries WHERE week=$1 AND chat_id=$2`, [week, chatId]),
+    pool.query(`SELECT results FROM pigeon_race_winners ORDER BY week DESC LIMIT 1`),
+    pool.query(`SELECT COUNT(*) AS n FROM pigeon_race_entries WHERE week=$1`, [week]),
+  ]);
+  return {
+    enabled: RACE_ENABLED, week, myBreed: mine.rows[0]?.breed ?? null,
+    entrants: Number(entrants.rows[0].n), lastResults: last.rows[0]?.results ?? null,
+  };
+}
+
+// Закрытие прошедшей недели. Идемпотентно: мьютекс-строка в pigeon_race_winners
+// (тот же паттерн, что clicker_week_winners в closeWeeklySeason) — INSERT ... ON
+// CONFLICT DO NOTHING RETURNING 1 гарантирует, что только один параллельный прогон
+// крона реально начислит призы; остальные откатывают транзакцию и возвращают closed=false.
+export async function closeRaceWeek(): Promise<{ week: string; entries: number; closed: boolean }> {
+  const prevWeek = await previousWeekKey();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const mutex = await client.query(
+      `INSERT INTO pigeon_race_winners (week, results) VALUES ($1,'[]'::jsonb) ON CONFLICT DO NOTHING RETURNING 1`, [prevWeek]);
+    if (!mutex.rowCount) { await client.query("ROLLBACK"); return { week: prevWeek, entries: 0, closed: false }; }
+    const top = await client.query(
+      `SELECT chat_id, breed, score FROM pigeon_race_entries WHERE week=$1 ORDER BY score DESC, entered_at ASC LIMIT 10`, [prevWeek]);
+    // Один ленивый импорт на всю функцию — не тянуть require("./clicker") на каждой
+    // итерации топ-10 (тот же модуль, тот же экспорт, N лишних промисов без пользы).
+    const { addClickerBalance } = await import("./clicker");
+    for (let i = 0; i < top.rows.length; i++) {
+      await addClickerBalance(Number(top.rows[i].chat_id), RACE_PRIZES[i], client);
+    }
+    if (top.rows.length) await grantPigeon(Number(top.rows[0].chat_id), "champion", client);
+    await client.query(`UPDATE pigeon_race_winners SET results=$2 WHERE week=$1`,
+      [prevWeek, JSON.stringify(top.rows.map((r, i) => ({ place: i + 1, chat: Number(r.chat_id), breed: r.breed, score: r.score, prize: RACE_PRIZES[i] })))]);
+    await client.query("COMMIT");
+    return { week: prevWeek, entries: top.rows.length, closed: true };
+  } catch (e) { await client.query("ROLLBACK"); throw e; }
+  finally { client.release(); }
 }

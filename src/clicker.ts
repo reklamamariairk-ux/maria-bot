@@ -34,7 +34,7 @@ const irkToday = () => new Date(Date.now() + 8 * 3600 * 1000).toISOString().slic
 // Ленивый импорт на стороне pigeons.ts (await import("./clicker")) — см. комментарий там.
 export const todayIrkutsk = irkToday;
 // Сезон = неделя по Иркутску (сброс в понедельник 00:00). Ключ — индекс дня-понедельника.
-function weekMonday(): number { const d = Math.floor((Date.now() + 8 * 3600 * 1000) / 86400000); return d - ((d + 3) % 7); }
+export function weekMonday(): number { const d = Math.floor((Date.now() + 8 * 3600 * 1000) / 86400000); return d - ((d + 3) % 7); }
 export const weekKey = () => String(weekMonday());
 const seasonEndsTs = () => (weekMonday() + 7) * 86400000 - 8 * 3600 * 1000; // ms UTC начала след. недели
 

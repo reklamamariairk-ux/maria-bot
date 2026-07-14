@@ -40,7 +40,7 @@ import appAuthRouter, { initAppAuthSchema, attachAppLoginChat, completeAppLogin 
 import { initPetSchema } from "./pet";
 import clickerRouter from "./routes/clicker";
 import { initClickerSchema, registerRef, closeWeeklySeason, pushWeeklyWinners, getRefOrderCandidates, markRefOrderRewarded } from "./clicker";
-import { initPigeonSchema } from "./pigeons";
+import { initPigeonSchema, RACE_ENABLED, closeRaceWeek } from "./pigeons";
 import { initAnalyticsSchema, trackEvent, wasFunnelSent, markFunnelSent, getDormantPlayers } from "./analytics";
 import { initClickerPushSchema, runClickerRetentionPush } from "./clicker-push";
 import { runPetHungryPush, runPetEnergyPush } from "./pet-push";
@@ -2210,8 +2210,10 @@ async function main() {
   // ДО обнуления week_base активными игроками. Фиксирует топ-3 + начисляет призы.
   cron.schedule("2 16 * * 0", () => {
     closeWeeklySeason().catch((e) => log.error({ err: e }, "[WEEKLY CLOSE CRON]"));
+    // Гонка стаи финиширует вс, закрытие пн 00:02 = сразу после — та же тактовая точка.
+    if (RACE_ENABLED) closeRaceWeek().catch((e) => log.error({ err: e }, "[RACE CLOSE CRON]"));
   });
-  console.log("[STARTUP] Weekly-season close cron scheduled (Mon 00:02 Irkutsk)");
+  console.log(`[STARTUP] Weekly-season close cron scheduled (Mon 00:02 Irkutsk; race=${RACE_ENABLED})`);
 
   // Пуш победителям недели — понедельник 10:00 Иркутск (02:00 UTC), не в тихие часы.
   cron.schedule("0 2 * * 1", () => {
