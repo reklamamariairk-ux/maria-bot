@@ -137,6 +137,11 @@ export async function initPigeonSchema(): Promise<void> {
     CREATE TABLE IF NOT EXISTS pigeon_race_winners (
       week TEXT PRIMARY KEY, results JSONB NOT NULL, closed_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
   `);
+  // Кэш перка «полный альбом» (+5% к пассиву, ALBUM_PASSIVE_BONUS) на clicker_state —
+  // выставляется в grantPigeon при 16/16 пород, читается в clicker.ts::refresh без
+  // похода в pigeon_inventory на каждый тап. initClickerSchema() уже отработал к этому
+  // моменту (index.ts: initClickerSchema() → initPigeonSchema()), таблица существует.
+  await pool.query(`ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS album_bonus BOOLEAN NOT NULL DEFAULT FALSE`);
 }
 
 // ── Инвентарь ──────────────────────────────────────────────────────────────
@@ -148,7 +153,13 @@ export async function grantPigeon(chatId: number, breedId: string, client?: Pool
     `INSERT INTO pigeon_inventory (chat_id, breed, count) VALUES ($1,$2,1)
      ON CONFLICT (chat_id, breed) DO UPDATE SET count = pigeon_inventory.count + 1
      RETURNING count`, [chatId, breedId]);
-  return { breed: breedId, isNew: r.rows[0].count === 1 };
+  const isNew = r.rows[0].count === 1;
+  // Только новая НЕ-champion порода могла сдвинуть счётчик различных пород до 16 —
+  // не гонять hasFullAlbum на каждый дубль. album_bonus читается кэшем в clicker.ts::refresh.
+  if (isNew && breedId !== "champion" && (await hasFullAlbum(chatId, client))) {
+    await q.query(`UPDATE clicker_state SET album_bonus=TRUE WHERE chat_id=$1 AND album_bonus=FALSE`, [chatId]);
+  }
+  return { breed: breedId, isNew };
 }
 
 export async function hasFullAlbum(chatId: number, client?: PoolClient): Promise<boolean> {
