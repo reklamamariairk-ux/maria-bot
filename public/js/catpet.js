@@ -183,13 +183,22 @@
     memState = s; lsSet(LS, JSON.stringify(s)); return s;
   }
   async function api(path, opts) {
-    const r = await fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', ...(App.authHeader ? App.authHeader() : {}) } });
-    if (!r.ok) throw new Error('http ' + r.status);
+    const r = await fetch(path, {
+      ...opts,
+      signal: AbortSignal.timeout ? AbortSignal.timeout(10000) : undefined, // не висеть вечно в мёртвой сети
+      headers: { 'Content-Type': 'application/json', ...(App.authHeader ? App.authHeader() : {}) },
+    });
+    if (!r.ok) {
+      const e = new Error('http ' + r.status);
+      try { e.body = await r.json(); } catch (_) {} // {error:reason} бэка — для человеческих тостов
+      throw e;
+    }
     return r.json();
   }
   async function loadState() { state = authed() ? await api('/api/pet') : localGet(); loc = state.location && LOC[state.location] ? state.location : 'kitchen'; }
   async function doAction(action) {
     let bonus = 0;
+    const lvl0 = state ? state.level : null;
     try {
       if (authed()) {
         try {
@@ -207,6 +216,7 @@
       renderGift(state);
     }
     if (bonus > 0) showCareBonus(bonus, state.careStreak);
+    if (lvl0 != null && state && state.level > lvl0) { showToast('Василий вырос — уровень ' + state.level + '!'); window.haptic?.('success'); }
   }
   function showToast(html) {
     if (!ov) return;
@@ -216,17 +226,28 @@
     t.classList.add('on');
     clearTimeout(t._tm); t._tm = setTimeout(() => t.classList.remove('on'), 2600);
   }
-  function showCareBonus(bonus, streak) { showToast('Василий рад! Забота ' + streak + ' дн. подряд · +' + bonus + ' монет'); }
-  function showSyncFail() { showToast('Нет связи — прогресс не сохранён'); }
+  function showCareBonus(bonus, streak) { showToast('Василий рад! Забота ' + streak + ' дн. подряд · +' + bonus + ' монет'); window.haptic?.('success'); }
+  function showSyncFail() { showToast('Нет связи — прогресс не сохранён'); window.haptic?.('error'); }
   async function saveLoc() { if (authed()) { api('/api/pet/location', { method: 'POST', body: JSON.stringify({ location: loc }) }).catch(() => {}); } else { const s = localGet(); s.location = loc; memState = s; lsSet(LS, JSON.stringify(s)); } }
+  // Причины отказа бэка (routes/pet.ts) → человеческий текст; нет body = сеть упала
+  const SHOP_ERR = { not_enough_coins: 'Не хватает монет', already_owned: 'Уже куплено', not_owned: 'Сначала купи эту шляпу' };
+  function shopFail(e) {
+    const reason = e && e.body && e.body.error;
+    showToast(reason ? (SHOP_ERR[reason] || 'Не получилось') : 'Нет связи — попробуй ещё раз');
+    window.haptic?.('error');
+  }
   async function buyItem(id) {
-    if (authed()) { try { const r = await api('/api/pet/buy', { method: 'POST', body: JSON.stringify({ item: id }) }); if (!r.error) state = r; } catch (_) {} }
-    else state = localBuy(id);
+    if (authed()) {
+      try { state = await api('/api/pet/buy', { method: 'POST', body: JSON.stringify({ item: id }) }); window.haptic?.('medium'); }
+      catch (e) { shopFail(e); }
+    } else { state = localBuy(id); window.haptic?.('medium'); }
     renderNeeds(); renderShop(); renderHat();
   }
   async function equipItem(id) {
-    if (authed()) { try { const r = await api('/api/pet/equip', { method: 'POST', body: JSON.stringify({ item: id }) }); if (!r.error) state = r; } catch (_) {} }
-    else state = localEquip(id);
+    if (authed()) {
+      try { state = await api('/api/pet/equip', { method: 'POST', body: JSON.stringify({ item: id }) }); }
+      catch (e) { shopFail(e); }
+    } else state = localEquip(id);
     renderShop(); renderHat();
   }
 
@@ -257,7 +278,7 @@
       .pet-nav__b{flex:1;margin:0 4px;border:none;border-radius:14px;padding:8px 4px;background:rgba(255,255,255,.85);font-size:12px;font-weight:700;color:#7a3b12;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
       .pet-nav__b.on{background:#ffd23f;box-shadow:0 4px 10px rgba(0,0,0,.2)}
       .pet-nav__b .i{font-size:20px}
-      .pet-bubble{position:absolute;z-index:5;background:#fff;border-radius:14px;padding:6px 10px;font-weight:800;color:#7a3b12;box-shadow:0 4px 12px rgba(0,0,0,.2);font-size:14px;transform:transl(-50%,0);opacity:0;transition:opacity .2s}
+      .pet-bubble{position:absolute;z-index:5;background:#fff;border-radius:14px;padding:6px 10px;font-weight:800;color:#7a3b12;box-shadow:0 4px 12px rgba(0,0,0,.2);font-size:14px;transform:translate(-50%,0);opacity:0;transition:opacity .2s}
       .pet-play{position:absolute;inset:0;z-index:6;display:none;align-items:center;justify-content:center;background:rgba(40,20,8,.5);backdrop-filter:blur(2px)}
       .pet-play.on{display:flex}
       .pet-play__card{background:#fff5ea;border-radius:22px;padding:22px;width:84%;max-width:340px;text-align:center}
@@ -285,6 +306,9 @@
       @media (prefers-reduced-motion: reduce){.pet-gift.ready{animation:none}}
       .pet-toast{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);z-index:8;max-width:88%;text-align:center;background:linear-gradient(180deg,#ffe7a6,#eebf52);color:#5a2028;font-weight:800;font-size:13px;border-radius:14px;padding:9px 14px;opacity:0;transition:opacity .3s;pointer-events:none}
       .pet-toast.on{opacity:1}
+      .pet-x::after,.pet-shop-btn::after{content:'';position:absolute;inset:-7px} /* хит-ареа 34px → 48px */
+      #pet-do:active,.pet-nav__b:active,#pet-x:active,#pet-shop-btn:active,.pet-item__b:active:not(:disabled),.pet-play__g button:active,.pet-shop__h button:active{transform:scale(.95);filter:brightness(.93)}
+      #pet-gift:active{filter:brightness(.9)} /* transform не трогаем: конфликт с translateX(-50%) и анимацией .ready */
     `;
     document.head.appendChild(s);
   }
@@ -300,9 +324,9 @@
           <div class="pet-streak" id="pet-streak"></div>
         </div>
       </div>
-      <button class="pet-gift" id="pet-gift" style="display:none" type="button"></button>
-      <button class="pet-x" id="pet-x">×</button>
-      <button class="pet-shop-btn" id="pet-shop-btn"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.57a1 1 0 0 0 .99.84H5v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V10h1.15a1 1 0 0 0 .99-.84l.58-3.57a2 2 0 0 0-1.34-2.23z"/></svg></button>
+      <button class="pet-gift" id="pet-gift" style="display:none" type="button" data-haptic="light"></button>
+      <button class="pet-x" id="pet-x" data-haptic="light">×</button>
+      <button class="pet-shop-btn" id="pet-shop-btn" data-haptic="light"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.57a1 1 0 0 0 .99.84H5v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V10h1.15a1 1 0 0 0 .99-.84l.58-3.57a2 2 0 0 0-1.34-2.23z"/></svg></button>
       <div class="pet-stage" id="pet-stage">
         <div class="pet-name" id="pet-locname"></div>
         <img class="pet-cat" id="pet-cat" draggable="false"/>
@@ -310,20 +334,20 @@
         <div class="pet-action" id="pet-action"></div>
       </div>
       <div class="pet-shop" id="pet-shop">
-        <div class="pet-shop__h"><span>Наряды Василия · <span id="pet-shop-coins">0</span> монет</span><button id="pet-shop-close">Готово</button></div>
+        <div class="pet-shop__h"><span>Наряды Василия · <span id="pet-shop-coins">0</span> монет</span><button id="pet-shop-close" data-haptic="light">Готово</button></div>
         <div class="pet-shop__grid" id="pet-shop-grid"></div>
       </div>
       <div class="pet-nav" id="pet-nav"></div>
       <div class="pet-play" id="pet-play"><div class="pet-play__card"><h3>Во что поиграем?</h3><div class="pet-play__g">
         <button id="pet-g-feed">Накорми</button><button id="pet-g-catch">Ловилка</button>
-      </div><div style="margin-top:14px"><button id="pet-g-cancel" style="background:#eee;color:#7a3b12;border:none;border-radius:14px;padding:10px 18px;font-weight:700;cursor:pointer">Назад</button></div></div></div>
+      </div><div style="margin-top:14px"><button id="pet-g-cancel" data-haptic="light" style="background:#eee;color:#7a3b12;border:none;border-radius:14px;padding:10px 18px;font-weight:700;cursor:pointer">Назад</button></div></div></div>
     `;
     document.body.appendChild(ov);
     ov.querySelector('#pet-x').onclick = close;
     ov.querySelector('#pet-gift').onclick = openGiftLadder;
     // nav
     const nav = ov.querySelector('#pet-nav');
-    nav.innerHTML = ORDER.map(k => `<button class="pet-nav__b" data-loc="${k}"><span class="i">${NAV_ICON[LOC[k].action](20)}</span>${LOC[k].name}</button>`).join('');
+    nav.innerHTML = ORDER.map(k => `<button class="pet-nav__b" data-loc="${k}" data-haptic="selection"><span class="i">${NAV_ICON[LOC[k].action](20)}</span>${LOC[k].name}</button>`).join('');
     nav.querySelectorAll('.pet-nav__b').forEach(b => b.onclick = () => goLoc(b.dataset.loc));
     // play menu
     ov.querySelector('#pet-g-feed').onclick = () => { hidePlay(); window.catFeedOpen?.(); afterPlay(); };
@@ -332,6 +356,9 @@
     // магазин
     ov.querySelector('#pet-shop-btn').onclick = () => { renderShop(); ov.querySelector('#pet-shop').classList.add('on'); };
     ov.querySelector('#pet-shop-close').onclick = () => ov.querySelector('#pet-shop').classList.remove('on');
+    // тап по фону попапа = закрыть (по самому оверлею, не по внутренностям)
+    ov.querySelector('#pet-shop').onclick = (e) => { if (e.target === e.currentTarget) { window.haptic?.('light'); e.currentTarget.classList.remove('on'); } };
+    ov.querySelector('#pet-play').onclick = (e) => { if (e.target === e.currentTarget) { window.haptic?.('light'); hidePlay(); } };
     // needs skeleton
     ov.querySelector('#pet-needs').innerHTML = NEEDS.map(n => `
       <div class="pet-need"><span class="pet-need__i">${n.ic(15)}</span><div class="pet-need__bar"><div class="pet-need__fill" id="need-${n.k}"></div></div></div>`).join('');
@@ -396,18 +423,24 @@
   }
 
   // ── Действия ухода ──────────────────────────────────────────────────────────
+  let actionBusy = false, poseTm = 0; // анти-даблтап + таймер возврата позы в idle
   async function onAction() {
     const cfg = LOC[loc];
     if (cfg.action === 'play') { showPlay(); return; }
+    if (actionBusy) return;
+    actionBusy = true;
+    const btn = ov.querySelector('#pet-do'); if (btn) btn.disabled = true;
+    clearTimeout(poseTm); // старый таймер не должен сбросить позу посреди нового действия
     cat.busy = true;
     const catEl = ov.querySelector('#pet-cat');
     if (cfg.action === 'feed') { setCatFrame(catEl, 'happy.png'); bubble('Ням!'); hearts(); }
     else if (cfg.action === 'sleep') { setCatFrame(catEl, 'full.png'); bubble('Zzz'); }
     else { setCatFrame(catEl, 'happy.png'); bubble('Мур!'); hearts(); }
-    window.haptic?.('light');
-    await doAction(cfg.action);
+    window.haptic?.('medium');
+    try { await doAction(cfg.action); }
+    finally { actionBusy = false; if (btn) btn.disabled = false; }
     // после действия возвращаемся в idle — иначе поза (особенно лежачая) залипала до следующей ходьбы
-    setTimeout(() => { cat.busy = false; setCatFrame(catEl, 'idle.png'); }, 1400);
+    poseTm = setTimeout(() => { cat.busy = false; setCatFrame(catEl, 'idle.png'); }, 1400);
   }
 
   function bubble(text) {
@@ -444,8 +477,17 @@
       else btn = `<button class="pet-item__b equip" data-equip="${h.id}">Надеть</button>`;
       return `<div class="pet-item"><img src="${A(h.img)}"/><div class="pet-item__n">${h.name}</div>${btn}</div>`;
     }).join('');
-    ov.querySelectorAll('#pet-shop-grid [data-buy]').forEach(b => b.onclick = () => buyItem(b.dataset.buy));
-    ov.querySelectorAll('#pet-shop-grid [data-equip]').forEach(b => b.onclick = () => equipItem(b.dataset.equip));
+    // на время запроса кнопка гаснет с «…»; buyItem/equipItem в конце перерисуют весь грид
+    ov.querySelectorAll('#pet-shop-grid [data-buy]').forEach(b => b.onclick = () => {
+      if (b.disabled) return;
+      b.disabled = true; b.textContent = '…';
+      buyItem(b.dataset.buy);
+    });
+    ov.querySelectorAll('#pet-shop-grid [data-equip]').forEach(b => b.onclick = () => {
+      if (b.disabled) return;
+      b.disabled = true; b.textContent = '…';
+      equipItem(b.dataset.equip);
+    });
   }
   function renderHat() {
     // Шляпа впечена в webp-кадры — просто пере-применяем текущий кадр с учётом надетого.
@@ -453,13 +495,18 @@
     setCatFrame(catEl, catEl.dataset.frame || 'idle.png');
   }
 
-  function showPlay() { ov.querySelector('#pet-play').classList.add('on'); }
+  function showPlay() { window.haptic?.('light'); ov.querySelector('#pet-play').classList.add('on'); }
   function hidePlay() { ov.querySelector('#pet-play').classList.remove('on'); }
+  let playCheck = 0; // интервал ожидания конца мини-игры — чистится в close()
   function afterPlay() {
     // вернулись из мини-игры → настроение вверх (оптимистично)
-    const check = setInterval(() => {
+    clearInterval(playCheck);
+    let seen = false; // оверлей игры обязан был реально появиться — иначе первый тик дарит бесплатный play
+    playCheck = setInterval(() => {
       const playing = document.querySelector('.cg-ov.on, .cf2-root.on, .cf-ov.on');
-      if (!playing) { clearInterval(check); doAction('play'); }
+      if (playing) { seen = true; return; }
+      clearInterval(playCheck);
+      if (seen) doAction('play');
     }, 800);
   }
 
@@ -499,7 +546,7 @@
   async function open() {
     if (!ov) build();
     ov.classList.add('on'); window.scrollLock?.();
-    try { await loadState(); } catch (_) { state = localGet(); }
+    try { await loadState(); } catch (_) { state = localGet(); if (authed()) showToast('Нет связи — показан офлайн-режим'); }
     // префетч кадров ходьбы — после loadState, чтобы префетчить вариант с надетой шляпой
     walkImgs = WALK.map(w => { const i = new Image(); i.src = A(catSrc(w)); return i; });
     // + кадры действий (покормить/уложить спать) — та же причина «дёргается» была на них,
@@ -519,7 +566,17 @@
     cat = { x: 0.5, dir: 1, vx: 0.04, mode: 'walk', frame: 0, t: 0, busy: false };
     lastTs = 0; renderAcc = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
   }
-  function close() { cancelAnimationFrame(raf); if (window.ckCoachClose) { try { window.ckCoachClose(); } catch (_) {} } if (ov) ov.classList.remove('on'); window.scrollUnlock?.(); }
+  function close() {
+    cancelAnimationFrame(raf); clearInterval(playCheck);
+    if (window.ckCoachClose) { try { window.ckCoachClose(); } catch (_) {} }
+    if (ov) {
+      ov.classList.remove('on');
+      // прибираем попапы — иначе при повторном открытии Дома всплывают старые
+      ov.querySelector('#pet-shop').classList.remove('on');
+      ov.querySelector('#pet-play').classList.remove('on');
+    }
+    window.scrollUnlock?.();
+  }
   // Вкладка ушла в фон — останавливаем rAF-цикл ходьбы (жалоба «тормозит», лишние тики впустую);
   // вернулись — перезапускаем, только если Дом всё ещё открыт.
   document.addEventListener('visibilitychange', () => {

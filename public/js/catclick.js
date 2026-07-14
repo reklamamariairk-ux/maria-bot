@@ -436,8 +436,9 @@
 
   // ── Гость (localStorage) ─────────────────────────────────────────────────────
   function rawDefault() { return { balance: 0, totalEarned: 0, energy: 1000, multitapLevel: 0, energyLevel: 0, cards: {}, taps: 0, dailyStreak: 0, dailyDate: null, bE: 0, bT: 0, bDate: null, turboUntil: 0, tasksDone: {}, comboDate: null, comboHits: [], comboClaimed: null, cipherDate: null, bonusAt: 0, chestDate: null, rainDate: null, gamesDone: {}, _ts: Date.now() }; }
-  function rawGet() { let s; try { s = JSON.parse(localStorage.getItem(LS)); } catch (_) {} if (!s) s = rawDefault(); if (!s.cards) s.cards = {}; return s; }
-  function rawSave(s) { s._ts = Date.now(); localStorage.setItem(LS, JSON.stringify(s)); }
+  let memRaw = null; // in-memory фолбэк: заблокированный localStorage не должен ронять тап (setItem кидает в приватных webview)
+  function rawGet() { let s; try { s = JSON.parse(localStorage.getItem(LS)); } catch (_) {} if (memRaw && (!s || (memRaw._ts || 0) >= (s._ts || 0))) s = memRaw; if (!s) s = rawDefault(); if (!s.cards) s.cards = {}; return s; }
+  function rawSave(s) { s._ts = Date.now(); memRaw = s; try { localStorage.setItem(LS, JSON.stringify(s)); } catch (_) {} }
   function profitOf(c) { let p = 0; for (const x of CARDS) p += cardProfit(x, c[x.id] || 0); return p; }
   function guestDerive() {
     const s = rawGet(); const today = irkToday();
@@ -469,8 +470,12 @@
     };
   }
 
-  async function api(path, opts) { const r = await fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', ...(App.authHeader ? App.authHeader() : {}) } }); return r.json(); }
-  async function load() { let q = ''; try { const sp = (window.App && App.startParam && App.startParam()) || ''; const m = /^src[_-]([a-zA-Z0-9_-]{1,32})/.exec(sp); if (m) q = '?source=' + encodeURIComponent(m[1]); } catch (_) {} st = authed() ? await api('/api/clicker' + q).catch(() => guestDerive()) : guestDerive(); turboUntil = Date.now() + (st.turboMsLeft || 0); }
+  async function api(path, opts) { const sig = (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? AbortSignal.timeout(10000) : undefined; const r = await fetch(path, { signal: sig, ...opts, headers: { 'Content-Type': 'application/json', ...(App.authHeader ? App.authHeader() : {}) } }); return r.json(); }
+  // Анти-даблтап: пока летит запрос операции этого типа — повторные тапы игнорируются
+  const inflight = new Set();
+  async function withLock(key, fn) { if (inflight.has(key)) return; inflight.add(key); try { return await fn(); } finally { inflight.delete(key); } }
+  let loadNetFail = false; // авторизованный юзер получил гостевой фолбэк из-за сети — скажем об этом
+  async function load() { let q = ''; try { const sp = (window.App && App.startParam && App.startParam()) || ''; const m = /^src[_-]([a-zA-Z0-9_-]{1,32})/.exec(sp); if (m) q = '?source=' + encodeURIComponent(m[1]); } catch (_) {} loadNetFail = false; st = authed() ? await api('/api/clicker' + q).catch(() => { loadNetFail = true; return guestDerive(); }) : guestDerive(); turboUntil = Date.now() + (st.turboMsLeft || 0); }
   // T5: welcome-промокод новичку (первая победа). Показ 1 раз; сервер решает eligibility.
   async function maybeWelcomePromo() {
     if (!authed()) return;
@@ -478,21 +483,24 @@
       const d = await api('/api/clicker/welcome').catch(() => null);
       if (!d || !d.promo) return;
       const pop = ov.querySelector('#ck-pop');
-      pop.innerHTML = `<h3>${ICON.gift(20)} Подарок новичку!</h3><div class="v" style="font-size:22px">${d.promo}</div><div style="color:var(--muted);font-size:13px;max-width:240px">${(d.desc || '').replace(/</g, '&lt;')}</div><div style="display:flex;gap:8px;justify-content:center;margin-top:12px"><button class="ck-card__buy" id="ck-wc-copy" style="justify-content:center">Скопировать</button><a class="ck-card__buy" href="https://maria-irk.ru/" target="_blank" rel="noopener" style="text-decoration:none;justify-content:center">Заказать</a></div><button id="ck-pop-ok" style="margin-top:10px">Закрыть</button>`;
+      pop.innerHTML = `<h3>${ICON.gift(20)} Подарок новичку!</h3><div class="v" style="font-size:22px">${d.promo}</div><div style="color:var(--muted);font-size:13px;max-width:240px">${(d.desc || '').replace(/</g, '&lt;')}</div><div style="display:flex;gap:8px;justify-content:center;margin-top:12px"><button class="ck-card__buy" id="ck-wc-copy" style="justify-content:center">Скопировать</button><button class="ck-card__buy" id="ck-wc-order" style="justify-content:center">Заказать</button></div><button id="ck-pop-ok" style="margin-top:10px">Закрыть</button>`;
       pop.classList.add('on');
       const done = () => { pop.classList.remove('on'); api('/api/clicker/welcome/seen', { method: 'POST', body: '{}' }).catch(() => {}); };
       const cp = pop.querySelector('#ck-wc-copy'); if (cp) cp.onclick = () => { try { navigator.clipboard && navigator.clipboard.writeText(d.promo); cp.textContent = 'Скопировано'; } catch (_) {} };
+      const wo = pop.querySelector('#ck-wc-order'); if (wo) wo.onclick = () => { if (window.App && App.openExternal) App.openExternal('https://maria-irk.ru/'); else window.open('https://maria-irk.ru/', '_blank'); }; // внешние ссылки — через бридж (правило проекта)
       pop.querySelector('#ck-pop-ok').onclick = done;
     } catch (_) {}
   }
   async function flush() { if (pending <= 0 || !authed()) return; const n = pending; pending = 0; try { const d = await api('/api/clicker/tap', { method: 'POST', body: JSON.stringify({ taps: n }) }); st = d; } catch (_) { pending += n; } }
 
   async function buy(type, id) {
-    const wasNoBiz = type === 'card' && !!st && !st.cardsOwned; // до покупки бизнесов не было — для коуч-хинта bizFirst
-    let ok = false;
-    if (authed()) { try { const d = await api('/api/clicker/buy', { method: 'POST', body: JSON.stringify({ type, id }) }); if (!d.error) { st = d; ok = true; } } catch (_) {} }
-    else { const s = guestBuyRaw(type, id); if (s) { st = guestDerive(); ok = true; } }
-    if (ok) { lastBought = type === 'card' ? id : null; bizCoachPending = type === 'card' && wasNoBiz; sfxBuy(); window.haptic && window.haptic('medium'); renderAll(); renderUpgrades(); } else { sfxError(); flashMsg('Не хватает монет'); }
+    return withLock('buy', async () => {
+      const wasNoBiz = type === 'card' && !!st && !st.cardsOwned; // до покупки бизнесов не было — для коуч-хинта bizFirst
+      let ok = false, netfail = false;
+      if (authed()) { try { const d = await api('/api/clicker/buy', { method: 'POST', body: JSON.stringify({ type, id }) }); if (!d.error) { st = d; ok = true; } } catch (_) { netfail = true; } }
+      else { const s = guestBuyRaw(type, id); if (s) { st = guestDerive(); ok = true; } }
+      if (ok) { lastBought = type === 'card' ? id : null; bizCoachPending = type === 'card' && wasNoBiz; sfxBuy(); window.haptic && window.haptic('medium'); renderAll(); renderUpgrades(); } else { sfxError(); flashMsg(netfail ? 'Нет связи — попробуй ещё раз' : 'Не хватает монет'); }
+    });
   }
   function guestBuyRaw(type, id) {
     guestDerive(); const s = rawGet(); let cost = 0;
@@ -507,10 +515,13 @@
     rawSave(s); return s;
   }
   async function claimDaily() {
-    let r;
-    if (authed()) { r = await api('/api/clicker/daily', { method: 'POST', body: '{}' }).catch(() => null); if (r && !r.error) st = r; }
-    else { const g = guestClaimDaily(); if (g) { r = { reward: g }; st = guestDerive(); } }
-    if (r && r.reward) { sfxReward(); window.haptic && window.haptic('success'); dailyPopup(r.reward, st.dailyStreak); renderAll(); bumpBalance(); }
+    return withLock('daily', async () => {
+      let r, netfail = false;
+      if (authed()) { r = await api('/api/clicker/daily', { method: 'POST', body: '{}' }).catch(() => { netfail = true; return null; }); if (r && !r.error) st = r; }
+      else { const g = guestClaimDaily(); if (g) { r = { reward: g }; st = guestDerive(); } }
+      if (r && r.reward) { sfxReward(); window.haptic && window.haptic('success'); dailyPopup(r.reward, st.dailyStreak); renderAll(); bumpBalance(); }
+      else if (netfail) { sfxError(); flashMsg('Нет связи — попробуй ещё раз'); }
+    });
   }
   function guestClaimDaily() {
     guestDerive(); const s = rawGet(); const today = irkToday(); if (s.dailyDate === today) return 0;
@@ -519,11 +530,13 @@
     s.balance += rew; s.totalEarned += rew; s.dailyDate = today; rawSave(s); return rew;
   }
   async function claimCombo() {
-    let r;
-    if (authed()) { r = await api('/api/clicker/combo', { method: 'POST', body: '{}' }).catch(() => null); if (r && !r.error) st = r; else r = null; }
-    else { const g = guestClaimComboRaw(); if (g) { r = { reward: COMBO_REWARD }; st = guestDerive(); } }
-    if (r && r.reward) { sfxLevel(); window.haptic && window.haptic('success'); coinShower(); confettiBurst(); dailyPopupRaw(ICON.star(20) + ' Комбо дня собрано!', r.reward); renderAll(); renderTasks(); bumpBalance(); }
-    else flashMsg('Комбо ещё не собрано');
+    return withLock('combo', async () => {
+      let r, netfail = false;
+      if (authed()) { r = await api('/api/clicker/combo', { method: 'POST', body: '{}' }).catch(() => { netfail = true; return null; }); if (r && !r.error) st = r; else r = null; }
+      else { const g = guestClaimComboRaw(); if (g) { r = { reward: COMBO_REWARD }; st = guestDerive(); } }
+      if (r && r.reward) { sfxLevel(); window.haptic && window.haptic('success'); coinShower(); confettiBurst(); dailyPopupRaw(ICON.star(20) + ' Комбо дня собрано!', r.reward); renderAll(); renderTasks(); bumpBalance(); }
+      else flashMsg(netfail ? 'Нет связи — попробуй ещё раз' : 'Комбо ещё не собрано');
+    });
   }
   function guestClaimComboRaw() {
     guestDerive(); const s = rawGet(); const today = irkToday();
@@ -534,7 +547,7 @@
   }
   async function claimCipher(guess) {
     let r;
-    if (authed()) { r = await api('/api/clicker/cipher', { method: 'POST', body: JSON.stringify({ guess }) }).catch(() => null); if (r && !r.error) st = r; else { flashMsg(r && r.error === 'already' ? 'Уже разгадан сегодня' : 'Неверно, попробуй ещё'); return; } }
+    if (authed()) { r = await api('/api/clicker/cipher', { method: 'POST', body: JSON.stringify({ guess }) }).catch(() => null); if (r && !r.error) st = r; else { flashMsg(!r ? 'Нет связи — попробуй ещё раз' : r.error === 'already' ? 'Уже разгадан сегодня' : 'Неверно, попробуй ещё'); return; } }
     else { const g = guestClaimCipherRaw(guess); if (!g) { flashMsg('Неверно, попробуй ещё'); return; } st = guestDerive(); r = { reward: CIPHER_REWARD }; }
     if (r && r.reward) { sfxReward(); window.haptic && window.haptic('success'); coinShower(); dailyPopupRaw(ICON.bolt(20) + ' Шифр разгадан!', r.reward); renderAll(); renderTasks(); bumpBalance(); }
   }
@@ -545,13 +558,16 @@
     s.balance += CIPHER_REWARD; s.totalEarned += CIPHER_REWARD; s.cipherDate = today; rawSave(s); return true;
   }
   async function boost(type) {
-    let ok = false;
-    if (authed()) { try { const d = await api('/api/clicker/boost', { method: 'POST', body: JSON.stringify({ type }) }); if (!d.error) { st = d; ok = true; } } catch (_) {} }
-    else { ok = guestBoost(type); if (ok) st = guestDerive(); }
-    if (!ok) { flashMsg('Бусты на сегодня кончились'); return; }
-    if (type === 'turbo') { turboUntil = Date.now() + TURBO_SEC * 1000; sfxTurbo(); }
-    else { chord([520, 780], 0.14); }
-    window.haptic && window.haptic('medium'); renderAll();
+    if (type === 'turbo' && turboOn()) { flashMsg('Турбо уже активно', 'light'); return; } // не сжигать заряд на переустановку тех же 20с
+    return withLock('boost', async () => {
+      let ok = false, netfail = false;
+      if (authed()) { try { const d = await api('/api/clicker/boost', { method: 'POST', body: JSON.stringify({ type }) }); if (!d.error) { st = d; ok = true; } } catch (_) { netfail = true; } }
+      else { ok = guestBoost(type); if (ok) st = guestDerive(); }
+      if (!ok) { flashMsg(netfail ? 'Нет связи — попробуй ещё раз' : 'Бусты на сегодня кончились'); return; }
+      if (type === 'turbo') { turboUntil = Date.now() + TURBO_SEC * 1000; sfxTurbo(); }
+      else { chord([520, 780], 0.14); }
+      window.haptic && window.haptic('medium'); renderAll();
+    });
   }
   function guestBoost(type) {
     guestDerive(); const s = rawGet();
@@ -577,6 +593,12 @@
       .ck-ov.on{display:flex}.ck-ov.turbo{background:radial-gradient(130% 100% at 50% -10%,#3a2a20 0%,#241712 55%,#120c0a 100%)}
       .ck-screen{position:relative;z-index:1;flex:1;display:none;flex-direction:column;align-items:center;overflow:hidden}.ck-screen.on{display:flex}
       .ck-x{position:absolute;top:12px;right:12px;z-index:9;width:34px;height:34px;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.28);color:var(--cream);font-size:17px;cursor:pointer}
+      /* Pressed-отклик на все кнопки игры + расширенные хит-зоны мелких крестиков (визуально 34px, тап 48px) */
+      .ck-ov button:not(:disabled):active{transform:scale(.96)}
+      .ck-nav__b:not(:disabled):active{transform:none;opacity:.72}
+      .ck-x::after,.ck-quiz__hd .x::after,.ck-rain__hud .x::after{content:'';position:absolute;inset:-8px;border-radius:50%}
+      .ck-quiz__hd .x,.ck-rain__hud .x{position:relative}
+      .ck-cat-chip:disabled{opacity:.45}
       .ck-i{display:inline-block;vertical-align:-.16em}.ck-coin-i{display:inline-block;vertical-align:-.18em;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4))}
       .ck-daily{margin-top:13px;display:inline-flex;align-items:center;gap:7px;background:linear-gradient(180deg,#ffe7a6,#eebf52 58%,#cf9a36);color:#5a2028;font-weight:800;border:1px solid #ffe9b3;border-radius:14px;padding:9px 18px;font-size:13px;cursor:pointer;box-shadow:0 7px 18px rgba(170,115,30,.4),inset 0 1px 0 rgba(255,255,255,.55)}
       .ck-lvl{margin-top:13px;color:var(--gold-l);font-family:'Nunito',sans-serif;font-weight:700;font-size:17px;letter-spacing:.2px}
@@ -664,7 +686,7 @@
       .ck-combo.show{opacity:1}
       .ck-fx{position:absolute;inset:0;pointer-events:none;z-index:6;overflow:hidden}
       .ck-boosts{display:flex;gap:10px;margin:2px 0 9px}
-      .ck-boost{display:inline-flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:8px 15px;color:var(--cream);font-weight:700;font-size:13px;cursor:pointer}
+      .ck-boost{display:inline-flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:8px 15px;min-height:44px;color:var(--cream);font-weight:700;font-size:13px;cursor:pointer}
       .ck-boost .ck-i{color:var(--gold)}.ck-boost:disabled{opacity:.4;cursor:default}
       .ck-energy{width:84%;max-width:360px;margin:0 0 16px}.ck-energy__row{display:flex;align-items:center;gap:7px;font-weight:700;font-size:13px;margin-bottom:6px;color:var(--cream);font-variant-numeric:tabular-nums}.ck-energy__row .ck-i{color:var(--gold)}.ck-energy__bar{height:11px;border-radius:8px;background:rgba(0,0,0,.34);box-shadow:inset 0 1px 2px rgba(0,0,0,.45);overflow:hidden}.ck-energy__fill{height:100%;border-radius:8px;background:linear-gradient(90deg,#c2882a,#ffe49c);box-shadow:0 0 7px rgba(238,191,82,.5);transition:width .25s}
       .ck-up{position:absolute;color:var(--gold-l);font-weight:800;pointer-events:none;text-shadow:0 2px 5px rgba(0,0,0,.5);z-index:7;font-variant-numeric:tabular-nums}
@@ -677,7 +699,7 @@
       .ck-gift.ok{color:#9be7a8;background:rgba(72,187,120,.1)}
       .ck-gift.earned{justify-content:space-between}.ck-gift.earned span{display:flex;align-items:center;gap:7px;flex:1;min-width:0}.ck-gift.earned .ck-card__buy{flex:none}
       .ck-cats{display:flex;gap:7px;margin:0 0 10px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}.ck-cats::-webkit-scrollbar{display:none}
-      .ck-cat-chip{flex:none;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:18px;padding:7px 14px;font-weight:700;font-size:12.5px;cursor:pointer;white-space:nowrap}
+      .ck-cat-chip{flex:none;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:18px;padding:10px 15px;font-weight:700;font-size:12.5px;cursor:pointer;white-space:nowrap}
       .ck-cat-chip.on{background:linear-gradient(180deg,#ffe7a6,#eebf52 58%,#cf9a36);color:#5a2028;border-color:#ffe9b3}
       .ck-biz{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:10px 12px;margin-bottom:9px;position:relative;opacity:0;animation:ckBizIn .34s ease-out forwards}
       @keyframes ckBizIn{0%{opacity:0;transform:translateY(9px)}100%{opacity:1;transform:none}}
@@ -732,6 +754,7 @@
       .ck-nav{display:flex;border-top:1px solid var(--line);background:rgba(18,8,11,.5);backdrop-filter:blur(8px)}
       .ck-nav__b{flex:1;border:none;background:transparent;color:var(--muted);padding:9px 0 12px;font-weight:600;font-size:11.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px}.ck-nav__b.on{color:var(--gold-l)}
       .ck-levelup{position:absolute;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;pointer-events:none}.ck-levelup span{font-family:'Nunito',sans-serif;color:var(--gold-l);font-weight:700;font-size:26px;background:linear-gradient(180deg,rgba(46,17,25,.92),rgba(26,10,15,.92));border:1px solid var(--line);padding:14px 24px;border-radius:18px;opacity:0;box-shadow:0 12px 36px rgba(0,0,0,.5)}.ck-levelup span.show{animation:ckLU 1.6s ease-out}@keyframes ckLU{0%{opacity:0;transform:scale(.6)}20%{opacity:1;transform:scale(1.1)}80%{opacity:1}100%{opacity:0}}
+      .ck-scrim{position:absolute;inset:0;z-index:8;background:rgba(10,6,5,.48);display:none}.ck-scrim.on{display:block}
       .ck-pop{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9;background:linear-gradient(180deg,#2e1119,#1d0a11);border:1px solid var(--line);border-radius:20px;padding:24px;text-align:center;box-shadow:0 18px 50px rgba(0,0,0,.6);display:none;max-width:80%}.ck-pop.on{display:block}.ck-pop h3{margin:0 0 6px;font-family:'Nunito',sans-serif;font-weight:700;font-size:20px;color:var(--cream)}.ck-pop .v{font-family:'Nunito',sans-serif;font-size:32px;font-weight:700;color:var(--gold-l);margin:10px 0;display:inline-flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums}.ck-pop button{margin-top:10px;border:1px solid #ffe9b3;border-radius:14px;padding:12px 28px;font-weight:800;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;cursor:pointer}
       /* ===================== ДИЗАЙН-ДОВОДКА (перенос на master) ===================== */
       .ck-ov{--cream:#eee7dd;--ink:#f1ece6;--muted:#9aa0ab;background:radial-gradient(130% 100% at 50% -10%,#2c2320 0%,#1a1413 52%,#0e0a09 100%);font-family:'Nunito','Mulish',system-ui,sans-serif}
@@ -826,7 +849,7 @@
       .ck-coach__row{display:flex;align-items:flex-start;gap:8px}
       .ck-coach__ic{flex:none;color:#ffe39c;margin-top:1px}
       .ck-coach__t{font-size:12.5px;line-height:1.42;color:#eee7dd}
-      .ck-coach__ok{display:block;margin:9px 0 0 auto;border:1px solid #ffe9b3;border-radius:10px;padding:6px 14px;font-weight:800;font-size:12px;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;cursor:pointer}
+      .ck-coach__ok{display:block;margin:9px 0 0 auto;border:1px solid #ffe9b3;border-radius:10px;padding:10px 16px;font-weight:800;font-size:12px;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;cursor:pointer}
       .ck-coach-glow{outline:2px solid rgba(238,191,82,.85);outline-offset:3px;border-radius:10px}
       /* Гайд «Как играть» — полный справочник по механикам, открывается кнопкой ? и из тьюториала */
       .ck-guide-btn{position:absolute;top:12px;left:12px;z-index:9;width:34px;height:34px;border:1px solid rgba(238,191,82,.55);border-radius:50%;background:rgba(0,0,0,.28);color:var(--gold-l);font-weight:800;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
@@ -879,6 +902,7 @@
       <div class="ck-screen" id="ck-scr-top"><div class="ck-uphd"><div class="b">${ICON.trophy(22)} Рейтинг</div><div class="p" id="ck-myrank"></div></div><div class="ck-uplist" id="ck-toplist"></div></div>
       <div class="ck-fx" id="ck-fx"></div>
       <div class="ck-levelup" id="ck-levelup"><span id="ck-levelup-t"></span></div>
+      <div class="ck-scrim" id="ck-scrim"></div>
       <div class="ck-pop" id="ck-pop"></div>
       <div class="ck-guide" id="ck-guide">
         <div class="ck-guide__hd"><div class="ck-guide__t">${ICON.list(20)} Как играть</div><button class="ck-guide__x" id="ck-guide-x" type="button" aria-label="Закрыть">×</button></div>
@@ -899,7 +923,7 @@
       if (window.App && App.platform !== 'guest') xBtn.onclick = () => { try { App.close(); } catch (_) {} };
       else xBtn.style.display = 'none';
     } else xBtn.onclick = close;
-    ov.querySelector('#ck-cat').addEventListener('pointerdown', onTap);
+    ov.querySelector('#ck-catwrap').addEventListener('pointerdown', onTap); // тап-зона = вся арена с глоу, не только спрайт кота
     attachCatRetry(ov.querySelector('#ck-cat'));
     ov.querySelector('#ck-daily').onclick = dailyBtn;
     ov.querySelector('#ck-bt-turbo').onclick = () => boost('turbo');
@@ -909,6 +933,11 @@
     ov.querySelector('#ck-guide-btn').onclick = () => { window.haptic && window.haptic('light'); openGuide(); };
     ov.querySelector('#ck-guide-x').onclick = closeGuide;
     ov.querySelector('#ck-guide-body').innerHTML = guideHtml();
+    // Скрим под #ck-pop: фон перестаёт быть кликабельным, тап по нему закрывает попап
+    // через собственную кнопку попапа (у welcome-попапа на закрытии висит POST /seen).
+    const pop0 = ov.querySelector('#ck-pop'), scrim = ov.querySelector('#ck-scrim');
+    new MutationObserver(() => scrim.classList.toggle('on', pop0.classList.contains('on'))).observe(pop0, { attributes: true, attributeFilter: ['class'] });
+    scrim.onclick = () => { const okb = pop0.querySelector('#ck-pop-ok'); if (okb) okb.click(); else pop0.classList.remove('on'); };
     ckDiagWireTapTrigger();
   }
 
@@ -945,7 +974,9 @@
 
   function setTab(t) {
     closeActiveCoach();
+    const pop = ov && ov.querySelector('#ck-pop'); if (pop) pop.classList.remove('on'); // попап не должен висеть над чужой вкладкой
     if (t === 'home') { window.haptic && window.haptic('light'); try { window.catPetOpen && window.catPetOpen(); } catch (_) {} return; }
+    window.haptic && window.haptic('selection');
     tab = t;
     ov.querySelector('#ck-scr-cat').classList.toggle('on', t === 'cat');
     ov.querySelector('#ck-scr-up').classList.toggle('on', t === 'up');
@@ -962,6 +993,7 @@
   const turboOn = () => Date.now() < turboUntil;
   function onTap(e) {
     e.preventDefault(); ac();
+    if (!st) return; // тап до завершения load() на медленной сети — не ронять TypeError'ом
     if (st.energy < 1) { energyEmpty(); return; }
     const mult = turboOn() ? TURBO_MULT : 1;
     const eMult = (st.event && st.event.active) ? st.event.mult : 1; // ивент ×N (зеркало сервера)
@@ -1044,7 +1076,8 @@
     const fx = ov.querySelector('#ck-fx'); const w = fx.clientWidth;
     for (let i = 0; i < 8; i++) { const c = document.createElement('div'); c.className = 'ck-coin'; c.innerHTML = COIN(22); c.style.left = (Math.random() * w) + 'px'; c.style.top = '-30px'; c.style.transition = 'transform 1s ease-in, opacity 1s'; fx.appendChild(c); requestAnimationFrame(() => { c.style.transform = `translateY(${fx.clientHeight + 40}px) rotate(${(Math.random() - .5) * 360}deg)`; c.style.opacity = '0.2'; }); setTimeout(() => c.remove(), 1000); }
   }
-  function flashMsg(text) { const fx = ov.querySelector('#ck-fx'); const el = document.createElement('div'); el.className = 'ck-up'; el.style.color = '#ff8a8a'; el.style.fontSize = '20px'; el.textContent = text; el.style.left = '50%'; el.style.top = '56%'; el.style.transform = 'translateX(-50%)'; el.style.transition = 'opacity .9s'; fx.appendChild(el); requestAnimationFrame(() => el.style.opacity = '0'); setTimeout(() => el.remove(), 900); }
+  // kind: 'error' (дефолт, с вибро) | 'light' (нейтральные сообщения). Плашка держится ~0.8с и гаснет — раньше гасла мгновенно и терялась.
+  function flashMsg(text, kind) { const fx = ov.querySelector('#ck-fx'); const el = document.createElement('div'); el.className = 'ck-up'; el.style.color = kind === 'light' ? 'var(--gold-l)' : '#ff8a8a'; el.style.fontSize = '16px'; el.style.background = 'rgba(20,8,10,.88)'; el.style.padding = '9px 16px'; el.style.borderRadius = '13px'; el.style.maxWidth = '82%'; el.style.textAlign = 'center'; el.textContent = text; el.style.left = '50%'; el.style.top = '56%'; el.style.transform = 'translateX(-50%)'; el.style.transition = 'opacity .5s ease .8s'; fx.appendChild(el); window.haptic && window.haptic(kind === 'light' ? 'light' : 'error'); requestAnimationFrame(() => el.style.opacity = '0'); setTimeout(() => el.remove(), 1400); }
 
   // ── Анимации (juice) ─────────────────────────────────────────────────────────
   let lastFly = 0;
@@ -1154,7 +1187,8 @@
   }
   async function grabBonus(el) {
     const r = el.getBoundingClientRect(), fr = ov.querySelector('#ck-fx').getBoundingClientRect();
-    el.remove(); confettiBurst();
+    el.remove(); confettiBurst(); window.haptic && window.haptic('light'); // мгновенный отклик на сам тап, награда догонит
+
     let amount = 0;
     if (authed()) { const d = await api('/api/clicker/bonus', { method: 'POST', body: '{}' }).catch(() => null); if (d && !d.error) { st = d; amount = d.amount; } }
     else { amount = guestBonusRaw(); if (amount) st = guestDerive(); }
@@ -1184,11 +1218,13 @@
     s.chestDate = today; rawSave(s); return prize;
   }
   async function openChestAct() {
-    let prize = null;
-    if (authed()) { const d = await api('/api/clicker/chest', { method: 'POST', body: '{}' }).catch(() => null); if (d && !d.error) { st = d; prize = d.prize; } else { flashMsg('Сундук уже открыт'); return; } }
-    else { prize = guestOpenChestRaw(); if (!prize) { flashMsg('Сундук уже открыт'); return; } st = guestDerive(); }
-    turboUntil = Date.now() + (st.turboMsLeft || 0);
-    sfxLevel(); window.haptic && window.haptic('success'); confettiBurst(); coinShower(); chestPopup(prize); renderAll(); renderTasks(); bumpBalance();
+    return withLock('chest', async () => {
+      let prize = null;
+      if (authed()) { const d = await api('/api/clicker/chest', { method: 'POST', body: '{}' }).catch(() => null); if (d && !d.error) { st = d; prize = d.prize; } else { flashMsg(!d ? 'Нет связи — попробуй ещё раз' : 'Сундук уже открыт'); return; } }
+      else { prize = guestOpenChestRaw(); if (!prize) { flashMsg('Сундук уже открыт'); return; } st = guestDerive(); }
+      turboUntil = Date.now() + (st.turboMsLeft || 0);
+      sfxLevel(); window.haptic && window.haptic('success'); confettiBurst(); coinShower(); chestPopup(prize); renderAll(); renderTasks(); bumpBalance();
+    });
   }
   function chestPopup(prize) {
     const pop = ov.querySelector('#ck-pop'); let body;
@@ -1253,9 +1289,10 @@
     submitRain(s.score); rainState = null;
   }
   async function submitRain(score) {
-    let reward = 0;
-    if (authed()) { const d = await api('/api/clicker/rain', { method: 'POST', body: JSON.stringify({ score }) }).catch(() => null); if (d && !d.error) { st = d; reward = d.reward; } }
+    let reward = 0, netfail = false;
+    if (authed()) { const d = await api('/api/clicker/rain', { method: 'POST', body: JSON.stringify({ score }) }).catch(() => { netfail = true; return null; }); if (d && !d.error) { st = d; reward = d.reward; } }
     else { const g = guestClaimRainRaw(score); if (g != null) { reward = g; st = guestDerive(); } }
+    if (netfail && !reward) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); return; } // не праздновать «+0» с конфетти
     sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); coinShower(); dailyPopupRaw(ICON.rain(20) + ` Золотой дождь · ${score} монет`, reward || 0); renderAll(); renderTasks(); bumpBalance();
   }
   // ── Хаб «Игры»: единый claim (clamp+гейт 1/день; для гостя — localStorage) ────
@@ -1273,7 +1310,7 @@
   }
   async function submitGame(game, score) {
     let reward = 0;
-    if (authed()) { const d = await api('/api/clicker/game', { method: 'POST', body: JSON.stringify({ game, score }) }).catch(() => null); if (d && !d.error) { st = d; reward = d.reward || 0; } }
+    if (authed()) { const d = await api('/api/clicker/game', { method: 'POST', body: JSON.stringify({ game, score }) }).catch(() => null); if (d && !d.error) { st = d; reward = d.reward || 0; } else if (!d) return null; /* сеть упала — не праздновать «+0» */ }
     else { const g = guestClaimGameRaw(game, score); if (g != null) { reward = g; st = guestDerive(); } }
     return reward;
   }
@@ -1382,7 +1419,7 @@
     // бусты
     ov.querySelector('#ck-bt-turbo-n').textContent = '(' + st.boostTurboLeft + ')';
     ov.querySelector('#ck-bt-energy-n').textContent = '(' + st.boostEnergyLeft + ')';
-    ov.querySelector('#ck-bt-turbo').disabled = st.boostTurboLeft <= 0;
+    ov.querySelector('#ck-bt-turbo').disabled = st.boostTurboLeft <= 0 || turboOn(); // во время турбо тап впустую сжёг бы заряд
     ov.querySelector('#ck-bt-energy').disabled = st.boostEnergyLeft <= 0 || st.energy >= st.energyMax;
     // турбо-вид
     const on = turboOn(); ov.classList.toggle('turbo', on); ov.querySelector('#ck-cat').classList.toggle('turbo', on);
@@ -1426,7 +1463,7 @@
     }
     list.innerHTML = h;
     if (lastBought) { const el = list.querySelector(`[data-id="${lastBought}"]`); const card = el && el.closest('.ck-biz'); if (card) { card.classList.add('bump'); if (bizCoachPending) coach('bizFirst', COACH.bizFirst.t, card, { icon: ICON[COACH.bizFirst.icon](18) }); } bizCoachPending = false; lastBought = null; }
-    list.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { upCat = b.dataset.cat; renderUpgrades(); });
+    list.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { window.haptic && window.haptic('selection'); upCat = b.dataset.cat; renderUpgrades(); });
     list.querySelectorAll('[data-act]').forEach(b => b.onclick = () => buy(b.dataset.act, b.dataset.id || undefined));
     list.querySelectorAll('[data-redeem]').forEach(b => b.onclick = () => redeem(b.dataset.redeem));
   }
@@ -1448,10 +1485,11 @@
   function redeem(id) {
     if (!rewardsEnabled) { flashMsg('Скоро откроем'); return; }
     if (!authed()) { flashMsg('Войди через приложение «Мария»'); return; }
-    api('/api/clicker/redeem', { method: 'POST', body: JSON.stringify({ id }) }).then(d => {
+    // Самая дорогая кнопка в игре (реальные коды/баллы) — строго один запрос за раз
+    withLock('redeem', () => api('/api/clicker/redeem', { method: 'POST', body: JSON.stringify({ id }) }).then(d => {
       if (d && !d.error && (d.code || d.points)) { st = d; sfxLevel(); window.haptic && window.haptic('success'); if (d.code) codePopup(d.code); else pointsPopup(d.points); renderAll(); renderUpgrades(); }
       else flashMsg(d && d.error === 'daily_limit' ? 'Лимит на сегодня' : d && d.error === 'need_phone' ? 'Сначала подтверди телефон в профиле' : d && d.error === 'disabled' ? 'Скоро откроем' : 'Не хватает монет');
-    }).catch(() => flashMsg('Ошибка'));
+    }).catch(() => flashMsg('Нет связи — попробуй ещё раз')));
   }
   function codePopup(code) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Награда твоя!</h3><div class="v" style="font-size:22px">${code}</div><div style="color:var(--muted);font-size:13px">Применить в корзине или показать кассиру</div><div style="display:flex;gap:8px;justify-content:center;margin-top:12px"><button class="ck-card__buy" id="ck-pop-copy" style="justify-content:center">Скопировать</button></div><button id="ck-pop-ok" style="margin-top:10px">Класс!</button>`; pop.classList.add('on'); const cp = pop.querySelector('#ck-pop-copy'); if (cp) cp.onclick = () => { const done = () => { cp.textContent = 'Скопировано'; }; if (navigator.clipboard) { navigator.clipboard.writeText(code).then(done, done); } else { done(); } }; pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
   function pointsPopup(points) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Баллы на карте!</h3><div class="v" style="font-size:22px">+${fmt(points)}</div><div style="color:var(--muted);font-size:13px">Реальные баллы клуба «Мария» — спишутся при заказе</div><button id="ck-pop-ok" style="margin-top:10px">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
@@ -1611,13 +1649,16 @@
     const ds = guestDerive(); const done = (rawGet().tasksDone) || {};
     return ACHIEVEMENTS.map(a => ({ ...a, done: !!done[a.id], claimable: !done[a.id] && condMet(a, ds) }));
   }
+  let tasksGen = 0; // токен поколения: два конкурирующих renderTasks не перетирают вкладку друг у друга
   async function renderTasks() {
+    const gen = ++tasksGen;
     const list = ov.querySelector('#ck-taskslist');
     if (authed()) list.innerHTML = skelRows(6);
     const refBlock = refCard();
-    let tasks;
-    if (authed()) { const d = await api('/api/clicker/tasks').catch(() => null); tasks = d && d.tasks; }
+    let tasks, tasksFail = false;
+    if (authed()) { const d = await api('/api/clicker/tasks').catch(() => null); tasks = d && d.tasks; tasksFail = !d; }
     else tasks = guestTaskList();
+    if (gen !== tasksGen) return;
     if (!tasks) tasks = [];
     const rows = tasks.map(t => {
       let btn;
@@ -1630,6 +1671,7 @@
     let achs;
     if (authed()) { const d = await api('/api/clicker/achievements').catch(() => null); achs = d && d.achievements; }
     else achs = guestAchList();
+    if (gen !== tasksGen) return;
     if (!achs) achs = [];
     const achRows = achs.map(a => {
       const btn = a.done ? `<button class="ck-card__buy" disabled style="justify-content:center">✓ Получено</button>`
@@ -1638,8 +1680,11 @@
       return `<div class="ck-card"${a.done ? ' style="opacity:.6"' : ''}><div class="ck-card__ic">${achIcon(a.icon)}</div><div class="ck-card__b"><div class="ck-card__n">${a.name}</div><div class="ck-card__s">${achDesc(a)}</div></div>${btn}</div>`;
     }).join('');
     const progRows = await milestonesHtml();
-    const promoCard = `<div class="ck-sect">Промокод</div><div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.gift(26)}</div><div class="ck-card__b"><div class="ck-card__n">Есть промокод?</div><div class="ck-card__s">Лови коды в соцсетях «Марии» → монеты</div></div></div><div style="display:flex;gap:8px"><input class="ck-cipher-in" id="ck-code-in" maxlength="24" placeholder="ВВЕДИ КОД" autocomplete="off" spellcheck="false"/><button class="ck-card__buy" id="ck-code-go" style="justify-content:center">Применить</button></div></div>`;
-    list.innerHTML = bonusBlock() + promoCard + `<div class="ck-sect">${ICON.gift(13)} Награды за прогресс</div>` + progRows + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows + '<div class="ck-sect">Достижения</div>' + achRows;
+    if (gen !== tasksGen) return;
+    const failCard = tasksFail ? `<div class="ck-card"><div class="ck-card__ic">${ICON.bolt(26)}</div><div class="ck-card__b"><div class="ck-card__n">Не всё загрузилось</div><div class="ck-card__s">Проверь связь</div></div><button class="ck-card__buy" id="ck-tasks-retry">Обновить</button></div>` : '';
+    const promoCard = `<div class="ck-sect">Промокод</div><div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.gift(26)}</div><div class="ck-card__b"><div class="ck-card__n">Есть промокод?</div><div class="ck-card__s">Лови коды в соцсетях «Марии» → монеты</div></div></div><div style="display:flex;gap:8px"><input class="ck-cipher-in" id="ck-code-in" maxlength="24" placeholder="ВВЕДИ КОД" autocomplete="off" spellcheck="false" enterkeyhint="done" autocapitalize="characters"/><button class="ck-card__buy" id="ck-code-go" style="justify-content:center">Применить</button></div></div>`;
+    list.innerHTML = failCard + bonusBlock() + promoCard + `<div class="ck-sect">${ICON.gift(13)} Награды за прогресс</div>` + progRows + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows + '<div class="ck-sect">Достижения</div>' + achRows;
+    const rtb = list.querySelector('#ck-tasks-retry'); if (rtb) rtb.onclick = () => renderTasks();
     ov.querySelector('#ck-invite').onclick = shareRef;
     list.querySelectorAll('[data-open]').forEach(b => b.onclick = () => { const id = b.dataset.open, link = b.dataset.link; if (link) { if (window.App && App.openExternal) App.openExternal(link); else window.open(link, '_blank'); } linkOpened[id] = true; setTimeout(renderTasks, 400); });
     list.querySelectorAll('[data-claim]').forEach(b => b.onclick = () => claimTask(b.dataset.claim));
@@ -1665,12 +1710,14 @@
   }
   async function claimMilestoneAct(id) {
     if (!authed()) { flashMsg('Войди через приложение «Мария»'); return; }
-    const d = await api('/api/clicker/milestone', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null);
-    if (d && !d.error) {
-      sfxLevel(); window.haptic && window.haptic('success'); confettiBurst();
-      if (d.promoCode) promoPopup(d.perkTitle, d.promoCode, d.minOrder, d.points); else giftPopup(d.points);
-      renderTasks();
-    } else flashMsg(d && d.error === 'need_phone' ? 'Сначала подтверди телефон' : d && d.error === 'already' ? 'Награда уже получена' : d && d.error === 'not_ready' ? 'Веха ещё не достигнута' : 'Не получилось, попробуй позже');
+    return withLock('milestone', async () => {
+      const d = await api('/api/clicker/milestone', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null);
+      if (d && !d.error) {
+        sfxLevel(); window.haptic && window.haptic('success'); confettiBurst();
+        if (d.promoCode) promoPopup(d.perkTitle, d.promoCode, d.minOrder, d.points); else giftPopup(d.points);
+        renderTasks();
+      } else flashMsg(!d ? 'Нет связи — попробуй ещё раз' : d.error === 'need_phone' ? 'Сначала подтверди телефон' : d.error === 'already' ? 'Награда уже получена' : d.error === 'not_ready' ? 'Веха ещё не достигнута' : 'Не получилось, попробуй позже');
+    });
   }
   function promoPopup(title, code, minOrder, points) {
     const pop = ov.querySelector('#ck-pop');
@@ -1680,15 +1727,17 @@
   }
   function giftPopup(points) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Подарок на карту!</h3><div class="v">+${points} баллов</div><div style="color:var(--muted);font-size:13px">Баллы «Мария» зачислены на твою карту клуба — трать при заказе тортов 🎂</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
   function requestPhone() {
-    try { const tg = window.Telegram && window.Telegram.WebApp; if (tg && typeof tg.requestContact === 'function') { tg.requestContact((ok) => { if (ok) { flashMsg('Спасибо! Проверяем номер…'); setTimeout(renderTasks, 1500); } }); return; } } catch (_) {}
+    try { const tg = window.Telegram && window.Telegram.WebApp; if (tg && typeof tg.requestContact === 'function') { tg.requestContact((ok) => { if (ok) { flashMsg('Спасибо! Проверяем номер…', 'light'); setTimeout(renderTasks, 1500); } }); return; } } catch (_) {}
     flashMsg('Открой бота «Мария» → кнопка «Поделиться телефоном»');
   }
   async function redeemCodeAct(code) {
     if (!code || !code.trim()) return;
     if (!authed()) { flashMsg('Промокоды — при входе через «Марию»'); return; }
-    const d = await api('/api/clicker/code', { method: 'POST', body: JSON.stringify({ code }) }).catch(() => null);
-    if (d && !d.error && d.reward != null) { st = d; sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); dailyPopupRaw(ICON.gift(20) + ' Промокод принят!', d.reward); renderAll(); renderTasks(); bumpBalance(); }
-    else flashMsg(d && d.error === 'used' ? 'Код уже использован' : d && d.error === 'invalid' ? 'Неверный код' : 'Не получилось');
+    return withLock('code', async () => {
+      const d = await api('/api/clicker/code', { method: 'POST', body: JSON.stringify({ code }) }).catch(() => null);
+      if (d && !d.error && d.reward != null) { st = d; sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); dailyPopupRaw(ICON.gift(20) + ' Промокод принят!', d.reward); renderAll(); renderTasks(); bumpBalance(); }
+      else flashMsg(!d ? 'Нет связи — попробуй ещё раз' : d.error === 'used' ? 'Код уже использован' : d.error === 'invalid' ? 'Неверный код' : 'Не получилось');
+    });
   }
   function achDesc(a) { const m = { taps: `${fmt(a.target)} тапов`, balance: `Накопить ${fmt(a.target)}`, level: `Уровень ${a.target}`, cards: `Все ${a.target} бизнеса`, streak: `${a.target} дней подряд`, ref: `${a.target} друга` }; return m[a.type] || ''; }
   function bonusBlock() {
@@ -1707,7 +1756,7 @@
       <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.bolt(26)}</div><div class="ck-card__b"><div class="ck-card__n">Шифр дня</div><div class="ck-card__s">Расшифруй морзе и впиши слово · +${fmt(cph.reward)} ${COIN(13)}</div></div></div>
       ${cph.claimed
         ? `<button class="ck-card__buy" disabled style="width:100%;justify-content:center">✓ Разгадан сегодня</button>`
-        : `<div class="ck-morse">${cph.morse}</div><div style="display:flex;gap:8px"><input class="ck-cipher-in" id="ck-cipher-in" maxlength="14" placeholder="${cph.len} букв" autocomplete="off" spellcheck="false"/><button class="ck-card__buy" id="ck-cipher-go" style="justify-content:center">Разгадать</button></div>`}</div>`;
+        : `<div class="ck-morse">${cph.morse}</div><div style="display:flex;gap:8px"><input class="ck-cipher-in" id="ck-cipher-in" maxlength="14" placeholder="${cph.len} букв" autocomplete="off" spellcheck="false" enterkeyhint="done" autocapitalize="characters"/><button class="ck-card__buy" id="ck-cipher-go" style="justify-content:center">Разгадать</button></div>`}</div>`;
     const chestAvail = !st || st.chestAvailable;
     const chestCard = `<div class="ck-card ck-bonus" style="background:linear-gradient(90deg,rgba(238,191,82,.16),rgba(238,191,82,.04))">
       <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.chest(26)}</div><div class="ck-card__b"><div class="ck-card__n">Сундук удачи</div><div class="ck-card__s">${chestAvail ? 'Монеты, турбо или джекпот!' : 'Возвращайся завтра за новым'}</div></div>
@@ -1726,11 +1775,13 @@
     if (go && inp) { go.onclick = () => claimCipher(inp.value); inp.onkeydown = (e) => { if (e.key === 'Enter') claimCipher(inp.value); }; }
   }
   async function claimTask(id) {
-    let reward = 0;
-    if (authed()) { const d = await api('/api/clicker/task', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null); if (d && !d.error) { st = d; reward = d.reward; } }
-    else { reward = guestClaimTask(id); if (reward) st = guestDerive(); }
-    if (reward) { sfxReward(); window.haptic && window.haptic('success'); dailyPopupRaw('✅ Задание выполнено', reward); renderAll(); renderTasks(); bumpBalance(); }
-    else flashMsg('Пока недоступно');
+    return withLock('task', async () => {
+      let reward = 0, netfail = false;
+      if (authed()) { const d = await api('/api/clicker/task', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => { netfail = true; return null; }); if (d && !d.error) { st = d; reward = d.reward; } }
+      else { reward = guestClaimTask(id); if (reward) st = guestDerive(); }
+      if (reward) { sfxReward(); window.haptic && window.haptic('success'); dailyPopupRaw('✅ Задание выполнено', reward); renderAll(); renderTasks(); bumpBalance(); }
+      else flashMsg(netfail ? 'Нет связи — попробуй ещё раз' : 'Пока недоступно');
+    });
   }
   function dailyPopupRaw(title, amount) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${title}</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
 
@@ -1784,6 +1835,7 @@
     ov.querySelector('#ck-cat').src = A(leagueFor(st.totalEarned).cat || 'idle.png');
     applyCatSize(ov.querySelector('#ck-cat'));
     setTab('cat'); renderAll(); spawnSparks(); applySeason(); scheduleBonus();
+    if (loadNetFail) flashMsg('Нет связи — офлайн-режим, прогресс синхронизируется позже'); // авторизованный получил гостевой фолбэк — не молчать про «пропавший» баланс
     if (authed()) api('/api/clicker/rewards').then(d => { if (d && typeof d.enabled === 'boolean' && d.enabled !== rewardsEnabled) { rewardsEnabled = d.enabled; if (tab === 'up') renderUpgrades(); } }).catch(() => {});
     let _seenTut = true; try { _seenTut = !!localStorage.getItem('ck_tut_v1'); } catch (e) {}
     if (!_seenTut) showTutorial();
@@ -1857,6 +1909,7 @@
   async function finishQuiz() {
     const s = quizState; if (!s) return; const deck = s.deck, correct = s.correct, total = s.qs.length, meta = GAME_META[deck]; closeQuiz();
     const reward = await submitGame(deck, correct);
+    if (reward === null) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); renderGames(); return; }
     sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
     resultPopup(`${meta.icon()} ${correct}/${total} верно!`, reward || 0, correct === total ? 'Идеально! 🌟' : 'Молодец, заходи завтра!');
     renderAll(); renderGames(); bumpBalance();
@@ -1891,6 +1944,7 @@
     const s = memState; if (!s) return; const secs = (performance.now() - s.t0) / 1000; const moves = s.moves;
     const score = Math.max(20, Math.min(100, Math.round(100 - (moves - MEM_ICONS.length) * 5 - secs * 1.2))); closeMemory();
     const reward = await submitGame('memory', score);
+    if (reward === null) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); renderGames(); return; }
     sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
     resultPopup(`${ICON.cake(22)} Торт собран!`, reward || 0, `За ${moves} ходов · ${Math.round(secs)}с`);
     renderAll(); renderGames(); bumpBalance();
@@ -1959,6 +2013,7 @@
     const s = towerState; if (!s || s.ended) return; s.ended = true; cancelAnimationFrame(s.raf);
     const score = s.score; closeTower();
     const reward = await submitGame('tower', score);
+    if (reward === null) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); renderGames(); return; }
     sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
     resultPopup(`${ICON.cake(22)} Башня из ${score} коржей!`, reward || 0, score >= 20 ? 'Высоченная! 🎂' : 'Неплохо — завтра выше!');
     renderAll(); renderGames(); bumpBalance();
@@ -1985,7 +2040,7 @@
     let el = ov.querySelector('#ck-gems'); if (!el) { el = document.createElement('div'); el.id = 'ck-gems'; el.className = 'ck-gems'; ov.appendChild(el); }
     gemsState = { g: makeGemBoard(GN, Math.random), n: GN, sel: -1, score: 0, lock: false, ended: false, tEnd: performance.now() + GEM_SEC * 1000, raf: 0 };
     el.classList.add('on'); renderGemsUI();
-    cancelAnimationFrame(gemsState.raf); gemsState.raf = requestAnimationFrame(gemsTimer);
+    gemsState.raf = setTimeout(gemsTimer, 0); // секундному таймеру не нужен rAF 60fps
   }
   function renderGemsUI() {
     const el = ov.querySelector('#ck-gems');
@@ -2020,23 +2075,24 @@
       m.forEach(idx => s.g[idx] = -1); applyGravityG(s.g, s.n, Math.random); renderGemsGrid();
       await wait(150);
     }
-    if (!hasMoveG(s.g, s.n)) { s.g = makeGemBoard(s.n, Math.random); renderGemsGrid(); flashMsg('Перемешали!'); }
+    if (!hasMoveG(s.g, s.n)) { s.g = makeGemBoard(s.n, Math.random); renderGemsGrid(); flashMsg('Перемешали!', 'light'); }
   }
   function gemsTimer() {
     const s = gemsState; if (!s || s.ended) return;
     const left = Math.max(0, (s.tEnd - performance.now()) / 1000); const tEl = ov.querySelector('#ck-gems-t'); if (tEl) tEl.textContent = Math.ceil(left);
     if (left <= 0) { finishGems(); return; }
-    s.raf = requestAnimationFrame(gemsTimer);
+    s.raf = setTimeout(gemsTimer, 250);
   }
   async function finishGems() {
-    const s = gemsState; if (!s || s.ended) return; s.ended = true; cancelAnimationFrame(s.raf);
+    const s = gemsState; if (!s || s.ended) return; s.ended = true; clearTimeout(s.raf);
     const score = s.score; closeGems();
     const reward = await submitGame('gems', score);
+    if (reward === null) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); renderGames(); return; }
     sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
     resultPopup(`${ICON.gem(22)} Собрано ${score} конфет!`, reward || 0, 'Сладко! Заходи завтра');
     renderAll(); renderGames(); bumpBalance();
   }
-  function closeGems() { if (gemsState) cancelAnimationFrame(gemsState.raf); const el = ov.querySelector('#ck-gems'); if (el) el.classList.remove('on'); gemsState = null; }
+  function closeGems() { if (gemsState) clearTimeout(gemsState.raf); const el = ov.querySelector('#ck-gems'); if (el) el.classList.remove('on'); gemsState = null; }
 
   function close() { cancelAnimationFrame(raf); clearTimeout(bonusTimer); closeActiveCoach(); if (rainState) endRain(true); if (quizState) closeQuiz(); if (memState) closeMemory(); if (towerState) closeTower(); if (gemsState) closeGems(); flush(); if (ov) ov.classList.remove('on'); window.scrollUnlock && window.scrollUnlock(); }
   window.catClickOpen = open; window.catClickClose = close; window.catClickBonusNow = () => { if (ov && ov.classList.contains('on')) showFlyingBonus(); }; // превью/тест золотого бонуса
@@ -2051,7 +2107,7 @@
   window.addEventListener('resize', () => { if (ov && ov.classList.contains('on') && st) applyCostume(leagueFor(st.totalEarned)); });
   // Реф регистрируем фоном уже при загрузке приложения (не дожидаясь открытия игры):
   // друг перешёл по ckref-ссылке → бонус начислится, даже если в игру он не зайдёт.
-  function refBootstrap() { try { if (window.App && App.ready && App.ready.then) App.ready.then(() => ensureRefRegistered()); else ensureRefRegistered(); } catch (_) { ensureRefRegistered(); } }
+  function refBootstrap() { try { if (window.App && typeof App.ready === 'function') App.ready().then(() => ensureRefRegistered(), () => ensureRefRegistered()); else ensureRefRegistered(); } catch (_) { ensureRefRegistered(); } } // App.ready — функция, у неё нет .then (старый код всегда падал в else)
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(refBootstrap, 1500)); else setTimeout(refBootstrap, 1500);
   // ── Диагностическая панель (startapp=debug ИЛИ 7 тапов по бейджу уровня) ─────
   // Ничего никуда не отправляет — только показывает на экране сведения о платформе/
@@ -2074,7 +2130,7 @@
 
     const st_ = {
       platform: '…', initLen: '…', authed: '…', ss: '…', ls: '…',
-      clicker: '…', pet: '…', ver: 'catclick v105', errors: '…',
+      clicker: '…', pet: '…', ver: 'catclick v112', errors: '…',
     };
     function render() {
       body.innerHTML = ''
@@ -2128,7 +2184,7 @@
       }
     } catch (_) {}
   }
-  function clickBootstrap() { try { if (window.App && App.ready && App.ready.then) App.ready.then(clickAutoOpen); else clickAutoOpen(); } catch (_) { clickAutoOpen(); } }
+  function clickBootstrap() { try { if (window.App && typeof App.ready === 'function') App.ready().then(clickAutoOpen, clickAutoOpen); else clickAutoOpen(); } catch (_) { clickAutoOpen(); } }
   // Гейм-first (сплэш уже на экране, магазин под ним): открываем игру сразу, без задержки-«моргания».
   const _ckGameFirst = document.documentElement.classList.contains('ck-gamefirst');
   const _ckDelay = _ckGameFirst ? 0 : 600;

@@ -11,13 +11,16 @@
   const PTS_PER_PIE = 10;
 
   let overlay, canvas, ctx, raf;
+  let opening = false;
   let catImg = null;
   let pieImgs = [];           // загруженные картинки пирогов
+  const view = { w: 0, h: 0 }; // кэш размеров канваса (не дёргать getBoundingClientRect в loop)
   const state = {
     running: false, score: 0, lives: LIVES, best: 0,
     catX: 0, catW: 96, catH: 116, floorY: 0,
     items: [], spawnT: 0, spawnEvery: 900, speed: 1, t0: 0, last: 0,
   };
+  try { state.best = +localStorage.getItem('cg_best') || 0; } catch (_) {}
 
   // ── Загрузка ассетов ──────────────────────────────────────────────────────
   function loadImg(src) {
@@ -48,12 +51,13 @@
     const s = document.createElement('style');
     s.id = 'catgame-css';
     s.textContent = `
-      .cg-ov{position:fixed;inset:0;z-index:9999;background:linear-gradient(180deg,#fff5e8 0%,#ffe6cf 60%,#ffd9b3 100%);display:none;flex-direction:column;overflow:hidden;touch-action:none;}
+      .cg-ov{position:fixed;inset:0;z-index:9999;background:linear-gradient(180deg,#fff5e8 0%,#ffe6cf 60%,#ffd9b3 100%);display:none;flex-direction:column;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;}
       .cg-ov.on{display:flex}
       .cg-top{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;font-weight:800;color:#7a3b12}
       .cg-top .cg-score{font-size:22px}
       .cg-top .cg-lives{font-size:18px;letter-spacing:2px}
-      .cg-x{background:rgba(255,255,255,.7);border:none;border-radius:50%;width:36px;height:36px;font-size:20px;color:#7a3b12;cursor:pointer}
+      .cg-x{position:relative;background:rgba(255,255,255,.7);border:none;border-radius:50%;width:36px;height:36px;font-size:20px;color:#7a3b12;cursor:pointer}
+      .cg-x::after{content:'';position:absolute;inset:-6px}
       .cg-canvas{flex:1;display:block;width:100%}
       .cg-panel{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center;background:rgba(255,245,232,.92);backdrop-filter:blur(2px)}
       .cg-panel.on{display:flex}
@@ -62,6 +66,7 @@
       .cg-big{font-size:46px}
       .cg-stars{font-size:18px;font-weight:800;color:#d61f37}
       .cg-btn{appearance:none;border:none;border-radius:16px;padding:14px 26px;font-size:17px;font-weight:800;cursor:pointer;background:#d61f37;color:#fff;box-shadow:0 6px 18px rgba(214,31,55,.35)}
+      .cg-btn:active{transform:scale(.96)}
       .cg-btn--ghost{background:#fff;color:#7a3b12;box-shadow:0 4px 12px rgba(0,0,0,.08)}
       .cg-row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
       .cg-hint{position:absolute;left:0;right:0;bottom:18px;text-align:center;color:#b06a36;font-size:13px;pointer-events:none}
@@ -94,7 +99,10 @@
       state.catX = Math.max(state.catW / 2, Math.min(rect.width - state.catW / 2, clientX - rect.left));
     };
     canvas.addEventListener('pointermove', (e) => { if (state.running) move(e.clientX); });
-    canvas.addEventListener('pointerdown', (e) => { move(e.clientX); });
+    canvas.addEventListener('pointerdown', (e) => {
+      try { canvas.setPointerCapture(e.pointerId); } catch (_) {} // палец за краем не теряет кота
+      move(e.clientX);
+    });
   }
 
   function resize() {
@@ -103,17 +111,19 @@
     canvas.width = rect.width * dpr;
     canvas.height = rect.height * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    view.w = rect.width; view.h = rect.height;
     state.floorY = rect.height - 8;
-    if (!state.catX) state.catX = rect.width / 2;
+    state.catX = state.catX
+      ? Math.max(state.catW / 2, Math.min(rect.width - state.catW / 2, state.catX))
+      : rect.width / 2;
   }
 
   // ── Игровой цикл ──────────────────────────────────────────────────────────
   function spawn() {
-    const rect = canvas.getBoundingClientRect();
     const size = 46 + Math.random() * 14;
     const golden = Math.random() < 0.08;
     state.items.push({
-      x: size + Math.random() * (rect.width - size * 2),
+      x: size + Math.random() * (view.w - size * 2),
       y: -size, size,
       vy: (1.6 + Math.random() * 1.2) * state.speed,
       img: pieImgs.length ? pieImgs[(Math.random() * pieImgs.length) | 0] : null,
@@ -123,9 +133,10 @@
 
   function loop(ts) {
     if (!state.running) return;
+    // кап ~60fps (на 120Гц-экранах не ускоряем спавн-логику)
+    if (state.last && ts - state.last < 15) { raf = requestAnimationFrame(loop); return; }
     if (!state.last) state.last = ts;
     const dt = Math.min(40, ts - state.last); state.last = ts;
-    const rect = canvas.getBoundingClientRect();
 
     // спавн
     state.spawnT += dt;
@@ -135,7 +146,7 @@
     state.speed = 1 + state.score / 400;
     state.spawnEvery = Math.max(420, 900 - state.score / 2);
 
-    ctx.clearRect(0, 0, rect.width, rect.height);
+    ctx.clearRect(0, 0, view.w, view.h);
 
     // предметы
     const catTop = state.floorY - state.catH;
@@ -155,6 +166,7 @@
       if (it.y - it.size / 2 > state.floorY) {
         state.items.splice(i, 1);
         loseLife();
+        if (!state.running) return; // gameOver внутри loseLife — не продолжаем тик
         continue;
       }
       drawItem(it);
@@ -206,6 +218,7 @@
     if (el) el.textContent = '❤️'.repeat(state.lives) + '🖤'.repeat(LIVES - state.lives);
   }
   function loseLife() {
+    if (!state.running || state.lives <= 0) return; // два промаха в одном тике → один gameOver
     state.lives--;
     window.haptic?.('error');
     renderLives();
@@ -214,6 +227,7 @@
 
   // ── Старт / конец ──────────────────────────────────────────────────────────
   function startRound() {
+    cancelAnimationFrame(raf); // не плодить второй rAF-цикл
     state.score = 0; state.lives = LIVES; state.items = [];
     state.spawnT = 0; state.spawnEvery = 900; state.speed = 1; state.last = 0;
     document.getElementById('cg-score').textContent = '0';
@@ -225,41 +239,58 @@
     raf = requestAnimationFrame(loop);
   }
 
-  async function gameOver() {
+  // сигнал таймаута для fetch (5с), с фолбэком для старых webview
+  function timeoutSignal(ms) {
+    if (AbortSignal.timeout) return AbortSignal.timeout(ms);
+    const c = new AbortController(); setTimeout(() => c.abort(), ms); return c.signal;
+  }
+
+  // отправка результата — панель уже показана, дописываем строку награды
+  async function postResult(panel) {
+    const line = panel.querySelector('#cg-reward');
+    if (!line) return;
+    try {
+      const r = await fetch('/api/game-result', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...App.authHeader() },
+        body: JSON.stringify({ game: GAME_KEY, score: state.score }),
+        signal: timeoutSignal(5000),
+      });
+      const d = await r.json();
+      let rewardLine = '';
+      if (PURE) {
+        // pure-режим: без клубных звёзд/CTA в UI, рекорд уже показан в тексте выше
+      } else if (d.gated) rewardLine = '🔓 Подтверди номер в Профиле — и за игру будут капать звёзды.';
+      else if (d.starsAwarded > 0) rewardLine = `⭐ +${d.starsAwarded} ${d.capped ? '(дневной лимит достигнут)' : ''}`;
+      else if (d.capped) rewardLine = '⭐ Дневной лимит звёзд достигнут — рекорд засчитан!';
+      if (!PURE && typeof d.balance?.stars === 'number') rewardLine += rewardLine ? ` · всего ⭐ ${d.balance.stars}` : `Всего ⭐ ${d.balance.stars}`;
+      if (rewardLine) { line.textContent = rewardLine; line.style.display = ''; }
+    } catch (_) {
+      line.textContent = 'Не удалось сохранить результат';
+      line.style.display = '';
+    }
+  }
+
+  function gameOver() {
     state.running = false;
     cancelAnimationFrame(raf);
-    window.haptic?.('warning');
     const panel = document.getElementById('cg-panel');
     document.getElementById('cg-hint').style.display = 'none';
     const isRecord = state.score > state.best;
-    if (isRecord) state.best = state.score;
-
-    let rewardLine = '';
-    // отправляем результат (если авторизован)
-    if (window.App?.isAuthed?.()) {
-      try {
-        const r = await fetch('/api/game-result', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...App.authHeader() },
-          body: JSON.stringify({ game: GAME_KEY, score: state.score }),
-        });
-        const d = await r.json();
-        if (PURE) {
-          // pure-режим: без клубных звёзд/CTA в UI, рекорд уже показан в тексте ниже
-        } else if (d.gated) rewardLine = '🔓 Подтверди номер в Профиле — и за игру будут капать звёзды.';
-        else if (d.starsAwarded > 0) rewardLine = `⭐ +${d.starsAwarded} ${d.capped ? '(дневной лимит достигнут)' : ''}`;
-        else if (d.capped) rewardLine = '⭐ Дневной лимит звёзд достигнут — рекорд засчитан!';
-        if (!PURE && typeof d.balance?.stars === 'number') rewardLine += rewardLine ? ` · всего ⭐ ${d.balance.stars}` : `Всего ⭐ ${d.balance.stars}`;
-      } catch (_) {}
-    } else if (!PURE) {
-      rewardLine = 'Открой игру через приложение «Марии» — и за рекорды будут звёзды.';
+    if (isRecord) {
+      state.best = state.score;
+      try { localStorage.setItem('cg_best', String(state.best)); } catch (_) {}
     }
+    window.haptic?.(isRecord ? 'success' : 'warning');
 
+    const authed = !!window.App?.isAuthed?.();
+    // панель сразу, награду допишем после ответа сервера
+    let rewardLine = (!authed && !PURE) ? 'Открой игру через приложение «Марии» — и за рекорды будут звёзды.' : '';
     panel.innerHTML = `
       <div class="cg-big">${isRecord ? '🏆' : '🐱'}</div>
       <h2>${isRecord ? 'Новый рекорд!' : 'Игра окончена'}</h2>
       <p>Котик собрал <b>${state.score}</b> очков${state.best ? ` · рекорд ${state.best}` : ''}.</p>
-      ${rewardLine ? `<p class="cg-stars">${rewardLine}</p>` : ''}
+      <p class="cg-stars" id="cg-reward" ${rewardLine ? '' : 'style="display:none"'}>${rewardLine}</p>
       <div class="cg-row">
         <button class="cg-btn" id="cg-again">Ещё раз 🥧</button>
         <button class="cg-btn cg-btn--ghost" id="cg-share">Похвастаться</button>
@@ -267,6 +298,7 @@
       <div class="cg-row"><button class="cg-btn cg-btn--ghost" id="cg-close2">В меню</button></div>
     `;
     panel.classList.add('on');
+    if (authed) postResult(panel);
     panel.querySelector('#cg-again').onclick = startRound;
     panel.querySelector('#cg-close2').onclick = close;
     panel.querySelector('#cg-share').onclick = () => {
@@ -278,12 +310,20 @@
 
   // ── Публичный API ──────────────────────────────────────────────────────────
   async function open() {
-    if (!overlay) buildOverlay();
-    overlay.classList.add('on');
-    window.scrollLock?.();
-    if (!catImg) catImg = await loadImg(CAT_SRC);
-    await loadPies();
-    requestAnimationFrame(() => { resize(); startRound(); });
+    if (opening || (overlay && overlay.classList.contains('on'))) return; // даблтап по «Играть»
+    opening = true;
+    try {
+      if (!overlay) buildOverlay();
+      overlay.classList.add('on');
+      window.scrollLock?.();
+      if (!catImg) catImg = await loadImg(CAT_SRC);
+      await loadPies();
+    } finally { opening = false; }
+    if (!overlay.classList.contains('on')) return; // закрыли, пока грузились ассеты — не плодим зомби-игру
+    requestAnimationFrame(() => {
+      if (!overlay.classList.contains('on')) return;
+      resize(); startRound();
+    });
   }
   function close() {
     state.running = false;

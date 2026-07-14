@@ -11,16 +11,25 @@
   const ASSET = (s) => `/assets/images/cat/${s}.png`;
   const STATES = ['idle', 'open', 'chew', 'happy', 'hungry', 'full'];
 
+  const DEBUG = location.search.includes('debug');
+
   let root, game, pies = [];     // pies: [{key,name,id}]
   let best = 0;
+  try { best = +localStorage.getItem('cf2_best') || 0; } catch (_) {}
   let audio;
+  let opening = false;
+  let sfxTimers = [];            // отложенные ноты — чистим в close()
 
   // ── Звук (WebAudio-синтез, без файлов) ───────────────────────────────────────
-  function ac() { if (!audio) { try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) {} } return audio; }
+  function ac() {
+    if (!audio) { try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) {} }
+    if (audio && audio.state === 'suspended') audio.resume().catch(() => {});
+    return audio;
+  }
   function tone(f, d, t, g, slide) { const a = ac(); if (!a) return; const o = a.createOscillator(), gn = a.createGain(); o.type = t || 'sine'; o.frequency.value = f; if (slide) o.frequency.exponentialRampToValueAtTime(slide, a.currentTime + d); gn.gain.value = g || 0.16; gn.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + d); o.connect(gn); gn.connect(a.destination); o.start(); o.stop(a.currentTime + d); }
   function sfxChomp() { const a = ac(); if (!a) return; const buf = a.createBuffer(1, a.sampleRate * 0.12, a.sampleRate); const ch = buf.getChannelData(0); for (let i = 0; i < ch.length; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / ch.length, 2); const s = a.createBufferSource(); s.buffer = buf; const g = a.createGain(); g.gain.value = 0.25; g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.12); const f = a.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 900; s.connect(f); f.connect(g); g.connect(a.destination); s.start(); tone(180, 0.1, 'sine', 0.12, 90); }
-  function sfxHappy() { [523, 659, 784].forEach((f, i) => setTimeout(() => tone(f, 0.18, 'triangle', 0.15), i * 70)); }
-  function sfxGold() { [659, 880, 1047, 1319].forEach((f, i) => setTimeout(() => tone(f, 0.2, 'triangle', 0.17), i * 55)); }
+  function sfxHappy() { [523, 659, 784].forEach((f, i) => sfxTimers.push(setTimeout(() => tone(f, 0.18, 'triangle', 0.15), i * 70))); }
+  function sfxGold() { [659, 880, 1047, 1319].forEach((f, i) => sfxTimers.push(setTimeout(() => tone(f, 0.2, 'triangle', 0.17), i * 55))); }
   function sfxPop() { tone(440, 0.07, 'square', 0.1, 720); }
 
   // ── Ленивая загрузка Phaser ───────────────────────────────────────────────────
@@ -97,12 +106,13 @@
         // тарелка
         this.plateY = H - 70;
         this.plate = [];
+        this.input.on('dragstart', () => window.haptic?.('selection'));
         this.input.on('drag', (p, obj, dx, dy) => { obj.x = dx; obj.y = dy; });
         this.input.on('dragend', (p, obj) => this.onDrop(obj));
 
         // отсчёт
         this.countdown(() => { this.st.running = true; this.st.tEnd = this.time.now + DUR * 1000; this.fillPlate(); });
-        window._cfScene = this; // dev/test hook
+        if (DEBUG) window._cfScene = this; // dev/test hook
       }
 
       makeEmojiTexture(key, ch) { if (this.textures.exists(key)) return; const c = document.createElement('canvas'); c.width = c.height = 56; const x = c.getContext('2d'); x.font = '46px serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(ch, 28, 30); this.textures.addCanvas(key, c); }
@@ -156,7 +166,7 @@
         if (d < this.cat.displayWidth * 0.55) { this.feed(obj.gold, obj.x, obj.y); this.plate = this.plate.filter(p => p !== obj); obj.destroy(); this.fillPlate(); }
         else this.returnPie(obj);
       }
-      returnPie(obj) { this.tweens.add({ targets: obj, x: obj.x, duration: 1 }); this.layoutPlate(); }
+      returnPie(obj) { window.haptic?.('warning'); this.tweens.add({ targets: obj, x: obj.x, duration: 1 }); this.layoutPlate(); }
 
       feed(gold, x, y) {
         const now = this.time.now;
@@ -207,12 +217,17 @@
         if (left <= 0) this.endGame();
       }
 
-      async endGame() {
+      endGame() {
         this.st.running = false;
-        this.cat.setTexture('full'); sfxHappy(); window.haptic?.('success');
-        const isRec = this.st.score > best; if (isRec) best = this.st.score;
-        window._cfResult = { score: this.st.score, fed: this.st.fed, best, isRec };
-        showResult();
+        this.cat.setTexture('full'); sfxHappy();
+        const isRec = this.st.score > best;
+        if (isRec) { best = this.st.score; try { localStorage.setItem('cf2_best', String(best)); } catch (_) {} }
+        window.haptic?.(isRec ? 'success' : 'medium');
+        const result = { score: this.st.score, fed: this.st.fed, best, isRec };
+        if (DEBUG) window._cfResult = result; // dev/test hook
+        showResult(result);
+        // не молотим частицы/твины под панелью результата
+        this.time.delayedCall(600, () => this.scene.pause());
       }
     };
   }
@@ -226,42 +241,62 @@
       .cf2-root.on{display:block}
       .cf2-root canvas{display:block}
       .cf2-x{position:absolute;top:12px;left:12px;z-index:3;width:38px;height:38px;border:none;border-radius:50%;background:rgba(0,0,0,.28);color:#fff;font-size:20px;cursor:pointer}
+      .cf2-x::after{content:'';position:absolute;inset:-6px}
       .cf2-panel{position:absolute;inset:0;z-index:5;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:26px;text-align:center;background:rgba(40,20,8,.55);backdrop-filter:blur(3px)}
       .cf2-panel.on{display:flex}
       .cf2-panel h2{margin:0;color:#fff;font-size:28px;font-weight:900;text-shadow:0 3px 8px rgba(0,0,0,.4)}
       .cf2-panel p{margin:0;color:#ffe9d2;font-size:16px}
       .cf2-big{font-size:60px}
       .cf2-btn{border:none;border-radius:16px;padding:14px 28px;font-size:17px;font-weight:800;cursor:pointer;background:#ff7a2d;color:#fff;box-shadow:0 6px 18px rgba(255,122,45,.45)}
+      .cf2-btn:active{transform:scale(.96)}
       .cf2-btn--g{background:rgba(255,255,255,.92);color:#7a3b12}
       .cf2-row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
     `;
     document.head.appendChild(s);
   }
 
-  async function showResult() {
-    const r = window._cfResult || { score: 0, fed: 0, best: 0, isRec: false };
-    let reward = '';
-    if (window.App?.isAuthed?.()) {
-      try {
-        const resp = await fetch('/api/game-result', { method: 'POST', headers: { 'Content-Type': 'application/json', ...App.authHeader() }, body: JSON.stringify({ game: GAME_KEY, score: r.score }) });
-        const d = await resp.json();
-        if (PURE) {
-          // pure-режим: без клубных звёзд/CTA в UI, рекорд уже показан в тексте ниже
-        } else if (d.gated) reward = '🔓 Подтверди номер в Профиле — и за игру будут звёзды.';
-        else if (d.starsAwarded > 0) reward = `⭐ +${d.starsAwarded}${d.capped ? ' (дневной лимит)' : ''}`;
-        else if (d.capped) reward = '⭐ Дневной лимит звёзд достигнут — рекорд засчитан!';
-        if (!PURE && typeof d.balance?.stars === 'number') reward += (reward ? ' · ' : '') + `всего ⭐ ${d.balance.stars}`;
-      } catch (_) {}
-    } else if (!PURE) reward = 'Открой через приложение «Марии» — и получай звёзды за рекорды.';
+  // сигнал таймаута для fetch (5с), с фолбэком для старых webview
+  function timeoutSignal(ms) {
+    if (AbortSignal.timeout) return AbortSignal.timeout(ms);
+    const c = new AbortController(); setTimeout(() => c.abort(), ms); return c.signal;
+  }
+
+  // отправка результата — панель уже показана, дописываем строку награды
+  async function postResult(panel, score) {
+    const line = panel.querySelector('#cf2-reward');
+    if (!line) return;
+    try {
+      const resp = await fetch('/api/game-result', { method: 'POST', headers: { 'Content-Type': 'application/json', ...App.authHeader() }, body: JSON.stringify({ game: GAME_KEY, score }), signal: timeoutSignal(5000) });
+      const d = await resp.json();
+      let reward = '';
+      if (PURE) {
+        // pure-режим: без клубных звёзд/CTA в UI, рекорд уже показан в тексте выше
+      } else if (d.gated) reward = '🔓 Подтверди номер в Профиле — и за игру будут звёзды.';
+      else if (d.starsAwarded > 0) reward = `⭐ +${d.starsAwarded}${d.capped ? ' (дневной лимит)' : ''}`;
+      else if (d.capped) reward = '⭐ Дневной лимит звёзд достигнут — рекорд засчитан!';
+      if (!PURE && typeof d.balance?.stars === 'number') reward += (reward ? ' · ' : '') + `всего ⭐ ${d.balance.stars}`;
+      if (reward) { line.textContent = reward; line.style.display = ''; }
+    } catch (_) {
+      line.textContent = 'Не удалось сохранить результат';
+      line.style.display = '';
+    }
+  }
+
+  function showResult(r) {
+    r = r || { score: 0, fed: 0, best: 0, isRec: false };
+    const authed = !!window.App?.isAuthed?.();
+    // панель сразу, награду допишем после ответа сервера
+    const reward = (!authed && !PURE) ? 'Открой через приложение «Марии» — и получай звёзды за рекорды.' : '';
     const panel = root.querySelector('.cf2-panel');
     panel.innerHTML = `
       <div class="cf2-big">${r.isRec ? '🏆' : '😻'}</div>
       <h2>${r.isRec ? 'Новый рекорд!' : 'Вкусно!'}</h2>
       <p>Котик объелся на <b>${r.score}</b> очков (${r.fed} пирогов)${r.best ? ` · рекорд ${r.best}` : ''}.</p>
-      ${reward ? `<p style="color:#ffd23f;font-weight:800">${reward}</p>` : ''}
+      <p id="cf2-reward" style="color:#ffd23f;font-weight:800;${reward ? '' : 'display:none'}">${reward}</p>
       <div class="cf2-row"><button class="cf2-btn" id="cf2-again">Ещё раз 🍰</button><button class="cf2-btn cf2-btn--g" id="cf2-share">Похвастаться</button></div>
       <div class="cf2-row"><button class="cf2-btn cf2-btn--g" id="cf2-close2">В меню</button></div>`;
     panel.classList.add('on');
+    if (authed) postResult(panel, r.score);
     panel.querySelector('#cf2-again').onclick = () => { panel.classList.remove('on'); restart(); };
     panel.querySelector('#cf2-close2').onclick = close;
     panel.querySelector('#cf2-share').onclick = () => { const link = window.App?.appLink?.() || 'https://t.me/mariatortik_bot'; const txt = `Я накормил Котика на ${r.score} очков в игре кондитерской «Мария» 🐱🍰 Побей мой рекорд! ${link}`; if (window.App?.share) App.share(txt); else if (navigator.share) navigator.share({ text: txt }).catch(() => {}); };
@@ -270,27 +305,50 @@
   function restart() { if (game) { game.scene.stop('feed'); game.scene.start('feed'); } }
 
   // ── Публичный API ─────────────────────────────────────────────────────────────
-  async function open() {
-    ensureStyles();
-    if (!root) {
-      root = document.createElement('div'); root.className = 'cf2-root';
-      root.innerHTML = `<button class="cf2-x">×</button><div class="cf2-panel"></div>`;
-      document.body.appendChild(root);
-      root.querySelector('.cf2-x').onclick = close;
-    }
-    root.classList.add('on'); window.scrollLock?.();
-    ac();
-    try { await lazyPhaser(); } catch (e) { alert('Не удалось загрузить игру, попробуй ещё раз'); close(); return; }
-    await loadCatalogPies();
-    root.querySelector('.cf2-panel').classList.remove('on');
-    if (game) { game.destroy(true); game = null; }
-    game = new Phaser.Game({
-      type: Phaser.AUTO, parent: root, transparent: false, backgroundColor: '#f3e2cf',
-      scale: { mode: Phaser.Scale.RESIZE, width: window.innerWidth, height: window.innerHeight },
-      scene: makeScene(),
-    });
+  // alert() в TG webview молча глотается — показываем плашку в панели
+  function showLoadError() {
+    const panel = root.querySelector('.cf2-panel');
+    panel.innerHTML = `
+      <div class="cf2-big">😿</div>
+      <p>Не удалось загрузить игру</p>
+      <div class="cf2-row"><button class="cf2-btn cf2-btn--g" id="cf2-err-close">Закрыть</button></div>`;
+    panel.classList.add('on');
+    panel.querySelector('#cf2-err-close').onclick = close;
   }
-  function close() { if (game) { game.destroy(true); game = null; } if (root) root.classList.remove('on'); window.scrollUnlock?.(); }
+
+  async function open() {
+    if (opening || (root && root.classList.contains('on'))) return; // даблтап по «Играть»
+    opening = true;
+    try {
+      ensureStyles();
+      if (!root) {
+        root = document.createElement('div'); root.className = 'cf2-root';
+        root.innerHTML = `<button class="cf2-x" aria-label="Закрыть">×</button><div class="cf2-panel"></div>`;
+        document.body.appendChild(root);
+        root.querySelector('.cf2-x').onclick = close;
+      }
+      root.classList.add('on'); window.scrollLock?.();
+      ac();
+      try { await lazyPhaser(); } catch (e) { showLoadError(); return; }
+      await loadCatalogPies();
+      if (!root.classList.contains('on')) return; // закрыли, пока грузились — не создаём игру-зомби
+      root.querySelector('.cf2-panel').classList.remove('on');
+      if (game) { game.destroy(true); game = null; }
+      game = new Phaser.Game({
+        type: Phaser.AUTO, parent: root, transparent: false, backgroundColor: '#f3e2cf',
+        fps: { target: 60, limit: 60 },
+        scale: { mode: Phaser.Scale.RESIZE, width: window.innerWidth, height: window.innerHeight },
+        scene: makeScene(),
+      });
+    } finally { opening = false; }
+  }
+  function close() {
+    if (game) { game.destroy(true); game = null; }
+    sfxTimers.forEach(clearTimeout); sfxTimers = [];
+    if (audio && audio.state === 'running') audio.suspend().catch(() => {});
+    if (root) root.classList.remove('on');
+    window.scrollUnlock?.();
+  }
   window.catFeedOpen = open;
   window.catFeedClose = close;
 })();

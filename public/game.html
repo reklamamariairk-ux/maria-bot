@@ -7,6 +7,7 @@
   <title>Котик Комбат — Мария</title>
   <meta name="description" content="Котик Комбат: помоги коту Василию дорасти от котёнка-стажёра до Императора выпечки. 19 уровней."/>
   <link rel="apple-touch-icon" href="/logo.png"/>
+  <link rel="icon" href="/logo.png"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <!-- Игра использует только Nunito (сплеш+кликер) и JetBrains Mono (цифры кликера) —
@@ -14,13 +15,13 @@
   <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;600&display=swap"/>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'"/>
   <noscript><link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet"/></noscript>
-  <link rel="preload" as="script" href="/js/catclick.js?v=111"/>
-  <link rel="preload" as="script" href="/js/catpet.js?v=17"/>
+  <link rel="preload" as="script" href="/js/catclick.js?v=112"/>
+  <link rel="preload" as="script" href="/js/catpet.js?v=18"/>
   <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
   <script src="/js/utils.js" defer></script>
   <script src="/js/tg-bridge.js" defer></script>
   <style>
-    html,body{margin:0;padding:0;background:#0e0a09}
+    html,body{margin:0;padding:0;background:#0e0a09;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
     #ck-splash{position:fixed;inset:0;z-index:9998;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:radial-gradient(130% 100% at 50% -10%,#2c2320 0%,#1a1413 52%,#0e0a09 100%);font-family:'Nunito','Onest',system-ui,sans-serif}
     html.ck-gamefirst #ck-splash{display:flex}
     #ck-splash .r{width:46px;height:46px;border-radius:50%;border:4px solid rgba(240,194,78,.22);border-top-color:#f0c24e;animation:cksp .8s linear infinite}
@@ -30,9 +31,20 @@
 </head>
 <body>
 <div id="ck-splash"><div class="r"></div><div class="t">Котик Комбат загружается…</div></div>
-<script src="/js/catgame.js?v=2" defer></script>
-<script src="/js/catfeed.js?v=2" defer></script>
-<script src="/js/catpet.js?v=17" defer></script>
-<script src="/js/catclick.js?v=111" defer></script>
+<script>
+// Watchdog: catclick.js не поднялся за 12с → вместо вечного спиннера экран ошибки с «Повторить»
+setTimeout(function () {
+  if (window.catClickOpen) return;
+  var s = document.getElementById('ck-splash');
+  if (!s) return;
+  s.style.display = 'flex';
+  s.innerHTML = '<div class="t">Не удалось загрузить игру</div>' +
+    '<button onclick="location.reload()" style="border:none;border-radius:14px;padding:12px 28px;font:800 15px Nunito,system-ui,sans-serif;background:#f0c24e;color:#0e0a09;cursor:pointer">Повторить</button>';
+}, 12000);
+</script>
+<script src="/js/catgame.js?v=3" defer></script>
+<script src="/js/catfeed.js?v=3" defer></script>
+<script src="/js/catpet.js?v=18" defer></script>
+<script src="/js/catclick.js?v=112" defer></script>
 </body>
 </html>
