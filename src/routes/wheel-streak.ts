@@ -13,6 +13,7 @@ import { Router } from "express";
 import { getSpinStatus, recordSpin, WHEEL_PRIZES, touchVisitStreak } from "../db";
 import type { PushService } from "../push";
 import { requireTgUser, getTgUser } from "../auth";
+import { rateLimit } from "../middleware";
 import { log } from "../logger";
 
 export function createWheelStreakRouter(push: PushService): Router {
@@ -46,7 +47,7 @@ export function createWheelStreakRouter(push: PushService): Router {
     }
   });
 
-  router.post("/api/streak/touch", requireTgUser, async (req, res) => {
+  router.post("/api/streak/touch", rateLimit(20), requireTgUser, async (req, res) => {
     const u = getTgUser(req)!;
     try {
       const r = await touchVisitStreak(u.id);

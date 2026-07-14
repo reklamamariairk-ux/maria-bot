@@ -692,54 +692,67 @@ export async function recordSpin(chatId: number): Promise<{ prize: SpinPrize; al
 
 // ─── Visit Streaks ───────────────────────────────────────────────────────────
 export async function touchVisitStreak(chatId: number): Promise<{ currentStreak: number; longestStreak: number; reachedReward: boolean }> {
-  const { rows } = await pool.query(
-    `SELECT current_streak, longest_streak, last_visit_date FROM visit_streaks WHERE chat_id = $1`,
-    [chatId]
-  );
   const now = new Date();
   const toIrk = (d: Date) => new Date(d.getTime() + 8 * 3600_000);
   const todayIrk = toIrk(now).toISOString().slice(0, 10);
-  if (!rows[0]) {
-    await pool.query(
+  const yesterdayIrk = toIrk(new Date(now.getTime() - 24 * 3600_000)).toISOString().slice(0, 10);
+  // Атомарно (транзакция + FOR UPDATE как в recordSpin): иначе пачка параллельных
+  // /api/streak/touch на 7-й день читает cur=6 всеми запросами и каждый выдаёт
+  // реальный купон free_dessert. Строка блокируется до COMMIT.
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const ins = await client.query(
       `INSERT INTO visit_streaks (chat_id, current_streak, longest_streak, last_visit_date)
-       VALUES ($1, 1, 1, $2::date)`,
+       VALUES ($1, 1, 1, $2::date) ON CONFLICT (chat_id) DO NOTHING`,
       [chatId, todayIrk]
     );
-    return { currentStreak: 1, longestStreak: 1, reachedReward: false };
-  }
-  const lastDate = rows[0].last_visit_date as Date | null;
-  let cur = Number(rows[0].current_streak) || 0;
-  let longest = Number(rows[0].longest_streak) || 0;
-  const lastIrk = lastDate ? toIrk(new Date(lastDate)).toISOString().slice(0, 10) : null;
-  if (lastIrk === todayIrk) {
-    // Уже отмечен сегодня
-    return { currentStreak: cur, longestStreak: longest, reachedReward: false };
-  }
-  // Проверяем — было ли вчера
-  const yesterday = new Date(now.getTime() - 24 * 3600_000);
-  const yesterdayIrk = toIrk(yesterday).toISOString().slice(0, 10);
-  if (lastIrk === yesterdayIrk) {
-    cur += 1;
-  } else {
-    cur = 1; // streak обнулён
-  }
-  let reachedReward = false;
-  if (cur >= 7) {
-    // Награда! Сбрасываем streak.
-    await pool.query(
-      `INSERT INTO earned_rewards (chat_id, kind, value, source)
-       VALUES ($1, 'free_dessert', '1', 'streak_7')`,
+    if (ins.rowCount && ins.rowCount > 0) {
+      await client.query("COMMIT");
+      return { currentStreak: 1, longestStreak: 1, reachedReward: false };
+    }
+    const { rows } = await client.query(
+      `SELECT current_streak, longest_streak, last_visit_date FROM visit_streaks WHERE chat_id = $1 FOR UPDATE`,
       [chatId]
     );
-    reachedReward = true;
-    cur = 0; // или оставить, но новый цикл — пусть сбросится
+    const lastDate = rows[0].last_visit_date as Date | null;
+    let cur = Number(rows[0].current_streak) || 0;
+    let longest = Number(rows[0].longest_streak) || 0;
+    const lastIrk = lastDate ? toIrk(new Date(lastDate)).toISOString().slice(0, 10) : null;
+    if (lastIrk === todayIrk) {
+      // Уже отмечен сегодня
+      await client.query("COMMIT");
+      return { currentStreak: cur, longestStreak: longest, reachedReward: false };
+    }
+    if (lastIrk === yesterdayIrk) {
+      cur += 1;
+    } else {
+      cur = 1; // streak обнулён
+    }
+    let reachedReward = false;
+    if (cur >= 7) {
+      // Награда! Сбрасываем streak.
+      await client.query(
+        `INSERT INTO earned_rewards (chat_id, kind, value, source)
+         VALUES ($1, 'free_dessert', '1', 'streak_7')`,
+        [chatId]
+      );
+      reachedReward = true;
+      cur = 0; // новый цикл — пусть сбросится
+    }
+    longest = Math.max(longest, cur);
+    await client.query(
+      `UPDATE visit_streaks SET current_streak = $2, longest_streak = $3, last_visit_date = $4::date WHERE chat_id = $1`,
+      [chatId, cur, longest, todayIrk]
+    );
+    await client.query("COMMIT");
+    return { currentStreak: cur, longestStreak: longest, reachedReward };
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally {
+    client.release();
   }
-  longest = Math.max(longest, cur);
-  await pool.query(
-    `UPDATE visit_streaks SET current_streak = $2, longest_streak = $3, last_visit_date = $4::date WHERE chat_id = $1`,
-    [chatId, cur, longest, todayIrk]
-  );
-  return { currentStreak: cur, longestStreak: longest, reachedReward };
 }
 
 // ─── Secret of the Day ───────────────────────────────────────────────────────
@@ -854,12 +867,15 @@ export async function recordReferralUse(usedByChat: number, code: string): Promi
   const ownerChat = await getReferralOwner(code);
   if (!ownerChat) return { ok: false, reason: "code_not_found" };
   if (ownerChat === usedByChat) return { ok: false, reason: "own_code" };
-  const exists = await pool.query(`SELECT code FROM referral_uses WHERE used_by_chat = $1`, [usedByChat]);
-  if (exists.rows.length > 0) return { ok: false, reason: "already_used" };
-  await pool.query(
-    `INSERT INTO referral_uses (used_by_chat, code) VALUES ($1, $2)`,
+  // Атомарно: дедуп через PK used_by_chat, а не check-then-insert (иначе гонка двух
+  // запросов роняла второй INSERT в 500 вместо already_used).
+  const ins = await pool.query(
+    `INSERT INTO referral_uses (used_by_chat, code) VALUES ($1, $2)
+     ON CONFLICT (used_by_chat) DO NOTHING
+     RETURNING code`,
     [usedByChat, code.toUpperCase()]
   );
+  if ((ins.rowCount ?? 0) === 0) return { ok: false, reason: "already_used" };
   return { ok: true, ownerChat };
 }
 

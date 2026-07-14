@@ -15,6 +15,7 @@
  */
 
 import { Router, type Request, type Response } from "express";
+import { safeEq } from "../middleware";
 import { addSubscriber, setVkMessagesAllowed } from "../db";
 import { toInternalId } from "../platform";
 import type { VkSender } from "./sender";
@@ -63,7 +64,7 @@ export function createVkCallbackRouter(vkSender: VkSender): Router {
     };
 
     // Секрет и group_id — отбрасываем чужие/поддельные события
-    if (body.secret !== VK_CALLBACK_SECRET || (VK_GROUP_ID && body.group_id !== VK_GROUP_ID)) {
+    if (!safeEq(body.secret, VK_CALLBACK_SECRET) || (VK_GROUP_ID && body.group_id !== VK_GROUP_ID)) {
       log.warn({ type: body.type, group: body.group_id }, "[vk callback] bad secret/group");
       res.status(403).end();
       return;

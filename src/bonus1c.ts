@@ -13,6 +13,7 @@
  */
 import { pool } from "./db";
 import { log } from "./logger";
+import { safeEq } from "./middleware";
 
 const BONUS_ADD_API = process.env.BONUS_ADD_API ?? "";       // push-режим: шлюз на сайте
 const BONUS_ADD_TOKEN = process.env.BONUS_ADD_TOKEN ?? "";
@@ -25,7 +26,7 @@ export function bonusSyncEnabled(): boolean {
   return Boolean(BONUS_ADD_API || BONUS_QUEUE_TOKEN);
 }
 export function queueAuthOk(token: string | undefined): boolean {
-  return Boolean(BONUS_QUEUE_TOKEN) && token === BONUS_QUEUE_TOKEN;
+  return Boolean(BONUS_QUEUE_TOKEN) && safeEq(token, BONUS_QUEUE_TOKEN);
 }
 
 /** PULL-режим: 1С забирает pending-начисления. Возвращает список к зачислению. */

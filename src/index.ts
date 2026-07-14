@@ -7,7 +7,7 @@ import https from "https";
 import cron from "node-cron";
 import { Bot, webhookCallback, InlineKeyboard, Keyboard } from "grammy";
 import { log, requestLogger, sentryExpressErrorHandler, captureError } from "./logger";
-import { rateLimit, requireAdminToken } from "./middleware";
+import { rateLimit, requireAdminToken, safeEq } from "./middleware";
 import sweetCheckRouter, { loadSweetCheckPrizes } from "./routes/sweet-check";
 import holidaysRouter from "./routes/holidays";
 import { createCatalogRouter } from "./routes/catalog";
@@ -1679,9 +1679,13 @@ function logOrderAttempt(a: OrderAttempt) {
   ORDER_LOG.push(a);
   if (ORDER_LOG.length > 20) ORDER_LOG.shift();
 }
+/** Маскирует телефон для логов (ПДн): оставляет только последние 4 цифры. */
+function maskPhone(p: string | undefined | null): string {
+  return p ? String(p).replace(/\d(?=\d{4})/g, "*") : "-";
+}
 
 app.get("/api/_debug-orders", (req, res) => {
-  if ((req.query.token ?? "") !== process.env.ORDER_TOKEN) {
+  if (!process.env.ORDER_TOKEN || !safeEq(String(req.query.token ?? ""), process.env.ORDER_TOKEN)) {
     res.status(403).json({ error: "forbidden" });
     return;
   }
@@ -1748,7 +1752,7 @@ app.post("/api/order", rateLimit(15), async (req, res) => {
   const ts = new Date().toISOString();
   const baseAttempt: OrderAttempt = { ts, tg: tg?.id ?? null, body: bodySnap, outcome: "validation_error", status: 0 };
 
-  console.log(`[ORDER] req: phone=${phone || '-'} name=${body.name || '-'} items=${items.length} ids=${JSON.stringify(bodySnap.itemIds)} tg=${tg?.id || '-'}`);
+  console.log(`[ORDER] req: phone=${maskPhone(phone)} items=${items.length} ids=${JSON.stringify(bodySnap.itemIds)} tg=${tg?.id || '-'}`);
 
   // Валидация телефона: после очистки от не-цифр должно быть 10+ цифр
   const phoneDigits = phone.replace(/\D/g, "");
@@ -1881,13 +1885,13 @@ app.post("/api/order", rateLimit(15), async (req, res) => {
   });
 
   if (!result.ok) {
-    console.error(`[ORDER] PHP error: ${result.error} for phone=${phone} items=${JSON.stringify(bodySnap.itemIds)}`);
+    console.error(`[ORDER] PHP error: ${result.error} for phone=${maskPhone(phone)} items=${JSON.stringify(bodySnap.itemIds)}`);
     const userMsg = translateOrderError(result.error);
     logOrderAttempt({ ...baseAttempt, outcome: "php_error", status: 502, error: result.error, message: userMsg });
     res.status(502).json({ ok: false, error: result.error ?? "order_failed", message: userMsg });
     return;
   }
-  console.log(`[ORDER] created #${result.orderId} for ${phone}`);
+  console.log(`[ORDER] created #${result.orderId} for ${maskPhone(phone)}`);
   logOrderAttempt({ ...baseAttempt, outcome: "success", status: 200, orderId: result.orderId });
 
   // Корзина превратилась в заказ — снимаем snapshot чтобы не пушить abandonment
