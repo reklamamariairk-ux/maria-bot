@@ -2,6 +2,10 @@
 // Спека: docs/superpowers/specs/2026-07-14-pigeon-market-design.md
 import { PoolClient } from "pg";
 import { pool } from "./db";
+import { log } from "./logger";
+import { miniAppLink } from "./links";
+// Тип без рантайм-зависимости — push.ts не импортирует pigeons.ts, цикла нет.
+import type { PushService } from "./push";
 
 export type Rarity = "common" | "rare" | "epic" | "legendary";
 export interface Breed { id: string; name: string; set: string; rarity: Rarity; }
@@ -388,4 +392,184 @@ export async function getTradeBoard(chatId: number):
     toMe: await rows(`t.to_chat=$1`, [chatId]),
     mine: await rows(`t.from_chat=$1`, [chatId]),
   };
+}
+
+// ── Почта ──────────────────────────────────────────────────────────────────
+// «Активен 7 дней»: clicker_state.updated_at — обновляется в clicker.ts::refresh()
+// на КАЖДОМ игровом запросе (тап/дейлик/буст/…), т.е. это де-факто «последняя
+// активность в игре». Отдельного updated_at-подобного поля искать не пришлось —
+// это поле уже есть в схеме (initClickerSchema, clicker.ts:244) и семантически
+// точно то, что нужно. Тот же сигнал уже использует clicker-push.ts:52-53 для
+// «уснул 16ч…4д назад» — переиспользуем тот же критерий активности.
+const MAIL_ACTIVE_WINDOW = "7 days";
+
+export interface MailRow {
+  id: number;
+  from_chat: number;
+  fromName: string;
+  breed: string;
+  sticker: number;
+  thanksSticker: number | null;
+  sentAt: string;
+  seenAt: string | null;
+}
+
+export async function sendMail(
+  chatId: number,
+  breed: string,
+  to: number | "random" | "squad" | "ref",
+  sticker: number,
+  push?: PushService,
+): Promise<{ ok: boolean; toChat?: number; reason?: string }> {
+  if (!BREED_BY_ID.has(breed)) return { ok: false, reason: "bad_breed" };
+  if (!Number.isInteger(sticker) || sticker < 0 || sticker >= STICKERS.length) return { ok: false, reason: "bad_sticker" };
+  const byPreset = to === "random" || to === "squad" || to === "ref";
+  if (!byPreset && !Number.isInteger(to)) return { ok: false, reason: "bad_input" };
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    // сериализация sendMail на пользователя — тот же класс TOCTOU, что и createTrade:
+    // без лока два параллельных запроса могут оба проскочить проверку лимита 1/день
+    // до того, как первый закоммитит свою запись в pigeon_mail.
+    await client.query(`SELECT pg_advisory_xact_lock($1)`, [chatId]);
+    // лимит 1/день по Иркутску. todayIrkutsk — ленивый импорт (см. комментарий у
+    // currentWeekKey выше): clicker.ts статически импортирует pickBreed/grantPigeon
+    // отсюда, статический импорт в обратную сторону создал бы цикл require.
+    const { todayIrkutsk } = await import("./clicker");
+    const today = todayIrkutsk();
+    const sent = await client.query(
+      `SELECT 1 FROM pigeon_mail WHERE from_chat=$1 AND (sent_at AT TIME ZONE 'Asia/Irkutsk')::date = $2 LIMIT 1`,
+      [chatId, today]);
+    if (sent.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "daily_limit" }; }
+
+    let toChat: number;
+    if (byPreset) {
+      let cand;
+      if (to === "random") {
+        cand = await client.query(
+          `SELECT chat_id FROM clicker_state WHERE chat_id<>$1 AND updated_at > NOW() - INTERVAL '${MAIL_ACTIVE_WINDOW}'
+           ORDER BY random() LIMIT 1`, [chatId]);
+      } else if (to === "squad") {
+        const sq = await client.query(`SELECT squad FROM clicker_state WHERE chat_id=$1`, [chatId]);
+        const squad = sq.rows[0]?.squad ?? null;
+        if (!squad) { await client.query("ROLLBACK"); return { ok: false, reason: "no_squad" }; }
+        cand = await client.query(
+          `SELECT chat_id FROM clicker_state WHERE squad=$2 AND chat_id<>$1 AND updated_at > NOW() - INTERVAL '${MAIL_ACTIVE_WINDOW}'
+           ORDER BY random() LIMIT 1`, [chatId, squad]);
+      } else { // "ref" — приглашённые этим игроком (registerRef пишет referred_by = чужой chat_id → мой)
+        cand = await client.query(
+          `SELECT chat_id FROM clicker_state WHERE referred_by=$1 AND updated_at > NOW() - INTERVAL '${MAIL_ACTIVE_WINDOW}'
+           ORDER BY random() LIMIT 1`, [chatId]);
+      }
+      if (!cand.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "no_players" }; }
+      toChat = Number(cand.rows[0].chat_id);
+    } else {
+      toChat = to as number;
+      if (toChat === chatId) { await client.query("ROLLBACK"); return { ok: false, reason: "self" }; }
+      const ex = await client.query(`SELECT 1 FROM clicker_state WHERE chat_id=$1`, [toChat]);
+      if (!ex.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "no_player" }; }
+    }
+
+    // эскроу: только дубликат (count>1), как в createTrade — базовую единственную птицу не отдать
+    const esc = await client.query(
+      `UPDATE pigeon_inventory SET count=count-1 WHERE chat_id=$1 AND breed=$2 AND count>1 RETURNING 1`,
+      [chatId, breed]);
+    if (!esc.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "need_duplicate" }; }
+    await grantPigeon(toChat, breed, client);
+    await client.query(
+      `INSERT INTO pigeon_mail (from_chat, to_chat, breed, sticker) VALUES ($1,$2,$3,$4)`,
+      [chatId, toChat, breed, sticker]);
+    await client.query("COMMIT");
+
+    // Пуш получателю — неблокирующий: почта уже доставлена и закоммичена, ошибка
+    // пуша не должна портить успешный ответ sendMail. Канал переиспользован из
+    // clicker-push.ts/pet-push.ts: push.sendPushSafely(chatId, "marketing_game", text)
+    // уже реализует дедуп/тихие часы/квоты (kind=marketing_game — тот же, что у
+    // игровых пушей возврата). Своей записи дедупа здесь не нужно: sendPushSafely
+    // сама режет через canSendNotification (общий кап 5/сутки, тихие часы 22–9 Иркутск).
+    if (push) {
+      void (async () => {
+        try {
+          const nameRow = await pool.query(
+            `SELECT first_name, username FROM subscribers WHERE chat_id=$1`, [chatId]);
+          const senderName = (nameRow.rows[0]?.first_name || nameRow.rows[0]?.username || "Котовод")
+            .toString().slice(0, 24);
+          const breedName = BREED_BY_ID.get(breed)!.name;
+          const text = `🕊 Тебе прилетел голубь! ${senderName} отправил тебе «${breedName}» — загляни в голубятню.`
+            + `\n\n[Открыть голубятню](${miniAppLink(toChat, "click")})`;
+          await push.sendPushSafely(toChat, "marketing_game", text);
+        } catch (e) {
+          log.warn({ err: e, chatId, toChat }, "[pigeon mail push]");
+        }
+      })();
+    }
+
+    return { ok: true, toChat };
+  } catch (e) { await client.query("ROLLBACK"); throw e; }
+  finally { client.release(); }
+}
+
+// getInbox: последние 30 писем + автопометка прочтения ВСЕЙ непрочитанной почты
+// (не только показанных 30 — совпадает с семантикой getPigeonsOverview.unreadMail,
+// который считает непрочитанное по всей pigeon_mail). SELECT идёт ДО UPDATE, чтобы
+// вернуть клиенту исходный seenAt (null → «новое») до того, как пометим прочитанным.
+export async function getInbox(chatId: number): Promise<{ mail: MailRow[] }> {
+  const result = await pool.query(
+    `SELECT m.id, m.from_chat, m.breed, m.sticker, m.thanks_sticker, m.sent_at, m.seen_at,
+            s.first_name, s.username
+       FROM pigeon_mail m LEFT JOIN subscribers s ON s.chat_id = m.from_chat
+      WHERE m.to_chat=$1
+      ORDER BY m.sent_at DESC LIMIT 30`, [chatId]);
+  await pool.query(`UPDATE pigeon_mail SET seen_at=NOW() WHERE to_chat=$1 AND seen_at IS NULL`, [chatId]);
+  const mail: MailRow[] = result.rows.map((r: any) => ({
+    id: Number(r.id),
+    from_chat: Number(r.from_chat),
+    fromName: (r.first_name || r.username || "Котовод").toString().slice(0, 24),
+    breed: r.breed,
+    sticker: Number(r.sticker),
+    thanksSticker: r.thanks_sticker == null ? null : Number(r.thanks_sticker),
+    sentAt: r.sent_at,
+    seenAt: r.seen_at,
+  }));
+  return { mail };
+}
+
+export async function thankMail(chatId: number, mailId: number, sticker: number):
+  Promise<{ ok: boolean; reason?: string }> {
+  if (!Number.isInteger(sticker) || sticker < 0 || sticker >= STICKERS.length) return { ok: false, reason: "bad_sticker" };
+  // Один UPDATE с условием в WHERE — атомарен сам по себе, отдельная транзакция/лок не нужны:
+  // только письмо, адресованное МНЕ и ещё не поблагодарённое, может сматчиться и обновиться.
+  const r = await pool.query(
+    `UPDATE pigeon_mail SET thanks_sticker=$3 WHERE id=$1 AND to_chat=$2 AND thanks_sticker IS NULL RETURNING 1`,
+    [mailId, chatId, sticker]);
+  if (!r.rowCount) return { ok: false, reason: "not_found" };
+  return { ok: true };
+}
+
+// getMailRecipients: однокомандцы (тот же squad) и рефералы (кого пригласил chatId),
+// активные 7 дней — тот же критерий (updated_at), что и в sendMail(to="squad"|"ref"),
+// чтобы список кандидатов совпадал с тем, кому реально можно отправить письмо.
+export async function getMailRecipients(chatId: number):
+  Promise<{ squad: { chat: number; name: string }[]; refs: { chat: number; name: string }[] }> {
+  const mapRows = (rows: any[]) => rows.map((r: any) => ({
+    chat: Number(r.chat_id),
+    name: (r.first_name || r.username || "Котовод").toString().slice(0, 24),
+  }));
+  const sq = await pool.query(`SELECT squad FROM clicker_state WHERE chat_id=$1`, [chatId]);
+  const squad = sq.rows[0]?.squad ?? null;
+  let squadRows: any[] = [];
+  if (squad) {
+    const r = await pool.query(
+      `SELECT c.chat_id, s.first_name, s.username
+         FROM clicker_state c LEFT JOIN subscribers s ON s.chat_id = c.chat_id
+        WHERE c.squad=$1 AND c.chat_id<>$2 AND c.updated_at > NOW() - INTERVAL '${MAIL_ACTIVE_WINDOW}'
+        LIMIT 20`, [squad, chatId]);
+    squadRows = r.rows;
+  }
+  const refR = await pool.query(
+    `SELECT c.chat_id, s.first_name, s.username
+       FROM clicker_state c LEFT JOIN subscribers s ON s.chat_id = c.chat_id
+      WHERE c.referred_by=$1 AND c.updated_at > NOW() - INTERVAL '${MAIL_ACTIVE_WINDOW}'
+      LIMIT 20`, [chatId]);
+  return { squad: mapRows(squadRows), refs: mapRows(refR.rows) };
 }

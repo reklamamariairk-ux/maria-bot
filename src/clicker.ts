@@ -30,6 +30,9 @@ const DAILY_BOOSTS = 6;           // бесплатных бустов кажд�
 const REF_INVITEE = 2500;         // бонус приглашённому
 const REF_REFERRER = 5000;        // бонус пригласившему
 const irkToday = () => new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+// Экспорт для голубиной почты (pigeons.ts::sendMail — лимит 1 письмо/день по Иркутску).
+// Ленивый импорт на стороне pigeons.ts (await import("./clicker")) — см. комментарий там.
+export const todayIrkutsk = irkToday;
 // Сезон = неделя по Иркутску (сброс в понедельник 00:00). Ключ — индекс дня-понедельника.
 function weekMonday(): number { const d = Math.floor((Date.now() + 8 * 3600 * 1000) / 86400000); return d - ((d + 3) % 7); }
 export const weekKey = () => String(weekMonday());
