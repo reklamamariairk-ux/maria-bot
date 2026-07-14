@@ -861,6 +861,10 @@
       .ck-coach-glow{outline:2px solid rgba(238,191,82,.85);outline-offset:3px;border-radius:10px}
       /* Гайд «Как играть» — полный справочник по механикам, открывается кнопкой ? и из тьюториала */
       .ck-guide-btn{position:absolute;top:12px;left:12px;z-index:9;width:34px;height:34px;border:1px solid rgba(238,191,82,.55);border-radius:50%;background:rgba(0,0,0,.28);color:var(--gold-l);font-weight:800;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+      /* Хаб «Игры»: z=7 — НИЖЕ скрима(8)/попапа(9) (попап результата должен лечь поверх) и ниже оверлеев мини-игр (11-12) */
+      .ck-games{position:absolute;inset:0;z-index:7;display:none;flex-direction:column;background:linear-gradient(180deg,#211a16,#140f0d);animation:ckGuideIn .18s ease-out}
+      .ck-games.on{display:flex}
+      @media (prefers-reduced-motion:reduce){.ck-games{animation:none}}
       .ck-guide{position:absolute;inset:0;z-index:20000;display:none;flex-direction:column;background:linear-gradient(180deg,#211a16,#140f0d);animation:ckGuideIn .18s ease-out}
       .ck-guide.on{display:flex}
       @keyframes ckGuideIn{from{opacity:0}to{opacity:1}}
@@ -912,6 +916,10 @@
       <div class="ck-levelup" id="ck-levelup"><span id="ck-levelup-t"></span></div>
       <div class="ck-scrim" id="ck-scrim"></div>
       <div class="ck-pop" id="ck-pop"></div>
+      <div class="ck-games" id="ck-games">
+        <div class="ck-guide__hd"><div class="ck-guide__t">${ICON.game(20)} Игры</div><button class="ck-guide__x" id="ck-games-x" type="button" aria-label="Закрыть">×</button></div>
+        <div class="ck-guide__body" id="ck-gameslist"></div>
+      </div>
       <div class="ck-guide" id="ck-guide">
         <div class="ck-guide__hd"><div class="ck-guide__t">${ICON.list(20)} Как играть</div><button class="ck-guide__x" id="ck-guide-x" type="button" aria-label="Закрыть">×</button></div>
         <div class="ck-guide__body" id="ck-guide-body"></div>
@@ -940,6 +948,7 @@
     ov.querySelectorAll('.ck-nav__b').forEach(b => b.onclick = () => setTab(b.dataset.tab));
     ov.querySelector('#ck-guide-btn').onclick = () => { window.haptic && window.haptic('light'); openGuide(); };
     ov.querySelector('#ck-guide-x').onclick = closeGuide;
+    ov.querySelector('#ck-games-x').onclick = closeGamesHub;
     ov.querySelector('#ck-guide-body').innerHTML = guideHtml();
     // Скрим под #ck-pop: фон перестаёт быть кликабельным, тап по нему закрывает попап
     // через собственную кнопку попапа (у welcome-попапа на закрытии висит POST /seen).
@@ -958,7 +967,7 @@
       { ic: ICON.shop(20), t: 'Прокачка и бизнесы', d: 'В «Прокачке» — четыре направления: Производство, Маркетинг, Персонал и Сеть. Каждый бизнес, который ты завёл, дальше сам приносит монеты в час — доход капает даже когда игра закрыта, а следующий уровень бизнеса поднимает доход ещё выше. Часть бизнесов открывается только с определённого уровня игрока — до этого карточка показана силуэтом с замком. Там же можно докупить Мультитап (больше монет за тап) и Запас энергии (выше потолок энергии).' },
       { ic: ICON.gift(20), t: 'Награда дня', d: 'Каждый день, когда заходишь в игру впервые, тебе доступна награда дня — забери её кнопкой сверху экрана. Награда растёт вместе со стриком: чем больше дней подряд ты заходишь, тем она весомее, а пропущенный день сбрасывает счётчик. Календарь на семь дней вперёд показывает, сколько причитается в каждый из ближайших дней.' },
       { ic: ICON.gem(20), t: 'Комбо дня и Шифр', d: 'В «Прокачке» каждый день выбираются три случайных бизнеса — прокачай (купи хотя бы один уровень) все три, и получишь бонус +12 000 монет. Забрать бонус и разгадать Шифр дня можно на вкладке «Призы»: шифр — сегодняшнее слово, зашифрованное азбукой Морзе, точками и тире. Переведи морзянку и впиши разгаданное слово в поле рядом — угадаешь верно, получишь +3 000 монет. Оба бонуса обновляются раз в сутки.' },
-      { ic: ICON.chest(20), t: 'Сундук и Золотой дождь', d: 'Иногда на главном экране пролетает золотая монетка — тронь её, пока не улетела, и получишь бонусные монеты. На вкладке «Призы» раз в день можно открыть Сундук удачи — там монеты, буст или неожиданный джекпот. Там же раз в день доступна мини-игра «Золотой дождь»: двадцать секунд лови падающие монеты, золотые монеты стоят втрое больше обычных.' },
+      { ic: ICON.chest(20), t: 'Сундук и мини-игры', d: 'Иногда на главном экране пролетает золотая монетка — тронь её, пока не улетела, и получишь бонусные монеты. На вкладке «Призы» раз в день можно открыть Сундук удачи — там монеты, буст или неожиданный джекпот. Там же карточка «Игры» открывает семь мини-игр: Котовикторина, Загадки, Счёт конфет, «Собери торт» (пары на память), «Сладкий ряд» (три конфеты в ряд), «Башня тортов» и «Золотой дождь». В каждую можно сыграть раз в день, и каждая приносит монеты.' },
       { ic: ICON.paw(20), t: 'Дом Василия', d: 'В Доме Василия — четыре комнаты: Кухня, Спальня, Игровая и Двор. В каждой — своё действие (покормить, уложить спать, поиграть, погладить), которое поднимает нужную шкалу — сытость, энергию или настроение — и приносит коту немного опыта. Если заботиться о Василии каждый день подряд, раз в сутки капают монеты питомца — награда растёт с каждым днём серии и с десятого дня держится на максимуме. В Игровой, кроме заботы, есть две мини-игры — «Накорми» и «Ловилка», рекорды в них сохраняются. Во Дворе — магазин шляп для Василия: покупай их за монеты питомца, накопленные заботой.' },
       { ic: ICON.dove(20), t: 'Голубятня', d: 'Шестнадцать голубей-помощников — по четыре на каждое из четырёх направлений «Прокачки». Как только заводишь бизнес хотя бы на первом уровне, голубь открывается и занимает своё место в коллекции — до этого на его месте молчаливый силуэт с замком. Собирай коллекцию по направлениям или полностью — Голубятня показывает прогресс по каждому разделу.' },
       { ic: ICON.trophy(20), t: 'Рейтинг и команды', d: 'Рейтинг недели показывает игроков по количеству монет, заработанных с начала недели — отсчёт идёт с понедельника, а в конце недели сезон обнуляется и начинается заново. Здесь же можно вступить в одну из четырёх команд — Шоколадные, Ванильные, Карамельные или Ягодные — и соревноваться вместе с командой в общем зачёте по сумме очков всех участников.' },
@@ -1085,7 +1094,9 @@
     for (let i = 0; i < 8; i++) { const c = document.createElement('div'); c.className = 'ck-coin'; c.innerHTML = COIN(22); c.style.left = (Math.random() * w) + 'px'; c.style.top = '-30px'; c.style.transition = 'transform 1s ease-in, opacity 1s'; fx.appendChild(c); requestAnimationFrame(() => { c.style.transform = `translateY(${fx.clientHeight + 40}px) rotate(${(Math.random() - .5) * 360}deg)`; c.style.opacity = '0.2'; }); setTimeout(() => c.remove(), 1000); }
   }
   // kind: 'error' (дефолт, с вибро) | 'light' (нейтральные сообщения). Плашка держится ~0.8с и гаснет — раньше гасла мгновенно и терялась.
-  function flashMsg(text, kind) { const fx = ov.querySelector('#ck-fx'); const el = document.createElement('div'); el.className = 'ck-up'; el.style.color = kind === 'light' ? 'var(--gold-l)' : '#ff8a8a'; el.style.fontSize = '16px'; el.style.background = 'rgba(20,8,10,.88)'; el.style.padding = '9px 16px'; el.style.borderRadius = '13px'; el.style.maxWidth = '82%'; el.style.textAlign = 'center'; el.textContent = text; el.style.left = '50%'; el.style.top = '56%'; el.style.transform = 'translateX(-50%)'; el.style.transition = 'opacity .5s ease .8s'; fx.appendChild(el); window.haptic && window.haptic(kind === 'light' ? 'light' : 'error'); requestAnimationFrame(() => el.style.opacity = '0'); setTimeout(() => el.remove(), 1400); }
+  // Топ-слой (z 30000, крепится к ov, не к #ck-fx z6): сообщение видно над хабом «Игры»,
+  // оверлеями мини-игр (z 11-12) и попапами — раньше «Перемешали!» внутри gems просто терялось.
+  function flashMsg(text, kind) { const el = document.createElement('div'); el.className = 'ck-up'; el.style.color = kind === 'light' ? 'var(--gold-l)' : '#ff8a8a'; el.style.fontSize = '16px'; el.style.background = 'rgba(20,8,10,.88)'; el.style.padding = '9px 16px'; el.style.borderRadius = '13px'; el.style.maxWidth = '82%'; el.style.textAlign = 'center'; el.style.zIndex = '30000'; el.textContent = text; el.style.left = '50%'; el.style.top = '56%'; el.style.transform = 'translateX(-50%)'; el.style.transition = 'opacity .5s ease .8s'; ov.appendChild(el); window.haptic && window.haptic(kind === 'light' ? 'light' : 'error'); requestAnimationFrame(() => el.style.opacity = '0'); setTimeout(() => el.remove(), 1400); }
 
   // ── Анимации (juice) ─────────────────────────────────────────────────────────
   let lastFly = 0;
@@ -1783,18 +1794,19 @@
     const chestCard = `<div class="ck-card ck-bonus" style="background:linear-gradient(90deg,rgba(238,191,82,.16),rgba(238,191,82,.04))">
       <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.chest(26)}</div><div class="ck-card__b"><div class="ck-card__n">Сундук удачи</div><div class="ck-card__s">${chestAvail ? 'Монеты, турбо или джекпот!' : 'Возвращайся завтра за новым'}</div></div>
       ${chestAvail ? `<button class="ck-card__buy" id="ck-chest-open">Открыть</button>` : `<button class="ck-card__buy" disabled>✓ Открыт</button>`}</div>`;
-    const rainAvail = !st || st.rainAvailable;
-    const rainCard = `<div class="ck-card ck-bonus">
-      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.rain(26)}</div><div class="ck-card__b"><div class="ck-card__n">Золотой дождь</div><div class="ck-card__s">${rainAvail ? 'Лови монеты 20 секунд → бонус' : 'Сыграно — приходи завтра'}</div></div>
-      ${rainAvail ? `<button class="ck-card__buy" id="ck-rain-play">Играть</button>` : `<button class="ck-card__buy" disabled>✓ Сыграно</button>`}</div>`;
-    // rainCard вернулась в блок: карточка собиралась и wireBonus вешал #ck-rain-play,
-    // но из возврата она выпала — «Золотой дождь» был недоступен вовсе (гайд его обещает).
-    return '<div class="ck-sect">Бонусы дня</div>' + chestCard + rainCard + comboCard + cipherCard;
+    // Хаб «Игры» (7 мини-игр, включая «Золотой дождь») — вход одной карточкой со счётчиком
+    const gated = ['quiz_kids', 'quiz_riddle', 'count', 'memory', 'gems', 'tower'];
+    const gDone = gated.filter(gameDone).length + ((!st || st.rainAvailable) ? 0 : 1);
+    const gAvail = 7 - gDone;
+    const gamesCard = `<div class="ck-card ck-bonus" style="background:linear-gradient(90deg,rgba(238,191,82,.16),rgba(238,191,82,.04))">
+      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.game(26)}</div><div class="ck-card__b"><div class="ck-card__n">Игры</div><div class="ck-card__s">${gAvail > 0 ? `Доступно сегодня: ${gAvail} из 7 · монеты за каждую` : 'Все пройдены — заходи завтра'}</div></div>
+      <button class="ck-card__buy" id="ck-games-open">${gAvail > 0 ? 'Играть' : 'Открыть'}</button></div>`;
+    return '<div class="ck-sect">Бонусы дня</div>' + chestCard + gamesCard + comboCard + cipherCard;
   }
   function wireBonus() {
     const cb = ov.querySelector('#ck-combo-claim'); if (cb) cb.onclick = claimCombo;
     const ch = ov.querySelector('#ck-chest-open'); if (ch) ch.onclick = openChestAct;
-    const rp = ov.querySelector('#ck-rain-play'); if (rp) rp.onclick = openRain;
+    const gp = ov.querySelector('#ck-games-open'); if (gp) gp.onclick = openGamesHub;
     const go = ov.querySelector('#ck-cipher-go'), inp = ov.querySelector('#ck-cipher-in');
     if (go && inp) { go.onclick = () => claimCipher(inp.value); inp.onkeydown = (e) => { if (e.key === 'Enter') claimCipher(inp.value); }; }
   }
@@ -1907,6 +1919,8 @@
     const rb = box.querySelector('#ck-games-rain'); if (rb) rb.onclick = openRain;
   }
   function startGame(g) { if (g === 'memory') openMemory(); else if (g === 'tower') openTower(); else if (g === 'gems') openGems(); else openQuiz(g); }
+  function openGamesHub() { if (!ov) return; window.haptic && window.haptic('light'); ov.querySelector('#ck-games').classList.add('on'); renderGames(); }
+  function closeGamesHub() { const g = ov && ov.querySelector('#ck-games'); if (g) g.classList.remove('on'); if (tab === 'tasks') renderTasks(); /* обновить счётчик «доступно N из 7» на карточке */ }
   function resultPopup(title, amount, sub) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${title}</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><div style="color:var(--muted);font-size:13px">${sub || ''}</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
 
   // — Квизы (Котовикторина / Загадки / Счёт конфет) —
@@ -2118,7 +2132,7 @@
   }
   function closeGems() { if (gemsState) clearTimeout(gemsState.raf); const el = ov.querySelector('#ck-gems'); if (el) el.classList.remove('on'); gemsState = null; }
 
-  function close() { cancelAnimationFrame(raf); clearTimeout(bonusTimer); closeActiveCoach(); if (rainState) endRain(true); if (quizState) closeQuiz(); if (memState) closeMemory(); if (towerState) closeTower(); if (gemsState) closeGems(); flush(); if (ov) ov.classList.remove('on'); window.scrollUnlock && window.scrollUnlock(); }
+  function close() { cancelAnimationFrame(raf); clearTimeout(bonusTimer); closeActiveCoach(); if (rainState) endRain(true); if (quizState) closeQuiz(); if (memState) closeMemory(); if (towerState) closeTower(); if (gemsState) closeGems(); const gh = ov && ov.querySelector('#ck-games'); if (gh) gh.classList.remove('on'); flush(); if (ov) ov.classList.remove('on'); window.scrollUnlock && window.scrollUnlock(); }
   window.catClickOpen = open; window.catClickClose = close; window.catClickBonusNow = () => { if (ov && ov.classList.contains('on')) showFlyingBonus(); }; // превью/тест золотого бонуса
   // Вкладка ушла в фон — останавливаем главный rAF-цикл (жалоба «тормозит», лишние тики впустую);
   // вернулись — перезапускаем, только если игра всё ещё открыта.
@@ -2154,7 +2168,7 @@
 
     const st_ = {
       platform: '…', initLen: '…', authed: '…', ss: '…', ls: '…',
-      clicker: '…', pet: '…', ver: 'catclick v113', errors: '…',
+      clicker: '…', pet: '…', ver: 'catclick v114', errors: '…',
     };
     function render() {
       body.innerHTML = ''
