@@ -260,3 +260,123 @@ export async function setShowcase(chatId: number, breeds: string[]): Promise<{ o
   } catch (e) { await client.query("ROLLBACK"); throw e; }
   finally { client.release(); }
 }
+
+// ── Обмены ─────────────────────────────────────────────────────────────────
+export const MAX_OPEN_TRADES = 3;
+const TRADE_TTL_DAYS = 7;
+
+export async function createTrade(chatId: number, give: string, want: string, to?: number):
+  Promise<{ ok: boolean; id?: number; reason?: string }> {
+  if (!BREED_BY_ID.has(give) || !BREED_BY_ID.has(want) || give === want) return { ok: false, reason: "bad_input" };
+  if (to === chatId) return { ok: false, reason: "self" };
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const cnt = await client.query(
+      `SELECT COUNT(*) AS n FROM pigeon_trades WHERE from_chat=$1 AND status='open'`, [chatId]);
+    if (Number(cnt.rows[0].n) >= MAX_OPEN_TRADES) { await client.query("ROLLBACK"); return { ok: false, reason: "limit" }; }
+    // эскроу: списать дубликат (count>1!)
+    const esc = await client.query(
+      `UPDATE pigeon_inventory SET count = count - 1 WHERE chat_id=$1 AND breed=$2 AND count>1 RETURNING 1`,
+      [chatId, give]);
+    if (!esc.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "need_duplicate" }; }
+    const ins = await client.query(
+      `INSERT INTO pigeon_trades (from_chat, to_chat, give, want) VALUES ($1,$2,$3,$4) RETURNING id`,
+      [chatId, to ?? null, give, want]);
+    await client.query("COMMIT");
+    return { ok: true, id: ins.rows[0].id };
+  } catch (e) { await client.query("ROLLBACK"); throw e; }
+  finally { client.release(); }
+}
+
+export async function acceptTrade(chatId: number, tradeId: number):
+  Promise<{ ok: boolean; got?: string; gave?: string; reason?: string }> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const t = await client.query(`SELECT * FROM pigeon_trades WHERE id=$1 AND status='open' FOR UPDATE`, [tradeId]);
+    if (!t.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "gone" }; }
+    const tr = t.rows[0];
+    if (Number(tr.from_chat) === chatId) { await client.query("ROLLBACK"); return { ok: false, reason: "own" }; }
+    if (tr.to_chat != null && Number(tr.to_chat) !== chatId) { await client.query("ROLLBACK"); return { ok: false, reason: "not_addressed" }; }
+    // акцептор отдаёт want (тоже только дубликат)
+    const pay = await client.query(
+      `UPDATE pigeon_inventory SET count = count - 1 WHERE chat_id=$1 AND breed=$2 AND count>1 RETURNING 1`,
+      [chatId, tr.want]);
+    if (!pay.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "need_duplicate" }; }
+    await grantPigeon(chatId, tr.give, client);               // акцептору — эскроу-птица
+    await grantPigeon(Number(tr.from_chat), tr.want, client); // создателю — want
+    await client.query(
+      `UPDATE pigeon_trades SET status='done', closed_at=NOW(), closed_by=$2 WHERE id=$1`, [tradeId, chatId]);
+    await client.query("COMMIT");
+    return { ok: true, got: tr.give, gave: tr.want };
+  } catch (e) { await client.query("ROLLBACK"); throw e; }
+  finally { client.release(); }
+}
+
+export async function cancelTrade(chatId: number, tradeId: number): Promise<{ ok: boolean; reason?: string }> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const t = await client.query(
+      `SELECT * FROM pigeon_trades WHERE id=$1 AND from_chat=$2 AND status='open' FOR UPDATE`, [tradeId, chatId]);
+    if (!t.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "gone" }; }
+    await grantPigeon(chatId, t.rows[0].give, client); // вернуть эскроу
+    await client.query(`UPDATE pigeon_trades SET status='cancelled', closed_at=NOW() WHERE id=$1`, [tradeId]);
+    await client.query("COMMIT");
+    return { ok: true };
+  } catch (e) { await client.query("ROLLBACK"); throw e; }
+  finally { client.release(); }
+}
+
+// Ленивый expiry: при каждом чтении доски возвращаем эскроу протухших. Курсивно малый объём — норм.
+export async function expireTrades(): Promise<number> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const old = await client.query(
+      `SELECT id, from_chat, give FROM pigeon_trades
+       WHERE status='open' AND created_at < NOW() - INTERVAL '${TRADE_TTL_DAYS} days' FOR UPDATE SKIP LOCKED`);
+    for (const r of old.rows) {
+      await grantPigeon(Number(r.from_chat), r.give, client);
+      await client.query(`UPDATE pigeon_trades SET status='expired', closed_at=NOW() WHERE id=$1`, [r.id]);
+    }
+    await client.query("COMMIT");
+    return old.rowCount ?? 0;
+  } catch (e) { await client.query("ROLLBACK"); throw e; }
+  finally { client.release(); }
+}
+
+export interface TradeRow {
+  id: number;
+  from_chat: number;
+  fromName: string;
+  give: string;
+  want: string;
+  created_at: string;
+}
+
+export async function getTradeBoard(chatId: number):
+  Promise<{ open: TradeRow[]; toMe: TradeRow[]; mine: TradeRow[] }> {
+  await expireTrades();
+  const rows = async (where: string, params: any[]): Promise<TradeRow[]> => {
+    const result = await pool.query(
+      `SELECT t.id, t.from_chat, t.to_chat, t.give, t.want, t.created_at, s.first_name, s.username
+       FROM pigeon_trades t LEFT JOIN subscribers s ON s.chat_id = t.from_chat
+       WHERE t.status='open' AND ${where}
+       ORDER BY t.created_at DESC LIMIT 50`, params);
+    return result.rows.map((r: any) => ({
+      id: Number(r.id),
+      from_chat: Number(r.from_chat),
+      fromName: (r.first_name || r.username || "Котовод").toString().slice(0, 24),
+      give: r.give,
+      want: r.want,
+      created_at: r.created_at,
+    }));
+  };
+  return {
+    open: await rows(`t.to_chat IS NULL AND t.from_chat<>$1`, [chatId]),
+    toMe: await rows(`t.to_chat=$1`, [chatId]),
+    mine: await rows(`t.from_chat=$1`, [chatId]),
+  };
+}
