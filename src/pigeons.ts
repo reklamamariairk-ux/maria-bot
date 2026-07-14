@@ -272,6 +272,8 @@ export async function createTrade(chatId: number, give: string, want: string, to
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // сериализация createTrade на пользователя — иначе двойной тап обходит лимит 3 офферов
+    await client.query(`SELECT pg_advisory_xact_lock($1)`, [chatId]);
     const cnt = await client.query(
       `SELECT COUNT(*) AS n FROM pigeon_trades WHERE from_chat=$1 AND status='open'`, [chatId]);
     if (Number(cnt.rows[0].n) >= MAX_OPEN_TRADES) { await client.query("ROLLBACK"); return { ok: false, reason: "limit" }; }
@@ -299,6 +301,13 @@ export async function acceptTrade(chatId: number, tradeId: number):
     const tr = t.rows[0];
     if (Number(tr.from_chat) === chatId) { await client.query("ROLLBACK"); return { ok: false, reason: "own" }; }
     if (tr.to_chat != null && Number(tr.to_chat) !== chatId) { await client.query("ROLLBACK"); return { ok: false, reason: "not_addressed" }; }
+    // канонический порядок блокировок инвентаря — против AB-BA дедлока встречных обменов
+    await client.query(
+      `SELECT 1 FROM pigeon_inventory
+        WHERE (chat_id, breed) IN (($1,$2),($1,$3),($4,$5))
+        ORDER BY chat_id, breed
+          FOR UPDATE`,
+      [chatId, tr.want, tr.give, Number(tr.from_chat), tr.want]);
     // акцептор отдаёт want (тоже только дубликат)
     const pay = await client.query(
       `UPDATE pigeon_inventory SET count = count - 1 WHERE chat_id=$1 AND breed=$2 AND count>1 RETURNING 1`,
