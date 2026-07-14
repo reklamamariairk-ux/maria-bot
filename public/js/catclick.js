@@ -534,7 +534,7 @@
       let r, netfail = false;
       if (authed()) { r = await api('/api/clicker/combo', { method: 'POST', body: '{}' }).catch(() => { netfail = true; return null; }); if (r && !r.error) st = r; else r = null; }
       else { const g = guestClaimComboRaw(); if (g) { r = { reward: COMBO_REWARD }; st = guestDerive(); } }
-      if (r && r.reward) { sfxLevel(); window.haptic && window.haptic('success'); coinShower(); confettiBurst(); dailyPopupRaw(ICON.star(20) + ' Комбо дня собрано!', r.reward); renderAll(); renderTasks(); bumpBalance(); }
+      if (r && r.reward) { sfxLevel(); window.haptic && window.haptic('success'); coinShower(); confettiBurst(); queueDoveDrop(r.pigeonDrop); dailyPopupRaw(ICON.star(20) + ' Комбо дня собрано!', r.reward); renderAll(); renderTasks(); bumpBalance(); }
       else flashMsg(netfail ? 'Нет связи — попробуй ещё раз' : 'Комбо ещё не собрано');
     });
   }
@@ -1241,10 +1241,10 @@
     const r = el.getBoundingClientRect(), fr = ov.querySelector('#ck-fx').getBoundingClientRect();
     el.remove(); confettiBurst(); window.haptic && window.haptic('light'); // мгновенный отклик на сам тап, награда догонит
 
-    let amount = 0;
-    if (authed()) { const d = await api('/api/clicker/bonus', { method: 'POST', body: '{}' }).catch(() => null); if (d && !d.error) { st = d; amount = d.amount; } }
+    let amount = 0, pigeonDrop;
+    if (authed()) { const d = await api('/api/clicker/bonus', { method: 'POST', body: '{}' }).catch(() => null); if (d && !d.error) { st = d; amount = d.amount; pigeonDrop = d.pigeonDrop; } }
     else { amount = guestBonusRaw(); if (amount) st = guestDerive(); }
-    if (amount) { sfxReward(); window.haptic && window.haptic('success'); coinShower(); dailyPopupRaw(ICON.star(20) + ' Золотой бонус!', amount); renderAll(); bumpBalance(); }
+    if (amount) { sfxReward(); window.haptic && window.haptic('success'); coinShower(); queueDoveDrop(pigeonDrop); dailyPopupRaw(ICON.star(20) + ' Золотой бонус!', amount); renderAll(); bumpBalance(); }
   }
   function guestBonusRaw() {
     guestDerive(); const s = rawGet(); if (s.bonusAt && Date.now() - s.bonusAt < 45000) return 0;
@@ -1271,11 +1271,11 @@
   }
   async function openChestAct() {
     return withLock('chest', async () => {
-      let prize = null;
-      if (authed()) { const d = await api('/api/clicker/chest', { method: 'POST', body: '{}' }).catch(() => null); if (d && !d.error) { st = d; prize = d.prize; } else { flashMsg(!d ? 'Нет связи — попробуй ещё раз' : 'Сундук уже открыт'); return; } }
+      let prize = null, pigeonDrop;
+      if (authed()) { const d = await api('/api/clicker/chest', { method: 'POST', body: '{}' }).catch(() => null); if (d && !d.error) { st = d; prize = d.prize; pigeonDrop = d.pigeonDrop; } else { flashMsg(!d ? 'Нет связи — попробуй ещё раз' : 'Сундук уже открыт'); return; } }
       else { prize = guestOpenChestRaw(); if (!prize) { flashMsg('Сундук уже открыт'); return; } st = guestDerive(); }
       turboUntil = Date.now() + (st.turboMsLeft || 0);
-      sfxLevel(); window.haptic && window.haptic('success'); confettiBurst(); coinShower(); chestPopup(prize); renderAll(); renderTasks(); bumpBalance();
+      sfxLevel(); window.haptic && window.haptic('success'); confettiBurst(); coinShower(); queueDoveDrop(pigeonDrop); chestPopup(prize); renderAll(); renderTasks(); bumpBalance();
     });
   }
   function chestPopup(prize) {
@@ -1283,7 +1283,7 @@
     if (prize.type === 'turbo') body = `<div class="v">${ICON.rocket(22)} Турбо ×5</div><div style="color:var(--muted);font-size:13px">20 секунд множитель за тап!</div>`;
     else if (prize.type === 'energy') body = `<div class="v">${ICON.bolt(22)} Полная энергия</div>`;
     else body = `<div class="v">+${fmt(prize.amount)} ${COIN(24)}</div>${prize.type === 'jackpot' ? '<div style="color:var(--gold-l);font-size:14px;font-weight:800;letter-spacing:1px">ДЖЕКПОТ!</div>' : ''}`;
-    pop.innerHTML = `<h3>${ICON.chest(20)} Сундук удачи</h3>${body}<button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
+    pop.innerHTML = `<h3>${ICON.chest(20)} Сундук удачи</h3>${body}<button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => { pop.classList.remove('on'); advancePopupQueue(); };
   }
 
   // ── Мини-игра «Золотой дождь» (canvas, 20с лови монеты) ───────────────────────
@@ -1375,10 +1375,10 @@
     s.balance += reward; s.totalEarned += reward; s.gamesDone[game] = today; rawSave(s); return reward;
   }
   async function submitGame(game, score) {
-    let reward = 0;
-    if (authed()) { const d = await api('/api/clicker/game', { method: 'POST', body: JSON.stringify({ game, score }) }).catch(() => null); if (d && !d.error) { st = d; reward = d.reward || 0; } else if (!d) return null; /* сеть упала — не праздновать «+0» */ }
+    let reward = 0, pigeonDrop;
+    if (authed()) { const d = await api('/api/clicker/game', { method: 'POST', body: JSON.stringify({ game, score }) }).catch(() => null); if (d && !d.error) { st = d; reward = d.reward || 0; pigeonDrop = d.pigeonDrop; } else if (!d) return null; /* сеть упала — не праздновать «+0» */ }
     else { const g = guestClaimGameRaw(game, score); if (g != null) { reward = g; st = guestDerive(); } }
-    return reward;
+    return { reward, pigeonDrop };
   }
 
   function guestClaimRainRaw(score) {
@@ -1677,10 +1677,15 @@
     try {
       if (!authed()) return;
       const d = await api('/api/clicker/purchase-sync', { method: 'POST', body: '{}' }).catch(() => null);
-      if (d && !d.error) { if (d.balance != null) st = d; if (d.bonus > 0) { sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); purchasePopup(d.bonus); } }
+      if (d && !d.error) {
+        if (d.balance != null) st = d;
+        if (Array.isArray(d.pigeonDrops) && d.pigeonDrops.length) pendingDoveSummary = d.pigeonDrops;
+        if (d.bonus > 0) { sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); purchasePopup(d.bonus); }
+        else if (pendingDoveSummary) { const s = pendingDoveSummary; pendingDoveSummary = null; doveDropsSummaryPopup(s); }
+      }
     } catch (_) {}
   }
-  function purchasePopup(amount) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Спасибо за покупки!</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><div style="color:var(--muted);font-size:13px">Бонус за покупки в «Марии» — чем больше заказываешь, тем больше монет в игре 🎂</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
+  function purchasePopup(amount) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Спасибо за покупки!</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><div style="color:var(--muted);font-size:13px">Бонус за покупки в «Марии» — чем больше заказываешь, тем больше монет в игре 🎂</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => { pop.classList.remove('on'); advancePopupQueue(); }; }
   // Перенос прогресса гостя на серверный аккаунт при первом входе (одна попытка).
   async function maybeMigrateGuest() {
     try {
@@ -1852,7 +1857,58 @@
       else flashMsg(netfail ? 'Нет связи — попробуй ещё раз' : 'Пока недоступно');
     });
   }
-  function dailyPopupRaw(title, amount) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${title}</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
+  // ── Дроп голубя: попап поверх #ck-pop, показывается ПОСЛЕ закрытия предыдущего
+  // попапа (сундук/комбо/золотой бонус/игра/покупки) — один общий DOM-элемент,
+  // два попапа разом не влезают. Очередь на случай будущих множественных дропов;
+  // сейчас реально копится максимум 1 штука (combo/chest/bonus/game дают по одному),
+  // кроме purchase-sync — там отдельный сводный попап (doveDropsSummaryPopup), не очередь.
+  // Мини-мирror имя+редкость — src/pigeons.ts::PIGEON_BREEDS (полный список с сетами/
+  // артом ведёт catdove.js; тут достаточно для попапа дропа).
+  const DOVE_META = {
+    sizar: { name: 'Сизарь', r: 'common' }, belobok: { name: 'Белобокий', r: 'common' }, ryaboy: { name: 'Рябой', r: 'common' }, chubaty: { name: 'Чубатый', r: 'common' },
+    vanil: { name: 'Ванильный', r: 'rare' }, shoko: { name: 'Шоколадный', r: 'rare' }, karamel: { name: 'Карамельный', r: 'rare' }, yagodny: { name: 'Ягодный', r: 'rare' },
+    pochtar: { name: 'Иркутский почтарь', r: 'epic' }, baikal: { name: 'Байкальский гонец', r: 'epic' }, kurier: { name: 'Ночной курьер', r: 'epic' }, vozhak: { name: 'Вожак стаи', r: 'epic' },
+    svadebny: { name: 'Свадебный', r: 'epic' }, imeninny: { name: 'Именинный', r: 'epic' }, snezhny: { name: 'Снежный', r: 'epic' }, zolotoy: { name: 'Золотой голубь Василия', r: 'legendary' },
+    champion: { name: 'Чемпион', r: 'legendary' },
+  };
+  const DOVE_RCOLOR = { common: 'rgba(200,204,212,.7)', rare: '#d9a35f', epic: '#c1a3f0', legendary: 'var(--gold-l)' };
+  let doveDropQueue = [], pendingDoveSummary = null;
+  function queueDoveDrop(drop) { if (drop && drop.breed) doveDropQueue.push(drop); }
+  function queueDoveDrops(drops) { if (Array.isArray(drops)) drops.forEach(queueDoveDrop); }
+  // Вызывается из OK-обработчика всех попапов-«триггеров» (сундук/комбо/бонус/игра/
+  // покупки) — после их закрытия показывает следующий дроп-попап, если он есть.
+  function advancePopupQueue() {
+    if (doveDropQueue.length) { setTimeout(showDovePopup, 260); return; }
+    if (pendingDoveSummary) { const s = pendingDoveSummary; pendingDoveSummary = null; setTimeout(() => doveDropsSummaryPopup(s), 260); }
+  }
+  function showDovePopup() {
+    const drop = doveDropQueue.shift();
+    if (!drop || !ov) { advancePopupQueue(); return; }
+    const meta = DOVE_META[drop.breed] || { name: drop.breed, r: 'common' };
+    const pop = ov.querySelector('#ck-pop'); if (!pop) return;
+    pop.innerHTML = `<h3>${ICON.dove(20)} Прилетел голубь!</h3>
+      <div style="width:78px;height:78px;margin:8px auto;border-radius:16px;border:2px solid ${DOVE_RCOLOR[meta.r]};display:flex;align-items:center;justify-content:center;overflow:hidden;background:rgba(238,191,82,.08);box-shadow:${meta.r === 'legendary' ? '0 0 12px rgba(238,191,82,.35)' : 'none'}">
+        <img src="/img/pigeons/${drop.breed}.webp?v=1" alt="" style="width:82%;height:82%;object-fit:contain" onerror="this.style.display='none'">
+      </div>
+      <div class="v" style="font-size:19px">${meta.name}</div>
+      <div style="color:var(--muted);font-size:13px">${drop.isNew ? 'Новый в альбоме!' : 'Дубликат — можно обменять или отправить'}</div>
+      <button id="ck-pop-ok">Класс!</button>`;
+    pop.classList.add('on');
+    pop.querySelector('#ck-pop-ok').onclick = () => { pop.classList.remove('on'); advancePopupQueue(); };
+  }
+  // Сводный попап для purchase-sync (может дать сразу несколько голубей за год покупок).
+  function doveDropsSummaryPopup(drops) {
+    if (!drops || !drops.length || !ov) return;
+    const pop = ov.querySelector('#ck-pop'); if (!pop) return;
+    const rows = drops.map((d) => {
+      const meta = DOVE_META[d.breed] || { name: d.breed, r: 'common' };
+      return `<div style="display:flex;align-items:center;gap:8px;padding:4px 2px;text-align:left"><span style="width:8px;height:8px;border-radius:50%;background:${DOVE_RCOLOR[meta.r]};flex:none"></span><span style="flex:1;font-size:13px;color:var(--cream)">${meta.name}</span><span style="font-size:11px;color:var(--muted);flex:none">${d.isNew ? 'новый!' : 'дубликат'}</span></div>`;
+    }).join('');
+    pop.innerHTML = `<h3>${ICON.dove(20)} Прилетели голуби!</h3><div style="max-height:200px;overflow-y:auto;margin:8px 0">${rows}</div><button id="ck-pop-ok">Класс!</button>`;
+    pop.classList.add('on');
+    pop.querySelector('#ck-pop-ok').onclick = () => { pop.classList.remove('on'); advancePopupQueue(); };
+  }
+  function dailyPopupRaw(title, amount) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${title}</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => { pop.classList.remove('on'); advancePopupQueue(); }; }
 
   function dailyCalHtml() {
     const streak = (st && st.dailyStreak) || 0, avail = !st || st.dailyAvailable, todayDay = avail ? streak + 1 : 0;
@@ -1954,7 +2010,7 @@
   function startGame(g) { if (g === 'memory') openMemory(); else if (g === 'tower') openTower(); else if (g === 'gems') openGems(); else openQuiz(g); }
   function openGamesHub() { if (!ov) return; window.haptic && window.haptic('light'); ov.querySelector('#ck-games').classList.add('on'); renderGames(); }
   function closeGamesHub() { const g = ov && ov.querySelector('#ck-games'); if (g) g.classList.remove('on'); if (tab === 'tasks') renderTasks(); /* обновить счётчик «доступно N из 7» на карточке */ }
-  function resultPopup(title, amount, sub) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${title}</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><div style="color:var(--muted);font-size:13px">${sub || ''}</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
+  function resultPopup(title, amount, sub) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${title}</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><div style="color:var(--muted);font-size:13px">${sub || ''}</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => { pop.classList.remove('on'); advancePopupQueue(); }; }
 
   // — Квизы (Котовикторина / Загадки / Счёт конфет) —
   function openQuiz(deck) {
@@ -1979,10 +2035,11 @@
   }
   async function finishQuiz() {
     const s = quizState; if (!s) return; const deck = s.deck, correct = s.correct, total = s.qs.length, meta = GAME_META[deck]; closeQuiz();
-    const reward = await submitGame(deck, correct);
-    if (reward === null) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); renderGames(); return; }
+    const gres = await submitGame(deck, correct);
+    if (!gres) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); renderGames(); return; }
     sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
-    resultPopup(`${meta.icon()} ${correct}/${total} верно!`, reward || 0, correct === total ? 'Идеально! 🌟' : 'Молодец, заходи завтра!');
+    queueDoveDrop(gres.pigeonDrop);
+    resultPopup(`${meta.icon()} ${correct}/${total} верно!`, gres.reward || 0, correct === total ? 'Идеально! 🌟' : 'Молодец, заходи завтра!');
     renderAll(); renderGames(); bumpBalance();
   }
   function closeQuiz() { const el = ov.querySelector('#ck-quiz'); if (el) el.classList.remove('on'); quizState = null; }
@@ -2014,10 +2071,11 @@
   async function finishMemory() {
     const s = memState; if (!s) return; const secs = (performance.now() - s.t0) / 1000; const moves = s.moves;
     const score = Math.max(20, Math.min(100, Math.round(100 - (moves - MEM_ICONS.length) * 5 - secs * 1.2))); closeMemory();
-    const reward = await submitGame('memory', score);
-    if (reward === null) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); renderGames(); return; }
+    const gres = await submitGame('memory', score);
+    if (!gres) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); renderGames(); return; }
     sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
-    resultPopup(`${ICON.cake(22)} Торт собран!`, reward || 0, `За ${moves} ходов · ${Math.round(secs)}с`);
+    queueDoveDrop(gres.pigeonDrop);
+    resultPopup(`${ICON.cake(22)} Торт собран!`, gres.reward || 0, `За ${moves} ходов · ${Math.round(secs)}с`);
     renderAll(); renderGames(); bumpBalance();
   }
   function closeMemory() { const el = ov.querySelector('#ck-mem'); if (el) el.classList.remove('on'); memState = null; }
@@ -2083,10 +2141,11 @@
   async function finishTower() {
     const s = towerState; if (!s || s.ended) return; s.ended = true; cancelAnimationFrame(s.raf);
     const score = s.score; closeTower();
-    const reward = await submitGame('tower', score);
-    if (reward === null) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); renderGames(); return; }
+    const gres = await submitGame('tower', score);
+    if (!gres) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); renderGames(); return; }
     sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
-    resultPopup(`${ICON.cake(22)} Башня из ${score} коржей!`, reward || 0, score >= 20 ? 'Высоченная! 🎂' : 'Неплохо — завтра выше!');
+    queueDoveDrop(gres.pigeonDrop);
+    resultPopup(`${ICON.cake(22)} Башня из ${score} коржей!`, gres.reward || 0, score >= 20 ? 'Высоченная! 🎂' : 'Неплохо — завтра выше!');
     renderAll(); renderGames(); bumpBalance();
   }
   function closeTower() { if (towerState) cancelAnimationFrame(towerState.raf); const el = ov.querySelector('#ck-tower'); if (el) el.classList.remove('on'); towerState = null; }
@@ -2157,10 +2216,11 @@
   async function finishGems() {
     const s = gemsState; if (!s || s.ended) return; s.ended = true; clearTimeout(s.raf);
     const score = s.score; closeGems();
-    const reward = await submitGame('gems', score);
-    if (reward === null) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); renderGames(); return; }
+    const gres = await submitGame('gems', score);
+    if (!gres) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); renderGames(); return; }
     sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
-    resultPopup(`${ICON.gem(22)} Собрано ${score} конфет!`, reward || 0, 'Сладко! Заходи завтра');
+    queueDoveDrop(gres.pigeonDrop);
+    resultPopup(`${ICON.gem(22)} Собрано ${score} конфет!`, gres.reward || 0, 'Сладко! Заходи завтра');
     renderAll(); renderGames(); bumpBalance();
   }
   function closeGems() { if (gemsState) clearTimeout(gemsState.raf); const el = ov.querySelector('#ck-gems'); if (el) el.classList.remove('on'); gemsState = null; }

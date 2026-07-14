@@ -41,6 +41,16 @@
   // Звёзды: сколько дублей скормить до следующей. ★1→★2 = 3, ★2→★3 = 5, ★3 = кап. Зеркало src/pigeons.ts::starTarget
   const starTarget = (stars) => stars === 1 ? 3 : stars === 2 ? 5 : null;
   const MAX_SHOWCASE = 3;
+  // Стикер-фразы Василия — зеркало src/pigeons.ts::STICKERS (id = индекс, менять синхронно).
+  const STICKERS = [
+    "Держи, пригодится!", "Сладкого дня!", "От Василия с любовью 🐾", "Такой красавец искал тебя!",
+    "За вкусную неделю!", "Пусть воркует у тебя!", "Обменяемся ещё!", "Ты в отличной стае!",
+    "Спасибо за игру!", "Гур-гур! (это комплимент)",
+  ];
+  // Имена, приходящие с сервера (fromName в TradeRow/MailRow, name в recipients) —
+  // сырой first_name/username живого пользователя, потенциально с HTML-спецсимволами.
+  // ВСЕГДА через esc() при вставке в innerHTML — своих данных (BREEDS/STICKERS) esc не нужен.
+  const esc = (s) => (window.escapeHtml ? window.escapeHtml(s) : String(s == null ? '' : s));
 
   const fmt = (n) => { n = Number(n) || 0; return Math.round(n).toLocaleString('ru-RU'); };
   const num = (n) => { n = Number(n); return Number.isFinite(n) ? n : 0; };
@@ -50,6 +60,8 @@
   // копия тут, catdove.js работает как отдельный модуль без чтения приватных функций catclick.
   const DOVE_ICON = (s) => svg('<path d="M21 7c-1.2.8-2.2.9-3 .4-1.6-1-4-.6-5.5 1.2C11 10.4 8.6 11.4 5 11.4c1.3 1.8 3.6 2.7 6 2.2-.9 2.2-2.7 3.6-5 4 2.3 1.4 5.5 1.4 8-.6 2-1.6 3-4 3-6.6 0-.9.4-1.7 1.2-2.2M8.5 18 7 21M12.5 17.5 12 21"/>', s || 26);
   const COIN_ICON = (s) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24"><use href="#ckSymCoin"/></svg>`;
+  const SWAP_ICON = (s) => svg('<path d="M4 7h13m0 0-3.5-3.5M17 7l-3.5 3.5M20 17H7m0 0 3.5-3.5M7 17l3.5 3.5"/>', s || 16);
+  const MAILBOX_ICON = (s) => svg('<path d="M4 6.5 12 12l8-5.5"/><rect x="4" y="6.5" width="16" height="11" rx="2"/>', s || 16);
 
   function authed() { return !!(window.App && App.isAuthed && App.isAuthed()); }
   const PURE = () => document.documentElement.classList.contains('ck-pure');
@@ -57,6 +69,14 @@
   function haptic(k) { window.haptic && window.haptic(k); }
 
   let container = null, apiRef = null, data = null, busy = false;
+  // ── доп. состояние: гонка (грузится вместе с альбомом), обмены/почта/рецепиенты
+  // (лениво, при первом открытии соответствующей страницы), мастера создания
+  // предложения/письма (шаг за шагом переиспользуют #cd-sheet). needsRerenderOnClose —
+  // отложенный полный render() после закрытия шита: страницы «Обмены»/«Почта» позволяют
+  // сделать несколько действий подряд, не закрываясь на каждой — render() пересобирает
+  // #cd-scrim/#cd-sheet и убил бы открытый шит, поэтому откладываем его до closeSheet().
+  let race = null, recipients = null, tradesCache = null, tradesTab = 'toMe', mailCache = null;
+  let tcState = null, msState = null, needsRerenderOnClose = false;
 
   // ── стили (свой блок, не трогаем catclick-css — переменные --gold-*/--muted/--panel/
   // --line/--ink/--cream каскадируются от .ck-ov, наш контейнер лежит внутри него) ──
@@ -129,6 +149,42 @@
       .cd-sk{position:relative;overflow:hidden;background:rgba(255,255,255,.05);border-radius:8px}
       .cd-sk::after{content:'';position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(255,255,255,.10),transparent);animation:cdShim 1.2s ease-in-out infinite}
       @keyframes cdShim{100%{transform:translateX(100%)}}
+      .cd-sheet{max-height:82vh;overflow-y:auto}
+      .cd-navrow{display:flex;gap:8px;margin-bottom:14px}
+      .cd-navbtn{position:relative;flex:1;display:flex;align-items:center;justify-content:center;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:10px 8px;font-weight:700;font-size:12.5px;color:var(--ink);cursor:pointer;min-height:40px}
+      .cd-navbtn:active{transform:scale(.97)}
+      .cd-navbadge{position:absolute;top:-6px;right:6px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:#e5484d;color:#fff;font-size:9.5px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+      .cd-subtabs{display:flex;gap:6px;margin-bottom:12px;background:rgba(0,0,0,.22);border-radius:12px;padding:3px}
+      .cd-subtab{flex:1;text-align:center;padding:8px 4px;border-radius:10px;font-weight:700;font-size:11.5px;color:var(--muted);cursor:pointer;background:transparent;border:none}
+      .cd-subtab.on{background:var(--panel);color:var(--gold-l)}
+      .cd-traderow{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:9px 10px;margin-bottom:8px}
+      .cd-traderow__swap{display:flex;align-items:center;gap:7px;flex:1;min-width:0}
+      .cd-traderow__art{width:34px;height:34px;border-radius:9px;background:rgba(238,191,82,.1);display:flex;align-items:center;justify-content:center;overflow:hidden;flex:none}
+      .cd-traderow__art img{width:80%;height:80%;object-fit:contain}
+      .cd-traderow__arrow{color:var(--muted);flex:none;font-size:12px}
+      .cd-traderow__meta{font-size:10.5px;color:var(--muted);margin-top:2px}
+      .cd-traderow__act{flex:none}
+      .cd-tbtn{border:1px solid #ffe9b3;border-radius:10px;padding:8px 12px;font-weight:800;font-size:11.5px;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;cursor:pointer;white-space:nowrap;min-height:34px}
+      .cd-tbtn:disabled{opacity:.6;cursor:default}
+      .cd-tbtn--ghost{background:rgba(255,255,255,.06);color:var(--muted);border-color:var(--line)}
+      .cd-mailcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:11px 12px;margin-bottom:9px}
+      .cd-mailcard__top{display:flex;align-items:center;gap:10px}
+      .cd-mailcard__art{width:42px;height:42px;border-radius:11px;background:rgba(238,191,82,.1);display:flex;align-items:center;justify-content:center;overflow:hidden;flex:none}
+      .cd-mailcard__art img{width:82%;height:82%;object-fit:contain}
+      .cd-mailcard__b{flex:1;min-width:0}
+      .cd-mailcard__n{font-weight:700;font-size:13px;color:var(--ink)}
+      .cd-mailcard__phrase{font-size:12px;color:var(--gold-l);margin-top:2px;font-style:italic;overflow-wrap:break-word}
+      .cd-mailcard__from{font-size:10.5px;color:var(--muted);margin-top:3px;overflow-wrap:break-word}
+      .cd-mailcard__thanks{margin-top:9px;width:100%;box-sizing:border-box;text-align:center}
+      .cd-reciperow{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:7px;cursor:pointer;overflow-wrap:break-word}
+      .cd-reciperow:active{transform:scale(.98)}
+      .cd-pickgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:10px}
+      .cd-pickcard{background:var(--panel);border:2px solid var(--line);border-radius:13px;padding:6px 4px 8px;text-align:center;cursor:pointer;box-sizing:border-box}
+      .cd-pickcard:active{transform:scale(.96)}
+      .cd-pickcard[data-r="common"]{border-color:rgba(141,146,156,.55)}
+      .cd-pickcard[data-r="rare"]{border-color:#b8813f}
+      .cd-pickcard[data-r="epic"]{border-color:#9070c2}
+      .cd-pickcard[data-r="legendary"]{border-color:var(--gold);box-shadow:0 0 10px rgba(238,191,82,.3)}
       @media (prefers-reduced-motion:reduce){.cd-card{animation:none;opacity:1}.cd-sk::after{animation:none}}
     `;
     document.head.appendChild(s);
@@ -145,12 +201,17 @@
 
   // ── данные ────────────────────────────────────────────────────────────────
   async function load() {
-    if (!apiRef || !authed()) { data = null; return; }
-    const d = await apiRef('/api/pigeons').catch(() => null);
+    if (!apiRef || !authed()) { data = null; race = null; return; }
+    const [d, r] = await Promise.all([
+      apiRef('/api/pigeons').catch(() => null),
+      apiRef('/api/pigeons/race').catch(() => null),
+    ]);
     if (!d || !Array.isArray(d.inventory)) { data = null; return; }
     const invMap = {};
-    d.inventory.forEach((r) => { invMap[r.breed] = { count: num(r.count), stars: num(r.stars) || 1, showcase: num(r.showcase) }; });
-    data = { sets: Array.isArray(d.sets) ? d.sets : [], invMap, weekBreed: d.weekBreed || null };
+    d.inventory.forEach((row) => { invMap[row.breed] = { count: num(row.count), stars: num(row.stars) || 1, showcase: num(row.showcase) }; });
+    data = { sets: Array.isArray(d.sets) ? d.sets : [], invMap, weekBreed: d.weekBreed || null, unreadMail: num(d.unreadMail) };
+    // race — за флагом PIGEON_RACE_ENABLED на сервере; секция рисуется только когда enabled=true.
+    race = (r && typeof r.enabled === 'boolean') ? r : null;
   }
 
   function showcaseOrder() {
@@ -234,10 +295,15 @@
     const sets = SETS.map(setRowHtml).join('');
     container.innerHTML = `<div class="cd-root">
       <div class="cd-summary">Собери коллекцию голубей — <b>${ownedCount}/16</b>. Голуби падают за тапы и покупки, «порода недели» выпадает чаще.</div>
+      <div class="cd-navrow">
+        <button class="cd-navbtn" id="cd-nav-trades">${SWAP_ICON(15)} Обмены</button>
+        <button class="cd-navbtn" id="cd-nav-mail">${MAILBOX_ICON(15)} Почта${data.unreadMail > 0 ? `<span class="cd-navbadge">${data.unreadMail > 9 ? '9+' : data.unreadMail}</span>` : ''}</button>
+      </div>
       <div class="cd-grid">${grid}</div>
       ${championHtml()}
       <div class="cd-sect-t">Сеты</div>
       ${sets}
+      ${raceHtml()}
       <div class="cd-scrim" id="cd-scrim"></div>
       <div class="cd-sheet" id="cd-sheet"></div>
       <div class="cd-pop-scrim" id="cd-pop-scrim"><div class="cd-pop" id="cd-pop"></div></div>
@@ -256,13 +322,18 @@
     });
     const scrim = container.querySelector('#cd-scrim');
     if (scrim) scrim.onclick = closeSheet;
+    const navT = container.querySelector('#cd-nav-trades'); if (navT) navT.onclick = openTradesPage;
+    const navM = container.querySelector('#cd-nav-mail'); if (navM) navM.onclick = openMailPage;
+    const raceBtn = container.querySelector('#cd-race-enter'); if (raceBtn) raceBtn.onclick = openRaceBreedPicker;
   }
 
-  // ── шит действий (звёзды/витрина) ───────────────────────────────────────────
+  // ── шит действий (звёзды/витрина/обмены/почта/гонка) — общий #cd-scrim/#cd-sheet,
+  // переиспользуется всеми под-экранами (см. openTradesPage/openMailPage/openSheet).
   function closeSheet() {
     const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
     if (sc) sc.classList.remove('on');
     if (sh) { sh.classList.remove('on'); sh.innerHTML = ''; }
+    if (needsRerenderOnClose) { needsRerenderOnClose = false; render(); }
   }
 
   function openSheet(breedId) {
@@ -280,6 +351,7 @@
     const curShowcase = showcaseOrder();
     const showcaseFull = curShowcase.length >= MAX_SHOWCASE && !isShown;
     const showLabel = isShown ? 'Убрать с витрины' : (showcaseFull ? `На витрине уже ${MAX_SHOWCASE}/${MAX_SHOWCASE}` : 'На витрину');
+    const canTrade = inv.count > 1; // обмен/почта отдают только дубликат — как feed
     const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
     if (!sc || !sh) return;
     sh.innerHTML = `
@@ -288,6 +360,7 @@
       <button class="cd-sheet__act" id="cd-feed" ${feedEnabled ? '' : 'disabled'}>${feedLabel}</button>
       ${need != null && !feedEnabled ? `<div class="cd-sheet__hint">Нужно ${need} запасных (сейчас ${Math.max(0, spare)})</div>` : ''}
       <button class="cd-sheet__act${isShown ? ' cd-sheet__act--on' : ''}" id="cd-show" ${(!isShown && showcaseFull) ? 'disabled' : ''}>${showLabel}</button>
+      ${canTrade ? `<button class="cd-sheet__act" id="cd-trade-start">${SWAP_ICON(15)} Предложить обмен</button>` : ''}
     `;
     sc.classList.add('on');
     requestAnimationFrame(() => sh.classList.add('on'));
@@ -296,6 +369,8 @@
     if (feedBtn && feedEnabled) feedBtn.onclick = () => feedAct(breedId, feedBtn);
     const showBtn = sh.querySelector('#cd-show');
     if (showBtn && !showBtn.disabled) showBtn.onclick = () => showcaseAct(breedId, isShown, showBtn);
+    const tradeBtn = sh.querySelector('#cd-trade-start');
+    if (tradeBtn) tradeBtn.onclick = () => openTradeWant(breedId);
   }
 
   const FEED_REASON = { not_owned: 'Птица не найдена', max_stars: 'Максимум звёзд', not_enough_dupes: 'Не хватает запасных дублей' };
@@ -333,6 +408,393 @@
       } else {
         flash(SHOW_REASON[d && d.error] || 'Не получилось обновить витрину');
         if (btn) btn.disabled = false;
+      }
+    } finally { busy = false; }
+  }
+
+  // ── общие хелперы для под-экранов (обмены/почта/гонка) ─────────────────────
+  function skeletonRows(n) {
+    let rows = '';
+    for (let i = 0; i < n; i++) rows += `<div class="cd-skrow"><span class="cd-sk" style="width:24px;height:24px;border-radius:50%;flex:none"></span><span class="cd-sk" style="height:12px;flex:1"></span></div>`;
+    return rows;
+  }
+  // Плитка-пикер породы (для «что хочешь взамен» / «кого отправить» / гонки) —
+  // явный список id, а не весь каталог: вызывающий решает, что показывать (все
+  // породы кроме отдаваемой / только дубликаты / только имеющиеся).
+  function pickGridHtml(ids, selectedId) {
+    return `<div class="cd-pickgrid">${ids.map(id => {
+      const b = BY_ID.get(id); if (!b) return '';
+      const artSrc = `/img/pigeons/${id}.webp?v=1`;
+      return `<div class="cd-pickcard${id === selectedId ? ' sel' : ''}" data-r="${b.rarity}" data-breed="${id}">
+        <div class="cd-art"><img src="${artSrc}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;align-items:center;justify-content:center;width:100%;height:100%">${DOVE_ICON(24)}</span></div>
+        <div class="cd-n" style="font-size:9.5px">${b.name}</div>
+      </div>`;
+    }).join('')}</div>`;
+  }
+  function stickerListHtml() {
+    return STICKERS.map((s, i) => `<div class="cd-reciperow" data-sticker="${i}"><span>${s}</span></div>`).join('');
+  }
+  async function loadRecipients() {
+    if (recipients) return recipients;
+    const d = await apiRef('/api/pigeons/recipients').catch(() => null);
+    recipients = (d && Array.isArray(d.squad) && Array.isArray(d.refs)) ? d : { squad: [], refs: [] };
+    return recipients;
+  }
+
+  // ── Обмены: создание предложения (из карточки, count>1) ────────────────────
+  function openTradeWant(giveId) {
+    tcState = { give: giveId, want: null };
+    haptic('light');
+    const sh = container.querySelector('#cd-sheet');
+    if (!sh) return;
+    const ids = BREEDS.filter(b => b.id !== 'champion' && b.id !== giveId).map(b => b.id);
+    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Что хочешь взамен?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
+      <div class="cd-sheet__hint">Отдашь: ${BY_ID.get(giveId).name}</div>
+      ${pickGridHtml(ids, null)}`;
+    sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+    sh.querySelectorAll('.cd-pickcard').forEach(el => { el.onclick = () => openTradeRecipient(el.dataset.breed); });
+  }
+  async function openTradeRecipient(wantId) {
+    if (!tcState) return;
+    tcState.want = wantId;
+    haptic('light');
+    const sh = container.querySelector('#cd-sheet');
+    if (!sh) return;
+    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Кому предложить?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
+      <div class="cd-sheet__hint">Отдашь ${BY_ID.get(tcState.give).name} → получишь ${BY_ID.get(wantId).name}</div>
+      <button class="cd-sheet__act" id="cd-trade-open">Всем на доску (открытый обмен)</button>
+      <div class="cd-sect-t">Или выбери адресата</div>
+      <div id="cd-trade-recip">${skeletonRows(2)}</div>`;
+    sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+    sh.querySelector('#cd-trade-open').onclick = () => submitTrade(null);
+    const rec = await loadRecipients();
+    const box = sh.querySelector('#cd-trade-recip');
+    if (!box) return; // шит уже закрыт/сменился, пока грузили
+    const rows = rec.squad.concat(rec.refs);
+    box.innerHTML = rows.length
+      ? rows.map(r => `<div class="cd-reciperow" data-chat="${r.chat}"><span>${esc(r.name)}</span></div>`).join('')
+      : `<div style="color:var(--muted);font-size:12.5px;text-align:center;padding:8px 0">Пока нет активных знакомых — предложи всем на доску</div>`;
+    box.querySelectorAll('.cd-reciperow').forEach(el => { el.onclick = () => submitTrade(Number(el.dataset.chat)); });
+  }
+  const TRADE_CREATE_REASON = { bad_input: 'Неверный выбор породы', self: 'Нельзя предложить самому себе', limit: 'Не больше 3 предложений одновременно', need_duplicate: 'Отдать можно только запасного' };
+  async function submitTrade(to) {
+    if (busy || !tcState) return; busy = true;
+    try {
+      const body = { give: tcState.give, want: tcState.want };
+      if (to != null) body.to = to;
+      const d = await apiRef('/api/pigeons/trade', { method: 'POST', body: JSON.stringify(body) }).catch(() => null);
+      if (d && d.ok) {
+        haptic('medium'); flash('Предложение создано');
+        tcState = null; tradesCache = null;
+        closeSheet();
+        await load(); render();
+      } else {
+        flash(TRADE_CREATE_REASON[d && d.error] || 'Не получилось создать предложение');
+      }
+    } finally { busy = false; }
+  }
+
+  // ── Обмены: доска (Мне/Доска/Мои) ───────────────────────────────────────────
+  async function openTradesPage() {
+    haptic('light');
+    const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
+    if (!sc || !sh) return;
+    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Обмены</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
+      <div class="cd-subtabs" id="cd-trade-tabs">
+        <button class="cd-subtab" data-t="toMe" type="button">Мне</button>
+        <button class="cd-subtab" data-t="open" type="button">Доска</button>
+        <button class="cd-subtab" data-t="mine" type="button">Мои</button>
+      </div>
+      <div id="cd-trade-list">${skeletonRows(3)}</div>`;
+    sc.classList.add('on');
+    requestAnimationFrame(() => sh.classList.add('on'));
+    sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+    sh.querySelectorAll('.cd-subtab').forEach(b => { b.onclick = () => { tradesTab = b.dataset.t; renderTradesTab(); }; });
+    const d = await apiRef('/api/pigeons/trades').catch(() => null);
+    tradesCache = (d && Array.isArray(d.open)) ? d : { open: [], toMe: [], mine: [] };
+    if (!container.querySelector('#cd-trade-list')) return; // закрыто, пока грузили
+    if (!tradesCache.toMe.length && tradesTab === 'toMe') tradesTab = tradesCache.open.length ? 'open' : 'toMe';
+    renderTradesTab();
+  }
+  function renderTradesTab() {
+    const sh = container.querySelector('#cd-sheet');
+    if (!sh || !tradesCache) return;
+    sh.querySelectorAll('.cd-subtab').forEach(b => b.classList.toggle('on', b.dataset.t === tradesTab));
+    const box = sh.querySelector('#cd-trade-list');
+    if (!box) return;
+    const list = tradesCache[tradesTab] || [];
+    if (!list.length) {
+      box.innerHTML = emptyState('Пусто', tradesTab === 'mine' ? 'У тебя нет открытых предложений.' : tradesTab === 'toMe' ? 'Тебе пока никто не предлагал обмен.' : 'На доске пока нет открытых предложений.');
+      return;
+    }
+    box.innerHTML = list.map(t => tradeRowHtml(t, tradesTab)).join('');
+    box.querySelectorAll('[data-accept]').forEach(el => { el.onclick = () => acceptTradeAct(Number(el.dataset.accept), el); });
+    box.querySelectorAll('[data-cancel]').forEach(el => { el.onclick = () => cancelTradeAct(Number(el.dataset.cancel), el); });
+  }
+  function tradeRowHtml(t, kind) {
+    const give = BY_ID.get(t.give), want = BY_ID.get(t.want);
+    const btn = kind === 'mine'
+      ? `<button class="cd-tbtn cd-tbtn--ghost" data-cancel="${t.id}">Отменить</button>`
+      : `<button class="cd-tbtn" data-accept="${t.id}">Принять</button>`;
+    return `<div class="cd-traderow">
+      <div class="cd-traderow__swap">
+        <div class="cd-traderow__art"><img src="/img/pigeons/${t.give}.webp?v=1" alt="" onerror="this.style.display='none'"></div>
+        <span class="cd-traderow__arrow">→</span>
+        <div class="cd-traderow__art"><img src="/img/pigeons/${t.want}.webp?v=1" alt="" onerror="this.style.display='none'"></div>
+        <div style="min-width:0;flex:1">
+          <div style="font-size:11.5px;color:var(--ink);font-weight:700">${give ? give.name : t.give} → ${want ? want.name : t.want}</div>
+          <div class="cd-traderow__meta">${kind === 'mine' ? 'от тебя' : 'от ' + esc(t.fromName)}</div>
+        </div>
+      </div>
+      <div class="cd-traderow__act">${btn}</div>
+    </div>`;
+  }
+  const TRADE_ACCEPT_REASON = { gone: 'Предложение уже разобрали', own: 'Это твоё предложение', not_addressed: 'Предложение не для тебя', need_duplicate: 'Отдать можно только запасного' };
+  async function acceptTradeAct(id, btn) {
+    if (busy) return; busy = true; if (btn) btn.disabled = true;
+    try {
+      const d = await apiRef('/api/pigeons/trade/accept', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null);
+      if (d && d.ok) {
+        haptic('medium'); flash('Обмен состоялся!');
+        needsRerenderOnClose = true;
+        await load();
+        const list = await apiRef('/api/pigeons/trades').catch(() => null);
+        tradesCache = (list && Array.isArray(list.open)) ? list : tradesCache;
+        renderTradesTab();
+      } else {
+        flash(TRADE_ACCEPT_REASON[d && d.error] || 'Не получилось принять обмен');
+        if (btn) btn.disabled = false;
+      }
+    } finally { busy = false; }
+  }
+  const TRADE_CANCEL_REASON = { gone: 'Предложение уже разобрали' };
+  async function cancelTradeAct(id, btn) {
+    if (busy) return; busy = true; if (btn) btn.disabled = true;
+    try {
+      const d = await apiRef('/api/pigeons/trade/cancel', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null);
+      if (d && d.ok) {
+        haptic('light'); flash('Предложение отменено');
+        needsRerenderOnClose = true;
+        await load();
+        const list = await apiRef('/api/pigeons/trades').catch(() => null);
+        tradesCache = (list && Array.isArray(list.open)) ? list : tradesCache;
+        renderTradesTab();
+      } else {
+        flash(TRADE_CANCEL_REASON[d && d.error] || 'Не получилось отменить');
+        if (btn) btn.disabled = false;
+      }
+    } finally { busy = false; }
+  }
+
+  // ── Почта: входящие + «Поблагодарить» ───────────────────────────────────────
+  function mailShellHtml() {
+    return `<div class="cd-sheet__hd"><div class="cd-sheet__t">Почта</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
+      <button class="cd-sheet__act" id="cd-mail-send">${SWAP_ICON(15)} Отправить голубя</button>
+      <div id="cd-mail-list"></div>`;
+  }
+  function wireMailShell(sh) {
+    sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+    sh.querySelector('#cd-mail-send').onclick = openMailSendBreed;
+  }
+  async function openMailPage() {
+    haptic('light');
+    const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
+    if (!sc || !sh) return;
+    sh.innerHTML = mailShellHtml();
+    wireMailShell(sh);
+    sh.querySelector('#cd-mail-list').innerHTML = skeletonRows(3);
+    sc.classList.add('on');
+    requestAnimationFrame(() => sh.classList.add('on'));
+    const d = await apiRef('/api/pigeons/mail').catch(() => null);
+    mailCache = (d && Array.isArray(d.mail)) ? d.mail : [];
+    // GET /api/pigeons/mail помечает письма прочитанными на сервере — синхронизируем
+    // бейдж на кнопке навбара catclick.js (Голуби<span id="ck-dove-badge">) сразу.
+    if (window.ckUpdateDoveBadge) window.ckUpdateDoveBadge(0);
+    if (data) data.unreadMail = 0;
+    if (!container.querySelector('#cd-mail-list')) return; // закрыто, пока грузили
+    renderMailList();
+  }
+  function showMailShellFromCache() {
+    const sh = container.querySelector('#cd-sheet');
+    if (!sh) return;
+    sh.innerHTML = mailShellHtml();
+    wireMailShell(sh);
+    renderMailList();
+  }
+  function renderMailList() {
+    const sh = container.querySelector('#cd-sheet');
+    if (!sh || !mailCache) return;
+    const box = sh.querySelector('#cd-mail-list');
+    if (!box) return;
+    if (!mailCache.length) { box.innerHTML = emptyState('Пусто', 'Голуби ещё не прилетали — отправь первым!'); return; }
+    box.innerHTML = mailCache.map(mailCardHtml).join('');
+    box.querySelectorAll('[data-thank]').forEach(el => { el.onclick = () => openThanksPicker(Number(el.dataset.thank)); });
+  }
+  function mailCardHtml(m) {
+    const b = BY_ID.get(m.breed);
+    const thanked = m.thanksSticker != null;
+    return `<div class="cd-mailcard">
+      <div class="cd-mailcard__top">
+        <div class="cd-mailcard__art"><img src="/img/pigeons/${m.breed}.webp?v=1" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;align-items:center;justify-content:center;width:100%;height:100%">${DOVE_ICON(18)}</span></div>
+        <div class="cd-mailcard__b">
+          <div class="cd-mailcard__n">${b ? b.name : m.breed}</div>
+          <div class="cd-mailcard__phrase">«${STICKERS[m.sticker] || ''}»</div>
+          <div class="cd-mailcard__from">от ${esc(m.fromName)}</div>
+        </div>
+      </div>
+      ${thanked
+        ? `<div style="font-size:11px;color:var(--muted);margin-top:8px">Ты поблагодарил: «${STICKERS[m.thanksSticker] || ''}»</div>`
+        : `<button class="cd-tbtn cd-mailcard__thanks" data-thank="${m.id}">Поблагодарить</button>`}
+    </div>`;
+  }
+  function openThanksPicker(mailId) {
+    const sh = container.querySelector('#cd-sheet');
+    if (!sh) return;
+    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Выбери стикер</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>${stickerListHtml()}`;
+    sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+    sh.querySelectorAll('.cd-reciperow').forEach(el => { el.onclick = () => thanksAct(mailId, Number(el.dataset.sticker)); });
+  }
+  async function thanksAct(mailId, sticker) {
+    if (busy) return; busy = true;
+    try {
+      const d = await apiRef('/api/pigeons/mail/thanks', { method: 'POST', body: JSON.stringify({ id: mailId, sticker }) }).catch(() => null);
+      if (d && d.ok) {
+        haptic('light'); flash('Спасибо отправлено!');
+        const m = mailCache && mailCache.find(x => x.id === mailId); if (m) m.thanksSticker = sticker;
+        showMailShellFromCache();
+      } else {
+        flash('Не получилось отправить спасибо');
+        showMailShellFromCache();
+      }
+    } finally { busy = false; }
+  }
+
+  // ── Почта: отправка (дубликат → адресат → стикер) ──────────────────────────
+  function openMailSendBreed() {
+    msState = {};
+    haptic('light');
+    const spares = Object.keys(data.invMap).filter(id => data.invMap[id].count > 1);
+    const sh = container.querySelector('#cd-sheet');
+    if (!sh) return;
+    if (!spares.length) {
+      sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Отправить голубя</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>${emptyState('Нечего отправить', 'Нужен хотя бы один запасной дубликат породы.')}`;
+      sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+      return;
+    }
+    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Кого отправишь?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>${pickGridHtml(spares, null)}`;
+    sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+    sh.querySelectorAll('.cd-pickcard').forEach(el => { el.onclick = () => openMailSendRecipient(el.dataset.breed); });
+  }
+  async function openMailSendRecipient(breedId) {
+    if (!msState) return;
+    msState.breed = breedId;
+    haptic('light');
+    const sh = container.querySelector('#cd-sheet');
+    if (!sh) return;
+    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Кому отправить?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
+      <div class="cd-sheet__hint">Отправишь: ${BY_ID.get(breedId).name}</div>
+      <button class="cd-sheet__act" id="cd-ms-random">Случайному игроку</button>
+      <div class="cd-sect-t">Однокомандцы</div>
+      <div id="cd-ms-squad">${skeletonRows(2)}</div>
+      <div class="cd-sect-t">Рефералы</div>
+      <div id="cd-ms-refs">${skeletonRows(2)}</div>`;
+    sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+    sh.querySelector('#cd-ms-random').onclick = () => openMailSendSticker('random');
+    const rec = await loadRecipients();
+    const sqBox = sh.querySelector('#cd-ms-squad'), rfBox = sh.querySelector('#cd-ms-refs');
+    if (!sqBox || !rfBox) return; // шит уже закрыт/сменился, пока грузили
+    sqBox.innerHTML = rec.squad.length
+      ? rec.squad.map(r => `<div class="cd-reciperow" data-chat="${r.chat}"><span>${esc(r.name)}</span></div>`).join('')
+      : `<div style="color:var(--muted);font-size:12px;padding:4px 2px 10px">Пока нет активных однокомандцев</div>`;
+    rfBox.innerHTML = rec.refs.length
+      ? rec.refs.map(r => `<div class="cd-reciperow" data-chat="${r.chat}"><span>${esc(r.name)}</span></div>`).join('')
+      : `<div style="color:var(--muted);font-size:12px;padding:4px 2px 10px">Пока нет активных рефералов</div>`;
+    sqBox.querySelectorAll('.cd-reciperow').forEach(el => { el.onclick = () => openMailSendSticker(Number(el.dataset.chat)); });
+    rfBox.querySelectorAll('.cd-reciperow').forEach(el => { el.onclick = () => openMailSendSticker(Number(el.dataset.chat)); });
+  }
+  function openMailSendSticker(to) {
+    if (!msState) return;
+    msState.to = to;
+    haptic('light');
+    const sh = container.querySelector('#cd-sheet');
+    if (!sh) return;
+    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Что напишешь?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>${stickerListHtml()}`;
+    sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+    sh.querySelectorAll('.cd-reciperow').forEach(el => { el.onclick = () => submitMail(Number(el.dataset.sticker)); });
+  }
+  const MAIL_SEND_REASON = {
+    bad_breed: 'Неизвестная порода', bad_sticker: 'Неверный стикер',
+    daily_limit: 'Голубь уже улетел сегодня — приходи завтра',
+    no_players: 'Нет активных игроков рядом', no_player: 'Игрок не найден',
+    self: 'Нельзя отправить самому себе', need_duplicate: 'Отдать можно только запасного',
+    no_squad: 'Ты не в команде',
+  };
+  async function submitMail(sticker) {
+    if (busy || !msState) return; busy = true;
+    try {
+      const d = await apiRef('/api/pigeons/mail', { method: 'POST', body: JSON.stringify({ breed: msState.breed, to: msState.to, sticker }) }).catch(() => null);
+      if (d && d.ok) {
+        haptic('medium'); flash('Голубь отправлен!');
+        msState = null;
+        closeSheet();
+        await load(); render();
+      } else {
+        flash(MAIL_SEND_REASON[d && d.error] || 'Не получилось отправить');
+      }
+    } finally { busy = false; }
+  }
+
+  // ── Гонка стаи (за флагом PIGEON_RACE_ENABLED — секция не рисуется, пока сервер
+  // не вернёт enabled=true). Прошлонедельные результаты хранят только chat_id, а
+  // клиент не знает свой chat_id (нет такого поля в App-мосте catclick.js) — «своё
+  // место» намеренно НЕ подсвечиваем, честно показываем весь топ без выделения.
+  function raceHtml() {
+    if (!race || !race.enabled) return '';
+    const mine = race.myBreed ? BY_ID.get(race.myBreed) : null;
+    const results = Array.isArray(race.lastResults) ? race.lastResults : [];
+    const rows = results.length ? results.map(r => {
+      const b = BY_ID.get(r.breed);
+      return `<div class="cd-traderow">
+        <div class="cd-traderow__swap">
+          <div style="width:24px;text-align:center;font-weight:800;color:var(--gold-l);flex:none;font-size:12px">№${num(r.place)}</div>
+          <div class="cd-traderow__art"><img src="/img/pigeons/${r.breed}.webp?v=1" alt="" onerror="this.style.display='none'"></div>
+          <div style="min-width:0;flex:1"><div style="font-size:12px;color:var(--ink);font-weight:700">${b ? b.name : r.breed}</div><div class="cd-traderow__meta">${num(r.score)} очков</div></div>
+        </div>
+        <div style="font-size:11.5px;color:var(--gold-l);font-weight:800;flex:none">${COIN_ICON(12)} ${fmt(r.prize)}</div>
+      </div>`;
+    }).join('') : `<div style="color:var(--muted);font-size:12.5px;text-align:center;padding:8px 0">Итоги прошлой недели ещё не подведены</div>`;
+    return `<div class="cd-sect-t">Гонка стаи</div>
+      <div class="cd-setrow">
+        <div class="cd-setrow__n"><b>${mine ? 'Заявлен: ' + mine.name : 'Пока не участвуешь'}</b><div class="cd-setrow__p">${num(race.entrants)} участников на этой неделе</div></div>
+        ${!mine ? `<button class="cd-claimbtn" id="cd-race-enter">Заявить</button>` : ''}
+      </div>
+      ${rows}`;
+  }
+  function openRaceBreedPicker() {
+    if (!data) return;
+    const owned = Object.keys(data.invMap).filter(id => data.invMap[id].count > 0);
+    if (!owned.length) { flash('Нет ни одной птицы для заявки'); return; }
+    haptic('light');
+    const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
+    if (!sc || !sh) return;
+    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Заяви птицу на гонку</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>${pickGridHtml(owned, null)}`;
+    sc.classList.add('on');
+    requestAnimationFrame(() => sh.classList.add('on'));
+    sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+    sh.querySelectorAll('.cd-pickcard').forEach(el => { el.onclick = () => raceEnterAct(el.dataset.breed); });
+  }
+  const RACE_ENTER_REASON = { disabled: 'Гонка сейчас недоступна', unknown_breed: 'Неизвестная порода', not_owned: 'Птица не найдена', already: 'Ты уже заявил голубя на этой неделе' };
+  async function raceEnterAct(breedId) {
+    if (busy) return; busy = true;
+    try {
+      const d = await apiRef('/api/pigeons/race/enter', { method: 'POST', body: JSON.stringify({ breed: breedId }) }).catch(() => null);
+      if (d && d.ok) {
+        haptic('medium'); flash('Заявка принята!');
+        if (race) race.myBreed = breedId;
+        closeSheet();
+        render();
+      } else {
+        flash(RACE_ENTER_REASON[d && d.error] || 'Не получилось заявить');
       }
     } finally { busy = false; }
   }
