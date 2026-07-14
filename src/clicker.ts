@@ -685,17 +685,40 @@ export async function boostClicker(chatId: number, type: string): Promise<{ ok: 
 
 /** Топ игроков за СЕЗОН (текущая неделя): очки = total_earned − week_base. Имя из subscribers. */
 export async function getTop(chatId: number, limit = 30): Promise<{
-  top: { name: string; total: number; me: boolean; prestige: number }[]; myRank: number | null; seasonEndsTs: number;
+  top: { name: string; total: number; me: boolean; prestige: number; showcase: { breed: string; stars: number }[]; title: string | null }[];
+  myRank: number | null; seasonEndsTs: number;
   weekly: { enabled: boolean; prizes: { rank: number; points: number; label: string }[]; lastWeek: { rank: number; name: string; points: number; me: boolean }[] };
 }> {
   const cur = weekKey();
   const { rows } = await pool.query(
-    `SELECT c.chat_id, (c.total_earned - c.week_base) AS pts, c.prestige, s.first_name, s.username
+    `SELECT c.chat_id, (c.total_earned - c.week_base) AS pts, c.prestige, c.album_bonus, s.first_name, s.username
        FROM clicker_state c LEFT JOIN subscribers s ON s.chat_id = c.chat_id
       WHERE c.week_key = $2 AND (c.total_earned - c.week_base) > 0
       ORDER BY pts DESC LIMIT $1`, [limit, cur]
   );
-  const top = rows.map((r) => ({ name: (r.first_name || r.username || "Котовод").toString().slice(0, 24), total: Number(r.pts), me: Number(r.chat_id) === chatId, prestige: Number(r.prestige || 0) }));
+  // Витрины топа — один запрос на всех (не по одному на игрока).
+  const topIds = rows.map((r) => Number(r.chat_id));
+  const showcaseByChat = new Map<number, { breed: string; stars: number }[]>();
+  if (topIds.length) {
+    const sc = await pool.query(
+      `SELECT chat_id, breed, stars, showcase FROM pigeon_inventory WHERE chat_id = ANY($1) AND showcase > 0 ORDER BY showcase`,
+      [topIds]
+    );
+    for (const s of sc.rows) {
+      const cid = Number(s.chat_id);
+      let list = showcaseByChat.get(cid);
+      if (!list) { list = []; showcaseByChat.set(cid, list); }
+      if (list.length < 3) list.push({ breed: String(s.breed), stars: Number(s.stars) });
+    }
+  }
+  const top = rows.map((r) => ({
+    name: (r.first_name || r.username || "Котовод").toString().slice(0, 24),
+    total: Number(r.pts),
+    me: Number(r.chat_id) === chatId,
+    prestige: Number(r.prestige || 0),
+    showcase: showcaseByChat.get(Number(r.chat_id)) || [],
+    title: r.album_bonus ? "Голубиный барон" : null,
+  }));
   const me = await pool.query(`SELECT week_key, (total_earned - week_base) AS pts FROM clicker_state WHERE chat_id=$1`, [chatId]);
   const myPts = me.rows.length && me.rows[0].week_key === cur ? Number(me.rows[0].pts) : 0;
   const rank = await pool.query(`SELECT COUNT(*)::int AS n FROM clicker_state WHERE week_key=$2 AND (total_earned - week_base) > $1`, [myPts, cur]);
