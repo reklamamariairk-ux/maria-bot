@@ -37,7 +37,8 @@ function serve() {
   await pg.waitForSelector('.ck-ov.on', { timeout: 15000 });
   ok(true, 'game.html: игра автооткрылась');
   ok(await pg.locator('#ck-splash').isHidden(), 'game.html: сплеш снят');
-  ok(await pg.locator('.ck-nav__b[data-tab="tasks"]').isHidden(), 'pure: вкладка Задания скрыта');
+  ok(await pg.locator('.ck-nav__b[data-tab="tasks"]').isVisible(), 'pure: вкладка Призы видима');
+  ok(((await pg.locator('.ck-nav__b[data-tab="tasks"]').textContent()) || '').includes('Призы'), 'pure: вкладка называется «Призы»');
   ok(await pg.locator('#ck-x').isHidden(), 'pure: крестик скрыт у гостя');
   // .ck-reward — карточки витрины наград (не текстовый матч: во вступлении тьюториала
   // тоже упоминается фраза «награды «Марии»» как флейвор-текст, это не витрина)
@@ -45,10 +46,10 @@ function serve() {
   // Первый визит показывает тьюториал поверх оверлея — реальный юзер тапнет «Поехали!»
   const tutGo = pg.locator('#ck-tut-go');
   if (await tutGo.isVisible().catch(() => false)) { await tutGo.click(); await pg.waitForTimeout(300); }
-  // Дом кота: виджет «До подарка» скрыт
+  // Дом кота: виджет «До подарка» снова виден (game-first: вехи заботы — витрина призов)
   await pg.locator('.ck-nav__b[data-tab="home"]').click();
   await pg.waitForTimeout(1500);
-  ok(await pg.locator('#pet-gift').isHidden().catch(() => true), 'pure: #pet-gift скрыт');
+  ok(await pg.locator('#pet-gift').isVisible().catch(() => false), 'pure: #pet-gift виден');
   await pg.close();
 
   // ── 2. index.html: регресс (магазин + игра с коммерцией) ──
@@ -58,7 +59,8 @@ function serve() {
   await pg.waitForTimeout(2500);
   await pg.evaluate(() => window.catClickOpen());
   await pg.waitForSelector('.ck-ov.on', { timeout: 15000 });
-  ok(await pg.locator('.ck-nav__b[data-tab="tasks"]').isVisible(), 'регресс: вкладка Задания на месте');
+  ok(await pg.locator('.ck-nav__b[data-tab="tasks"]').isVisible(), 'регресс: вкладка Призы на месте');
+  ok(((await pg.locator('.ck-nav__b[data-tab="tasks"]').textContent()) || '').includes('Призы'), 'регресс: вкладка называется «Призы»');
   ok(await pg.locator('#ck-x').isVisible(), 'регресс: крестик на месте');
   await pg.close();
 
