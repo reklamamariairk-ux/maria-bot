@@ -2,7 +2,6 @@
 // Спека: docs/superpowers/specs/2026-07-14-pigeon-market-design.md
 import { PoolClient } from "pg";
 import { pool } from "./db";
-import { weekKey } from "./clicker";
 
 export type Rarity = "common" | "rare" | "epic" | "legendary";
 export interface Breed { id: string; name: string; set: string; rarity: Rarity; }
@@ -31,7 +30,13 @@ export const BREED_BY_ID = new Map(PIGEON_BREEDS.map(b => [b.id, b]));
 
 // Обёртка ключа недели по Иркутску — единственный источник истины: weekKey() в clicker.ts
 // (используется closeWeeklySeason). Не дублируем реализацию здесь.
-export function currentWeekKey(): string { return weekKey(); }
+// Ленивый импорт (как addClickerBalance в claimSet): все импорты из clicker.ts внутри
+// pigeons.ts обязаны быть лениво через await import — clicker.ts в Task 3 статически
+// импортирует pickBreed/grantPigeon отсюда, статический импорт в обе стороны = цикл.
+export async function currentWeekKey(): Promise<string> {
+  const { weekKey } = await import("./clicker");
+  return weekKey();
+}
 
 // Сеты: награда монетами (v1 — только игровое). Полный альбом = 16 сетовых пород.
 export const PIGEON_SETS: { id: string; name: string; reward: number }[] = [
@@ -171,7 +176,7 @@ export async function getPigeonsOverview(chatId: number) {
     inventory: inv.rows, sets,
     albumDone: [...owned].filter(b => b !== "champion").length >= 16,
     unreadMail: Number(mail.rows[0].n),
-    weekBreed: breedOfWeek(currentWeekKey()),
+    weekBreed: breedOfWeek(await currentWeekKey()),
   };
 }
 
