@@ -59,14 +59,14 @@
   ];
   const REF_REFERRER = 5000, REF_INVITEE = 2500, BOT = 'mariatortik_bot';
   // Соцссылки «Марии» — зеркало SOCIAL в src/clicker.ts (менять синхронно). Пустая = задание скрыто.
-  const SOCIAL = { review: 'https://yandex.ru/maps/?text=Мария кондитерская Иркутск', vk: '', tg: '' };
+  const SOCIAL = { review: 'https://yandex.ru/maps/?text=Мария кондитерская Иркутск', vk: '', tg: 'https://t.me/mariatortik_bot' };
   // Режим «чистой игры» (game.html): вся коммерция скрыта. См. спеку 2026-07-13.
   const PURE = document.documentElement.classList.contains('ck-pure');
   const TASKS = [
     { id: 'site', name: 'Заглянуть на сайт «Мария»', icon: '🌐', reward: 1500, type: 'link', link: 'https://www.maria-irk.ru/' },
     { id: 'review', name: 'Оставить отзыв о «Марии»', icon: '⭐', reward: 5000, type: 'link', link: SOCIAL.review },
     { id: 'vk', name: 'Подписаться на ВК «Мария»', icon: '👍', reward: 4000, type: 'link', link: SOCIAL.vk },
-    { id: 'tg', name: 'Подписаться на Telegram «Мария»', icon: '📣', reward: 4000, type: 'link', link: SOCIAL.tg },
+    { id: 'tg', name: 'Открыть Telegram-бот «Марии»', icon: '📣', reward: 4000, type: 'link', link: SOCIAL.tg },
     { id: 'invite1', name: 'Пригласить друга', icon: '👥', reward: 10000, type: 'ref', target: 1 },
     { id: 'level3', name: 'Дойти до 3 уровня', icon: '⭐', reward: 3000, type: 'level', target: 3 },
     { id: 'balance10', name: 'Накопить 10 000 монет', icon: '💰', reward: 2500, type: 'balance', target: 10000 },
@@ -473,7 +473,6 @@
   async function load() { let q = ''; try { const sp = (window.App && App.startParam && App.startParam()) || ''; const m = /^src[_-]([a-zA-Z0-9_-]{1,32})/.exec(sp); if (m) q = '?source=' + encodeURIComponent(m[1]); } catch (_) {} st = authed() ? await api('/api/clicker' + q).catch(() => guestDerive()) : guestDerive(); turboUntil = Date.now() + (st.turboMsLeft || 0); }
   // T5: welcome-промокод новичку (первая победа). Показ 1 раз; сервер решает eligibility.
   async function maybeWelcomePromo() {
-    if (PURE) return;
     if (!authed()) return;
     try {
       const d = await api('/api/clicker/welcome').catch(() => null);
@@ -876,7 +875,7 @@
       </div>
       <div class="ck-screen" id="ck-scr-up"><div class="ck-uphd"><div class="ck-bal" style="justify-content:center;font-size:30px">${COIN(26)} <span id="ck-bal2">0</span></div><div class="p" id="ck-prof2">${COIN(13)} +0 / час</div></div><div class="ck-uplist" id="ck-uplist"></div></div>
       <div class="ck-screen" id="ck-scr-dove"><div class="ck-uphd"><div class="b">${ICON.dove(22)} Голубятня</div></div><div class="ck-uplist" id="ck-dovelist"></div></div>
-      <div class="ck-screen" id="ck-scr-tasks"><div class="ck-uphd"><div class="b">${ICON.list(22)} Задания</div></div><div class="ck-uplist" id="ck-taskslist"></div></div>
+      <div class="ck-screen" id="ck-scr-tasks"><div class="ck-uphd"><div class="b">${ICON.gift(22)} Призы</div></div><div class="ck-uplist" id="ck-taskslist"></div></div>
       <div class="ck-screen" id="ck-scr-top"><div class="ck-uphd"><div class="b">${ICON.trophy(22)} Рейтинг</div><div class="p" id="ck-myrank"></div></div><div class="ck-uplist" id="ck-toplist"></div></div>
       <div class="ck-fx" id="ck-fx"></div>
       <div class="ck-levelup" id="ck-levelup"><span id="ck-levelup-t"></span></div>
@@ -890,7 +889,7 @@
         <button class="ck-nav__b" data-tab="up">${ICON.bolt(21)}Прокачка</button>
         <button class="ck-nav__b" data-tab="home">${ICON.paw(21)}Дом</button>
         <button class="ck-nav__b" data-tab="dove">${ICON.dove(21)}Голуби</button>
-        <button class="ck-nav__b" data-tab="tasks">${ICON.list(21)}Задания</button>
+        <button class="ck-nav__b" data-tab="tasks">${ICON.gift(21)}Призы</button>
         <button class="ck-nav__b" data-tab="top">${ICON.trophy(21)}Рейтинг</button>
       </div>`;
     document.body.appendChild(ov);
@@ -900,7 +899,6 @@
       if (window.App && App.platform !== 'guest') xBtn.onclick = () => { try { App.close(); } catch (_) {} };
       else xBtn.style.display = 'none';
     } else xBtn.onclick = close;
-    if (PURE) { const tb = ov.querySelector('.ck-nav__b[data-tab="tasks"]'); if (tb) tb.style.display = 'none'; }
     ov.querySelector('#ck-cat').addEventListener('pointerdown', onTap);
     attachCatRetry(ov.querySelector('#ck-cat'));
     ov.querySelector('#ck-daily').onclick = dailyBtn;
@@ -929,10 +927,8 @@
       { ic: ICON.trophy(20), t: 'Рейтинг и команды', d: 'Рейтинг недели показывает игроков по количеству монет, заработанных с начала недели — отсчёт идёт с понедельника, а в конце недели сезон обнуляется и начинается заново. Здесь же можно вступить в одну из четырёх команд — Шоколадные, Ванильные, Карамельные или Ягодные — и соревноваться вместе с командой в общем зачёте по сумме очков всех участников.' },
       { ic: ICON.users(20), t: 'Друзья', d: 'Позови друга в игру по своей ссылке — как только он присоединится, тебе начислится 5 000 монет, а другу — 2 500 монет на старт. Ссылку можно скопировать или отправить прямо из игры кнопкой «Позвать».' },
     ];
-    if (!PURE) {
-      s.push({ ic: ICON.list(20), t: 'Задания', d: 'На вкладке «Задания» — простые поручения за монеты: заглянуть на сайт «Марии», оставить отзыв, подписаться на соцсети (когда ссылка доступна), пригласить друга или просто держать серию заходов и баланс. Выполнил условие — жми кнопку с наградой рядом с заданием. Ниже, в Достижениях — более долгие цели вроде количества тапов, уровня, собранных бизнесов или дней подряд, тоже с наградой в монетах.' });
-      s.push({ ic: ICON.medal(20), t: 'Награды «Марии»', d: 'Здесь же — витрина настоящих призов «Марии»: промокоды на скидку, баллы на карту клуба, десерт в подарок. Обменивать монеты на них можно будет, когда «Мария» откроет витрину — сейчас место для неё уже готово, она появится по мере запуска. А лестница «Награды за прогресс» уже работает: доходишь до нужного уровня, собираешь коллекцию голубей, приглашаешь друзей или заботишься о Василии подряд несколько дней — и получаешь баллы на карту клуба или купон.' });
-    }
+    s.push({ ic: ICON.list(20), t: 'Призы и задания', d: 'На вкладке «Призы» — простые поручения за монеты: заглянуть на сайт «Марии», оставить отзыв, открыть Telegram-бот, пригласить друга или просто держать серию заходов и баланс. Выполнил условие — жми кнопку с наградой рядом с заданием. Ниже, в Достижениях — более долгие цели вроде количества тапов, уровня, собранных бизнесов или дней подряд, тоже с наградой в монетах.' });
+    s.push({ ic: ICON.medal(20), t: 'Награды «Марии»', d: 'Здесь же — витрина настоящих призов «Марии»: промокоды на скидку, баллы на карту клуба, десерт в подарок. Обменивать монеты на них можно будет, когда «Мария» откроет витрину — сейчас место для неё уже готово, она появится по мере запуска. А лестница «Награды за прогресс» уже работает: доходишь до нужного уровня, собираешь коллекцию голубей, приглашаешь друзей или заботишься о Василии подряд несколько дней — и получаешь баллы на карту клуба или купон.' });
     return s;
   }
   function guideHtml() {
@@ -949,7 +945,6 @@
 
   function setTab(t) {
     closeActiveCoach();
-    if (PURE && t === 'tasks') t = 'cat';
     if (t === 'home') { window.haptic && window.haptic('light'); try { window.catPetOpen && window.catPetOpen(); } catch (_) {} return; }
     tab = t;
     ov.querySelector('#ck-scr-cat').classList.toggle('on', t === 'cat');
@@ -1463,7 +1458,7 @@
   function renderDove() {
     const list = ov.querySelector('#ck-dovelist'); if (!st) { list.innerHTML = ''; return; }
     const owned = st.cards.filter(c => c.level > 0).length, total = st.cards.length;
-    let h = `<div style="text-align:center;color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.5">Собери всех помощников кота — <b style="color:var(--gold-l)">${owned}/${total}</b>. Заводи бизнесы в «Прокачке»; ${PURE ? 'награды за комплект — игровые монеты' : 'награды за комплект — в «Заданиях» → Достижения'}.</div>`;
+    let h = `<div style="text-align:center;color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.5">Собери всех помощников кота — <b style="color:var(--gold-l)">${owned}/${total}</b>. Заводи бизнесы в «Прокачке»; награды за комплект — в «Призах» → Достижения.</div>`;
     for (const ct of CARD_CATS) {
       const cards = st.cards.filter(c => c.cat === ct.id); const got = cards.filter(c => c.level > 0).length;
       h += `<div class="ck-sect">${ct.name} · ${got}/${cards.length}</div><div class="ck-dovegrid">`;
@@ -1492,7 +1487,7 @@
     const d = await loadTop();
     const ends = d && d.seasonEndsTs ? fmtDur(d.seasonEndsTs - Date.now()) : left;
     rank.textContent = `Сезон недели · до сброса ${ends}` + (d && d.myRank ? ` · ты #${d.myRank}` : '');
-    const wk = PURE ? '' : weeklyPrizeCard(d && d.weekly);
+    const wk = weeklyPrizeCard(d && d.weekly);
     const head = '<div class="ck-sect">Топ недели</div>';
     if (!d || !d.top || !d.top.length) { list.innerHTML = brag + ref + wk + sq.html + head + emptyState(ICON.trophy(30), 'Сезон только начался', 'Заработай монеты и стань первым в топе недели!'); wire(); return; }
     list.innerHTML = brag + ref + wk + sq.html + head + d.top.map((r, i) => `<div class="ck-row${r.me ? ' me' : ''}"><div class="r">${i < 3 ? ICON.medal(20) : i + 1}</div><div class="n">${(r.name || '').replace(/</g, '&lt;')}${r.prestige > 0 ? ` <span class="ck-pbadge ck-pbadge--sm">★${r.prestige}</span>` : ''}</div><div class="v">${COIN(14)} ${fmt(r.total)}</div></div>`).join('');
@@ -1575,7 +1570,6 @@
   }
   // Реальные покупки у «Марии» → игровые монеты (за новые траты, троттлинг на сервере).
   async function maybePurchaseBonus() {
-    if (PURE) return;
     try {
       if (!authed()) return;
       const d = await api('/api/clicker/purchase-sync', { method: 'POST', body: '{}' }).catch(() => null);
@@ -1773,10 +1767,10 @@
     t.innerHTML = `<div class="ck-tut__card">
       <div class="ck-tut__ic">${ICON.paw(36)}</div>
       <h3>Котик Комбат</h3>
-      <div class="ck-tut__sub">${PURE ? 'Помоги котику дорасти от подвала до тронного зала — 19 уровней.' : 'Помоги котику дорасти от подвала до тронного зала — 19 уровней и реальные награды «Марии».'}</div>
+      <div class="ck-tut__sub">Помоги котику дорасти от подвала до тронного зала — 19 уровней и реальные награды «Марии».</div>
       <div class="ck-tut__step"><div class="si">${ICON.paw(20)}</div><div><div class="st">Тапай котика</div><div class="sd">Каждый тап — монеты, лови комбо ×N</div></div></div>
       <div class="ck-tut__step"><div class="si">${ICON.shop(20)}</div><div><div class="st">Заводи бизнесы</div><div class="sd">В «Прокачке» — монеты копятся сами, даже офлайн</div></div></div>
-      <div class="ck-tut__step"><div class="si">${ICON.gift(20)}</div><div><div class="st">Заходи каждый день</div><div class="sd">${PURE ? 'Ежедневные награды, комбо дня и шифр' : 'Награды, комбо дня и баллы на карту «Марии»'}</div></div></div>
+      <div class="ck-tut__step"><div class="si">${ICON.gift(20)}</div><div><div class="st">Заходи каждый день</div><div class="sd">Награды, комбо дня и баллы на карту «Марии»</div></div></div>
       <button class="ck-tut__go" id="ck-tut-go">Поехали!</button>
       <button class="ck-tut__guide" id="ck-tut-guide" type="button">Полный гайд — как всё устроено</button></div>`;
     ov.appendChild(t);
