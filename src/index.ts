@@ -40,7 +40,7 @@ import appAuthRouter, { initAppAuthSchema, attachAppLoginChat, completeAppLogin 
 import { initPetSchema } from "./pet";
 import clickerRouter from "./routes/clicker";
 import { initClickerSchema, registerRef, closeWeeklySeason, pushWeeklyWinners, getRefOrderCandidates, markRefOrderRewarded } from "./clicker";
-import { initPigeonSchema, RACE_ENABLED, closeRaceWeek } from "./pigeons";
+import { initPigeonSchema, RACE_ENABLED, closeRaceWeek, expireTrades } from "./pigeons";
 import { initAnalyticsSchema, trackEvent, wasFunnelSent, markFunnelSent, getDormantPlayers } from "./analytics";
 import { initClickerPushSchema, runClickerRetentionPush } from "./clicker-push";
 import { runPetHungryPush, runPetEnergyPush } from "./pet-push";
@@ -2214,6 +2214,14 @@ async function main() {
     if (RACE_ENABLED) closeRaceWeek().catch((e) => log.error({ err: e }, "[RACE CLOSE CRON]"));
   });
   console.log(`[STARTUP] Weekly-season close cron scheduled (Mon 00:02 Irkutsk; race=${RACE_ENABLED})`);
+
+  // Голубиная почта: возврат эскроу протухших офферов доски — ежедневно 00:10 Иркутск
+  // (16:10 UTC). Помимо ленивого expireTrades() при чтении доски (getTradeBoard),
+  // гарантирует возврат даже тем, кто доску не открывает.
+  cron.schedule("10 16 * * *", () => {
+    expireTrades().catch((e) => log.error({ err: e }, "[PIGEON TRADES EXPIRE CRON]"));
+  });
+  console.log("[STARTUP] Pigeon-trades expire cron scheduled (daily 00:10 Irkutsk)");
 
   // Пуш победителям недели — понедельник 10:00 Иркутск (02:00 UTC), не в тихие часы.
   cron.schedule("0 2 * * 1", () => {

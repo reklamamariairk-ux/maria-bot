@@ -34,9 +34,9 @@ export const BREED_BY_ID = new Map(PIGEON_BREEDS.map(b => [b.id, b]));
 
 // Обёртка ключа недели по Иркутску — единственный источник истины: weekKey() в clicker.ts
 // (используется closeWeeklySeason). Не дублируем реализацию здесь.
-// Ленивый импорт (как addClickerBalance в claimSet): все импорты из clicker.ts внутри
-// pigeons.ts обязаны быть лениво через await import — clicker.ts в Task 3 статически
-// импортирует pickBreed/grantPigeon отсюда, статический импорт в обе стороны = цикл.
+// Ленивый импорт (как addClickerBalance в claimSet): по конвенции модулей все связи
+// clicker↔pigeons ленивые (await import с обеих сторон) — так исключается сама
+// возможность цикла require независимо от порядка добавления импортов.
 export async function currentWeekKey(): Promise<string> {
   const { weekKey } = await import("./clicker");
   return weekKey();
@@ -70,7 +70,9 @@ export const RARITY_WEIGHTS: Record<Rarity, number> = { common: 70, rare: 20, ep
 const FEST_SET = "fest";
 const WEEK_BOOST = 3; // порода недели: вес породы ×3
 
-// Детерминированная «порода недели» от ключа недели (week = "2026-W29" из weekKey()).
+// Детерминированная «порода недели» от ключа недели (week — строка-индекс дня вроде
+// "20648", как возвращает weekKey() в clicker.ts; конкретный формат не важен, функция
+// просто хэширует произвольную строку).
 // Хэш — как cipher/combo в clicker.ts: простая свёртка кодов символов.
 export function breedOfWeek(week: string): string {
   let h = 0;
@@ -219,11 +221,11 @@ export async function claimSet(chatId: number, setId: string):
       `INSERT INTO pigeon_sets_claimed (chat_id, set_id) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING 1`,
       [chatId, setId]);
     if (!mutex.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "already" }; }
-    // Динамический импорт вместо статического: clicker.ts (Task 3) статически импортирует
-    // pickBreed/grantPigeon из pigeons.ts — статический импорт addClickerBalance здесь создал
-    // бы цикл require при старте процесса. await import(...) при module="commonjs" компилируется
-    // в Promise-обёртку над require(), выполняемую лениво внутри тела функции — к этому моменту
-    // оба модуля уже полностью инициализированы, цикл безопасен.
+    // Динамический импорт вместо статического: по конвенции модулей все связи clicker↔pigeons
+    // ленивые (await import с обеих сторон) — статический импорт addClickerBalance здесь нарушил
+    // бы эту конвенцию. await import(...) при module="commonjs" компилируется в Promise-обёртку
+    // над require(), выполняемую лениво внутри тела функции — к этому моменту оба модуля уже
+    // полностью инициализированы, цикла нет в принципе.
     const { addClickerBalance } = await import("./clicker");
     await addClickerBalance(chatId, set.reward, client);
     await client.query("COMMIT");
@@ -286,6 +288,10 @@ export async function createTrade(chatId: number, give: string, want: string, to
     await client.query("BEGIN");
     // сериализация createTrade на пользователя — иначе двойной тап обходит лимит 3 офферов
     await client.query(`SELECT pg_advisory_xact_lock($1)`, [chatId]);
+    if (typeof to === "number") {
+      const ex = await client.query("SELECT 1 FROM clicker_state WHERE chat_id=$1", [to]);
+      if (!ex.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "no_player" }; }
+    }
     const cnt = await client.query(
       `SELECT COUNT(*) AS n FROM pigeon_trades WHERE from_chat=$1 AND status='open'`, [chatId]);
     if (Number(cnt.rows[0].n) >= MAX_OPEN_TRADES) { await client.query("ROLLBACK"); return { ok: false, reason: "limit" }; }
@@ -441,8 +447,7 @@ export async function sendMail(
     // до того, как первый закоммитит свою запись в pigeon_mail.
     await client.query(`SELECT pg_advisory_xact_lock($1)`, [chatId]);
     // лимит 1/день по Иркутску. todayIrkutsk — ленивый импорт (см. комментарий у
-    // currentWeekKey выше): clicker.ts статически импортирует pickBreed/grantPigeon
-    // отсюда, статический импорт в обратную сторону создал бы цикл require.
+    // currentWeekKey выше): по конвенции модулей все связи clicker↔pigeons ленивые.
     const { todayIrkutsk } = await import("./clicker");
     const today = todayIrkutsk();
     const sent = await client.query(
@@ -505,10 +510,12 @@ export async function sendMail(
         try {
           const nameRow = await pool.query(
             `SELECT first_name, username FROM subscribers WHERE chat_id=$1`, [chatId]);
-          const senderName = (nameRow.rows[0]?.first_name || nameRow.rows[0]?.username || "Котовод")
+          const rawName = (nameRow.rows[0]?.first_name || nameRow.rows[0]?.username || "Котовод")
             .toString().slice(0, 24);
+          // имя юзера в Markdown-пуше — режем метасимволы (ссылки-фишинг, битый парсинг)
+          const safeName = rawName.replace(/[\[\]()_*\x60~]/g, "");
           const breedName = BREED_BY_ID.get(breed)!.name;
-          const text = `🕊 Тебе прилетел голубь! ${senderName} отправил тебе «${breedName}» — загляни в голубятню.`
+          const text = `🕊 Тебе прилетел голубь! ${safeName} отправил тебе «${breedName}» — загляни в голубятню.`
             + `\n\n[Открыть голубятню](${miniAppLink(toChat, "click")})`;
           await push.sendPushSafely(toChat, "marketing_game", text);
         } catch (e) {
@@ -562,9 +569,10 @@ export async function thankMail(chatId: number, mailId: number, sticker: number)
   return { ok: true };
 }
 
-// getMailRecipients: однокомандцы (тот же squad) и рефералы (кого пригласил chatId),
-// активные 7 дней — тот же критерий (updated_at), что и в sendMail(to="squad"|"ref"),
-// чтобы список кандидатов совпадал с тем, кому реально можно отправить письмо.
+// getMailRecipients: однокомандцы (тот же squad) и рефералы — оба направления реф-связи
+// (кого пригласил chatId И его собственный реферер), активные 7 дней — тот же критерий
+// (updated_at), что и в sendMail(to="squad"|"ref"), чтобы список кандидатов совпадал
+// с тем, кому реально можно отправить письмо.
 export async function getMailRecipients(chatId: number):
   Promise<{ squad: { chat: number; name: string }[]; refs: { chat: number; name: string }[] }> {
   const mapRows = (rows: any[]) => rows.map((r: any) => ({

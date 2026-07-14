@@ -484,7 +484,7 @@
       : `<div style="color:var(--muted);font-size:12.5px;text-align:center;padding:8px 0">Пока нет активных знакомых — предложи всем на доску</div>`;
     box.querySelectorAll('.cd-reciperow').forEach(el => { el.onclick = () => submitTrade(Number(el.dataset.chat)); });
   }
-  const TRADE_CREATE_REASON = { bad_input: 'Неверный выбор породы', self: 'Нельзя предложить самому себе', limit: 'Не больше 3 предложений одновременно', need_duplicate: 'Отдать можно только запасного' };
+  const TRADE_CREATE_REASON = { bad_input: 'Неверный выбор породы', self: 'Нельзя предложить самому себе', limit: 'Не больше 3 предложений одновременно', need_duplicate: 'Отдать можно только запасного', no_player: 'Игрок не найден' };
   async function submitTrade(to) {
     if (busy || !tcState) return; busy = true;
     try {
