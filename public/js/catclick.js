@@ -633,6 +633,14 @@
       .ck-rain__hud .t{display:inline-flex;align-items:center;gap:6px}.ck-rain__hud .s{display:inline-flex;align-items:center;gap:6px;color:var(--gold-l)}.ck-rain__hud .sp{flex:1}
       .ck-rain__hud .x{width:32px;height:32px;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.3);color:var(--cream);font-size:16px;cursor:pointer}
       .ck-rain canvas{flex:1;width:100%;display:block;touch-action:none;cursor:pointer}
+      .ck-rain__cfm{position:absolute;inset:0;z-index:3;display:flex;align-items:center;justify-content:center;background:rgba(10,6,8,.62)}
+      .ck-rain__cfm .b{background:linear-gradient(180deg,#2e1119,#1d0a11);border:1px solid var(--line);border-radius:18px;padding:20px;max-width:80%;text-align:center}
+      .ck-rain__cfm .t{font-weight:800;font-size:18px;color:var(--cream)}
+      .ck-rain__cfm .s{color:var(--muted);font-size:13px;margin:8px 0 14px;display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap}
+      .ck-rain__cfm .r{display:flex;gap:10px;justify-content:center}
+      .ck-rain__cfm button{border:none;border-radius:13px;padding:12px 20px;font-weight:800;cursor:pointer;min-height:44px}
+      .ck-rain__cfm .stay{background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;border:1px solid #ffe9b3}
+      .ck-rain__cfm .quit{background:rgba(255,255,255,.08);color:var(--cream);border:1px solid var(--line)}
       .ck-rain__hint{position:absolute;left:0;right:0;top:48%;text-align:center;color:var(--muted);font-size:13px;pointer-events:none}
       .ck-quiz,.ck-mem,.ck-tower,.ck-gems{position:absolute;inset:0;z-index:12;display:none;flex-direction:column;background:radial-gradient(135% 100% at 50% -8%,#241318,#0e0a0d);padding:0 16px 26px;overflow:hidden;-webkit-overflow-scrolling:touch}
       .ck-quiz,.ck-mem,.ck-gems{overflow-y:auto}
@@ -949,8 +957,8 @@
       { ic: ICON.rocket(20), t: 'Бусты', d: 'Турбо и Энергия — два бесплатных буста на вкладке «Котик». Турбо на 20 секунд даёт монеты за тап ×5, Энергия сразу наполняет шкалу энергии до максимума. Каждый буст доступен до 6 раз в день, а на следующий день лимит обновляется — счётчик рядом с кнопкой показывает, сколько попыток осталось.' },
       { ic: ICON.shop(20), t: 'Прокачка и бизнесы', d: 'В «Прокачке» — четыре направления: Производство, Маркетинг, Персонал и Сеть. Каждый бизнес, который ты завёл, дальше сам приносит монеты в час — доход капает даже когда игра закрыта, а следующий уровень бизнеса поднимает доход ещё выше. Часть бизнесов открывается только с определённого уровня игрока — до этого карточка показана силуэтом с замком. Там же можно докупить Мультитап (больше монет за тап) и Запас энергии (выше потолок энергии).' },
       { ic: ICON.gift(20), t: 'Награда дня', d: 'Каждый день, когда заходишь в игру впервые, тебе доступна награда дня — забери её кнопкой сверху экрана. Награда растёт вместе со стриком: чем больше дней подряд ты заходишь, тем она весомее, а пропущенный день сбрасывает счётчик. Календарь на семь дней вперёд показывает, сколько причитается в каждый из ближайших дней.' },
-      { ic: ICON.gem(20), t: 'Комбо дня и Шифр', d: 'В «Прокачке» каждый день выбираются три случайных бизнеса — прокачай (купи хотя бы один уровень) все три, и получишь бонус +12 000 монет. Там же — Шифр дня: сегодняшнее слово, зашифрованное азбукой Морзе, точками и тире. Переведи морзянку и впиши разгаданное слово в поле рядом — угадаешь верно, получишь +3 000 монет. Оба бонуса обновляются раз в сутки.' },
-      { ic: ICON.chest(20), t: 'Сундук и Золотой дождь', d: 'Иногда на главном экране пролетает золотая монетка — тронь её, пока не улетела, и получишь бонусные монеты. В «Прокачке» раз в день можно открыть Сундук удачи — там монеты, буст или неожиданный джекпот. Там же раз в день доступна мини-игра «Золотой дождь»: двадцать секунд лови падающие монеты, золотые монеты стоят втрое больше обычных.' },
+      { ic: ICON.gem(20), t: 'Комбо дня и Шифр', d: 'В «Прокачке» каждый день выбираются три случайных бизнеса — прокачай (купи хотя бы один уровень) все три, и получишь бонус +12 000 монет. Забрать бонус и разгадать Шифр дня можно на вкладке «Призы»: шифр — сегодняшнее слово, зашифрованное азбукой Морзе, точками и тире. Переведи морзянку и впиши разгаданное слово в поле рядом — угадаешь верно, получишь +3 000 монет. Оба бонуса обновляются раз в сутки.' },
+      { ic: ICON.chest(20), t: 'Сундук и Золотой дождь', d: 'Иногда на главном экране пролетает золотая монетка — тронь её, пока не улетела, и получишь бонусные монеты. На вкладке «Призы» раз в день можно открыть Сундук удачи — там монеты, буст или неожиданный джекпот. Там же раз в день доступна мини-игра «Золотой дождь»: двадцать секунд лови падающие монеты, золотые монеты стоят втрое больше обычных.' },
       { ic: ICON.paw(20), t: 'Дом Василия', d: 'В Доме Василия — четыре комнаты: Кухня, Спальня, Игровая и Двор. В каждой — своё действие (покормить, уложить спать, поиграть, погладить), которое поднимает нужную шкалу — сытость, энергию или настроение — и приносит коту немного опыта. Если заботиться о Василии каждый день подряд, раз в сутки капают монеты питомца — награда растёт с каждым днём серии и с десятого дня держится на максимуме. В Игровой, кроме заботы, есть две мини-игры — «Накорми» и «Ловилка», рекорды в них сохраняются. Во Дворе — магазин шляп для Василия: покупай их за монеты питомца, накопленные заботой.' },
       { ic: ICON.dove(20), t: 'Голубятня', d: 'Шестнадцать голубей-помощников — по четыре на каждое из четырёх направлений «Прокачки». Как только заводишь бизнес хотя бы на первом уровне, голубь открывается и занимает своё место в коллекции — до этого на его месте молчаливый силуэт с замком. Собирай коллекцию по направлениям или полностью — Голубятня показывает прогресс по каждому разделу.' },
       { ic: ICON.trophy(20), t: 'Рейтинг и команды', d: 'Рейтинг недели показывает игроков по количеству монет, заработанных с начала недели — отсчёт идёт с понедельника, а в конце недели сезон обнуляется и начинается заново. Здесь же можно вступить в одну из четырёх команд — Шоколадные, Ванильные, Карамельные или Ягодные — и соревноваться вместе с командой в общем зачёте по сумме очков всех участников.' },
@@ -1242,7 +1250,7 @@
     if (!el) {
       el = document.createElement('div'); el.id = 'ck-rain'; el.className = 'ck-rain';
       el.innerHTML = `<div class="ck-rain__hud"><div class="t">${ICON.bolt(16)} <span id="ck-rain-t">20</span></div><div class="sp"></div><div class="s">${COIN(16)} <span id="ck-rain-s">0</span></div><button class="x" id="ck-rain-x">×</button></div><canvas id="ck-rain-cv"></canvas><div class="ck-rain__hint" id="ck-rain-hint">Лови падающие монеты! Золотые — ×3</div>`;
-      ov.appendChild(el); el.querySelector('#ck-rain-x').onclick = () => endRain(true);
+      ov.appendChild(el); el.querySelector('#ck-rain-x').onclick = confirmRainExit;
     }
     el.querySelector('#ck-rain-s').textContent = '0'; el.querySelector('#ck-rain-t').textContent = '20'; el.querySelector('#ck-rain-hint').style.display = '';
     el.classList.add('on'); startRain();
@@ -1282,9 +1290,23 @@
     ctx.fillStyle = '#7a4a12'; ctx.font = `700 ${Math.round(it.r * 1.05)}px Georgia,serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('М', 0, it.r * 0.08);
     ctx.restore();
   }
+  // × мид-гейм: набранное сгорит (попытка дня останется) — спрашиваем, поставив игру на паузу.
+  function confirmRainExit() {
+    const s = rainState; if (!s || s.ended) return;
+    if (!s.score) { endRain(true); return; } // терять нечего — выходим сразу
+    s.pauseLeft = Math.max(0, s.tEnd - performance.now()); cancelAnimationFrame(rainRAF);
+    const el = ov.querySelector('#ck-rain');
+    let c = el.querySelector('#ck-rain-cfm');
+    if (!c) { c = document.createElement('div'); c.id = 'ck-rain-cfm'; c.className = 'ck-rain__cfm'; el.appendChild(c); }
+    c.innerHTML = `<div class="b"><div class="t">Выйти из игры?</div><div class="s">Собранные ${s.score} ${COIN(13)} сгорят, попытка на сегодня останется</div><div class="r"><button class="stay" id="ck-rain-stay">Доиграть</button><button class="quit" id="ck-rain-quit">Выйти</button></div></div>`;
+    c.querySelector('#ck-rain-stay').onclick = () => { c.remove(); const p = rainState; if (!p || p.ended) return; p.tEnd = performance.now() + p.pauseLeft; p.lastTs = performance.now(); cancelAnimationFrame(rainRAF); rainRAF = requestAnimationFrame(rainLoop); window.haptic && window.haptic('light'); };
+    c.querySelector('#ck-rain-quit').onclick = () => { window.haptic && window.haptic('light'); endRain(true); };
+    window.haptic && window.haptic('warning');
+  }
   function endRain(aborted) {
     const s = rainState; if (!s || s.ended) return; s.ended = true; cancelAnimationFrame(rainRAF);
     const el = ov.querySelector('#ck-rain'); el.classList.remove('on');
+    const cfm = el.querySelector('#ck-rain-cfm'); if (cfm) cfm.remove(); // close() мог прийти при открытом confirm
     if (aborted) { rainState = null; return; }
     submitRain(s.score); rainState = null;
   }
@@ -1765,7 +1787,9 @@
     const rainCard = `<div class="ck-card ck-bonus">
       <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.rain(26)}</div><div class="ck-card__b"><div class="ck-card__n">Золотой дождь</div><div class="ck-card__s">${rainAvail ? 'Лови монеты 20 секунд → бонус' : 'Сыграно — приходи завтра'}</div></div>
       ${rainAvail ? `<button class="ck-card__buy" id="ck-rain-play">Играть</button>` : `<button class="ck-card__buy" disabled>✓ Сыграно</button>`}</div>`;
-    return '<div class="ck-sect">Бонусы дня</div>' + chestCard + comboCard + cipherCard;
+    // rainCard вернулась в блок: карточка собиралась и wireBonus вешал #ck-rain-play,
+    // но из возврата она выпала — «Золотой дождь» был недоступен вовсе (гайд его обещает).
+    return '<div class="ck-sect">Бонусы дня</div>' + chestCard + rainCard + comboCard + cipherCard;
   }
   function wireBonus() {
     const cb = ov.querySelector('#ck-combo-claim'); if (cb) cb.onclick = claimCombo;
@@ -2130,7 +2154,7 @@
 
     const st_ = {
       platform: '…', initLen: '…', authed: '…', ss: '…', ls: '…',
-      clicker: '…', pet: '…', ver: 'catclick v112', errors: '…',
+      clicker: '…', pet: '…', ver: 'catclick v113', errors: '…',
     };
     function render() {
       body.innerHTML = ''
