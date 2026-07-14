@@ -39,6 +39,7 @@ import appAuthRouter, { initAppAuthSchema, attachAppLoginChat, completeAppLogin 
 import { initPetSchema } from "./pet";
 import clickerRouter from "./routes/clicker";
 import { initClickerSchema, registerRef, closeWeeklySeason, pushWeeklyWinners, getRefOrderCandidates, markRefOrderRewarded } from "./clicker";
+import { initPigeonSchema } from "./pigeons";
 import { initAnalyticsSchema, trackEvent, wasFunnelSent, markFunnelSent, getDormantPlayers } from "./analytics";
 import { initClickerPushSchema, runClickerRetentionPush } from "./clicker-push";
 import { runPetHungryPush, runPetEnergyPush } from "./pet-push";
@@ -2115,6 +2116,7 @@ async function main() {
   await initClubSchema();
   await initPetSchema();
   await initClickerSchema();
+  await initPigeonSchema();
   await initAnalyticsSchema();
   await initClickerPushSchema();
   await initBonusSchema();
