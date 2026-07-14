@@ -456,10 +456,15 @@ export async function sendMail(
         cand = await client.query(
           `SELECT chat_id FROM clicker_state WHERE squad=$2 AND chat_id<>$1 AND updated_at > NOW() - INTERVAL '${MAIL_ACTIVE_WINDOW}'
            ORDER BY random() LIMIT 1`, [chatId, squad]);
-      } else { // "ref" — приглашённые этим игроком (registerRef пишет referred_by = чужой chat_id → мой)
+      } else {
+        // "ref" — оба направления реф-связи: мои приглашённые (referred_by = я)
+        // И мой реферер (мой clicker_state.referred_by). registerRef пишет
+        // referred_by = chat_id пригласившего.
         cand = await client.query(
-          `SELECT chat_id FROM clicker_state WHERE referred_by=$1 AND updated_at > NOW() - INTERVAL '${MAIL_ACTIVE_WINDOW}'
-           ORDER BY random() LIMIT 1`, [chatId]);
+          `SELECT chat_id FROM clicker_state
+            WHERE (referred_by=$1 OR chat_id = (SELECT referred_by FROM clicker_state WHERE chat_id=$1))
+              AND chat_id<>$1 AND updated_at > NOW() - INTERVAL '${MAIL_ACTIVE_WINDOW}'
+            ORDER BY random() LIMIT 1`, [chatId]);
       }
       if (!cand.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "no_players" }; }
       toChat = Number(cand.rows[0].chat_id);
@@ -509,10 +514,10 @@ export async function sendMail(
   finally { client.release(); }
 }
 
-// getInbox: последние 30 писем + автопометка прочтения ВСЕЙ непрочитанной почты
-// (не только показанных 30 — совпадает с семантикой getPigeonsOverview.unreadMail,
-// который считает непрочитанное по всей pigeon_mail). SELECT идёт ДО UPDATE, чтобы
-// вернуть клиенту исходный seenAt (null → «новое») до того, как пометим прочитанным.
+// getInbox: последние 30 писем + автопометка прочтения ТОЛЬКО показанных строк —
+// непрочитанное за пределами топ-30 остаётся unread (иначе оно стало бы навсегда
+// невидимым: пометилось бы seen, не попав ни в одну выдачу). SELECT идёт ДО UPDATE,
+// чтобы вернуть клиенту исходный seenAt (null → «новое») до пометки прочитанным.
 export async function getInbox(chatId: number): Promise<{ mail: MailRow[] }> {
   const result = await pool.query(
     `SELECT m.id, m.from_chat, m.breed, m.sticker, m.thanks_sticker, m.sent_at, m.seen_at,
@@ -520,7 +525,10 @@ export async function getInbox(chatId: number): Promise<{ mail: MailRow[] }> {
        FROM pigeon_mail m LEFT JOIN subscribers s ON s.chat_id = m.from_chat
       WHERE m.to_chat=$1
       ORDER BY m.sent_at DESC LIMIT 30`, [chatId]);
-  await pool.query(`UPDATE pigeon_mail SET seen_at=NOW() WHERE to_chat=$1 AND seen_at IS NULL`, [chatId]);
+  const unseenIds = result.rows.filter((r: any) => r.seen_at == null).map((r: any) => Number(r.id));
+  if (unseenIds.length) {
+    await pool.query(`UPDATE pigeon_mail SET seen_at=NOW() WHERE id = ANY($1) AND seen_at IS NULL`, [unseenIds]);
+  }
   const mail: MailRow[] = result.rows.map((r: any) => ({
     id: Number(r.id),
     from_chat: Number(r.from_chat),
@@ -566,10 +574,14 @@ export async function getMailRecipients(chatId: number):
         LIMIT 20`, [squad, chatId]);
     squadRows = r.rows;
   }
+  // Рефералы = оба направления связи: мои приглашённые (referred_by = я) И мой
+  // реферер (мой clicker_state.referred_by) — одной группой «Рефералы» для UI.
+  // Тот же критерий, что в sendMail(to="ref").
   const refR = await pool.query(
     `SELECT c.chat_id, s.first_name, s.username
        FROM clicker_state c LEFT JOIN subscribers s ON s.chat_id = c.chat_id
-      WHERE c.referred_by=$1 AND c.updated_at > NOW() - INTERVAL '${MAIL_ACTIVE_WINDOW}'
+      WHERE (c.referred_by=$1 OR c.chat_id = (SELECT referred_by FROM clicker_state WHERE chat_id=$1))
+        AND c.chat_id<>$1 AND c.updated_at > NOW() - INTERVAL '${MAIL_ACTIVE_WINDOW}'
       LIMIT 20`, [chatId]);
   return { squad: mapRows(squadRows), refs: mapRows(refR.rows) };
 }
