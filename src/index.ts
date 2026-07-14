@@ -31,6 +31,7 @@ import { createVkRouter } from "./routes/vk";
 import { miniAppLink, withAppLinkForVk, clickerReferralLink } from "./links";
 import { createReferralRouter } from "./routes/referral";
 import { createWheelStreakRouter } from "./routes/wheel-streak";
+import { createPigeonsRouter } from "./routes/pigeons";
 import { pool as _dbPoolForRouters } from "./db";
 import userRouter from "./routes/user";
 import gameRouter from "./routes/game";
@@ -1625,6 +1626,8 @@ app.use(notifyPrefsRouter);
 app.use(createReferralRouter(_pushService, _dbPoolForRouters));
 // Wheel + streak → src/routes/wheel-streak.ts
 app.use(createWheelStreakRouter(_pushService));
+// Голубятня (коллекция/обмены/почта) → src/routes/pigeons.ts
+app.use(createPigeonsRouter(_pushService));
 // VK Callback API (входящие события сообщества) → src/vk/callback.ts
 // Без VK_CALLBACK_SECRET/VK_CONFIRMATION_CODE отвечает 404 (TG-only режим)
 app.use(createVkCallbackRouter(vkSender));
