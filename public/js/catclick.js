@@ -851,6 +851,7 @@
       .ck-event[hidden]{display:none}.ck-event b{font-weight:900}.ck-event .ck-i{color:#5a2028}
       .ck-pbadge{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:800;color:#3a230c;background:linear-gradient(90deg,#ffe39c,#e0a93a);padding:1px 7px;border-radius:9px;vertical-align:1px;box-shadow:0 1px 4px rgba(0,0,0,.3)}
       .ck-pbadge .ck-i{color:#5a2028}.ck-pbadge--sm{font-size:9.5px;padding:0 6px}
+      .ck-pbadge--baron{background:linear-gradient(90deg,#d8c6ff,#9070c2);color:#2c1a4a}.ck-pbadge--baron .ck-i{color:#2c1a4a}
       .ck-prestige{margin-top:9px;border:1px solid #ffe9b3;border-radius:13px;padding:9px 16px;font-weight:800;font-size:13px;background:linear-gradient(180deg,#ffe7a6,#cf9a36);color:#5a2028;cursor:pointer;display:inline-flex;align-items:center;gap:7px;box-shadow:0 4px 12px rgba(165,112,28,.4)}
       .ck-prestige[hidden]{display:none}.ck-prestige .ck-i{color:#5a2028}
       /* Коуч-хинты новичку (одноразовые тултипы — см. coach()/window.ckCoach) */
@@ -1594,7 +1595,12 @@
     const wk = weeklyPrizeCard(d && d.weekly);
     const head = '<div class="ck-sect">Топ недели</div>';
     if (!d || !d.top || !d.top.length) { list.innerHTML = brag + ref + wk + sq.html + head + emptyState(ICON.trophy(30), 'Сезон только начался', 'Заработай монеты и стань первым в топе недели!'); wire(); return; }
-    list.innerHTML = brag + ref + wk + sq.html + head + d.top.map((r, i) => `<div class="ck-row${r.me ? ' me' : ''}"><div class="r">${i < 3 ? ICON.medal(20) : i + 1}</div><div class="n">${(r.name || '').replace(/</g, '&lt;')}${r.prestige > 0 ? ` <span class="ck-pbadge ck-pbadge--sm">★${r.prestige}</span>` : ''}</div><div class="v">${COIN(14)} ${fmt(r.total)}</div></div>`).join('');
+    list.innerHTML = brag + ref + wk + sq.html + head + d.top.map((r, i) => {
+      // showcase/title — Task 8 (getTop), могут отсутствовать у старого закэшированного клиента.
+      const mini = (window.CatDove && window.CatDove.miniIconsHtml) ? window.CatDove.miniIconsHtml(r.showcase) : '';
+      const titleBadge = r.title ? ` <span class="ck-pbadge ck-pbadge--sm ck-pbadge--baron">${ICON.dove(10)}${String(r.title).replace(/</g, '&lt;')}</span>` : '';
+      return `<div class="ck-row${r.me ? ' me' : ''}"><div class="r">${i < 3 ? ICON.medal(20) : i + 1}</div><div class="n"><div>${(r.name || '').replace(/</g, '&lt;')}${r.prestige > 0 ? ` <span class="ck-pbadge ck-pbadge--sm">★${r.prestige}</span>` : ''}${titleBadge}</div>${mini}</div><div class="v">${COIN(14)} ${fmt(r.total)}</div></div>`;
+    }).join('');
     wire();
   }
   function weeklyPrizeCard(w) {

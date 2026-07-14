@@ -186,6 +186,14 @@
       .cd-pickcard[data-r="epic"]{border-color:#9070c2}
       .cd-pickcard[data-r="legendary"]{border-color:var(--gold);box-shadow:0 0 10px rgba(238,191,82,.3)}
       @media (prefers-reduced-motion:reduce){.cd-card{animation:none;opacity:1}.cd-sk::after{animation:none}}
+      /* Мини-витрина в лидерборде (window.CatDove.miniIconsHtml) — своя CSS, не зависит от mount() */
+      .cd-mini-row{display:inline-flex;gap:4px;margin-top:4px}
+      .cd-mini{width:13px;height:13px;border-radius:4px;border:1.5px solid rgba(141,146,156,.55);background:rgba(0,0,0,.28);display:inline-flex;align-items:center;justify-content:center;overflow:hidden;flex:none;box-sizing:border-box}
+      .cd-mini[data-r="rare"]{border-color:#b8813f}
+      .cd-mini[data-r="epic"]{border-color:#9070c2}
+      .cd-mini[data-r="legendary"]{border-color:var(--gold);box-shadow:0 0 4px rgba(238,191,82,.5)}
+      .cd-mini img{width:100%;height:100%;object-fit:contain}
+      .cd-mini svg{width:70%;height:70%;color:var(--gold-l)}
     `;
     document.head.appendChild(s);
   }
@@ -843,5 +851,24 @@
     if (d && window.ckUpdateDoveBadge) window.ckUpdateDoveBadge(num(d.unreadMail));
   }
 
-  window.CatDove = { mount, refreshBadge };
+  // Публичный хелпер для лидерборда (catclick.js::renderTop) — рендерит до 3 мини-иконок
+  // витрины (12-14px, рамка редкости), т.к. catclick не имеет доступа к каталогу пород/
+  // цветам редкости из catdove.js. Работает независимо от mount() (сам гарантирует CSS).
+  // showcase: {breed,stars}[] из GET /api/clicker/top::top[].showcase — может отсутствовать
+  // (старый закэшированный клиент) или быть пустым, тогда возвращаем ''.
+  function miniIconsHtml(showcase) {
+    if (!Array.isArray(showcase) || !showcase.length) return '';
+    styles();
+    const items = showcase.slice(0, 3).map((it) => {
+      const id = it && typeof it.breed === 'string' ? it.breed : '';
+      if (!id) return '';
+      const b = BY_ID.get(id);
+      const rarity = b ? b.rarity : 'common';
+      const artSrc = `/img/pigeons/${esc(id)}.webp?v=1`;
+      return `<span class="cd-mini" data-r="${rarity}"><img src="${artSrc}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;align-items:center;justify-content:center;width:100%;height:100%">${DOVE_ICON(8)}</span></span>`;
+    }).join('');
+    return items ? `<span class="cd-mini-row">${items}</span>` : '';
+  }
+
+  window.CatDove = { mount, refreshBadge, miniIconsHtml };
 })();
