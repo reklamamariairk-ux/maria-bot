@@ -702,6 +702,11 @@
       .ck-uphd{padding:16px 16px 6px;text-align:center;width:100%;box-sizing:border-box}.ck-uphd .b{font-family:'Nunito',sans-serif;font-weight:700;font-size:24px;display:inline-flex;align-items:center;gap:8px;color:var(--cream)}.ck-uphd .b .ck-i{color:var(--gold)}.ck-uphd .p{color:var(--gold);font-weight:700;font-size:13px;margin-top:3px;display:inline-flex;align-items:center;gap:5px;font-variant-numeric:tabular-nums}
       .ck-uplist{flex:1;overflow:auto;padding:6px 12px 16px;width:100%;box-sizing:border-box}
       .ck-sect{color:var(--muted);font-weight:700;font-size:11px;margin:12px 4px 7px;text-transform:uppercase;letter-spacing:.7px}
+      .ck-seg{display:flex;gap:6px;width:100%;max-width:360px;margin:2px 0 8px;padding:0 12px;box-sizing:border-box}
+      .ck-seg__b{flex:1;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:12px;padding:9px 4px;font-weight:700;font-size:12.5px;cursor:pointer;min-height:38px}
+      .ck-seg__b.on{background:linear-gradient(180deg,#ffe7a6,#eebf52 58%,#cf9a36);color:#5a2028;border-color:#ffe9b3}
+      .ck-badge{display:inline-flex;align-items:center;justify-content:center;position:absolute;top:1px;right:22%;min-width:15px;height:15px;padding:0 4px;border-radius:8px;background:#e5484d;color:#fff;font-size:9px;font-weight:800;line-height:1;box-shadow:0 0 0 2px rgba(18,8,11,.6)}
+      .ck-badge[hidden]{display:none}
       .ck-games-hd{margin:10px 2px 2px;padding:11px 14px;border-radius:14px;background:linear-gradient(90deg,rgba(238,191,82,.16),rgba(238,191,82,.04));border:1px solid var(--line);color:var(--cream);font-size:13.5px;font-weight:700;text-align:center}.ck-games-hd b{color:var(--gold-l);font-size:16px}
       .ck-gift{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--gold-l);background:rgba(238,191,82,.1);border:1px solid var(--line);border-radius:11px;padding:8px 11px;font-weight:600;margin-top:2px}
       .ck-gift.ok{color:#9be7a8;background:rgba(72,187,120,.1)}
@@ -909,7 +914,9 @@
         <div class="ck-energy"><div class="ck-energy__row" id="ck-enrow"><span id="ck-enpre">${ICON.bolt(15)}</span> <span id="ck-en">0</span> / <span id="ck-enmax">1000</span></div><div class="ck-energy__bar"><div class="ck-energy__fill" id="ck-enfill"></div></div></div>
       </div>
       <div class="ck-screen" id="ck-scr-up"><div class="ck-uphd"><div class="ck-bal" style="justify-content:center;font-size:30px">${COIN(26)} <span id="ck-bal2">0</span></div><div class="p" id="ck-prof2">${COIN(13)} +0 / час</div></div><div class="ck-uplist" id="ck-uplist"></div></div>
-      <div class="ck-screen" id="ck-scr-dove"><div class="ck-uphd"><div class="b">${ICON.dove(22)} Голубятня</div></div><div class="ck-uplist" id="ck-dovelist"></div></div>
+      <div class="ck-screen" id="ck-scr-dove"><div class="ck-uphd"><div class="b">${ICON.dove(22)} Голубятня</div></div>
+        <div class="ck-seg" id="ck-dove-seg"><button class="ck-seg__b on" data-seg="help" type="button">Помощники</button><button class="ck-seg__b" data-seg="col" type="button">Коллекция</button></div>
+        <div class="ck-uplist" id="ck-dovelist"></div><div class="ck-uplist" id="ck-dove-col" style="display:none"></div></div>
       <div class="ck-screen" id="ck-scr-tasks"><div class="ck-uphd"><div class="b">${ICON.gift(22)} Призы</div></div><div class="ck-uplist" id="ck-taskslist"></div></div>
       <div class="ck-screen" id="ck-scr-top"><div class="ck-uphd"><div class="b">${ICON.trophy(22)} Рейтинг</div><div class="p" id="ck-myrank"></div></div><div class="ck-uplist" id="ck-toplist"></div></div>
       <div class="ck-fx" id="ck-fx"></div>
@@ -928,7 +935,7 @@
         <button class="ck-nav__b on" data-tab="cat">${ICON.paw(21)}Котик</button>
         <button class="ck-nav__b" data-tab="up">${ICON.bolt(21)}Прокачка</button>
         <button class="ck-nav__b" data-tab="home">${ICON.paw(21)}Дом</button>
-        <button class="ck-nav__b" data-tab="dove">${ICON.dove(21)}Голуби</button>
+        <button class="ck-nav__b" data-tab="dove">${ICON.dove(21)}Голуби<span class="ck-badge" id="ck-dove-badge" hidden></span></button>
         <button class="ck-nav__b" data-tab="tasks">${ICON.gift(21)}Призы</button>
         <button class="ck-nav__b" data-tab="top">${ICON.trophy(21)}Рейтинг</button>
       </div>`;
@@ -946,6 +953,7 @@
     ov.querySelector('#ck-bt-energy').onclick = () => boost('energy');
     ov.querySelector('#ck-prestige').onclick = prestigeConfirm;
     ov.querySelectorAll('.ck-nav__b').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+    ov.querySelectorAll('#ck-dove-seg .ck-seg__b').forEach(b => b.onclick = () => setDoveSeg(b.dataset.seg));
     ov.querySelector('#ck-guide-btn').onclick = () => { window.haptic && window.haptic('light'); openGuide(); };
     ov.querySelector('#ck-guide-x').onclick = closeGuide;
     ov.querySelector('#ck-games-x').onclick = closeGamesHub;
@@ -989,6 +997,31 @@
   }
   function closeGuide() { const g = ov && ov.querySelector('#ck-guide'); if (g) g.classList.remove('on'); }
 
+  // ── Вкладка «Голуби»: сегмент «Помощники» (карточки бизнесов, старая механика) /
+  // «Коллекция» (альбом пород — window.CatDove, public/js/catdove.js). Коллекция
+  // монтируется лениво при первом переключении на неё — не грузим лишний JS-модуль,
+  // пока юзер ни разу не открыл сегмент.
+  let doveSeg = 'help', doveColMounted = false;
+  function setDoveSeg(seg) {
+    doveSeg = seg;
+    ov.querySelectorAll('#ck-dove-seg .ck-seg__b').forEach(b => b.classList.toggle('on', b.dataset.seg === seg));
+    const help = ov.querySelector('#ck-dovelist'), col = ov.querySelector('#ck-dove-col');
+    if (help) help.style.display = seg === 'help' ? '' : 'none';
+    if (col) col.style.display = seg === 'col' ? '' : 'none';
+    if (seg === 'col' && !doveColMounted && window.CatDove) { doveColMounted = true; window.CatDove.mount(col, api); }
+  }
+  // Бейдж непрочитанной почты голубятни на кнопке навбара — грузится один раз при
+  // старте игры и при каждом открытии вкладки «Голуби» (unreadMail из /api/pigeons).
+  function updateDoveBadge(n) {
+    const b = ov && ov.querySelector('#ck-dove-badge'); if (!b) return;
+    if (n > 0) { b.textContent = n > 9 ? '9+' : String(n); b.hidden = false; } else b.hidden = true;
+  }
+  async function loadDoveBadge() {
+    if (!authed()) return;
+    const d = await api('/api/pigeons').catch(() => null);
+    if (d) updateDoveBadge(Number(d.unreadMail) || 0);
+  }
+
   function setTab(t) {
     closeActiveCoach();
     const pop = ov && ov.querySelector('#ck-pop'); if (pop) pop.classList.remove('on'); // попап не должен висеть над чужой вкладкой
@@ -1002,7 +1035,7 @@
     ov.querySelector('#ck-scr-top').classList.toggle('on', t === 'top');
     ov.querySelectorAll('.ck-nav__b').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
     if (t === 'up') { renderUpgrades(); coach('up', COACH.up.t, '#ck-uplist', { icon: ICON[COACH.up.icon](18) }); }
-    if (t === 'dove') { renderDove(); coach('dove', COACH.dove.t, '#ck-dovelist', { icon: ICON[COACH.dove.icon](18) }); }
+    if (t === 'dove') { renderDove(); setDoveSeg(doveSeg); coach('dove', COACH.dove.t, '#ck-dovelist', { icon: ICON[COACH.dove.icon](18) }); loadDoveBadge(); }
     if (t === 'tasks') renderTasks();
     if (t === 'top') { renderTop(); coach('top', COACH.top.t, '#ck-toplist', { icon: ICON[COACH.top.icon](18) }); }
   }
@@ -1870,7 +1903,7 @@
     await load(); await maybeMigrateGuest(); await ensureRefRegistered(); await maybePurchaseBonus(); curLevel = leagueFor(st.totalEarned).level;
     ov.querySelector('#ck-cat').src = A(leagueFor(st.totalEarned).cat || 'idle.png');
     applyCatSize(ov.querySelector('#ck-cat'));
-    setTab('cat'); renderAll(); spawnSparks(); applySeason(); scheduleBonus();
+    setTab('cat'); renderAll(); spawnSparks(); applySeason(); scheduleBonus(); loadDoveBadge();
     if (loadNetFail) flashMsg('Нет связи — офлайн-режим, прогресс синхронизируется позже'); // авторизованный получил гостевой фолбэк — не молчать про «пропавший» баланс
     if (authed()) api('/api/clicker/rewards').then(d => { if (d && typeof d.enabled === 'boolean' && d.enabled !== rewardsEnabled) { rewardsEnabled = d.enabled; if (tab === 'up') renderUpgrades(); } }).catch(() => {});
     let _seenTut = true; try { _seenTut = !!localStorage.getItem('ck_tut_v1'); } catch (e) {}
@@ -2142,6 +2175,10 @@
   });
   window.ckSetTab = setTab; // для виджета «Дома кота»: открыть лестницу вех (setTab('tasks'))
   window.ckCoach = coach; window.ckCoachClose = closeActiveCoach; // экспорт для коуч-хинта «Дом» из catpet.js
+  // Мост для catdove.js (сегмент «Коллекция» вкладки dove): api — тот же fetch-хелпер с
+  // initData-заголовками, flashMsg — тост об ошибке, updateDoveBadge — бейдж непрочитанной
+  // почты на кнопке навбара (учитывая, что мьютить его дальше будет Task 10 — почта).
+  window.ckApi = api; window.ckFlash = flashMsg; window.ckUpdateDoveBadge = updateDoveBadge;
   window.addEventListener('resize', () => { if (ov && ov.classList.contains('on') && st) applyCostume(leagueFor(st.totalEarned)); });
   // Реф регистрируем фоном уже при загрузке приложения (не дожидаясь открытия игры):
   // друг перешёл по ckref-ссылке → бонус начислится, даже если в игру он не зайдёт.
