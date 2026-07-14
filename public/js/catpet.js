@@ -347,7 +347,6 @@
   }
   function renderGift(state) {
     const el = ov.querySelector('#pet-gift'); if (!el || !state) return;
-    if (PURE) { const el0 = ov.querySelector('#pet-gift'); if (el0) el0.style.display = 'none'; return; }
     const best = Math.max(Number(state.careStreakBest || 0), Number(state.careStreak || 0), Number(state.care_streak || 0));
     const granted = careGranted || new Set();
     const next = CARE_MILESTONES.find(m => !granted.has('ms_care' + m.d));
@@ -357,7 +356,6 @@
     else { el.classList.remove('ready'); el.innerHTML = PIC.gift(15) + ' До подарка «' + next.label + '»: ещё ' + (next.d - best) + ' дн. заботы'; }
   }
   function openGiftLadder() {
-    if (PURE) return;
     close();
     try {
       const ck = document.querySelector('.ck-ov');
