@@ -1156,6 +1156,19 @@ export async function claimMilestone(chatId: number, id: string): Promise<{ ok: 
 // чтобы не дёргать сайт. Первый заход начисляет за весь YTD (приветствие лояльным).
 const PURCHASE_RATE = 20;            // монет за 1₽ покупок
 const PURCHASE_CAP = 5_000_000;      // потолок одной сверки (защита от выбросов/данных)
+
+// Чистая арифметика сверки — вынесена из syncPurchaseBonus ради юнит-тестов
+// (tests/clicker.test.ts), поведение прежнее:
+// delta — только НОВЫЕ траты сверх watermark (откат/новый год → 0),
+// grant — монеты с потолком PURCHASE_CAP,
+// birds — гарантированные голуби rare+ за каждые полные 1000₽ delta (кап 3 за сверку).
+export function computePurchaseGrant(yearSpent: number, spentSynced: number):
+  { delta: number; grant: number; birds: number } {
+  const delta = Math.max(0, yearSpent - spentSynced);
+  const grant = Math.min(delta * PURCHASE_RATE, PURCHASE_CAP);
+  const birds = Math.min(3, Math.floor(delta / 1000));
+  return { delta, grant, birds };
+}
 export async function syncPurchaseBonus(chatId: number): Promise<{ ok: boolean; granted: number; yearSpent?: number; state?: ClickerState; pigeonDrops?: { breed: string; isNew: boolean }[] }> {
   // Атомарно «застолбить» сверку: вставить/обновить last_check, только если прошло >1ч.
   const claim = await pool.query(
@@ -1171,8 +1184,7 @@ export async function syncPurchaseBonus(chatId: number): Promise<{ ok: boolean; 
   const lk = await fetchLk(chatId).catch(() => null);
   if (!lk || !lk.ok || !lk.data || !lk.data.configured) return { ok: true, granted: 0 };
   const yearSpent = Math.max(0, Math.floor(Number(lk.data.year_spent || 0)));
-  const delta = Math.max(0, yearSpent - spentSynced); // откат/новый год → 0, watermark подвинем
-  const grant = Math.min(delta * PURCHASE_RATE, PURCHASE_CAP);
+  const { grant, birds } = computePurchaseGrant(yearSpent, spentSynced);
   if (grant <= 0) {
     // Начислять нечего — двигаем watermark отдельно (потери монет тут быть не может).
     await pool.query(`UPDATE clicker_purchase_sync SET spent_synced=$2 WHERE chat_id=$1`, [chatId, yearSpent]);
@@ -1189,8 +1201,8 @@ export async function syncPurchaseBonus(chatId: number): Promise<{ ok: boolean; 
     // отдельным query ДО начисления → краш между ними терял бонус навсегда
     // (следующая сверка дала бы delta=0).
     await client.query(`UPDATE clicker_purchase_sync SET spent_synced=$2 WHERE chat_id=$1`, [chatId, yearSpent]);
-    // Каждые полные 1000₽ новых покупок (delta) → гарантированный голубь rare+ (кап 3 за сверку).
-    const birds = Math.min(3, Math.floor(delta / 1000));
+    // Каждые полные 1000₽ новых покупок (delta) → гарантированный голубь rare+
+    // (кап 3 за сверку) — birds посчитан выше в computePurchaseGrant.
     const pigeonDrops: { breed: string; isNew: boolean }[] = [];
     if (birds > 0) {
       const { pickPurchaseBreed, grantPigeon } = await import("./pigeons");

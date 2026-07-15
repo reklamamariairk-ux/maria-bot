@@ -10,6 +10,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ssh -i "$KEY" "$VPS" 'cd /opt/maria/maria-bot && git pull --ff-only'
 
 # 2. залить скрипт дайджеста
+ssh -i "$KEY" "$VPS" 'mkdir -p /opt/maria/scripts'
 scp -i "$KEY" "$HERE/morning-digest.sh" "$VPS:/opt/maria/scripts/morning-digest.sh"
 ssh -i "$KEY" "$VPS" 'chmod +x /opt/maria/scripts/morning-digest.sh /opt/maria/maria-bot/scripts/smoke.sh; sed -i "s/\r$//" /opt/maria/scripts/morning-digest.sh /opt/maria/maria-bot/scripts/smoke.sh'
 

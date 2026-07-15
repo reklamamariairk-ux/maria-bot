@@ -417,6 +417,13 @@ export async function getTradeBoard(chatId: number):
 // «уснул 16ч…4д назад» — переиспользуем тот же критерий активности.
 const MAIL_ACTIVE_WINDOW = "7 days";
 
+// Имя юзера в Markdown-пуше — режем метасимволы (ссылки-фишинг [x](url), битый
+// парсинг *_`~). Вынесено из sendMail в экспорт ради юнит-тестов
+// (tests/markdown.test.ts) — поведение байт-в-байт прежнее.
+export function escapePushName(name: string): string {
+  return name.replace(/[\[\]()_*\x60~]/g, "");
+}
+
 export interface MailRow {
   id: number;
   from_chat: number;
@@ -513,7 +520,7 @@ export async function sendMail(
           const rawName = (nameRow.rows[0]?.first_name || nameRow.rows[0]?.username || "Котовод")
             .toString().slice(0, 24);
           // имя юзера в Markdown-пуше — режем метасимволы (ссылки-фишинг, битый парсинг)
-          const safeName = rawName.replace(/[\[\]()_*\x60~]/g, "");
+          const safeName = escapePushName(rawName);
           const breedName = BREED_BY_ID.get(breed)!.name;
           const text = `🕊 Тебе прилетел голубь! ${safeName} отправил тебе «${breedName}» — загляни в голубятню.`
             + `\n\n[Открыть голубятню](${miniAppLink(toChat, "click")})`;
