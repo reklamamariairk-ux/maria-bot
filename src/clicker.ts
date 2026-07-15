@@ -401,6 +401,20 @@ async function refresh(client: any, chatId: number): Promise<{ r: any; cl: Recor
   return { r, cl, passive };
 }
 
+// Тонкий вариант refresh() для драг-рейсинга (src/drag.ts::runRace): применяет только
+// реген энергии (без пассива/стартового голубя/сезона — не нужны в контексте заезда) под
+// FOR UPDATE, возвращает {energy, balance}. Вызывающая сторона сама пишет итоговый UPDATE
+// (энергия/баланс/race_reaction_ms) в рамках своей транзакции — здесь мы не коммитим строку,
+// чтобы не сбрасывать updated_at раньше времени и не гонять два UPDATE подряд.
+export async function refreshEnergyFor(client: PoolClient, chatId: number): Promise<{ energy: number; balance: number }> {
+  await client.query(`INSERT INTO clicker_state (chat_id) VALUES ($1) ON CONFLICT (chat_id) DO NOTHING`, [chatId]);
+  const { rows } = await client.query(`SELECT energy, energy_limit_level, balance, updated_at FROM clicker_state WHERE chat_id=$1 FOR UPDATE`, [chatId]);
+  const r = rows[0];
+  const secs = Math.max(0, (Date.now() - new Date(r.updated_at).getTime()) / 1000);
+  const energy = Math.min(energyMaxFor(r.energy_limit_level), Math.round(r.energy + secs * REGEN_PER_SEC));
+  return { energy, balance: Number(r.balance) };
+}
+
 async function gamesDoneToday(client: any, chatId: number): Promise<string[]> {
   const { rows } = await client.query(`SELECT game FROM clicker_daily WHERE chat_id=$1 AND day=$2`, [chatId, irkToday()]);
   return rows.map((r: any) => r.game);

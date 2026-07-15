@@ -87,3 +87,73 @@ export async function pickOpponents(chatId: number, targetPower: number, n: numb
   while (real.length < n) real.push(makeBot(targetPower, real.length));
   return real;
 }
+
+// ── Резолв заезда в транзакции ──────────────────────────────────────────────
+// Всё под FOR UPDATE clicker_state (внутри refreshEnergyFor): реген энергии → проверки
+// (владение породой/энергия/ставка) → подбор соперников → резолв мест → списание энергии
+// + расчёт/начисление ставки → фиксация race_reaction_ms (для будущего pickOpponents).
+export async function runRace(chatId: number, breed: string, mode: "training" | "bet", stake: number, reactionMs: number):
+  Promise<{ ok: boolean; racers?: any[]; myPlace?: number; reward?: number; newBalance?: number; newEnergy?: number; reason?: string }> {
+  if (!BREED_BY_ID.has(breed)) return { ok: false, reason: "not_owned" };
+  if (mode !== "training" && mode !== "bet") return { ok: false, reason: "bad_mode" };
+  if (mode === "bet" && !STAKE_PRESETS.includes(stake)) return { ok: false, reason: "bad_stake" };
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    // Энергия/баланс с регеном — та же строка clicker_state, что и в кликере, взятая
+    // FOR UPDATE в этой же транзакции, чтобы не словить гонку с параллельным тапом/заездом.
+    const { refreshEnergyFor } = await import("./clicker");
+    const st = await refreshEnergyFor(client, chatId);
+    const inv = await client.query(`SELECT stars, tune_speed, tune_stamina FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 AND count>0`, [chatId, breed]);
+    if (!inv.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "not_owned" }; }
+    if (st.energy < DRAG_ENERGY_COST) { await client.query("ROLLBACK"); return { ok: false, reason: "no_energy" }; }
+    if (mode === "bet" && st.balance < stake) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
+    const b = BREED_BY_ID.get(breed)!;
+    const myPower = dragPower(b.rarity, inv.rows[0].stars, inv.rows[0].tune_speed, inv.rows[0].tune_stamina);
+    const opps = await pickOpponents(chatId, myPower, 3);
+    const react = Math.min(REACT_MAX, Math.max(REACT_MIN, Math.round(reactionMs)));
+    const field: { breed: string; power: number; reactionMs: number; bot: boolean; me: boolean }[] = [
+      { breed, power: myPower, reactionMs: react, bot: false, me: true },
+      ...opps.map(o => ({ breed: o.breed, power: o.power, reactionMs: o.reactionMs, bot: o.bot, me: false })),
+    ];
+    // Один рандомный «luck»-ролл на гонщика, зафиксированный ДО резолва — resolveRace и
+    // finishT ниже должны использовать один и тот же r по индексу, иначе места и показанное
+    // время анимации разъедутся (клиент анимирует по finishT).
+    const rolls = field.map(() => Math.random());
+    const places = resolveRace(field.map((f, i) => ({ power: f.power, reactionMs: f.reactionMs, r: rolls[i] })));
+    const racers = field
+      .map((f, i) => ({
+        breed: f.breed,
+        power: f.power,
+        finishT: dragFinishTime(f.power, f.reactionMs, rolls[i]),
+        place: places[i],
+        me: f.me,
+        bot: f.bot,
+      }))
+      .sort((a, b) => a.place - b.place);
+    const myPlace = places[0];
+    // Списания/выплата: энергия списывается всегда (training тоже тратит попытку); ставка —
+    // только в режиме bet, и только после проверки balance>=stake выше, так что баланс не
+    // может уйти в минус даже при полном проигрыше (reward = -stake).
+    const energyLeft = st.energy - DRAG_ENERGY_COST;
+    let balance = st.balance, reward = 0;
+    if (mode === "bet") {
+      const mult = PAYOUT[myPlace] ?? 0; // 2=+ставка net, 1=возврат (net 0), 0/undefined=потеря
+      reward = stake * mult - stake;
+      balance += reward;
+    }
+    // updated_at=NOW() сбрасывает базу регена — иначе следующий refresh() в кликере досчитает
+    // энергию ещё раз за те же секунды, что уже учёл refreshEnergyFor выше (двойной реген).
+    await client.query(
+      `UPDATE clicker_state SET energy=$2, balance=$3, race_reaction_ms=$4, updated_at=NOW() WHERE chat_id=$1`,
+      [chatId, energyLeft, balance, react]
+    );
+    await client.query("COMMIT");
+    return { ok: true, racers, myPlace, reward, newBalance: balance, newEnergy: energyLeft };
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
+}
