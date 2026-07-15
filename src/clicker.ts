@@ -105,26 +105,29 @@ const dailyReward = (streak: number) => 250 * Math.min(Math.max(1, streak), 10);
 
 // «Кондитерская карьера Василия» (арт-комплект 08.07.2026) — имена синхронно с
 // public/js/catclick.js LEAGUES (там же поле cat); пороги need НЕ менялись.
+// Пороги растянуты 15.07 (ранние уровни пролетали за минуты): плавная ~2.1× геометрия,
+// финал далеко. Существующие игроки защищены храповиком max_level (см. refresh) —
+// уровень не откатывается. ⚠️ Продублировано в public/js/catclick.js — менять синхронно.
 export const LEAGUES = [
   { level: 1,  name: "Котёнок-стажёр",     need: 0 },
-  { level: 2,  name: "Помощник пекаря",    need: 1000 },
-  { level: 3,  name: "Ученик",             need: 3000 },
-  { level: 4,  name: "Тестомес",           need: 8000 },
-  { level: 5,  name: "Пекарь",             need: 18000 },
-  { level: 6,  name: "Мастер круассанов",  need: 38000 },
-  { level: 7,  name: "Юный кондитер",      need: 70000 },
-  { level: 8,  name: "Тортодел",           need: 120000 },
-  { level: 9,  name: "Шоколатье",          need: 200000 },
-  { level: 10, name: "Су-шеф",             need: 320000 },
-  { level: 11, name: "Шеф-кондитер",       need: 500000 },
-  { level: 12, name: "Художник десертов",  need: 800000 },
-  { level: 13, name: "Управляющий",        need: 1300000 },
-  { level: 14, name: "Владелец кафе",      need: 2000000 },
-  { level: 15, name: "Ресторатор",         need: 3500000 },
-  { level: 16, name: "Магнат выпечки",     need: 8000000 },
-  { level: 17, name: "Легенда",            need: 30000000 },
-  { level: 18, name: "Король тортов",      need: 150000000 },
-  { level: 19, name: "Император выпечки",  need: 1200000000 },
+  { level: 2,  name: "Помощник пекаря",    need: 2000 },
+  { level: 3,  name: "Ученик",             need: 6000 },
+  { level: 4,  name: "Тестомес",           need: 15000 },
+  { level: 5,  name: "Пекарь",             need: 35000 },
+  { level: 6,  name: "Мастер круассанов",  need: 75000 },
+  { level: 7,  name: "Юный кондитер",      need: 150000 },
+  { level: 8,  name: "Тортодел",           need: 320000 },
+  { level: 9,  name: "Шоколатье",          need: 650000 },
+  { level: 10, name: "Су-шеф",             need: 1300000 },
+  { level: 11, name: "Шеф-кондитер",       need: 2600000 },
+  { level: 12, name: "Художник десертов",  need: 5200000 },
+  { level: 13, name: "Управляющий",        need: 10000000 },
+  { level: 14, name: "Владелец кафе",      need: 20000000 },
+  { level: 15, name: "Ресторатор",         need: 42000000 },
+  { level: 16, name: "Магнат выпечки",     need: 90000000 },
+  { level: 17, name: "Легенда",            need: 200000000 },
+  { level: 18, name: "Король тортов",      need: 500000000 },
+  { level: 19, name: "Император выпечки",  need: 1500000000 },
 ];
 function leagueFor(total: number) { let l = LEAGUES[0]; for (const x of LEAGUES) if (total >= x.need) l = x; return l; }
 function nextNeed(total: number): number | null { const n = LEAGUES.find((x) => x.need > total); return n ? n.need : null; }
@@ -319,7 +322,9 @@ async function readCards(client: any, chatId: number): Promise<Record<string, nu
 function profitPerHour(cl: Record<string, number>, albumMult = 1): number { let p = 0; for (const c of CARDS) p += cardProfit(c, cl[c.id] || 0); return p * albumMult; }
 
 function buildState(r: any, cl: Record<string, number>, passiveEarned: number): ClickerState {
-  const lg = leagueFor(Number(r.total_earned));
+  // Эффективный уровень с учётом храповика: не ниже max_level (защита от отката при новых порогах).
+  const effLevel = Math.max(leagueFor(Number(r.total_earned)).level, Number(r.max_level) || 1);
+  const lg = LEAGUES[effLevel - 1];
   const today = irkToday();
   const turboMs = r.turbo_until ? Math.max(0, new Date(r.turbo_until).getTime() - Date.now()) : 0;
   const bUsedE = r.boost_date === today ? r.boost_energy_used : 0;
@@ -357,6 +362,15 @@ async function refresh(client: any, chatId: number): Promise<{ r: any; cl: Recor
     await grantPigeon(chatId, "sizar", client);
     await client.query(`UPDATE clicker_state SET starter_pigeon=TRUE WHERE chat_id=$1`, [chatId]);
     r.starter_pigeon = true;
+  }
+  // Храповик уровня: max_level только растёт. Если игрок перешагнул порог по новой кривой —
+  // подтягиваем max_level; buildState показывает max(вычисленный, max_level), откат исключён.
+  {
+    const compLvl = leagueFor(Number(r.total_earned)).level;
+    if (compLvl > (Number(r.max_level) || 1)) {
+      await client.query(`UPDATE clicker_state SET max_level=$2 WHERE chat_id=$1`, [chatId, compLvl]);
+      r.max_level = compLvl;
+    }
   }
   const cl = await readCards(client, chatId);
   const today = irkToday();

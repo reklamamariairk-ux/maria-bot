@@ -191,6 +191,20 @@ export async function initPigeonSchema(): Promise<void> {
   await pool.query(`ALTER TABLE pigeon_race_entries ADD COLUMN IF NOT EXISTS division TEXT NOT NULL DEFAULT 'bronze'`);
   // Стартовый голубь: флаг одноразовой выдачи Сизаря новому игроку (см. refresh в clicker.ts).
   await pool.query(`ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS starter_pigeon BOOLEAN NOT NULL DEFAULT FALSE`);
+  // Храповик уровня (max_level не откатывается при ужесточении порогов, 15.07). Грандфазер:
+  // одноразово фиксируем уровень существующих игроков по СТАРЫМ порогам, чтобы новая (более
+  // крутая) кривая никого не понизила. GREATEST идемпотентен — повтор на буте безвреден.
+  await pool.query(`ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS max_level SMALLINT NOT NULL DEFAULT 1`);
+  await pool.query(`UPDATE clicker_state SET max_level = GREATEST(max_level, CASE
+      WHEN total_earned >= 1200000000 THEN 19 WHEN total_earned >= 150000000 THEN 18
+      WHEN total_earned >= 30000000 THEN 17 WHEN total_earned >= 8000000 THEN 16
+      WHEN total_earned >= 3500000 THEN 15 WHEN total_earned >= 2000000 THEN 14
+      WHEN total_earned >= 1300000 THEN 13 WHEN total_earned >= 800000 THEN 12
+      WHEN total_earned >= 500000 THEN 11 WHEN total_earned >= 320000 THEN 10
+      WHEN total_earned >= 200000 THEN 9 WHEN total_earned >= 120000 THEN 8
+      WHEN total_earned >= 70000 THEN 7 WHEN total_earned >= 38000 THEN 6
+      WHEN total_earned >= 18000 THEN 5 WHEN total_earned >= 8000 THEN 4
+      WHEN total_earned >= 3000 THEN 3 WHEN total_earned >= 1000 THEN 2 ELSE 1 END)`);
 }
 
 // ── Инвентарь ──────────────────────────────────────────────────────────────
