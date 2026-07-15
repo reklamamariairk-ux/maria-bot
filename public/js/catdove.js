@@ -408,13 +408,15 @@
     const body = container.querySelector('#cd-tune-body'); if (!body) return;
     const t = await apiRef('/api/pigeons/tune?breed=' + encodeURIComponent(breedId)).catch(() => null);
     if (!t || !t.owned) { body.innerHTML = `<div style="color:var(--muted);font-size:12.5px;text-align:center;padding:10px 0">Птица не найдена</div>`; return; }
+    const balance = num(t.balance);
     const rows = ['speed', 'stamina', 'luck'].map(stat => {
       const lvl = num(t[stat]);
       const cost = t.nextCost[stat];
       const bars = Array.from({ length: TUNE_MAX }, (_, i) => `<span style="flex:1;height:6px;border-radius:3px;background:${i < lvl ? 'var(--gold)' : 'rgba(255,255,255,.12)'}"></span>`).join('');
+      const poor = cost != null && cost > balance;
       const btn = cost == null
         ? `<span style="font-size:11px;color:var(--muted);flex:none">макс</span>`
-        : `<button class="cd-claimbtn" data-stat="${stat}" style="flex:none">${COIN_ICON(11)} ${fmt(cost)}</button>`;
+        : `<button class="cd-claimbtn" data-stat="${stat}" style="flex:none" ${poor ? 'disabled' : ''}>${COIN_ICON(11)} ${fmt(cost)}</button>`;
       return `<div style="padding:7px 2px">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px">
           <div style="font-size:12.5px;color:var(--ink);font-weight:700">${STAT_LABEL[stat]} <span style="color:var(--muted);font-weight:500;font-size:11px">${lvl}/${TUNE_MAX} · ${STAT_HINT[stat]}</span></div>

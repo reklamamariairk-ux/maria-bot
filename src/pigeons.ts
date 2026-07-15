@@ -647,16 +647,18 @@ const STAT_COL: Record<TuneStat, string> = { speed: "tune_speed", stamina: "tune
 
 export async function getTuning(chatId: number, breed: string): Promise<{
   owned: boolean; speed: number; stamina: number; luck: number; powerRating: number;
-  division: Division; nextCost: Record<TuneStat, number | null>;
+  division: Division; nextCost: Record<TuneStat, number | null>; balance: number;
 }> {
-  const r = await pool.query(
-    `SELECT tune_speed, tune_stamina, tune_luck FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 AND count>0`,
-    [chatId, breed]);
-  const speed = r.rows[0]?.tune_speed ?? 0, stamina = r.rows[0]?.tune_stamina ?? 0, luck = r.rows[0]?.tune_luck ?? 0;
+  const [inv, bal] = await Promise.all([
+    pool.query(`SELECT tune_speed, tune_stamina, tune_luck FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 AND count>0`, [chatId, breed]),
+    pool.query(`SELECT balance FROM clicker_state WHERE chat_id=$1`, [chatId]),
+  ]);
+  const speed = inv.rows[0]?.tune_speed ?? 0, stamina = inv.rows[0]?.tune_stamina ?? 0, luck = inv.rows[0]?.tune_luck ?? 0;
   const power = speed + stamina + luck;
   return {
-    owned: !!r.rowCount, speed, stamina, luck, powerRating: power, division: raceDivision(power),
+    owned: !!inv.rowCount, speed, stamina, luck, powerRating: power, division: raceDivision(power),
     nextCost: { speed: tuneCost(speed), stamina: tuneCost(stamina), luck: tuneCost(luck) },
+    balance: bal.rows[0] ? Number(bal.rows[0].balance) : 0,
   };
 }
 

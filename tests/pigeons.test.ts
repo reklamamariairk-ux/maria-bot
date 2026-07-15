@@ -149,10 +149,13 @@ describe("starTarget / raceScore", () => {
     expect(commonMax).toBeGreaterThan(legendRaw);
   });
 
-  it("на потолке (10/10/10) детерминированная часть у всех равна — решают звёзды и рывок", () => {
-    const a = raceScore("sizar", 1, 10, 10, 10, 0);     // общий детерминированный кор
-    const b = raceScore("belobok", 1, 10, 10, 10, 0);   // тот же common, r=0
-    expect(a).toBe(b);
+  it("на потолке тюнинга редкость второстепенна: разрыв common↔legendary = только базис редкости", () => {
+    // sizar(common,10) и zolotoy(legendary,28), оба maxed 10/10, ★1, r=0 — разница = 28−10=18
+    // (=RARITY_BASE), ничтожная на фоне 120 очков тюнинга → вложение доминирует над редкостью
+    const commonMax = raceScore("sizar", 1, 10, 10, 0, 0);
+    const legendMax = raceScore("zolotoy", 1, 10, 10, 0, 0);
+    expect(legendMax - commonMax).toBe(18);
+    expect(commonMax).toBeGreaterThan(legendMax * 0.85); // разрыв <15% → редкость не решает
   });
 
   it("неизвестная порода → 0 очков", () => {

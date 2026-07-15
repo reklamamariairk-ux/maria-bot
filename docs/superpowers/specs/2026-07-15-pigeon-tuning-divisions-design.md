@@ -79,7 +79,8 @@ ALTER TABLE pigeon_race_entries ADD COLUMN IF NOT EXISTS division TEXT NOT NULL 
 - `upgradeTune(chatId, breed, stat)`: транзакция — проверка владения (count>0), уровня (<TUNE_MAX), баланса (≥ cost), затем `UPDATE pigeon_inventory SET tune_<stat>=+1` + списание монет через существующий путь. Возврат `{ ok, level?, spent?, reason? }` (reason: `not_owned|bad_stat|max_level|not_enough_coins`).
 - `enterRace` — переписать: читать speed/stamina/luck, считать score новой формулой, division через raceDivision, писать оба в заявку.
 - `closeRaceWeek` — переписать: за прошлую неделю выбрать заявки, **сгруппировать по division**, в каждом дивизионе топ-3 по score DESC/entered_at ASC, начислить `DIVISION_PRIZES[div]`, Чемпиона — только `gold` место 1; `results` JSONB = `{ bronze:[...], silver:[...], gold:[...] }` (каждый элемент place/chat/breed/score/prize). Мьютекс-строка недели — как сейчас (идемпотентность).
-- `getRace` — добавить в ответ `myDivision`, `myPower`; `lastResults` теперь объект по дивизионам.
+- `getRace` — добавить в ответ `myDivision`; `lastResults` теперь объект по дивизионам. (powerRating показывается в панели тюнинга, в секцию гонки не дублируется.)
+- `getTuning` — возвращает ещё и `balance` игрока, чтобы клиент дизейблил кнопку прокачки при нехватке монет.
 
 ## HTTP (routes/pigeons.ts)
 
