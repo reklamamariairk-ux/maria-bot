@@ -114,12 +114,40 @@ export function starTarget(stars: number): number | null {
   return stars === 1 ? 3 : stars === 2 ? 5 : null;
 }
 
-// Гонка: очки = базис редкости + звёзды + рандом (новичок может выиграть).
-const RARITY_BASE: Record<Rarity, number> = { common: 10, rare: 16, epic: 22, legendary: 28 };
-export function raceScore(breedId: string, stars: number, r: number): number {
-  const b = BREED_BY_ID.get(breedId); if (!b) return 0;
-  return RARITY_BASE[b.rarity] + (stars - 1) * 4 + Math.floor(r * 40);
+// ── Тюнинг гонщика: 3 характеристики за монеты, потолок TUNE_MAX ──────────────
+export const TUNE_MAX = 10;
+export const TUNE_BASE_COST = 500;
+export const TUNE_COST_MULT = 1.7;
+export const TUNE_STATS = ["speed", "stamina", "luck"] as const;
+export type TuneStat = typeof TUNE_STATS[number];
+
+// Цена следующего уровня характеристики (как бизнес-карты кликера). Потолок → null.
+export function tuneCost(level: number): number | null {
+  if (level >= TUNE_MAX) return null;
+  return Math.floor(TUNE_BASE_COST * TUNE_COST_MULT ** level);
 }
+
+// Гонка: почти детерминированные очки. Скорость/выносливость — плоская сила (по +6),
+// удача расширяет случайный «рывок» (0..3 без удачи → 0..23 на удаче 10). Базис редкости
+// второстепенен: прокачанный common может обойти непрокачанного legendary.
+const RARITY_BASE: Record<Rarity, number> = { common: 10, rare: 16, epic: 22, legendary: 28 };
+export function raceScore(breedId: string, stars: number, speed: number, stamina: number, luck: number, r: number): number {
+  const b = BREED_BY_ID.get(breedId); if (!b) return 0;
+  return RARITY_BASE[b.rarity] + (stars - 1) * 4 + 6 * speed + 6 * stamina + Math.floor(r * (3 + 2 * luck));
+}
+
+// Дивизион гонки по рейтингу силы (сумма трёх характеристик, 0..30). Новичок соревнуется
+// с равными; по мере прокачки поднимаешься в лигу посильнее — естественный матчмейкинг.
+export type Division = "bronze" | "silver" | "gold";
+export function raceDivision(powerRating: number): Division {
+  return powerRating >= 18 ? "gold" : powerRating >= 9 ? "silver" : "bronze";
+}
+// Призы топ-3 каждого дивизиона (v1 — игровые монеты). Чемпион — только gold место 1.
+export const DIVISION_PRIZES: Record<Division, number[]> = {
+  bronze: [5000, 2500, 1000],
+  silver: [15000, 8000, 4000],
+  gold: [50000, 25000, 10000],
+};
 
 // ── Схема ──────────────────────────────────────────────────────────────────
 export async function initPigeonSchema(): Promise<void> {
@@ -156,6 +184,11 @@ export async function initPigeonSchema(): Promise<void> {
   // похода в pigeon_inventory на каждый тап. initClickerSchema() уже отработал к этому
   // моменту (index.ts: initClickerSchema() → initPigeonSchema()), таблица существует.
   await pool.query(`ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS album_bonus BOOLEAN NOT NULL DEFAULT FALSE`);
+  // Тюнинг гонщика: 3 характеристики на пару (игрок, порода) + снапшот дивизиона в заявке.
+  await pool.query(`ALTER TABLE pigeon_inventory ADD COLUMN IF NOT EXISTS tune_speed SMALLINT NOT NULL DEFAULT 0`);
+  await pool.query(`ALTER TABLE pigeon_inventory ADD COLUMN IF NOT EXISTS tune_stamina SMALLINT NOT NULL DEFAULT 0`);
+  await pool.query(`ALTER TABLE pigeon_inventory ADD COLUMN IF NOT EXISTS tune_luck SMALLINT NOT NULL DEFAULT 0`);
+  await pool.query(`ALTER TABLE pigeon_race_entries ADD COLUMN IF NOT EXISTS division TEXT NOT NULL DEFAULT 'bronze'`);
 }
 
 // ── Инвентарь ──────────────────────────────────────────────────────────────
@@ -609,66 +642,121 @@ export async function getMailRecipients(chatId: number):
   return { squad: mapRows(squadRows), refs: mapRows(refR.rows) };
 }
 
+// ── Тюнинг гонщика (операции с БД) ──────────────────────────────────────────
+const STAT_COL: Record<TuneStat, string> = { speed: "tune_speed", stamina: "tune_stamina", luck: "tune_luck" };
+
+export async function getTuning(chatId: number, breed: string): Promise<{
+  owned: boolean; speed: number; stamina: number; luck: number; powerRating: number;
+  division: Division; nextCost: Record<TuneStat, number | null>;
+}> {
+  const r = await pool.query(
+    `SELECT tune_speed, tune_stamina, tune_luck FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 AND count>0`,
+    [chatId, breed]);
+  const speed = r.rows[0]?.tune_speed ?? 0, stamina = r.rows[0]?.tune_stamina ?? 0, luck = r.rows[0]?.tune_luck ?? 0;
+  const power = speed + stamina + luck;
+  return {
+    owned: !!r.rowCount, speed, stamina, luck, powerRating: power, division: raceDivision(power),
+    nextCost: { speed: tuneCost(speed), stamina: tuneCost(stamina), luck: tuneCost(luck) },
+  };
+}
+
+// Прокачка одной характеристики: списание монет + инкремент уровня в одной транзакции.
+export async function upgradeTune(chatId: number, breed: string, stat: string):
+  Promise<{ ok: boolean; level?: number; spent?: number; reason?: string }> {
+  if (!TUNE_STATS.includes(stat as TuneStat)) return { ok: false, reason: "bad_stat" };
+  const col = STAT_COL[stat as TuneStat];
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const inv = await client.query(
+      `SELECT ${col} AS lvl FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 AND count>0 FOR UPDATE`,
+      [chatId, breed]);
+    if (!inv.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "not_owned" }; }
+    const level = inv.rows[0].lvl;
+    const cost = tuneCost(level);
+    if (cost == null) { await client.query("ROLLBACK"); return { ok: false, reason: "max_level" }; }
+    // списываем монеты только если хватает (атомарно через условный UPDATE баланса)
+    const pay = await client.query(
+      `UPDATE clicker_state SET balance = balance - $2 WHERE chat_id=$1 AND balance >= $2 RETURNING 1`,
+      [chatId, cost]);
+    if (!pay.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
+    await client.query(`UPDATE pigeon_inventory SET ${col} = ${col} + 1 WHERE chat_id=$1 AND breed=$2`, [chatId, breed]);
+    await client.query("COMMIT");
+    return { ok: true, level: level + 1, spent: cost };
+  } catch (e) { await client.query("ROLLBACK"); throw e; }
+  finally { client.release(); }
+}
+
 // ── Гонка стаи ────────────────────────────────────────────────────────────
 // Флаг: гонка выключена по умолчанию (v1 фичи почты/обменов/сетов не зависят от неё).
 export const RACE_ENABLED = process.env.PIGEON_RACE_ENABLED === "true";
-const RACE_PRIZES = [50000, 25000, 10000, 5000, 5000, 2500, 2500, 2500, 2500, 2500];
 
-// Заявка фиксирует очки сразу (raceScore зависит от текущих stars породы) — птица
-// НЕ списывается, гонка не сжигает коллекцию. Одна заявка на неделю (PK week,chat_id).
+// Заявка фиксирует очки И дивизион снапшотом (по текущим звёздам+тюнингу) — поздняя
+// прокачка после заявки не перекидывает между лигами задним числом. Птица НЕ списывается,
+// одна заявка на неделю (PK week,chat_id).
 export async function enterRace(chatId: number, breed: string): Promise<{ ok: boolean; reason?: string }> {
   if (!RACE_ENABLED) return { ok: false, reason: "disabled" };
   if (!BREED_BY_ID.has(breed)) return { ok: false, reason: "unknown_breed" };
   const inv = await pool.query(
-    `SELECT stars FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 AND count>0`, [chatId, breed]);
+    `SELECT stars, tune_speed, tune_stamina, tune_luck FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 AND count>0`,
+    [chatId, breed]);
   if (!inv.rowCount) return { ok: false, reason: "not_owned" };
-  const score = raceScore(breed, inv.rows[0].stars, Math.random());
+  const { stars, tune_speed, tune_stamina, tune_luck } = inv.rows[0];
+  const score = raceScore(breed, stars, tune_speed, tune_stamina, tune_luck, Math.random());
+  const division = raceDivision(tune_speed + tune_stamina + tune_luck);
   const week = await currentWeekKey();
   const ins = await pool.query(
-    `INSERT INTO pigeon_race_entries (week, chat_id, breed, score) VALUES ($1,$2,$3,$4)
+    `INSERT INTO pigeon_race_entries (week, chat_id, breed, score, division) VALUES ($1,$2,$3,$4,$5)
      ON CONFLICT (week, chat_id) DO NOTHING RETURNING 1`,
-    [week, chatId, breed, score]);
+    [week, chatId, breed, score, division]);
   return ins.rowCount ? { ok: true } : { ok: false, reason: "already" };
 }
 
 export async function getRace(chatId: number) {
   const week = await currentWeekKey();
   const [mine, last, entrants] = await Promise.all([
-    pool.query(`SELECT breed FROM pigeon_race_entries WHERE week=$1 AND chat_id=$2`, [week, chatId]),
+    pool.query(`SELECT breed, division FROM pigeon_race_entries WHERE week=$1 AND chat_id=$2`, [week, chatId]),
     pool.query(`SELECT results FROM pigeon_race_winners ORDER BY week DESC LIMIT 1`),
     pool.query(`SELECT COUNT(*) AS n FROM pigeon_race_entries WHERE week=$1`, [week]),
   ]);
   return {
     enabled: RACE_ENABLED, week, myBreed: mine.rows[0]?.breed ?? null,
+    myDivision: mine.rows[0]?.division ?? null,
     entrants: Number(entrants.rows[0].n), lastResults: last.rows[0]?.results ?? null,
   };
 }
 
-// Закрытие прошедшей недели. Идемпотентно: мьютекс-строка в pigeon_race_winners
-// (тот же паттерн, что clicker_week_winners в closeWeeklySeason) — INSERT ... ON
-// CONFLICT DO NOTHING RETURNING 1 гарантирует, что только один параллельный прогон
-// крона реально начислит призы; остальные откатывают транзакцию и возвращают closed=false.
+// Закрытие прошедшей недели. Заявки группируются по дивизиону, в каждом — свой топ-3
+// с призами DIVISION_PRIZES; порода «Чемпион» — только победителю Золота. Идемпотентно:
+// мьютекс-строка в pigeon_race_winners (INSERT ... ON CONFLICT DO NOTHING RETURNING 1)
+// гарантирует, что только один параллельный прогон крона реально начислит призы.
 export async function closeRaceWeek(): Promise<{ week: string; entries: number; closed: boolean }> {
   const prevWeek = await previousWeekKey();
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const mutex = await client.query(
-      `INSERT INTO pigeon_race_winners (week, results) VALUES ($1,'[]'::jsonb) ON CONFLICT DO NOTHING RETURNING 1`, [prevWeek]);
+      `INSERT INTO pigeon_race_winners (week, results) VALUES ($1,'{}'::jsonb) ON CONFLICT DO NOTHING RETURNING 1`, [prevWeek]);
     if (!mutex.rowCount) { await client.query("ROLLBACK"); return { week: prevWeek, entries: 0, closed: false }; }
-    const top = await client.query(
-      `SELECT chat_id, breed, score FROM pigeon_race_entries WHERE week=$1 ORDER BY score DESC, entered_at ASC LIMIT 10`, [prevWeek]);
-    // Один ленивый импорт на всю функцию — не тянуть require("./clicker") на каждой
-    // итерации топ-10 (тот же модуль, тот же экспорт, N лишних промисов без пользы).
     const { addClickerBalance } = await import("./clicker");
-    for (let i = 0; i < top.rows.length; i++) {
-      await addClickerBalance(Number(top.rows[i].chat_id), RACE_PRIZES[i], client);
+    const results: Record<Division, any[]> = { bronze: [], silver: [], gold: [] };
+    let total = 0;
+    for (const div of ["bronze", "silver", "gold"] as Division[]) {
+      const top = await client.query(
+        `SELECT chat_id, breed, score FROM pigeon_race_entries WHERE week=$1 AND division=$2
+         ORDER BY score DESC, entered_at ASC LIMIT 3`, [prevWeek, div]);
+      const prizes = DIVISION_PRIZES[div];
+      for (let i = 0; i < top.rows.length; i++) {
+        await addClickerBalance(Number(top.rows[i].chat_id), prizes[i], client);
+        results[div].push({ place: i + 1, chat: Number(top.rows[i].chat_id), breed: top.rows[i].breed, score: top.rows[i].score, prize: prizes[i] });
+      }
+      // Чемпион — только победителю Золота
+      if (div === "gold" && top.rows.length) await grantPigeon(Number(top.rows[0].chat_id), "champion", client);
+      total += top.rows.length;
     }
-    if (top.rows.length) await grantPigeon(Number(top.rows[0].chat_id), "champion", client);
-    await client.query(`UPDATE pigeon_race_winners SET results=$2 WHERE week=$1`,
-      [prevWeek, JSON.stringify(top.rows.map((r, i) => ({ place: i + 1, chat: Number(r.chat_id), breed: r.breed, score: r.score, prize: RACE_PRIZES[i] })))]);
+    await client.query(`UPDATE pigeon_race_winners SET results=$2 WHERE week=$1`, [prevWeek, JSON.stringify(results)]);
     await client.query("COMMIT");
-    return { week: prevWeek, entries: top.rows.length, closed: true };
+    return { week: prevWeek, entries: total, closed: true };
   } catch (e) { await client.query("ROLLBACK"); throw e; }
   finally { client.release(); }
 }

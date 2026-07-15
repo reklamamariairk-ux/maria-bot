@@ -62,6 +62,7 @@
   const COIN_ICON = (s) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24"><use href="#ckSymCoin"/></svg>`;
   const SWAP_ICON = (s) => svg('<path d="M4 7h13m0 0-3.5-3.5M17 7l-3.5 3.5M20 17H7m0 0 3.5-3.5M7 17l3.5 3.5"/>', s || 16);
   const MAILBOX_ICON = (s) => svg('<path d="M4 6.5 12 12l8-5.5"/><rect x="4" y="6.5" width="16" height="11" rx="2"/>', s || 16);
+  const GEAR_ICON = (s) => svg('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>', s || 16);
 
   function authed() { return !!(window.App && App.isAuthed && App.isAuthed()); }
   const PURE = () => document.documentElement.classList.contains('ck-pure');
@@ -368,6 +369,7 @@
       <button class="cd-sheet__act" id="cd-feed" ${feedEnabled ? '' : 'disabled'}>${feedLabel}</button>
       ${need != null && !feedEnabled ? `<div class="cd-sheet__hint">Нужно ${need} запасных (сейчас ${Math.max(0, spare)})</div>` : ''}
       <button class="cd-sheet__act${isShown ? ' cd-sheet__act--on' : ''}" id="cd-show" ${(!isShown && showcaseFull) ? 'disabled' : ''}>${showLabel}</button>
+      <button class="cd-sheet__act" id="cd-tune">${GEAR_ICON(15)} Тюнинг гонщика</button>
       ${canTrade ? `<button class="cd-sheet__act" id="cd-trade-start">${SWAP_ICON(15)} Предложить обмен</button>` : ''}
     `;
     sc.classList.add('on');
@@ -377,8 +379,61 @@
     if (feedBtn && feedEnabled) feedBtn.onclick = () => feedAct(breedId, feedBtn);
     const showBtn = sh.querySelector('#cd-show');
     if (showBtn && !showBtn.disabled) showBtn.onclick = () => showcaseAct(breedId, isShown, showBtn);
+    const tuneBtn = sh.querySelector('#cd-tune');
+    if (tuneBtn) tuneBtn.onclick = () => openTune(breedId);
     const tradeBtn = sh.querySelector('#cd-trade-start');
     if (tradeBtn) tradeBtn.onclick = () => openTradeWant(breedId);
+  }
+
+  // ── Тюнинг гонщика: 3 характеристики за монеты, дивизион по сумме уровней ──
+  const DIV_LABEL = { bronze: '🥉 Бронза', silver: '🥈 Серебро', gold: '🥇 Золото' };
+  const STAT_LABEL = { speed: 'Скорость', stamina: 'Выносливость', luck: 'Удача' };
+  const STAT_HINT = { speed: 'плоская сила', stamina: 'плоская сила', luck: 'шире случайный рывок' };
+  const TUNE_MAX = 10;
+  const TUNE_REASON = { not_owned: 'Птица не найдена', bad_stat: 'Неизвестная характеристика', max_level: 'Максимальный уровень', not_enough_coins: 'Не хватает монет' };
+
+  async function openTune(breedId) {
+    const b = BY_ID.get(breedId); if (!b) return;
+    haptic('light');
+    const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
+    if (!sc || !sh) return;
+    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Тюнинг: ${b.name}</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div><div id="cd-tune-body" style="padding:4px 0"><div style="color:var(--muted);font-size:12.5px;text-align:center;padding:10px 0">Загрузка…</div></div>`;
+    sc.classList.add('on');
+    requestAnimationFrame(() => sh.classList.add('on'));
+    sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+    await renderTune(breedId);
+  }
+
+  async function renderTune(breedId) {
+    const body = container.querySelector('#cd-tune-body'); if (!body) return;
+    const t = await apiRef('/api/pigeons/tune?breed=' + encodeURIComponent(breedId)).catch(() => null);
+    if (!t || !t.owned) { body.innerHTML = `<div style="color:var(--muted);font-size:12.5px;text-align:center;padding:10px 0">Птица не найдена</div>`; return; }
+    const rows = ['speed', 'stamina', 'luck'].map(stat => {
+      const lvl = num(t[stat]);
+      const cost = t.nextCost[stat];
+      const bars = Array.from({ length: TUNE_MAX }, (_, i) => `<span style="flex:1;height:6px;border-radius:3px;background:${i < lvl ? 'var(--gold)' : 'rgba(255,255,255,.12)'}"></span>`).join('');
+      const btn = cost == null
+        ? `<span style="font-size:11px;color:var(--muted);flex:none">макс</span>`
+        : `<button class="cd-claimbtn" data-stat="${stat}" style="flex:none">${COIN_ICON(11)} ${fmt(cost)}</button>`;
+      return `<div style="padding:7px 2px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px">
+          <div style="font-size:12.5px;color:var(--ink);font-weight:700">${STAT_LABEL[stat]} <span style="color:var(--muted);font-weight:500;font-size:11px">${lvl}/${TUNE_MAX} · ${STAT_HINT[stat]}</span></div>
+          ${btn}
+        </div>
+        <div style="display:flex;gap:3px">${bars}</div>
+      </div>`;
+    }).join('');
+    body.innerHTML = `<div class="cd-setrow" style="margin-bottom:4px"><div class="cd-setrow__n"><b>Дивизион: ${DIV_LABEL[t.division]}</b><div class="cd-setrow__p">рейтинг силы ${num(t.powerRating)}/30 — сумма уровней</div></div></div>${rows}`;
+    body.querySelectorAll('button[data-stat]').forEach(btn => { btn.onclick = () => tuneAct(breedId, btn.dataset.stat, btn); });
+  }
+
+  async function tuneAct(breedId, stat, btn) {
+    if (busy) return; busy = true; if (btn) btn.disabled = true;
+    try {
+      const d = await apiRef('/api/pigeons/tune', { method: 'POST', body: JSON.stringify({ breed: breedId, stat }) }).catch(() => null);
+      if (d && d.ok) { haptic('medium'); await renderTune(breedId); }
+      else { flash(TUNE_REASON[d && d.error] || 'Не получилось прокачать'); if (btn) btn.disabled = false; }
+    } finally { busy = false; }
   }
 
   const FEED_REASON = { not_owned: 'Птица не найдена', max_stars: 'Максимум звёзд', not_enough_dupes: 'Не хватает запасных дублей' };
@@ -757,27 +812,37 @@
   // не вернёт enabled=true). Прошлонедельные результаты хранят только chat_id, а
   // клиент не знает свой chat_id (нет такого поля в App-мосте catclick.js) — «своё
   // место» намеренно НЕ подсвечиваем, честно показываем весь топ без выделения.
+  function raceRow(r) {
+    const b = BY_ID.get(r.breed);
+    return `<div class="cd-traderow">
+      <div class="cd-traderow__swap">
+        <div style="width:24px;text-align:center;font-weight:800;color:var(--gold-l);flex:none;font-size:12px">№${num(r.place)}</div>
+        <div class="cd-traderow__art"><img src="/img/pigeons/${r.breed}.webp?v=1" alt="" onerror="this.style.display='none'"></div>
+        <div style="min-width:0;flex:1"><div style="font-size:12px;color:var(--ink);font-weight:700">${b ? b.name : r.breed}</div><div class="cd-traderow__meta">${num(r.score)} очков</div></div>
+      </div>
+      <div style="font-size:11.5px;color:var(--gold-l);font-weight:800;flex:none">${COIN_ICON(12)} ${fmt(r.prize)}</div>
+    </div>`;
+  }
   function raceHtml() {
     if (!race || !race.enabled) return '';
     const mine = race.myBreed ? BY_ID.get(race.myBreed) : null;
-    const results = Array.isArray(race.lastResults) ? race.lastResults : [];
-    const rows = results.length ? results.map(r => {
-      const b = BY_ID.get(r.breed);
-      return `<div class="cd-traderow">
-        <div class="cd-traderow__swap">
-          <div style="width:24px;text-align:center;font-weight:800;color:var(--gold-l);flex:none;font-size:12px">№${num(r.place)}</div>
-          <div class="cd-traderow__art"><img src="/img/pigeons/${r.breed}.webp?v=1" alt="" onerror="this.style.display='none'"></div>
-          <div style="min-width:0;flex:1"><div style="font-size:12px;color:var(--ink);font-weight:700">${b ? b.name : r.breed}</div><div class="cd-traderow__meta">${num(r.score)} очков</div></div>
-        </div>
-        <div style="font-size:11.5px;color:var(--gold-l);font-weight:800;flex:none">${COIN_ICON(12)} ${fmt(r.prize)}</div>
-      </div>`;
+    // lastResults теперь объект по дивизионам {bronze:[],silver:[],gold:[]}
+    const lr = race.lastResults && typeof race.lastResults === 'object' && !Array.isArray(race.lastResults) ? race.lastResults : null;
+    const anyResults = lr && ['gold', 'silver', 'bronze'].some(d => Array.isArray(lr[d]) && lr[d].length);
+    const blocks = anyResults ? ['gold', 'silver', 'bronze'].map(d => {
+      const arr = Array.isArray(lr[d]) ? lr[d] : [];
+      if (!arr.length) return '';
+      return `<div class="cd-setrow__p" style="margin:8px 2px 3px;font-weight:800;color:var(--ink)">${DIV_LABEL[d]}</div>${arr.map(raceRow).join('')}`;
     }).join('') : `<div style="color:var(--muted);font-size:12.5px;text-align:center;padding:8px 0">Итоги прошлой недели ещё не подведены</div>`;
+    const myLine = mine
+      ? `Заявлен: ${mine.name}${race.myDivision ? ' · ' + DIV_LABEL[race.myDivision] : ''}`
+      : 'Пока не участвуешь';
     return `<div class="cd-sect-t">Гонка стаи</div>
       <div class="cd-setrow">
-        <div class="cd-setrow__n"><b>${mine ? 'Заявлен: ' + mine.name : 'Пока не участвуешь'}</b><div class="cd-setrow__p">${num(race.entrants)} участников на этой неделе</div></div>
+        <div class="cd-setrow__n"><b>${myLine}</b><div class="cd-setrow__p">${num(race.entrants)} участников на этой неделе</div></div>
         ${!mine ? `<button class="cd-claimbtn" id="cd-race-enter">Заявить</button>` : ''}
       </div>
-      ${rows}`;
+      ${blocks}`;
   }
   function openRaceBreedPicker() {
     if (!data) return;

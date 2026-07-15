@@ -97,7 +97,7 @@ ALTER TABLE pigeon_race_entries ADD COLUMN IF NOT EXISTS division TEXT NOT NULL 
 
 ## Приёмка
 
-1. tuneCost: 0→500, 1→850, 2→1445; на уровне 10 → null. (vitest)
+1. tuneCost: 0→500, 1→850, 2→1444 (флоат-floor); на уровне 10 → null. (vitest)
 2. raceDivision: 8→bronze, 9→silver, 17→silver, 18→gold. (vitest)
 3. raceScore: прокачанный common (speed10,stamina10) обходит непрокачанного legendary при r=0; на потолке разница только в звёздах+рывке. (vitest)
 4. upgradeTune: списывает монеты, поднимает уровень; без монет→not_enough_coins; на потолке→max_level; не владеешь→not_owned. (E2E на VPS)

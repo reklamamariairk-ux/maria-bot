@@ -11,6 +11,7 @@ import { describe, it, expect } from "vitest";
 import {
   PIGEON_BREEDS, BREED_BY_ID, RARITY_WEIGHTS, STICKERS,
   breedOfWeek, pickBreed, pickPurchaseBreed, starTarget, raceScore,
+  tuneCost, raceDivision, TUNE_MAX,
   createTrade, sendMail, thankMail, setShowcase, claimSet, enterRace,
 } from "../src/pigeons";
 
@@ -126,14 +127,55 @@ describe("starTarget / raceScore", () => {
     expect(starTarget(3)).toBeNull();
   });
 
-  it("очки гонки: базис редкости + звёзды + рандом", () => {
-    expect(raceScore("sizar", 1, 0)).toBe(10);          // common ★1, без удачи
-    expect(raceScore("zolotoy", 3, 0.9999)).toBe(75);   // 28 + 8 + 39 — максимум
-    expect(raceScore("vanil", 2, 0) - raceScore("vanil", 1, 0)).toBe(4); // +4 за звезду
+  it("очки гонки: базис редкости + звёзды + тюнинг + рывок(удача)", () => {
+    // common ★1, без прокачки, r=0 → только базис редкости
+    expect(raceScore("sizar", 1, 0, 0, 0, 0)).toBe(10);
+    // +4 за звезду
+    expect(raceScore("vanil", 2, 0, 0, 0, 0) - raceScore("vanil", 1, 0, 0, 0, 0)).toBe(4);
+    // +6 за уровень скорости, +6 за выносливость
+    expect(raceScore("sizar", 1, 5, 0, 0, 0)).toBe(10 + 30);
+    expect(raceScore("sizar", 1, 0, 5, 0, 0)).toBe(10 + 30);
+  });
+
+  it("рывок зависит от удачи: без удачи 0..3, с удачей 10 — 0..23", () => {
+    expect(raceScore("sizar", 1, 0, 0, 0, 0.9999)).toBe(10 + 2);   // floor(0.9999*3)=2
+    expect(raceScore("sizar", 1, 0, 0, 10, 0.9999)).toBe(10 + 22); // floor(0.9999*23)=22
+    expect(raceScore("sizar", 1, 0, 0, 0, 0)).toBe(10);            // r=0 → рывок 0
+  });
+
+  it("почти детерминированно: прокачанный common обходит непрокачанного legendary при r=0", () => {
+    const commonMax = raceScore("sizar", 1, 10, 10, 0, 0);   // 10 + 120
+    const legendRaw = raceScore("zolotoy", 3, 0, 0, 0, 0);   // 28 + 8
+    expect(commonMax).toBeGreaterThan(legendRaw);
+  });
+
+  it("на потолке (10/10/10) детерминированная часть у всех равна — решают звёзды и рывок", () => {
+    const a = raceScore("sizar", 1, 10, 10, 10, 0);     // общий детерминированный кор
+    const b = raceScore("belobok", 1, 10, 10, 10, 0);   // тот же common, r=0
+    expect(a).toBe(b);
   });
 
   it("неизвестная порода → 0 очков", () => {
-    expect(raceScore("kotopyos", 1, 0.5)).toBe(0);
+    expect(raceScore("kotopyos", 1, 0, 0, 0, 0.5)).toBe(0);
+  });
+});
+
+describe("tuneCost / raceDivision — тюнинг и дивизионы", () => {
+  it("цена уровня: 500 × 1.7^level, floor; на потолке (10) → null", () => {
+    expect(tuneCost(0)).toBe(500);
+    expect(tuneCost(1)).toBe(850);
+    expect(tuneCost(2)).toBe(1444); // 1.7² = 2.8899…, ×500 = 1444.99…, floor
+    expect(tuneCost(TUNE_MAX)).toBeNull();
+    expect(tuneCost(TUNE_MAX + 1)).toBeNull();
+  });
+
+  it("дивизион по рейтингу силы: 0–8 бронза, 9–17 серебро, 18–30 золото", () => {
+    expect(raceDivision(0)).toBe("bronze");
+    expect(raceDivision(8)).toBe("bronze");
+    expect(raceDivision(9)).toBe("silver");
+    expect(raceDivision(17)).toBe("silver");
+    expect(raceDivision(18)).toBe("gold");
+    expect(raceDivision(30)).toBe("gold");
   });
 });
 

@@ -15,7 +15,7 @@ import { Router } from "express";
 import {
   getPigeonsOverview, claimSet, getTradeBoard, createTrade, acceptTrade, cancelTrade,
   sendMail, getInbox, thankMail, getMailRecipients, feedPigeon, setShowcase,
-  enterRace, getRace,
+  enterRace, getRace, getTuning, upgradeTune,
 } from "../pigeons";
 import type { PushService } from "../push";
 import { requireTgUser, getTgUser } from "../auth";
@@ -138,6 +138,21 @@ export function createPigeonsRouter(push: PushService): Router {
     const u = getTgUser(req)!;
     try { res.json(await getRace(u.id)); }
     catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/race]"); res.status(500).json({ error: "internal" }); }
+  });
+
+  router.get("/api/pigeons/tune", requireTgUser, rateLimit(60), async (req, res) => {
+    const u = getTgUser(req)!; const breed = String((req.query as { breed?: string }).breed || "");
+    try { res.json(await getTuning(u.id, breed)); }
+    catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/tune]"); res.status(500).json({ error: "internal" }); }
+  });
+
+  router.post("/api/pigeons/tune", requireTgUser, rateLimit(20), async (req, res) => {
+    const u = getTgUser(req)!; const b = req.body as { breed?: string; stat?: string };
+    try {
+      const r = await upgradeTune(u.id, String(b.breed || ""), String(b.stat || ""));
+      if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
+      res.json(r);
+    } catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/tune/post]"); res.status(500).json({ error: "internal" }); }
   });
 
   return router;
