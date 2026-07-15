@@ -1,6 +1,8 @@
 // src/drag.ts — драг-рейсинг: физика заезда (чистые функции) + подбор соперников + резолв.
 // Спека: docs/superpowers/specs/2026-07-15-drag-race-design.md
 import type { Rarity } from "./pigeons";
+import { pool } from "./db";
+import { PIGEON_BREEDS, BREED_BY_ID } from "./pigeons";
 
 export const DRAG_ENERGY_COST = 250;
 export const TRACK_LEN = 2000;
@@ -34,4 +36,51 @@ export function resolveRace(racers: { power: number; reactionMs: number; r: numb
   const places = new Array(racers.length);
   times.forEach((x, rank) => { places[x.i] = rank + 1; });
   return places;
+}
+
+// ── Подбор соперников ──────────────────────────────────────────────────────
+
+export type Racer = { breed: string; power: number; reactionMs: number; bot: boolean; name?: string };
+
+// Детерминированная «правдоподобная» реакция без Math.random — используется как фолбэк,
+// когда у игрока ещё нет своего race_reaction_ms (новичок) и для базовой реакции бота.
+function synthReaction(target: number): number {
+  return clampReact(250 + Math.round((target % 7) * 40));
+}
+
+// Синтетический соперник-бот под целевую мощность target: случайная не-чемпионская порода
+// (чемпион — только приз, не гоняется как соперник), tune_speed/tune_stamina подобраны так,
+// чтобы dragPower ≈ target (RARITY_BASE редкости даёт нижнюю границу, дальше 6 очков за пункт
+// тюнинга, поровну между speed/stamina, с клампом на TUNE_MAX=10 каждая).
+const TUNE_MAX = 10;
+function makeBot(target: number, seed: number): Racer {
+  const candidates = PIGEON_BREEDS.filter(b => b.id !== "champion");
+  const b = candidates[Math.floor(Math.random() * candidates.length)];
+  const stars = 1;
+  const base = dragPower(b.rarity, stars, 0, 0);
+  const totalPoints = Math.max(0, Math.round((target - base) / 6));
+  const speed = Math.min(TUNE_MAX, Math.ceil(totalPoints / 2));
+  const stamina = Math.min(TUNE_MAX, totalPoints - speed);
+  const power = dragPower(b.rarity, stars, speed, stamina);
+  const reactionMs = clampReact(synthReaction(target) + ((seed % 5) - 2) * 15 + Math.round((Math.random() - 0.5) * 60));
+  return { breed: b.id, power, reactionMs, bot: true, name: "Соперник" };
+}
+
+// n соперников для игрока chatId под целевую мощность targetPower: сперва реальные голуби
+// других игроков в коридоре ±POWER_BAND (ближайшие по |power-target|), при нехватке —
+// добивка синтетическими ботами под target.
+export async function pickOpponents(chatId: number, targetPower: number, n: number): Promise<Racer[]> {
+  const rows = (await pool.query(
+    `SELECT pi.breed, pi.stars, pi.tune_speed, pi.tune_stamina, cs.race_reaction_ms
+       FROM pigeon_inventory pi JOIN clicker_state cs ON cs.chat_id = pi.chat_id
+      WHERE pi.chat_id <> $1 AND pi.count > 0`, [chatId])).rows;
+  const real: Racer[] = rows.map((r: any) => {
+    const b = BREED_BY_ID.get(r.breed)!;
+    const power = dragPower(b.rarity, r.stars, r.tune_speed, r.tune_stamina);
+    return { breed: r.breed, power, reactionMs: r.race_reaction_ms ?? synthReaction(targetPower), bot: false };
+  }).filter(x => Math.abs(x.power - targetPower) <= POWER_BAND)
+    .sort((a, b) => Math.abs(a.power - targetPower) - Math.abs(b.power - targetPower))
+    .slice(0, n);
+  while (real.length < n) real.push(makeBot(targetPower, real.length));
+  return real;
 }
