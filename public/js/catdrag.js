@@ -60,6 +60,7 @@
   // ── состояние оверлея (модульный синглтон — открыт максимум один заезд разом) ───
   let ov = null, apiRef = null, session = 0, resizeHandler = null;
   let curBreed = null, mode = 'training', stake = STAKE_PRESETS[0];
+  let myPower = null;          // мощность моего голубя из ответа /opponents (null=ещё не знаем)
   let opponentsPreview = null; // null=грузится, []=подобрать не удалось (не блокирует старт — сервер подберёт сам)
   let raceBusy = false, step = 'setup'; // setup | race | result
 
@@ -181,7 +182,7 @@
       <div class="cd-drag-body">
         <div class="cd-drag-my">
           <div class="cd-drag-my__art">${artTag(curBreed)}</div>
-          <div class="cd-drag-my__b"><div class="cd-drag-my__n">${esc(m.name)}</div><div class="cd-drag-my__p">Твой боец на старте</div></div>
+          <div class="cd-drag-my__b"><div class="cd-drag-my__n">${esc(m.name)}</div><div class="cd-drag-my__p">${myPower !== null ? `Мощность: ⚡ ${Math.round(myPower)}` : 'Твой боец на старте'}</div></div>
         </div>
         <div class="cd-drag-sect">Режим</div>
         <div class="cd-drag-seg">
@@ -213,6 +214,7 @@
     const d = await apiRef('/api/pigeons/drag/opponents', { method: 'POST', body: JSON.stringify({ breed: curBreed }) }).catch(() => null);
     if (mySession !== session || !ov) return; // оверлей закрыт/переоткрыт — не трогаем DOM
     opponentsPreview = (d && Array.isArray(d.opponents)) ? d.opponents : [];
+    myPower = (d && typeof d.myPower === 'number') ? d.myPower : myPower;
     if (step === 'setup') renderSetup();
   }
 
@@ -247,7 +249,8 @@
     const wrap = canvas.parentElement;
     cssW = (wrap && wrap.clientWidth) || 320;
     const lanes = (raceData && Array.isArray(raceData.racers)) ? raceData.racers.length : (previewRacers().length || 4);
-    cssH = Math.max(200, lanes * 62 + 24);
+    // +46 headroom под небо/скайлайн (землю рисуем с 24% высоты), 58/лейн под голубя+тень
+    cssH = Math.max(220, lanes * 58 + 46);
     dpr = window.devicePixelRatio || 1;
     canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
     canvas.style.width = cssW + 'px'; canvas.style.height = cssH + 'px';
@@ -260,46 +263,123 @@
     return [mine, ...opps];
   }
 
-  // ── отрисовка трассы: 4 (или N) дорожек, спрайты голубей интерполированы по frac[0..1] ──
-  function drawTrack(list, positions) {
+  // ── сайд-скролл-сцена: параллакс-фон + камера за лидером + бегущие голуби ──────
+  // Мир длиннее экрана (worldLen), позиции по finishT нормированы в frac[0..1] → worldX =
+  // frac*worldLen; финиш — на worldLen. Камера держит лидера у ~40% ширины, поэтому мир
+  // (столбы/разметка/фон) стримится справа налево со скоростью лидера → ощущение движения.
+  // Всё процедурное, без нового арта. Дёшево на кадр (только заливки/дуги) → держит 60fps.
+  function worldLen() { return Math.max(cssW * 2.2, cssW + 240); }
+
+  function drawScene(list, fracs, ts) {
     if (!ctx || !cssW || !cssH) return;
-    ctx.clearRect(0, 0, cssW, cssH);
-    ctx.fillStyle = '#120d0b'; ctx.fillRect(0, 0, cssW, cssH);
+    const W = cssW, H = cssH;
+    const worldL = worldLen();
+    const leaderFrac = fracs.length ? Math.max.apply(null, fracs) : 0;
+    const anchorX = W * 0.4;
+    const camX = Math.max(0, Math.min(worldL - W, leaderFrac * worldL - anchorX));
+    const groundTop = Math.round(H * 0.24);
+
+    // небо (тёплый бренд-градиент)
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, '#3a2c22'); sky.addColorStop(0.55, '#241a15'); sky.addColorStop(1, '#140d0a');
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+
+    drawClouds(camX * 0.25, W);                 // дальний слой (медленный)
+    drawSkyline(camX * 0.5, W, groundTop);       // средний слой (быстрее)
+
+    // земля/асфальт
+    ctx.fillStyle = '#19110d'; ctx.fillRect(0, groundTop, W, H - groundTop);
+
     const n = list.length || 1;
-    const laneH = cssH / n;
-    const trackStart = 40, trackEnd = cssW - 46;
+    const laneArea = H - groundTop, laneH = laneArea / n;
     for (let i = 0; i < n; i++) {
-      const y = i * laneH;
-      ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,.035)' : 'rgba(255,255,255,.015)';
-      ctx.fillRect(0, y, cssW, laneH);
+      ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,.03)' : 'rgba(0,0,0,.12)';
+      ctx.fillRect(0, groundTop + i * laneH, W, laneH);
     }
-    ctx.strokeStyle = 'rgba(240,194,78,.55)';
-    ctx.setLineDash([5, 5]);
-    ctx.beginPath(); ctx.moveTo(trackStart, 0); ctx.lineTo(trackStart, cssH); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = '#f0c24e';
-    for (let yy = 4; yy < cssH; yy += 11) ctx.fillRect(trackEnd, yy, 4, 6);
+    drawLaneDashes(camX, groundTop, laneArea, n, W);   // разметка стримится с камерой
+    drawPoles(camX, groundTop, W);                     // фонарные столбы (ближний слой, скорость мира)
+
+    // финишный чекер-баннер выезжает справа под конец
+    const finishX = worldL - camX;
+    if (finishX <= W + 40) drawFinish(finishX, groundTop, laneArea);
+
+    // голуби: worldX=frac*worldLen, экранный x=worldX-camX; лёгкий боб + тень
     list.forEach((r, i) => {
-      const y = i * laneH + laneH / 2;
-      const frac = positions[i] || 0;
-      const x = trackStart + 16 + frac * (trackEnd - trackStart - 32);
-      drawPigeon(r.breed, x, y, laneH * 0.7, !!r.me);
+      const y = groundTop + i * laneH + laneH / 2;
+      const x = fracs[i] * worldL - camX;
+      const running = phase === 'animating' && fracs[i] < 1;
+      drawPigeon(r.breed, x, y, Math.min(laneH * 0.82, 48), !!r.me, ts, running);
     });
   }
-  function drawPigeon(breed, x, y, size, isMe) {
+
+  function drawClouds(scroll, W) {
+    const spacing = 240, r = 32;
+    ctx.fillStyle = 'rgba(255,225,170,.06)';
+    for (let k = Math.floor(scroll / spacing) - 1; k * spacing - scroll < W + spacing; k++) {
+      const x = k * spacing - scroll + 40, y = 26 + (((k % 3) + 3) % 3) * 15;
+      ctx.beginPath();
+      ctx.ellipse(x, y, r, r * 0.55, 0, 0, Math.PI * 2);
+      ctx.ellipse(x + r * 0.8, y + 4, r * 0.7, r * 0.45, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  function drawSkyline(scroll, W, groundTop) {
+    const spacing = 92;
+    ctx.fillStyle = 'rgba(74,50,34,.5)';
+    for (let k = Math.floor(scroll / spacing) - 1; k * spacing - scroll < W + spacing; k++) {
+      const x = k * spacing - scroll, h = 26 + ((k * 37) % 42 + 42) % 42;
+      ctx.fillRect(x, groundTop - h, 64, h);
+    }
+  }
+  function drawLaneDashes(scroll, top, area, n, W) {
+    const laneH = area / n, spacing = 46, dashW = 22, off = ((scroll % spacing) + spacing) % spacing;
+    ctx.fillStyle = 'rgba(240,194,78,.26)';
+    for (let i = 1; i < n; i++) {
+      const y = top + i * laneH - 1.5;
+      for (let x = -off; x < W; x += spacing) ctx.fillRect(x, y, dashW, 3);
+    }
+  }
+  function drawPoles(camX, groundTop, W) {
+    const spacing = 200;
+    for (let k = Math.floor(camX / spacing) - 1; k * spacing - camX < W + spacing; k++) {
+      const x = k * spacing - camX + 26;
+      if (x < -14 || x > W + 14) continue;
+      ctx.fillStyle = 'rgba(18,12,9,.85)'; ctx.fillRect(x, groundTop - 46, 5, 52);
+      ctx.fillStyle = 'rgba(240,194,78,.5)';
+      ctx.beginPath(); ctx.arc(x + 2.5, groundTop - 47, 6, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  function drawFinish(x, top, area) {
+    const sq = 10;
+    for (let yy = top; yy < top + area; yy += sq) {
+      const row = Math.floor((yy - top) / sq);
+      for (let c = 0; c < 2; c++) { ctx.fillStyle = ((row + c) % 2 === 0) ? '#f4ede2' : '#1a120e'; ctx.fillRect(x + c * sq, yy, sq, sq); }
+    }
+    ctx.fillStyle = '#e5484d'; ctx.fillRect(x - 4, top - 15, sq * 2 + 8, 13);
+    ctx.fillStyle = '#fff'; ctx.font = '700 8px Nunito, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('ФИНИШ', x + sq, top - 5.5);
+  }
+  function drawPigeon(breed, x, y, size, isMe, ts, running) {
+    const bob = running ? Math.sin(ts / 90 + x * 0.05) * size * 0.09 : 0;
+    const cy = y + bob;
+    // тень под голубем (не двигается с бобом — «на земле»)
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,.32)';
+    ctx.beginPath(); ctx.ellipse(x, y + size * 0.42, size * 0.34, size * 0.12, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
     const rec = loadArt(breed);
     ctx.save();
     if (isMe) { ctx.shadowColor = 'rgba(240,194,78,.85)'; ctx.shadowBlur = 12; }
     if (rec.ok) {
-      ctx.drawImage(rec.img, x - size / 2, y - size / 2, size, size);
+      ctx.drawImage(rec.img, x - size / 2, cy - size / 2, size, size);
     } else {
       ctx.fillStyle = isMe ? '#f0c24e' : '#5b6472';
-      ctx.beginPath(); ctx.arc(x, y, size / 2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x, cy, size / 2, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
     if (isMe) {
       ctx.fillStyle = '#ffe39c'; ctx.font = '700 10px Nunito, sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('ты', x, y + size / 2 + 12);
+      ctx.fillText('ты', x, cy - size / 2 - 4);
     }
   }
 
@@ -316,15 +396,17 @@
         if (frac < 1) allDone = false;
         return frac;
       });
-      drawTrack(raceData.racers, positions);
+      drawScene(raceData.racers, positions, ts);
       if (!allDone) { raf = requestAnimationFrame(tick); return; }
       raf = 0; phase = 'done';
+      // застывший финальный кадр (все на финише), затем плашка результата
+      drawScene(raceData.racers, raceData.racers.map(() => 1), ts);
       setTimeout(() => { if (ov && step === 'race') renderResult(); }, 450);
       return;
     }
-    // countdown/idle/go — статичная картинка на старте (моя птица + превью соперников)
+    // countdown/idle/go — стартовая решётка (моя птица + превью соперников), мир статичен
     const list = previewRacers();
-    drawTrack(list, list.map(() => 0));
+    drawScene(list, list.map(() => 0), ts);
     raf = requestAnimationFrame(tick);
   }
 
@@ -367,12 +449,16 @@
     const body = { breed: curBreed, mode, reactionMs: Math.round(reactionMs) };
     if (mode === 'bet') body.stake = stake;
     const d = await apiRef('/api/pigeons/drag/race', { method: 'POST', body: JSON.stringify(body) }).catch(() => null);
-    raceBusy = false;
     const ok = !!(d && d.ok && Array.isArray(d.racers));
-    // Синхронизируем баланс/энергию кликера сразу, как только знаем ответ — деньги/энергия
-    // уже списаны на сервере независимо от того, закрыл ли игрок оверлей, пока ждал ответ.
+    // ВАЖНО: стейл-ответ прошлого открытия НЕ должен трогать состояние нового. Если оверлей
+    // закрыли/переоткрыли, пока запрос был в полёте (mySession!==session) — не сбрасываем
+    // raceBusy (это флаг уже другого, актуального запроса) и не синхронизируем баланс/энергию
+    // (window.ckSyncState устаревшим снапшотом затёр бы свежий баланс кликера — тот самый баг).
+    if (mySession !== session || !ov) return;
+    raceBusy = false;
+    // Синхронизируем баланс/энергию кликера, как только знаем ответ — деньги/энергия уже
+    // списаны на сервере; актуальность проверена выше (это ответ текущего открытия).
     if (ok && typeof window.ckSyncState === 'function') window.ckSyncState({ balance: d.newBalance, energy: d.newEnergy });
-    if (mySession !== session || !ov) return; // оверлей закрыт/переоткрыт, пока ждали ответ — DOM не трогаем
     if (!ok) {
       flash(ERR_REASON[d && d.error] || 'Не получилось запустить заезд');
       if (d && d.error === 'not_owned') { close(); return; }
@@ -422,7 +508,7 @@
   function open(api, breed) {
     if (!api || !breed) return;
     apiRef = api; curBreed = breed; mode = 'training'; stake = STAKE_PRESETS[0];
-    opponentsPreview = null; raceBusy = false; phase = 'idle'; raceData = null;
+    opponentsPreview = null; myPower = null; raceBusy = false; phase = 'idle'; raceData = null;
     session++;
     const mySession = session;
     styles();

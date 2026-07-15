@@ -162,7 +162,7 @@ export function createPigeonsRouter(push: PushService): Router {
       const { dragTargetPower, pickOpponents } = await import("../drag");
       const targetPower = await dragTargetPower(u.id, breed);
       if (targetPower === null) { res.status(400).json({ error: "not_owned" }); return; }
-      res.json({ opponents: await pickOpponents(u.id, targetPower, 3) });
+      res.json({ myPower: targetPower, opponents: await pickOpponents(u.id, targetPower, 3) });
     } catch (e) { log.error({ err: e, chatId: u.id }, "[drag/opponents]"); res.status(500).json({ error: "internal" }); }
   });
 
