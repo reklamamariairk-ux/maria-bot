@@ -303,7 +303,7 @@
     const grid = BREEDS.filter(b => b.id !== 'champion').map(cardHtml).join('');
     const sets = SETS.map(setRowHtml).join('');
     container.innerHTML = `<div class="cd-root">
-      <div class="cd-summary">Собери коллекцию голубей — <b>${ownedCount}/16</b>. Голуби падают за тапы и покупки, «порода недели» выпадает чаще.</div>
+      <div class="cd-summary">Собери коллекцию голубей — <b>${ownedCount}/16</b>. Голуби прилетают за комбо дня, мини-игры, сундук удачи и покупки; «порода недели» выпадает чаще.</div>
       <div class="cd-navrow">
         <button class="cd-navbtn" id="cd-nav-trades">${SWAP_ICON(15)} Обмены</button>
         <button class="cd-navbtn" id="cd-nav-mail">${MAILBOX_ICON(15)} Почта${data.unreadMail > 0 ? `<span class="cd-navbadge">${data.unreadMail > 9 ? '9+' : data.unreadMail}</span>` : ''}</button>

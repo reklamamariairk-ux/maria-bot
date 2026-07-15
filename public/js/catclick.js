@@ -703,8 +703,9 @@
       .ck-uplist{flex:1;overflow:auto;padding:6px 12px 16px;width:100%;box-sizing:border-box}
       .ck-sect{color:var(--muted);font-weight:700;font-size:11px;margin:12px 4px 7px;text-transform:uppercase;letter-spacing:.7px}
       .ck-seg{display:flex;gap:6px;width:100%;max-width:360px;margin:2px 0 8px;padding:0 12px;box-sizing:border-box}
-      .ck-seg__b{flex:1;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:12px;padding:9px 4px;font-weight:700;font-size:12.5px;cursor:pointer;min-height:38px}
+      .ck-seg__b{position:relative;flex:1;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:12px;padding:9px 4px;font-weight:700;font-size:12.5px;cursor:pointer;min-height:38px}
       .ck-seg__b.on{background:linear-gradient(180deg,#ffe7a6,#eebf52 58%,#cf9a36);color:#5a2028;border-color:#ffe9b3}
+      .ck-seg__b--new::after{content:'';position:absolute;top:6px;right:9px;width:8px;height:8px;border-radius:50%;background:#e5484d;box-shadow:0 0 0 2px var(--panel)}
       .ck-badge{display:inline-flex;align-items:center;justify-content:center;position:absolute;top:1px;right:22%;min-width:15px;height:15px;padding:0 4px;border-radius:8px;background:#e5484d;color:#fff;font-size:9px;font-weight:800;line-height:1;box-shadow:0 0 0 2px rgba(18,8,11,.6)}
       .ck-badge[hidden]{display:none}
       .ck-games-hd{margin:10px 2px 2px;padding:11px 14px;border-radius:14px;background:linear-gradient(90deg,rgba(238,191,82,.16),rgba(238,191,82,.04));border:1px solid var(--line);color:var(--cream);font-size:13.5px;font-weight:700;text-align:center}.ck-games-hd b{color:var(--gold-l);font-size:16px}
@@ -954,7 +955,7 @@
     ov.querySelector('#ck-bt-energy').onclick = () => boost('energy');
     ov.querySelector('#ck-prestige').onclick = prestigeConfirm;
     ov.querySelectorAll('.ck-nav__b').forEach(b => b.onclick = () => setTab(b.dataset.tab));
-    ov.querySelectorAll('#ck-dove-seg .ck-seg__b').forEach(b => b.onclick = () => setDoveSeg(b.dataset.seg));
+    ov.querySelectorAll('#ck-dove-seg .ck-seg__b').forEach(b => b.onclick = () => setDoveSeg(b.dataset.seg, true));
     ov.querySelector('#ck-guide-btn').onclick = () => { window.haptic && window.haptic('light'); openGuide(); };
     ov.querySelector('#ck-guide-x').onclick = closeGuide;
     ov.querySelector('#ck-games-x').onclick = closeGamesHub;
@@ -1002,14 +1003,20 @@
   // «Коллекция» (альбом пород — window.CatDove, public/js/catdove.js). Коллекция
   // монтируется лениво при первом переключении на неё — не грузим лишний JS-модуль,
   // пока юзер ни разу не открыл сегмент.
-  let doveSeg = 'help', doveColMounted = false;
-  function setDoveSeg(seg) {
+  let doveSeg = 'help', doveColMounted = false, doveSegTouched = false;
+  const doveColSeen = () => { try { return localStorage.getItem('ck_dove_col_seen') === '1'; } catch (_) { return false; } };
+  function setDoveSeg(seg, byUser) {
+    if (byUser) doveSegTouched = true;
     doveSeg = seg;
     ov.querySelectorAll('#ck-dove-seg .ck-seg__b').forEach(b => b.classList.toggle('on', b.dataset.seg === seg));
     const help = ov.querySelector('#ck-dovelist'), col = ov.querySelector('#ck-dove-col');
     if (help) help.style.display = seg === 'help' ? '' : 'none';
     if (col) col.style.display = seg === 'col' ? '' : 'none';
     if (seg === 'col' && !doveColMounted && window.CatDove) { doveColMounted = true; window.CatDove.mount(col, api); }
+    if (seg === 'col') { // открыл коллекцию — гасим «новинку» на сегменте
+      try { localStorage.setItem('ck_dove_col_seen', '1'); } catch (_) {}
+      const cb = ov.querySelector('#ck-dove-seg .ck-seg__b[data-seg="col"]'); if (cb) cb.classList.remove('ck-seg__b--new');
+    }
   }
   // Бейдж непрочитанной почты голубятни на кнопке навбара — грузится один раз при
   // старте игры и при каждом открытии вкладки «Голуби» (unreadMail из /api/pigeons).
@@ -1020,7 +1027,17 @@
   async function loadDoveBadge() {
     if (!authed()) return;
     const d = await api('/api/pigeons').catch(() => null);
-    if (d) updateDoveBadge(Number(d.unreadMail) || 0);
+    if (!d) return;
+    updateDoveBadge(Number(d.unreadMail) || 0);
+    // Дискаверабилити «Коллекции»: есть голуби, но игрок ещё не открывал сегмент —
+    // подсвечиваем его точкой и по умолчанию открываем вкладку «Голуби» сразу на нём
+    // (сегмент «Помощники» остаётся в одном тапе). Иначе новая коллекция незаметна.
+    const owned = Array.isArray(d.inventory) ? d.inventory.length : 0;
+    if (owned > 0 && !doveColSeen()) {
+      const cb = ov && ov.querySelector('#ck-dove-seg .ck-seg__b[data-seg="col"]');
+      if (cb) cb.classList.add('ck-seg__b--new');
+      if (!doveSegTouched) { doveSeg = 'col'; if (tab === 'dove') setDoveSeg('col'); }
+    }
   }
 
   function setTab(t) {
