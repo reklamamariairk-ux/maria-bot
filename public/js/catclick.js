@@ -1776,8 +1776,9 @@
     const progRows = await milestonesHtml();
     if (gen !== tasksGen) return;
     const failCard = tasksFail ? `<div class="ck-card"><div class="ck-card__ic">${ICON.bolt(26)}</div><div class="ck-card__b"><div class="ck-card__n">Не всё загрузилось</div><div class="ck-card__s">Проверь связь</div></div><button class="ck-card__buy" id="ck-tasks-retry">Обновить</button></div>` : '';
-    const promoCard = `<div class="ck-sect">Промокод</div><div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.gift(26)}</div><div class="ck-card__b"><div class="ck-card__n">Есть промокод?</div><div class="ck-card__s">Лови коды в соцсетях «Марии» → монеты</div></div></div><div style="display:flex;gap:8px"><input class="ck-cipher-in" id="ck-code-in" maxlength="24" placeholder="ВВЕДИ КОД" autocomplete="off" spellcheck="false" enterkeyhint="done" autocapitalize="characters"/><button class="ck-card__buy" id="ck-code-go" style="justify-content:center">Применить</button></div></div>`;
-    list.innerHTML = failCard + bonusBlock() + promoCard + `<div class="ck-sect">${ICON.gift(13)} Награды за прогресс</div>` + progRows + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows + '<div class="ck-sect">Достижения</div>' + achRows;
+    // Промокод убран из вкладки «Призы» по решению юзера (15.07). redeemCodeAct/эндпоинт живы —
+    // при возврате секции достаточно вернуть promoCard в innerHTML ниже.
+    list.innerHTML = failCard + bonusBlock() + `<div class="ck-sect">${ICON.gift(13)} Награды за прогресс</div>` + progRows + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows + '<div class="ck-sect">Достижения</div>' + achRows;
     const rtb = list.querySelector('#ck-tasks-retry'); if (rtb) rtb.onclick = () => renderTasks();
     ov.querySelector('#ck-invite').onclick = shareRef;
     list.querySelectorAll('[data-open]').forEach(b => b.onclick = () => { const id = b.dataset.open, link = b.dataset.link; if (link) { if (window.App && App.openExternal) App.openExternal(link); else window.open(link, '_blank'); } linkOpened[id] = true; setTimeout(renderTasks, 400); });
