@@ -2,7 +2,7 @@
 // Спека: docs/superpowers/specs/2026-07-15-drag-race-design.md
 import type { Rarity } from "./pigeons";
 import { pool } from "./db";
-import { PIGEON_BREEDS, BREED_BY_ID } from "./pigeons";
+import { PIGEON_BREEDS, BREED_BY_ID, TUNE_MAX } from "./pigeons";
 
 export const DRAG_ENERGY_COST = 250;
 export const TRACK_LEN = 2000;
@@ -48,13 +48,16 @@ function synthReaction(target: number): number {
   return clampReact(250 + Math.round((target % 7) * 40));
 }
 
-// Синтетический соперник-бот под целевую мощность target: случайная не-чемпионская порода
-// (чемпион — только приз, не гоняется как соперник), tune_speed/tune_stamina подобраны так,
-// чтобы dragPower ≈ target (RARITY_BASE редкости даёт нижнюю границу, дальше 6 очков за пункт
-// тюнинга, поровну между speed/stamina, с клампом на TUNE_MAX=10 каждая).
-const TUNE_MAX = 10;
+// Синтетический соперник-бот под целевую мощность target: не-чемпионская порода нужной
+// редкости (чемпион — только приз, не гоняется как соперник), tune_speed/tune_stamina
+// подобраны так, чтобы dragPower ≈ target. Редкость выбираем под target: у common база
+// всего 10, и потолка тюнинга (2×TUNE_MAX=20 → +120 power) не хватает дотянуть до высоких
+// таргетов — поэтому чем выше target, тем выше стартовая редкость (её RARITY_BASE даёт
+// нижнюю границу), дальше 6 очков power за пункт тюнинга, поровну speed/stamina, кламп 0..TUNE_MAX.
 function makeBot(target: number, seed: number): Racer {
-  const candidates = PIGEON_BREEDS.filter(b => b.id !== "champion");
+  const wantRarity: Rarity = target >= 130 ? "legendary" : target >= 90 ? "epic" : target >= 45 ? "rare" : "common";
+  let candidates = PIGEON_BREEDS.filter(b => b.id !== "champion" && b.rarity === wantRarity);
+  if (!candidates.length) candidates = PIGEON_BREEDS.filter(b => b.id !== "champion");
   const b = candidates[Math.floor(Math.random() * candidates.length)];
   const stars = 1;
   const base = dragPower(b.rarity, stars, 0, 0);
