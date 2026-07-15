@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { dragPower, dragFinishTime, resolveRace, DRAG_ENERGY_COST } from "../src/drag";
+import { dragPower, dragFinishTime, resolveRace } from "../src/drag";
 
 describe("dragPower — мощность голубя для заезда", () => {
   it("растёт со скоростью/выносливостью и редкостью, детерминированна", () => {
@@ -34,6 +34,11 @@ describe("resolveRace — места по возрастанию finishT + до�
   it("при РАВНОЙ мощности решает реакция", () => {
     const places = resolveRace([{ power: 80, reactionMs: 700, r: 0.5 }, { power: 80, reactionMs: 200, r: 0.5 }]);
     expect(places[1]).toBe(1); // у кого реакция лучше — тот первый
+  });
+  it("реакция решает генуинно близкую дуэль (малый разрыв мощности)", () => {
+    // gap всего 6 power: у кого реакция сильно лучше — тот и выигрывает
+    const places = resolveRace([{ power: 80, reactionMs: 900, r: 0.5 }, { power: 74, reactionMs: 150, r: 0.5 }]);
+    expect(places[1]).toBe(1); // чуть слабее, но реакция сильно лучше → первый
   });
   it("места уникальны и покрывают 1..N", () => {
     const places = resolveRace([{ power: 100, reactionMs: 300, r: 0.1 }, { power: 90, reactionMs: 300, r: 0.5 }, { power: 110, reactionMs: 300, r: 0.9 }]);

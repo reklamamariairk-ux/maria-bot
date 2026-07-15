@@ -7,7 +7,7 @@ export const TRACK_LEN = 2000;
 export const BASE_SPEED = 220;
 export const SPEED_PER_POWER = 5;      // мощность доминирует: разрыв power перевешивает реакцию
 export const REACT_MIN = 120, REACT_MAX = 3000;
-export const REACT_WEIGHT = 0.4;       // сек за секунду задержки — мал относительно разрыва мощности
+export const REACT_WEIGHT = 0.25;      // реакция решает близкие дуэли (≲15 power), но не перебивает большой разрыв мощности
 export const LUCK_SPREAD = 0.15;       // маленький рандом (сек)
 export const POWER_BAND = 25;          // коридор подбора соперников по мощности
 export const STAKE_PRESETS = [500, 2000, 10000];
