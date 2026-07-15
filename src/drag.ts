@@ -58,7 +58,7 @@ function makeBot(target: number, seed: number): Racer {
   const b = candidates[Math.floor(Math.random() * candidates.length)];
   const stars = 1;
   const base = dragPower(b.rarity, stars, 0, 0);
-  const totalPoints = Math.max(0, Math.round((target - base) / 6));
+  const totalPoints = Math.min(2 * TUNE_MAX, Math.max(0, Math.round((target - base) / 6)));
   const speed = Math.min(TUNE_MAX, Math.ceil(totalPoints / 2));
   const stamina = Math.min(TUNE_MAX, totalPoints - speed);
   const power = dragPower(b.rarity, stars, speed, stamina);
