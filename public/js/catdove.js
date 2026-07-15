@@ -308,11 +308,11 @@
         <button class="cd-navbtn" id="cd-nav-trades">${SWAP_ICON(15)} Обмены</button>
         <button class="cd-navbtn" id="cd-nav-mail">${MAILBOX_ICON(15)} Почта${data.unreadMail > 0 ? `<span class="cd-navbadge">${data.unreadMail > 9 ? '9+' : data.unreadMail}</span>` : ''}</button>
       </div>
+      ${raceHtml()}
       <div class="cd-grid">${grid}</div>
       ${championHtml()}
       <div class="cd-sect-t">Сеты</div>
       ${sets}
-      ${raceHtml()}
       <div class="cd-scrim" id="cd-scrim"></div>
       <div class="cd-sheet" id="cd-sheet"></div>
       <div class="cd-pop-scrim" id="cd-pop-scrim"><div class="cd-pop" id="cd-pop"></div></div>
