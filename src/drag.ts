@@ -73,11 +73,15 @@ function makeBot(target: number, seed: number): Racer {
 // других игроков в коридоре ±POWER_BAND (ближайшие по |power-target|), при нехватке —
 // добивка синтетическими ботами под target.
 export async function pickOpponents(chatId: number, targetPower: number, n: number): Promise<Racer[]> {
+  // LIMIT 200 + random(): не полный скан таблицы на каждый заезд (масштабируемость);
+  // .filter(BREED_BY_ID.has) — не роняем роут 500-й, если в чужом инвентаре осталась
+  // переименованная/удалённая порода (как guard в dragTargetPower).
   const rows = (await pool.query(
     `SELECT pi.breed, pi.stars, pi.tune_speed, pi.tune_stamina, cs.race_reaction_ms
        FROM pigeon_inventory pi JOIN clicker_state cs ON cs.chat_id = pi.chat_id
-      WHERE pi.chat_id <> $1 AND pi.count > 0`, [chatId])).rows;
-  const real: Racer[] = rows.map((r: any) => {
+      WHERE pi.chat_id <> $1 AND pi.count > 0
+      ORDER BY random() LIMIT 200`, [chatId])).rows;
+  const real: Racer[] = rows.filter((r: any) => BREED_BY_ID.has(r.breed)).map((r: any) => {
     const b = BREED_BY_ID.get(r.breed)!;
     const power = dragPower(b.rarity, r.stars, r.tune_speed, r.tune_stamina);
     return { breed: r.breed, power, reactionMs: r.race_reaction_ms ?? synthReaction(targetPower), bot: false };
