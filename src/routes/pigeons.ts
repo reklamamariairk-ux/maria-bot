@@ -156,7 +156,7 @@ export function createPigeonsRouter(push: PushService): Router {
   });
 
   router.post("/api/pigeons/drag/opponents", requireTgUser, rateLimit(30), async (req, res) => {
-    const u = getTgUser(req)!; const breed = String((req.body as any).breed || "");
+    const u = getTgUser(req)!; const breed = String((req.body as { breed?: string }).breed || "");
     try {
       if (!BREED_BY_ID.has(breed)) { res.status(400).json({ error: "not_owned" }); return; }
       const { dragTargetPower, pickOpponents } = await import("../drag");
@@ -167,10 +167,14 @@ export function createPigeonsRouter(push: PushService): Router {
   });
 
   router.post("/api/pigeons/drag/race", requireTgUser, rateLimit(20), async (req, res) => {
-    const u = getTgUser(req)!; const b = req.body as any;
+    const u = getTgUser(req)!; const b = req.body as { breed?: string; mode?: string; stake?: number; reactionMs?: number };
     try {
       const { runRace } = await import("../drag");
-      const r = await runRace(u.id, String(b.breed || ""), b.mode === "bet" ? "bet" : "training", Number(b.stake) || 0, Number(b.reactionMs) || 3000);
+      // reactionMs — untrusted: нормализуем на границе. Math.max(0,·) ловит отрицательные
+      // (−1 truthy обошёл бы `||3000` и clampReact подтянул бы к REACT_MIN=ЛУЧШАЯ реакция —
+      // чит на монеты в bet). −1/0/NaN → 3000 (худшая), валидные значения проходят.
+      const reactionMs = Math.max(0, Number(b.reactionMs)) || 3000;
+      const r = await runRace(u.id, String(b.breed || ""), b.mode === "bet" ? "bet" : "training", Number(b.stake) || 0, reactionMs);
       if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
       res.json(r);
     } catch (e) { log.error({ err: e, chatId: u.id }, "[drag/race]"); res.status(500).json({ error: "internal" }); }
