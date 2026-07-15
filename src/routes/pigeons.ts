@@ -15,7 +15,7 @@ import { Router } from "express";
 import {
   getPigeonsOverview, claimSet, getTradeBoard, createTrade, acceptTrade, cancelTrade,
   sendMail, getInbox, thankMail, getMailRecipients, feedPigeon, setShowcase,
-  enterRace, getRace, getTuning, upgradeTune,
+  enterRace, getRace, getTuning, upgradeTune, BREED_BY_ID,
 } from "../pigeons";
 import type { PushService } from "../push";
 import { requireTgUser, getTgUser } from "../auth";
@@ -153,6 +153,27 @@ export function createPigeonsRouter(push: PushService): Router {
       if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
       res.json(r);
     } catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/tune/post]"); res.status(500).json({ error: "internal" }); }
+  });
+
+  router.post("/api/pigeons/drag/opponents", requireTgUser, rateLimit(30), async (req, res) => {
+    const u = getTgUser(req)!; const breed = String((req.body as any).breed || "");
+    try {
+      if (!BREED_BY_ID.has(breed)) { res.status(400).json({ error: "not_owned" }); return; }
+      const { dragTargetPower, pickOpponents } = await import("../drag");
+      const targetPower = await dragTargetPower(u.id, breed);
+      if (targetPower === null) { res.status(400).json({ error: "not_owned" }); return; }
+      res.json({ opponents: await pickOpponents(u.id, targetPower, 3) });
+    } catch (e) { log.error({ err: e, chatId: u.id }, "[drag/opponents]"); res.status(500).json({ error: "internal" }); }
+  });
+
+  router.post("/api/pigeons/drag/race", requireTgUser, rateLimit(20), async (req, res) => {
+    const u = getTgUser(req)!; const b = req.body as any;
+    try {
+      const { runRace } = await import("../drag");
+      const r = await runRace(u.id, String(b.breed || ""), b.mode === "bet" ? "bet" : "training", Number(b.stake) || 0, Number(b.reactionMs) || 3000);
+      if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
+      res.json(r);
+    } catch (e) { log.error({ err: e, chatId: u.id }, "[drag/race]"); res.status(500).json({ error: "internal" }); }
   });
 
   return router;

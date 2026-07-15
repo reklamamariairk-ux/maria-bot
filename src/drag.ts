@@ -88,6 +88,19 @@ export async function pickOpponents(chatId: number, targetPower: number, n: numb
   return real;
 }
 
+// ── Мощность игрока для породы ─────────────────────────────────────────────
+// Возвращает мощность голубя в инвентаре или null если не владеет.
+export async function dragTargetPower(chatId: number, breed: string): Promise<number | null> {
+  const row = (await pool.query(
+    `SELECT stars, tune_speed, tune_stamina FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 AND count>0`,
+    [chatId, breed]
+  )).rows[0];
+  if (!row) return null;
+  const b = BREED_BY_ID.get(breed);
+  if (!b) return null;
+  return dragPower(b.rarity, row.stars, row.tune_speed, row.tune_stamina);
+}
+
 // ── Резолв заезда в транзакции ──────────────────────────────────────────────
 // Всё под FOR UPDATE clicker_state (внутри refreshEnergyFor): реген энергии → проверки
 // (владение породой/энергия/ставка) → подбор соперников → резолв мест → списание энергии
