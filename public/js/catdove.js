@@ -334,6 +334,7 @@
     const navT = container.querySelector('#cd-nav-trades'); if (navT) navT.onclick = openTradesPage;
     const navM = container.querySelector('#cd-nav-mail'); if (navM) navM.onclick = openMailPage;
     const raceBtn = container.querySelector('#cd-race-enter'); if (raceBtn) raceBtn.onclick = openRaceBreedPicker;
+    const dragBtn = container.querySelector('#cd-drag-enter'); if (dragBtn) dragBtn.onclick = openDragBreedPicker;
   }
 
   // ── шит действий (звёзды/витрина/обмены/почта/гонка) — общий #cd-scrim/#cd-sheet,
@@ -842,9 +843,33 @@
     return `<div class="cd-sect-t">Гонка стаи</div>
       <div class="cd-setrow">
         <div class="cd-setrow__n"><b>${myLine}</b><div class="cd-setrow__p">${num(race.entrants)} участников на этой неделе</div></div>
-        ${!mine ? `<button class="cd-claimbtn" id="cd-race-enter">Заявить</button>` : ''}
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+          ${!mine ? `<button class="cd-claimbtn" id="cd-race-enter">Заявить</button>` : ''}
+          <button class="cd-claimbtn" id="cd-drag-enter">🏁 Драг-заезд</button>
+        </div>
       </div>
       ${blocks}`;
+  }
+  // Драг-заезд (отдельный always-on режим поверх недельной гонки, catdrag.js) — выбор
+  // владеемой породы через тот же пикер-шит, что и заявка на недельную гонку.
+  function openDragBreedPicker() {
+    if (!data) return;
+    const owned = Object.keys(data.invMap).filter(id => data.invMap[id].count > 0);
+    if (!owned.length) { flash('Нет ни одной птицы для заезда'); return; }
+    haptic('light');
+    const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
+    if (!sc || !sh) return;
+    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Кто едет в драг-заезде?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>${pickGridHtml(owned, null)}`;
+    sc.classList.add('on');
+    requestAnimationFrame(() => sh.classList.add('on'));
+    sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+    sh.querySelectorAll('.cd-pickcard').forEach(el => {
+      el.onclick = () => {
+        const breedId = el.dataset.breed;
+        closeSheet();
+        if (window.CatDrag) window.CatDrag.open(apiRef, breedId);
+      };
+    });
   }
   function openRaceBreedPicker() {
     if (!data) return;

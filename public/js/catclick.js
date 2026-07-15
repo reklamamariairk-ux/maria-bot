@@ -2265,6 +2265,17 @@
   // initData-заголовками, flashMsg — тост об ошибке, updateDoveBadge — бейдж непрочитанной
   // почты на кнопке навбара (учитывая, что мьютить его дальше будет Task 10 — почта).
   window.ckApi = api; window.ckFlash = flashMsg; window.ckUpdateDoveBadge = updateDoveBadge;
+  // Мост для catdrag.js (драг-заезд): читать текущий баланс/энергию для UI (дизейбл ставок
+  // выше баланса и т.п.) и синхронизировать стейт кликера после серверного списания
+  // энергии/ставки — иначе игрок видит устаревшие цифры, пока не откроет кликер заново.
+  window.ckBalance = () => (st ? st.balance : 0);
+  window.ckEnergy = () => (st ? st.energy : 0);
+  window.ckSyncState = (patch) => {
+    if (!st || !patch) return;
+    if (typeof patch.balance === 'number') st.balance = patch.balance;
+    if (typeof patch.energy === 'number') st.energy = patch.energy;
+    renderAll();
+  };
   window.addEventListener('resize', () => { if (ov && ov.classList.contains('on') && st) applyCostume(leagueFor(st.totalEarned)); });
   // Реф регистрируем фоном уже при загрузке приложения (не дожидаясь открытия игры):
   // друг перешёл по ckref-ссылке → бонус начислится, даже если в игру он не зайдёт.

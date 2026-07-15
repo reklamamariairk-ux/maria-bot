@@ -195,6 +195,9 @@ export async function initPigeonSchema(): Promise<void> {
   // одноразово фиксируем уровень существующих игроков по СТАРЫМ порогам, чтобы новая (более
   // крутая) кривая никого не понизила. GREATEST идемпотентен — повтор на буте безвреден.
   await pool.query(`ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS max_level SMALLINT NOT NULL DEFAULT 1`);
+  // Драг-рейсинг: реакция игрока (мс) для подбора соперников (pickOpponents в drag.ts) — снапшот
+  // последнего заезда; NULL для тех, кто ещё не гонял (тогда используем synthReaction).
+  await pool.query(`ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS race_reaction_ms SMALLINT`);
   await pool.query(`UPDATE clicker_state SET max_level = GREATEST(max_level, CASE
       WHEN total_earned >= 1200000000 THEN 19 WHEN total_earned >= 150000000 THEN 18
       WHEN total_earned >= 30000000 THEN 17 WHEN total_earned >= 8000000 THEN 16
