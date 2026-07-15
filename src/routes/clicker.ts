@@ -80,19 +80,19 @@ router.post("/api/clicker/rain", requireTgUser, rateLimit(30), async (req, res) 
 
 router.post("/api/clicker/game", requireTgUser, rateLimit(40), async (req, res) => {
   const u = getTgUser(req)!; const { game, score } = req.body as { game?: string; score?: number };
-  try { const r = await claimGame(u.id, String(game || ""), Number(score) || 0); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ reward: r.reward, game: r.game, ...r.state }); trackEvent(u.id, "game", { game: String(game || ""), score: Number(score) || 0, reward: r.reward }); }
+  try { const r = await claimGame(u.id, String(game || ""), Number(score) || 0); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ reward: r.reward, game: r.game, pigeonDrop: r.pigeonDrop, ...r.state }); trackEvent(u.id, "game", { game: String(game || ""), score: Number(score) || 0, reward: r.reward }); }
   catch (e) { log.error({ err: e, chatId: u.id }, "[game]"); res.status(500).json({ error: "internal" }); }
 });
 
 router.post("/api/clicker/chest", requireTgUser, rateLimit(30), async (req, res) => {
   const u = getTgUser(req)!;
-  try { const r = await openChest(u.id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ prize: r.prize, ...r.state }); trackEvent(u.id, "chest", {}); }
+  try { const r = await openChest(u.id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ prize: r.prize, pigeonDrop: r.pigeonDrop, ...r.state }); trackEvent(u.id, "chest", {}); }
   catch (e) { log.error({ err: e, chatId: u.id }, "[chest]"); res.status(500).json({ error: "internal" }); }
 });
 
 router.post("/api/clicker/bonus", requireTgUser, rateLimit(60), async (req, res) => {
   const u = getTgUser(req)!;
-  try { const r = await claimBonus(u.id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ amount: r.amount, ...r.state }); trackEvent(u.id, "bonus", { amount: r.amount }); }
+  try { const r = await claimBonus(u.id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ amount: r.amount, pigeonDrop: r.pigeonDrop, ...r.state }); trackEvent(u.id, "bonus", { amount: r.amount }); }
   catch (e) { log.error({ err: e, chatId: u.id }, "[bonus]"); res.status(500).json({ error: "internal" }); }
 });
 
@@ -110,7 +110,7 @@ router.post("/api/clicker/boost", requireTgUser, rateLimit(60), async (req, res)
 
 router.post("/api/clicker/combo", requireTgUser, rateLimit(30), async (req, res) => {
   const u = getTgUser(req)!;
-  try { const r = await claimCombo(u.id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ reward: r.reward, ...r.state }); trackEvent(u.id, "combo", { reward: r.reward }); }
+  try { const r = await claimCombo(u.id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ reward: r.reward, pigeonDrop: r.pigeonDrop, ...r.state }); trackEvent(u.id, "combo", { reward: r.reward }); }
   catch (e) { log.error({ err: e, chatId: u.id }, "[combo]"); res.status(500).json({ error: "internal" }); }
 });
 
@@ -144,7 +144,7 @@ router.post("/api/clicker/ref", requireTgUser, rateLimit(20), async (req, res) =
 
 router.post("/api/clicker/purchase-sync", requireTgUser, rateLimit(20), async (req, res) => {
   const u = getTgUser(req)!;
-  try { const r = await syncPurchaseBonus(u.id); res.json({ bonus: r.granted || 0, yearSpent: r.yearSpent, ...(r.state || {}) }); }
+  try { const r = await syncPurchaseBonus(u.id); res.json({ bonus: r.granted || 0, yearSpent: r.yearSpent, pigeonDrops: r.pigeonDrops, ...(r.state || {}) }); }
   catch (e) { log.error({ err: e, chatId: u.id }, "[purchase-sync]"); res.status(500).json({ error: "internal" }); }
 });
 

@@ -534,7 +534,7 @@
       let r, netfail = false;
       if (authed()) { r = await api('/api/clicker/combo', { method: 'POST', body: '{}' }).catch(() => { netfail = true; return null; }); if (r && !r.error) st = r; else r = null; }
       else { const g = guestClaimComboRaw(); if (g) { r = { reward: COMBO_REWARD }; st = guestDerive(); } }
-      if (r && r.reward) { sfxLevel(); window.haptic && window.haptic('success'); coinShower(); confettiBurst(); dailyPopupRaw(ICON.star(20) + ' Комбо дня собрано!', r.reward); renderAll(); renderTasks(); bumpBalance(); }
+      if (r && r.reward) { sfxLevel(); window.haptic && window.haptic('success'); coinShower(); confettiBurst(); queueDoveDrop(r.pigeonDrop); dailyPopupRaw(ICON.star(20) + ' Комбо дня собрано!', r.reward); renderAll(); renderTasks(); bumpBalance(); }
       else flashMsg(netfail ? 'Нет связи — попробуй ещё раз' : 'Комбо ещё не собрано');
     });
   }
@@ -702,6 +702,11 @@
       .ck-uphd{padding:16px 16px 6px;text-align:center;width:100%;box-sizing:border-box}.ck-uphd .b{font-family:'Nunito',sans-serif;font-weight:700;font-size:24px;display:inline-flex;align-items:center;gap:8px;color:var(--cream)}.ck-uphd .b .ck-i{color:var(--gold)}.ck-uphd .p{color:var(--gold);font-weight:700;font-size:13px;margin-top:3px;display:inline-flex;align-items:center;gap:5px;font-variant-numeric:tabular-nums}
       .ck-uplist{flex:1;overflow:auto;padding:6px 12px 16px;width:100%;box-sizing:border-box}
       .ck-sect{color:var(--muted);font-weight:700;font-size:11px;margin:12px 4px 7px;text-transform:uppercase;letter-spacing:.7px}
+      .ck-seg{display:flex;gap:6px;width:100%;max-width:360px;margin:2px 0 8px;padding:0 12px;box-sizing:border-box}
+      .ck-seg__b{flex:1;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:12px;padding:9px 4px;font-weight:700;font-size:12.5px;cursor:pointer;min-height:38px}
+      .ck-seg__b.on{background:linear-gradient(180deg,#ffe7a6,#eebf52 58%,#cf9a36);color:#5a2028;border-color:#ffe9b3}
+      .ck-badge{display:inline-flex;align-items:center;justify-content:center;position:absolute;top:1px;right:22%;min-width:15px;height:15px;padding:0 4px;border-radius:8px;background:#e5484d;color:#fff;font-size:9px;font-weight:800;line-height:1;box-shadow:0 0 0 2px rgba(18,8,11,.6)}
+      .ck-badge[hidden]{display:none}
       .ck-games-hd{margin:10px 2px 2px;padding:11px 14px;border-radius:14px;background:linear-gradient(90deg,rgba(238,191,82,.16),rgba(238,191,82,.04));border:1px solid var(--line);color:var(--cream);font-size:13.5px;font-weight:700;text-align:center}.ck-games-hd b{color:var(--gold-l);font-size:16px}
       .ck-gift{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--gold-l);background:rgba(238,191,82,.1);border:1px solid var(--line);border-radius:11px;padding:8px 11px;font-weight:600;margin-top:2px}
       .ck-gift.ok{color:#9be7a8;background:rgba(72,187,120,.1)}
@@ -846,6 +851,7 @@
       .ck-event[hidden]{display:none}.ck-event b{font-weight:900}.ck-event .ck-i{color:#5a2028}
       .ck-pbadge{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:800;color:#3a230c;background:linear-gradient(90deg,#ffe39c,#e0a93a);padding:1px 7px;border-radius:9px;vertical-align:1px;box-shadow:0 1px 4px rgba(0,0,0,.3)}
       .ck-pbadge .ck-i{color:#5a2028}.ck-pbadge--sm{font-size:9.5px;padding:0 6px}
+      .ck-pbadge--baron{background:linear-gradient(90deg,#d8c6ff,#9070c2);color:#2c1a4a}.ck-pbadge--baron .ck-i{color:#2c1a4a}
       .ck-prestige{margin-top:9px;border:1px solid #ffe9b3;border-radius:13px;padding:9px 16px;font-weight:800;font-size:13px;background:linear-gradient(180deg,#ffe7a6,#cf9a36);color:#5a2028;cursor:pointer;display:inline-flex;align-items:center;gap:7px;box-shadow:0 4px 12px rgba(165,112,28,.4)}
       .ck-prestige[hidden]{display:none}.ck-prestige .ck-i{color:#5a2028}
       /* Коуч-хинты новичку (одноразовые тултипы — см. coach()/window.ckCoach) */
@@ -909,7 +915,9 @@
         <div class="ck-energy"><div class="ck-energy__row" id="ck-enrow"><span id="ck-enpre">${ICON.bolt(15)}</span> <span id="ck-en">0</span> / <span id="ck-enmax">1000</span></div><div class="ck-energy__bar"><div class="ck-energy__fill" id="ck-enfill"></div></div></div>
       </div>
       <div class="ck-screen" id="ck-scr-up"><div class="ck-uphd"><div class="ck-bal" style="justify-content:center;font-size:30px">${COIN(26)} <span id="ck-bal2">0</span></div><div class="p" id="ck-prof2">${COIN(13)} +0 / час</div></div><div class="ck-uplist" id="ck-uplist"></div></div>
-      <div class="ck-screen" id="ck-scr-dove"><div class="ck-uphd"><div class="b">${ICON.dove(22)} Голубятня</div></div><div class="ck-uplist" id="ck-dovelist"></div></div>
+      <div class="ck-screen" id="ck-scr-dove"><div class="ck-uphd"><div class="b">${ICON.dove(22)} Голубятня</div></div>
+        <div class="ck-seg" id="ck-dove-seg"><button class="ck-seg__b on" data-seg="help" type="button">Помощники</button><button class="ck-seg__b" data-seg="col" type="button">Коллекция</button></div>
+        <div class="ck-uplist" id="ck-dovelist"></div><div class="ck-uplist" id="ck-dove-col" style="display:none"></div></div>
       <div class="ck-screen" id="ck-scr-tasks"><div class="ck-uphd"><div class="b">${ICON.gift(22)} Призы</div></div><div class="ck-uplist" id="ck-taskslist"></div></div>
       <div class="ck-screen" id="ck-scr-top"><div class="ck-uphd"><div class="b">${ICON.trophy(22)} Рейтинг</div><div class="p" id="ck-myrank"></div></div><div class="ck-uplist" id="ck-toplist"></div></div>
       <div class="ck-fx" id="ck-fx"></div>
@@ -928,7 +936,7 @@
         <button class="ck-nav__b on" data-tab="cat">${ICON.paw(21)}Котик</button>
         <button class="ck-nav__b" data-tab="up">${ICON.bolt(21)}Прокачка</button>
         <button class="ck-nav__b" data-tab="home">${ICON.paw(21)}Дом</button>
-        <button class="ck-nav__b" data-tab="dove">${ICON.dove(21)}Голуби</button>
+        <button class="ck-nav__b" data-tab="dove">${ICON.dove(21)}Голуби<span class="ck-badge" id="ck-dove-badge" hidden></span></button>
         <button class="ck-nav__b" data-tab="tasks">${ICON.gift(21)}Призы</button>
         <button class="ck-nav__b" data-tab="top">${ICON.trophy(21)}Рейтинг</button>
       </div>`;
@@ -946,6 +954,7 @@
     ov.querySelector('#ck-bt-energy').onclick = () => boost('energy');
     ov.querySelector('#ck-prestige').onclick = prestigeConfirm;
     ov.querySelectorAll('.ck-nav__b').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+    ov.querySelectorAll('#ck-dove-seg .ck-seg__b').forEach(b => b.onclick = () => setDoveSeg(b.dataset.seg));
     ov.querySelector('#ck-guide-btn').onclick = () => { window.haptic && window.haptic('light'); openGuide(); };
     ov.querySelector('#ck-guide-x').onclick = closeGuide;
     ov.querySelector('#ck-games-x').onclick = closeGamesHub;
@@ -989,6 +998,31 @@
   }
   function closeGuide() { const g = ov && ov.querySelector('#ck-guide'); if (g) g.classList.remove('on'); }
 
+  // ── Вкладка «Голуби»: сегмент «Помощники» (карточки бизнесов, старая механика) /
+  // «Коллекция» (альбом пород — window.CatDove, public/js/catdove.js). Коллекция
+  // монтируется лениво при первом переключении на неё — не грузим лишний JS-модуль,
+  // пока юзер ни разу не открыл сегмент.
+  let doveSeg = 'help', doveColMounted = false;
+  function setDoveSeg(seg) {
+    doveSeg = seg;
+    ov.querySelectorAll('#ck-dove-seg .ck-seg__b').forEach(b => b.classList.toggle('on', b.dataset.seg === seg));
+    const help = ov.querySelector('#ck-dovelist'), col = ov.querySelector('#ck-dove-col');
+    if (help) help.style.display = seg === 'help' ? '' : 'none';
+    if (col) col.style.display = seg === 'col' ? '' : 'none';
+    if (seg === 'col' && !doveColMounted && window.CatDove) { doveColMounted = true; window.CatDove.mount(col, api); }
+  }
+  // Бейдж непрочитанной почты голубятни на кнопке навбара — грузится один раз при
+  // старте игры и при каждом открытии вкладки «Голуби» (unreadMail из /api/pigeons).
+  function updateDoveBadge(n) {
+    const b = ov && ov.querySelector('#ck-dove-badge'); if (!b) return;
+    if (n > 0) { b.textContent = n > 9 ? '9+' : String(n); b.hidden = false; } else b.hidden = true;
+  }
+  async function loadDoveBadge() {
+    if (!authed()) return;
+    const d = await api('/api/pigeons').catch(() => null);
+    if (d) updateDoveBadge(Number(d.unreadMail) || 0);
+  }
+
   function setTab(t) {
     closeActiveCoach();
     const pop = ov && ov.querySelector('#ck-pop'); if (pop) pop.classList.remove('on'); // попап не должен висеть над чужой вкладкой
@@ -1002,7 +1036,7 @@
     ov.querySelector('#ck-scr-top').classList.toggle('on', t === 'top');
     ov.querySelectorAll('.ck-nav__b').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
     if (t === 'up') { renderUpgrades(); coach('up', COACH.up.t, '#ck-uplist', { icon: ICON[COACH.up.icon](18) }); }
-    if (t === 'dove') { renderDove(); coach('dove', COACH.dove.t, '#ck-dovelist', { icon: ICON[COACH.dove.icon](18) }); }
+    if (t === 'dove') { renderDove(); setDoveSeg(doveSeg); coach('dove', COACH.dove.t, '#ck-dovelist', { icon: ICON[COACH.dove.icon](18) }); loadDoveBadge(); }
     if (t === 'tasks') renderTasks();
     if (t === 'top') { renderTop(); coach('top', COACH.top.t, '#ck-toplist', { icon: ICON[COACH.top.icon](18) }); }
   }
@@ -1208,10 +1242,10 @@
     const r = el.getBoundingClientRect(), fr = ov.querySelector('#ck-fx').getBoundingClientRect();
     el.remove(); confettiBurst(); window.haptic && window.haptic('light'); // мгновенный отклик на сам тап, награда догонит
 
-    let amount = 0;
-    if (authed()) { const d = await api('/api/clicker/bonus', { method: 'POST', body: '{}' }).catch(() => null); if (d && !d.error) { st = d; amount = d.amount; } }
+    let amount = 0, pigeonDrop;
+    if (authed()) { const d = await api('/api/clicker/bonus', { method: 'POST', body: '{}' }).catch(() => null); if (d && !d.error) { st = d; amount = d.amount; pigeonDrop = d.pigeonDrop; } }
     else { amount = guestBonusRaw(); if (amount) st = guestDerive(); }
-    if (amount) { sfxReward(); window.haptic && window.haptic('success'); coinShower(); dailyPopupRaw(ICON.star(20) + ' Золотой бонус!', amount); renderAll(); bumpBalance(); }
+    if (amount) { sfxReward(); window.haptic && window.haptic('success'); coinShower(); queueDoveDrop(pigeonDrop); dailyPopupRaw(ICON.star(20) + ' Золотой бонус!', amount); renderAll(); bumpBalance(); }
   }
   function guestBonusRaw() {
     guestDerive(); const s = rawGet(); if (s.bonusAt && Date.now() - s.bonusAt < 45000) return 0;
@@ -1238,11 +1272,11 @@
   }
   async function openChestAct() {
     return withLock('chest', async () => {
-      let prize = null;
-      if (authed()) { const d = await api('/api/clicker/chest', { method: 'POST', body: '{}' }).catch(() => null); if (d && !d.error) { st = d; prize = d.prize; } else { flashMsg(!d ? 'Нет связи — попробуй ещё раз' : 'Сундук уже открыт'); return; } }
+      let prize = null, pigeonDrop;
+      if (authed()) { const d = await api('/api/clicker/chest', { method: 'POST', body: '{}' }).catch(() => null); if (d && !d.error) { st = d; prize = d.prize; pigeonDrop = d.pigeonDrop; } else { flashMsg(!d ? 'Нет связи — попробуй ещё раз' : 'Сундук уже открыт'); return; } }
       else { prize = guestOpenChestRaw(); if (!prize) { flashMsg('Сундук уже открыт'); return; } st = guestDerive(); }
       turboUntil = Date.now() + (st.turboMsLeft || 0);
-      sfxLevel(); window.haptic && window.haptic('success'); confettiBurst(); coinShower(); chestPopup(prize); renderAll(); renderTasks(); bumpBalance();
+      sfxLevel(); window.haptic && window.haptic('success'); confettiBurst(); coinShower(); queueDoveDrop(pigeonDrop); chestPopup(prize); renderAll(); renderTasks(); bumpBalance();
     });
   }
   function chestPopup(prize) {
@@ -1250,7 +1284,7 @@
     if (prize.type === 'turbo') body = `<div class="v">${ICON.rocket(22)} Турбо ×5</div><div style="color:var(--muted);font-size:13px">20 секунд множитель за тап!</div>`;
     else if (prize.type === 'energy') body = `<div class="v">${ICON.bolt(22)} Полная энергия</div>`;
     else body = `<div class="v">+${fmt(prize.amount)} ${COIN(24)}</div>${prize.type === 'jackpot' ? '<div style="color:var(--gold-l);font-size:14px;font-weight:800;letter-spacing:1px">ДЖЕКПОТ!</div>' : ''}`;
-    pop.innerHTML = `<h3>${ICON.chest(20)} Сундук удачи</h3>${body}<button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
+    pop.innerHTML = `<h3>${ICON.chest(20)} Сундук удачи</h3>${body}<button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => { pop.classList.remove('on'); advancePopupQueue(); };
   }
 
   // ── Мини-игра «Золотой дождь» (canvas, 20с лови монеты) ───────────────────────
@@ -1342,10 +1376,10 @@
     s.balance += reward; s.totalEarned += reward; s.gamesDone[game] = today; rawSave(s); return reward;
   }
   async function submitGame(game, score) {
-    let reward = 0;
-    if (authed()) { const d = await api('/api/clicker/game', { method: 'POST', body: JSON.stringify({ game, score }) }).catch(() => null); if (d && !d.error) { st = d; reward = d.reward || 0; } else if (!d) return null; /* сеть упала — не праздновать «+0» */ }
+    let reward = 0, pigeonDrop;
+    if (authed()) { const d = await api('/api/clicker/game', { method: 'POST', body: JSON.stringify({ game, score }) }).catch(() => null); if (d && !d.error) { st = d; reward = d.reward || 0; pigeonDrop = d.pigeonDrop; } else if (!d) return null; /* сеть упала — не праздновать «+0» */ }
     else { const g = guestClaimGameRaw(game, score); if (g != null) { reward = g; st = guestDerive(); } }
-    return reward;
+    return { reward, pigeonDrop };
   }
 
   function guestClaimRainRaw(score) {
@@ -1561,7 +1595,12 @@
     const wk = weeklyPrizeCard(d && d.weekly);
     const head = '<div class="ck-sect">Топ недели</div>';
     if (!d || !d.top || !d.top.length) { list.innerHTML = brag + ref + wk + sq.html + head + emptyState(ICON.trophy(30), 'Сезон только начался', 'Заработай монеты и стань первым в топе недели!'); wire(); return; }
-    list.innerHTML = brag + ref + wk + sq.html + head + d.top.map((r, i) => `<div class="ck-row${r.me ? ' me' : ''}"><div class="r">${i < 3 ? ICON.medal(20) : i + 1}</div><div class="n">${(r.name || '').replace(/</g, '&lt;')}${r.prestige > 0 ? ` <span class="ck-pbadge ck-pbadge--sm">★${r.prestige}</span>` : ''}</div><div class="v">${COIN(14)} ${fmt(r.total)}</div></div>`).join('');
+    list.innerHTML = brag + ref + wk + sq.html + head + d.top.map((r, i) => {
+      // showcase/title — Task 8 (getTop), могут отсутствовать у старого закэшированного клиента.
+      const mini = (window.CatDove && window.CatDove.miniIconsHtml) ? window.CatDove.miniIconsHtml(r.showcase) : '';
+      const titleBadge = r.title ? ` <span class="ck-pbadge ck-pbadge--sm ck-pbadge--baron">${ICON.dove(10)}${String(r.title).replace(/</g, '&lt;')}</span>` : '';
+      return `<div class="ck-row${r.me ? ' me' : ''}"><div class="r">${i < 3 ? ICON.medal(20) : i + 1}</div><div class="n"><div>${(r.name || '').replace(/</g, '&lt;')}${r.prestige > 0 ? ` <span class="ck-pbadge ck-pbadge--sm">★${r.prestige}</span>` : ''}${titleBadge}</div>${mini}</div><div class="v">${COIN(14)} ${fmt(r.total)}</div></div>`;
+    }).join('');
     wire();
   }
   function weeklyPrizeCard(w) {
@@ -1644,10 +1683,15 @@
     try {
       if (!authed()) return;
       const d = await api('/api/clicker/purchase-sync', { method: 'POST', body: '{}' }).catch(() => null);
-      if (d && !d.error) { if (d.balance != null) st = d; if (d.bonus > 0) { sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); purchasePopup(d.bonus); } }
+      if (d && !d.error) {
+        if (d.balance != null) st = d;
+        if (Array.isArray(d.pigeonDrops) && d.pigeonDrops.length) pendingDoveSummary = d.pigeonDrops;
+        if (d.bonus > 0) { sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); purchasePopup(d.bonus); }
+        else if (pendingDoveSummary) { const s = pendingDoveSummary; pendingDoveSummary = null; doveDropsSummaryPopup(s); }
+      }
     } catch (_) {}
   }
-  function purchasePopup(amount) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Спасибо за покупки!</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><div style="color:var(--muted);font-size:13px">Бонус за покупки в «Марии» — чем больше заказываешь, тем больше монет в игре 🎂</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
+  function purchasePopup(amount) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Спасибо за покупки!</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><div style="color:var(--muted);font-size:13px">Бонус за покупки в «Марии» — чем больше заказываешь, тем больше монет в игре 🎂</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => { pop.classList.remove('on'); advancePopupQueue(); }; }
   // Перенос прогресса гостя на серверный аккаунт при первом входе (одна попытка).
   async function maybeMigrateGuest() {
     try {
@@ -1819,7 +1863,58 @@
       else flashMsg(netfail ? 'Нет связи — попробуй ещё раз' : 'Пока недоступно');
     });
   }
-  function dailyPopupRaw(title, amount) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${title}</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
+  // ── Дроп голубя: попап поверх #ck-pop, показывается ПОСЛЕ закрытия предыдущего
+  // попапа (сундук/комбо/золотой бонус/игра/покупки) — один общий DOM-элемент,
+  // два попапа разом не влезают. Очередь на случай будущих множественных дропов;
+  // сейчас реально копится максимум 1 штука (combo/chest/bonus/game дают по одному),
+  // кроме purchase-sync — там отдельный сводный попап (doveDropsSummaryPopup), не очередь.
+  // Мини-мирror имя+редкость — src/pigeons.ts::PIGEON_BREEDS (полный список с сетами/
+  // артом ведёт catdove.js; тут достаточно для попапа дропа).
+  const DOVE_META = {
+    sizar: { name: 'Сизарь', r: 'common' }, belobok: { name: 'Белобокий', r: 'common' }, ryaboy: { name: 'Рябой', r: 'common' }, chubaty: { name: 'Чубатый', r: 'common' },
+    vanil: { name: 'Ванильный', r: 'rare' }, shoko: { name: 'Шоколадный', r: 'rare' }, karamel: { name: 'Карамельный', r: 'rare' }, yagodny: { name: 'Ягодный', r: 'rare' },
+    pochtar: { name: 'Иркутский почтарь', r: 'epic' }, baikal: { name: 'Байкальский гонец', r: 'epic' }, kurier: { name: 'Ночной курьер', r: 'epic' }, vozhak: { name: 'Вожак стаи', r: 'epic' },
+    svadebny: { name: 'Свадебный', r: 'epic' }, imeninny: { name: 'Именинный', r: 'epic' }, snezhny: { name: 'Снежный', r: 'epic' }, zolotoy: { name: 'Золотой голубь Василия', r: 'legendary' },
+    champion: { name: 'Чемпион', r: 'legendary' },
+  };
+  const DOVE_RCOLOR = { common: 'rgba(200,204,212,.7)', rare: '#d9a35f', epic: '#c1a3f0', legendary: 'var(--gold-l)' };
+  let doveDropQueue = [], pendingDoveSummary = null;
+  function queueDoveDrop(drop) { if (drop && drop.breed) doveDropQueue.push(drop); }
+  function queueDoveDrops(drops) { if (Array.isArray(drops)) drops.forEach(queueDoveDrop); }
+  // Вызывается из OK-обработчика всех попапов-«триггеров» (сундук/комбо/бонус/игра/
+  // покупки) — после их закрытия показывает следующий дроп-попап, если он есть.
+  function advancePopupQueue() {
+    if (doveDropQueue.length) { setTimeout(showDovePopup, 260); return; }
+    if (pendingDoveSummary) { const s = pendingDoveSummary; pendingDoveSummary = null; setTimeout(() => doveDropsSummaryPopup(s), 260); }
+  }
+  function showDovePopup() {
+    const drop = doveDropQueue.shift();
+    if (!drop || !ov) { advancePopupQueue(); return; }
+    const meta = DOVE_META[drop.breed] || { name: drop.breed, r: 'common' };
+    const pop = ov.querySelector('#ck-pop'); if (!pop) return;
+    pop.innerHTML = `<h3>${ICON.dove(20)} Прилетел голубь!</h3>
+      <div style="width:78px;height:78px;margin:8px auto;border-radius:16px;border:2px solid ${DOVE_RCOLOR[meta.r]};display:flex;align-items:center;justify-content:center;overflow:hidden;background:rgba(238,191,82,.08);box-shadow:${meta.r === 'legendary' ? '0 0 12px rgba(238,191,82,.35)' : 'none'}">
+        <img src="/img/pigeons/${drop.breed}.webp?v=1" alt="" style="width:82%;height:82%;object-fit:contain" onerror="this.style.display='none'">
+      </div>
+      <div class="v" style="font-size:19px">${meta.name}</div>
+      <div style="color:var(--muted);font-size:13px">${drop.isNew ? 'Новый в альбоме!' : 'Дубликат — можно обменять или отправить'}</div>
+      <button id="ck-pop-ok">Класс!</button>`;
+    pop.classList.add('on');
+    pop.querySelector('#ck-pop-ok').onclick = () => { pop.classList.remove('on'); advancePopupQueue(); };
+  }
+  // Сводный попап для purchase-sync (может дать сразу несколько голубей за год покупок).
+  function doveDropsSummaryPopup(drops) {
+    if (!drops || !drops.length || !ov) return;
+    const pop = ov.querySelector('#ck-pop'); if (!pop) return;
+    const rows = drops.map((d) => {
+      const meta = DOVE_META[d.breed] || { name: d.breed, r: 'common' };
+      return `<div style="display:flex;align-items:center;gap:8px;padding:4px 2px;text-align:left"><span style="width:8px;height:8px;border-radius:50%;background:${DOVE_RCOLOR[meta.r]};flex:none"></span><span style="flex:1;font-size:13px;color:var(--cream)">${meta.name}</span><span style="font-size:11px;color:var(--muted);flex:none">${d.isNew ? 'новый!' : 'дубликат'}</span></div>`;
+    }).join('');
+    pop.innerHTML = `<h3>${ICON.dove(20)} Прилетели голуби!</h3><div style="max-height:200px;overflow-y:auto;margin:8px 0">${rows}</div><button id="ck-pop-ok">Класс!</button>`;
+    pop.classList.add('on');
+    pop.querySelector('#ck-pop-ok').onclick = () => { pop.classList.remove('on'); advancePopupQueue(); };
+  }
+  function dailyPopupRaw(title, amount) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${title}</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => { pop.classList.remove('on'); advancePopupQueue(); }; }
 
   function dailyCalHtml() {
     const streak = (st && st.dailyStreak) || 0, avail = !st || st.dailyAvailable, todayDay = avail ? streak + 1 : 0;
@@ -1870,7 +1965,7 @@
     await load(); await maybeMigrateGuest(); await ensureRefRegistered(); await maybePurchaseBonus(); curLevel = leagueFor(st.totalEarned).level;
     ov.querySelector('#ck-cat').src = A(leagueFor(st.totalEarned).cat || 'idle.png');
     applyCatSize(ov.querySelector('#ck-cat'));
-    setTab('cat'); renderAll(); spawnSparks(); applySeason(); scheduleBonus();
+    setTab('cat'); renderAll(); spawnSparks(); applySeason(); scheduleBonus(); loadDoveBadge();
     if (loadNetFail) flashMsg('Нет связи — офлайн-режим, прогресс синхронизируется позже'); // авторизованный получил гостевой фолбэк — не молчать про «пропавший» баланс
     if (authed()) api('/api/clicker/rewards').then(d => { if (d && typeof d.enabled === 'boolean' && d.enabled !== rewardsEnabled) { rewardsEnabled = d.enabled; if (tab === 'up') renderUpgrades(); } }).catch(() => {});
     let _seenTut = true; try { _seenTut = !!localStorage.getItem('ck_tut_v1'); } catch (e) {}
@@ -1921,7 +2016,7 @@
   function startGame(g) { if (g === 'memory') openMemory(); else if (g === 'tower') openTower(); else if (g === 'gems') openGems(); else openQuiz(g); }
   function openGamesHub() { if (!ov) return; window.haptic && window.haptic('light'); ov.querySelector('#ck-games').classList.add('on'); renderGames(); }
   function closeGamesHub() { const g = ov && ov.querySelector('#ck-games'); if (g) g.classList.remove('on'); if (tab === 'tasks') renderTasks(); /* обновить счётчик «доступно N из 7» на карточке */ }
-  function resultPopup(title, amount, sub) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${title}</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><div style="color:var(--muted);font-size:13px">${sub || ''}</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
+  function resultPopup(title, amount, sub) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${title}</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><div style="color:var(--muted);font-size:13px">${sub || ''}</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => { pop.classList.remove('on'); advancePopupQueue(); }; }
 
   // — Квизы (Котовикторина / Загадки / Счёт конфет) —
   function openQuiz(deck) {
@@ -1946,10 +2041,11 @@
   }
   async function finishQuiz() {
     const s = quizState; if (!s) return; const deck = s.deck, correct = s.correct, total = s.qs.length, meta = GAME_META[deck]; closeQuiz();
-    const reward = await submitGame(deck, correct);
-    if (reward === null) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); renderGames(); return; }
+    const gres = await submitGame(deck, correct);
+    if (!gres) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); renderGames(); return; }
     sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
-    resultPopup(`${meta.icon()} ${correct}/${total} верно!`, reward || 0, correct === total ? 'Идеально! 🌟' : 'Молодец, заходи завтра!');
+    queueDoveDrop(gres.pigeonDrop);
+    resultPopup(`${meta.icon()} ${correct}/${total} верно!`, gres.reward || 0, correct === total ? 'Идеально! 🌟' : 'Молодец, заходи завтра!');
     renderAll(); renderGames(); bumpBalance();
   }
   function closeQuiz() { const el = ov.querySelector('#ck-quiz'); if (el) el.classList.remove('on'); quizState = null; }
@@ -1981,10 +2077,11 @@
   async function finishMemory() {
     const s = memState; if (!s) return; const secs = (performance.now() - s.t0) / 1000; const moves = s.moves;
     const score = Math.max(20, Math.min(100, Math.round(100 - (moves - MEM_ICONS.length) * 5 - secs * 1.2))); closeMemory();
-    const reward = await submitGame('memory', score);
-    if (reward === null) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); renderGames(); return; }
+    const gres = await submitGame('memory', score);
+    if (!gres) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); renderGames(); return; }
     sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
-    resultPopup(`${ICON.cake(22)} Торт собран!`, reward || 0, `За ${moves} ходов · ${Math.round(secs)}с`);
+    queueDoveDrop(gres.pigeonDrop);
+    resultPopup(`${ICON.cake(22)} Торт собран!`, gres.reward || 0, `За ${moves} ходов · ${Math.round(secs)}с`);
     renderAll(); renderGames(); bumpBalance();
   }
   function closeMemory() { const el = ov.querySelector('#ck-mem'); if (el) el.classList.remove('on'); memState = null; }
@@ -2050,10 +2147,11 @@
   async function finishTower() {
     const s = towerState; if (!s || s.ended) return; s.ended = true; cancelAnimationFrame(s.raf);
     const score = s.score; closeTower();
-    const reward = await submitGame('tower', score);
-    if (reward === null) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); renderGames(); return; }
+    const gres = await submitGame('tower', score);
+    if (!gres) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); renderGames(); return; }
     sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
-    resultPopup(`${ICON.cake(22)} Башня из ${score} коржей!`, reward || 0, score >= 20 ? 'Высоченная! 🎂' : 'Неплохо — завтра выше!');
+    queueDoveDrop(gres.pigeonDrop);
+    resultPopup(`${ICON.cake(22)} Башня из ${score} коржей!`, gres.reward || 0, score >= 20 ? 'Высоченная! 🎂' : 'Неплохо — завтра выше!');
     renderAll(); renderGames(); bumpBalance();
   }
   function closeTower() { if (towerState) cancelAnimationFrame(towerState.raf); const el = ov.querySelector('#ck-tower'); if (el) el.classList.remove('on'); towerState = null; }
@@ -2124,10 +2222,11 @@
   async function finishGems() {
     const s = gemsState; if (!s || s.ended) return; s.ended = true; clearTimeout(s.raf);
     const score = s.score; closeGems();
-    const reward = await submitGame('gems', score);
-    if (reward === null) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); renderGames(); return; }
+    const gres = await submitGame('gems', score);
+    if (!gres) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); renderGames(); return; }
     sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
-    resultPopup(`${ICON.gem(22)} Собрано ${score} конфет!`, reward || 0, 'Сладко! Заходи завтра');
+    queueDoveDrop(gres.pigeonDrop);
+    resultPopup(`${ICON.gem(22)} Собрано ${score} конфет!`, gres.reward || 0, 'Сладко! Заходи завтра');
     renderAll(); renderGames(); bumpBalance();
   }
   function closeGems() { if (gemsState) clearTimeout(gemsState.raf); const el = ov.querySelector('#ck-gems'); if (el) el.classList.remove('on'); gemsState = null; }
@@ -2142,6 +2241,10 @@
   });
   window.ckSetTab = setTab; // для виджета «Дома кота»: открыть лестницу вех (setTab('tasks'))
   window.ckCoach = coach; window.ckCoachClose = closeActiveCoach; // экспорт для коуч-хинта «Дом» из catpet.js
+  // Мост для catdove.js (сегмент «Коллекция» вкладки dove): api — тот же fetch-хелпер с
+  // initData-заголовками, flashMsg — тост об ошибке, updateDoveBadge — бейдж непрочитанной
+  // почты на кнопке навбара (учитывая, что мьютить его дальше будет Task 10 — почта).
+  window.ckApi = api; window.ckFlash = flashMsg; window.ckUpdateDoveBadge = updateDoveBadge;
   window.addEventListener('resize', () => { if (ov && ov.classList.contains('on') && st) applyCostume(leagueFor(st.totalEarned)); });
   // Реф регистрируем фоном уже при загрузке приложения (не дожидаясь открытия игры):
   // друг перешёл по ckref-ссылке → бонус начислится, даже если в игру он не зайдёт.

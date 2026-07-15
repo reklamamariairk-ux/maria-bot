@@ -30,9 +30,12 @@ const DAILY_BOOSTS = 6;           // бесплатных бустов кажд�
 const REF_INVITEE = 2500;         // бонус приглашённому
 const REF_REFERRER = 5000;        // бонус пригласившему
 const irkToday = () => new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+// Экспорт для голубиной почты (pigeons.ts::sendMail — лимит 1 письмо/день по Иркутску).
+// Ленивый импорт на стороне pigeons.ts (await import("./clicker")) — см. комментарий там.
+export const todayIrkutsk = irkToday;
 // Сезон = неделя по Иркутску (сброс в понедельник 00:00). Ключ — индекс дня-понедельника.
-function weekMonday(): number { const d = Math.floor((Date.now() + 8 * 3600 * 1000) / 86400000); return d - ((d + 3) % 7); }
-const weekKey = () => String(weekMonday());
+export function weekMonday(): number { const d = Math.floor((Date.now() + 8 * 3600 * 1000) / 86400000); return d - ((d + 3) % 7); }
+export const weekKey = () => String(weekMonday());
 const seasonEndsTs = () => (weekMonday() + 7) * 86400000 - 8 * 3600 * 1000; // ms UTC начала след. недели
 
 // ── Престиж (#9) ─────────────────────────────────────────────────────────────
@@ -313,7 +316,7 @@ async function readCards(client: any, chatId: number): Promise<Record<string, nu
   const { rows } = await client.query(`SELECT card, level FROM clicker_cards WHERE chat_id=$1`, [chatId]);
   const m: Record<string, number> = {}; for (const r of rows) m[r.card] = r.level; return m;
 }
-function profitPerHour(cl: Record<string, number>): number { let p = 0; for (const c of CARDS) p += cardProfit(c, cl[c.id] || 0); return p; }
+function profitPerHour(cl: Record<string, number>, albumMult = 1): number { let p = 0; for (const c of CARDS) p += cardProfit(c, cl[c.id] || 0); return p * albumMult; }
 
 function buildState(r: any, cl: Record<string, number>, passiveEarned: number): ClickerState {
   const lg = leagueFor(Number(r.total_earned));
@@ -323,7 +326,7 @@ function buildState(r: any, cl: Record<string, number>, passiveEarned: number): 
   const bUsedT = r.boost_date === today ? r.boost_turbo_used : 0;
   return {
     balance: Number(r.balance), totalEarned: Number(r.total_earned), energy: r.energy, energyMax: energyMaxFor(r.energy_limit_level),
-    perTap: perTapFor(r.multitap_level), profitPerHour: profitPerHour(cl), passiveEarned,
+    perTap: perTapFor(r.multitap_level), profitPerHour: profitPerHour(cl, r.__albumMult || 1), passiveEarned,
     level: lg.level, levelName: lg.name, nextNeed: nextNeed(Number(r.total_earned)),
     multitapLevel: r.multitap_level, multitapPrice: priceMultitap(r.multitap_level),
     energyLevel: r.energy_limit_level, energyPrice: priceEnergy(r.energy_limit_level),
@@ -352,7 +355,12 @@ async function refresh(client: any, chatId: number): Promise<{ r: any; cl: Recor
   if (r.boost_date !== today) { r.boost_energy_used = 0; r.boost_turbo_used = 0; r.boost_date = today; }
   const secs = Math.max(0, (Date.now() - new Date(r.updated_at).getTime()) / 1000);
   r.energy = Math.min(energyMaxFor(r.energy_limit_level), Math.round(r.energy + secs * REGEN_PER_SEC));
-  const passive = Math.floor(profitPerHour(cl) * Math.min(secs / 3600, PASSIVE_CAP_HOURS) * gainMult(r.prestige));
+  // Перк полного альбома (+5% к пассиву): флаг кэширован на clicker_state.album_bonus
+  // (выставляется в grantPigeon при 16/16 пород) — без похода в pigeon_inventory на каждый тап.
+  const { ALBUM_PASSIVE_BONUS } = await import("./pigeons");
+  const albumMult = r.album_bonus ? 1 + ALBUM_PASSIVE_BONUS : 1;
+  r.__albumMult = albumMult;
+  const passive = Math.floor(profitPerHour(cl, albumMult) * Math.min(secs / 3600, PASSIVE_CAP_HOURS) * gainMult(r.prestige));
   if (passive > 0) { r.balance = Number(r.balance) + passive; r.total_earned = Number(r.total_earned) + passive; }
   // сезон: новая неделя → база = текущий total (очки сезона обнуляются)
   const wk = weekKey();
@@ -486,7 +494,16 @@ export async function claimDaily(chatId: number): Promise<{ ok: boolean; reward?
 }
 
 /** Забрать награду за Комбо дня (если все 3 карты сегодня прокачаны). */
-export async function claimCombo(chatId: number): Promise<{ ok: boolean; reward?: number; state?: ClickerState; reason?: string }> {
+// Дроп голубя из игровых источников. chance ∈ (0,1]; внутри чужой транзакции передавать client.
+async function maybeDropPigeon(chatId: number, chance: number, client?: PoolClient):
+  Promise<{ breed: string; isNew: boolean } | undefined> {
+  if (Math.random() >= chance) return undefined;
+  const { pickBreed, grantPigeon } = await import("./pigeons");
+  const breed = pickBreed(Math.random(), Math.random(), weekKey(), !!activeEvent());
+  return grantPigeon(chatId, breed, client);
+}
+
+export async function claimCombo(chatId: number): Promise<{ ok: boolean; reward?: number; state?: ClickerState; reason?: string; pigeonDrop?: { breed: string; isNew: boolean } }> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -498,8 +515,10 @@ export async function claimCombo(chatId: number): Promise<{ ok: boolean; reward?
     if (!combo.every((c) => hits.includes(c))) { await client.query("ROLLBACK"); return { ok: false, reason: "not_ready" }; }
     r.balance = Number(r.balance) + COMBO_REWARD; r.total_earned = Number(r.total_earned) + COMBO_REWARD; r.combo_claimed = today;
     await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, combo_claimed=$4, updated_at=NOW() WHERE chat_id=$1`, [chatId, r.balance, r.total_earned, today]);
+    // Комбо дня — гарантированный дроп (chance=1): требует собрать все карточки за день, награда честная.
+    const pigeonDrop = await maybeDropPigeon(chatId, 1, client);
     await client.query("COMMIT");
-    return { ok: true, reward: COMBO_REWARD, state: buildState(r, cl, 0) };
+    return { ok: true, reward: COMBO_REWARD, state: buildState(r, cl, 0), pigeonDrop };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
@@ -572,7 +591,7 @@ const GAME_CFG: Record<string, { cap: number; per: number }> = {
   gems:        { cap: 200, per: 45   }, // «Сладкий ряд» (match-3): собрано конфет
   tower:       { cap: 200, per: 60   }, // «Башня тортов»: коржей в башне
 };
-export async function claimGame(chatId: number, game: string, score: number): Promise<{ ok: boolean; reward?: number; game?: string; state?: ClickerState; reason?: string }> {
+export async function claimGame(chatId: number, game: string, score: number): Promise<{ ok: boolean; reward?: number; game?: string; state?: ClickerState; reason?: string; pigeonDrop?: { breed: string; isNew: boolean } }> {
   const cfg = GAME_CFG[game]; if (!cfg) return { ok: false, reason: "bad_game" };
   const client = await pool.connect();
   try {
@@ -581,14 +600,19 @@ export async function claimGame(chatId: number, game: string, score: number): Pr
     const today = irkToday();
     const ex = await client.query(`SELECT day FROM clicker_daily WHERE chat_id=$1 AND game=$2`, [chatId, game]);
     if (ex.rows.length && ex.rows[0].day === today) { await client.query("ROLLBACK"); return { ok: false, reason: "already" }; }
+    // «Первый заход дня» — среди ВСЕХ игр хаба (не только текущей): считаем строки
+    // clicker_daily за сегодня ДО инсёрта текущей игры. Если их 0 — это первый claim дня.
+    const doneBefore = await client.query(`SELECT COUNT(*) AS n FROM clicker_daily WHERE chat_id=$1 AND day=$2`, [chatId, today]);
+    const isFirstGameToday = Number(doneBefore.rows[0].n) === 0;
     const sc = Math.max(0, Math.min(cfg.cap, Math.floor(Number(score) || 0)));
     const reward = sc * cfg.per;
     r.balance = Number(r.balance) + reward; r.total_earned = Number(r.total_earned) + reward;
     await client.query(`INSERT INTO clicker_daily (chat_id, game, day) VALUES ($1,$2,$3) ON CONFLICT (chat_id, game) DO UPDATE SET day=$3`, [chatId, game, today]);
     await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, updated_at=NOW() WHERE chat_id=$1`, [chatId, r.balance, r.total_earned]);
+    const pigeonDrop = isFirstGameToday ? await maybeDropPigeon(chatId, 0.25, client) : undefined;
     const st = buildState(r, cl, 0); st.gamesDone = await gamesDoneToday(client, chatId);
     await client.query("COMMIT");
-    return { ok: true, reward, game, state: st };
+    return { ok: true, reward, game, state: st, pigeonDrop };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
@@ -601,7 +625,7 @@ function rollChest(level: number): { type: string; amount?: number } {
   if (r < 0.95) return { type: "energy" };
   return { type: "jackpot", amount: Math.round(5000 + Math.random() * 15000) };
 }
-export async function openChest(chatId: number): Promise<{ ok: boolean; prize?: { type: string; amount?: number }; state?: ClickerState; reason?: string }> {
+export async function openChest(chatId: number): Promise<{ ok: boolean; prize?: { type: string; amount?: number }; state?: ClickerState; reason?: string; pigeonDrop?: { breed: string; isNew: boolean } }> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -615,14 +639,15 @@ export async function openChest(chatId: number): Promise<{ ok: boolean; prize?: 
     r.chest_date = today;
     await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, energy=$4, turbo_until=$5, chest_date=$6, updated_at=NOW() WHERE chat_id=$1`,
       [chatId, r.balance, r.total_earned, r.energy, r.turbo_until || null, today]);
+    const pigeonDrop = await maybeDropPigeon(chatId, 0.35, client);
     await client.query("COMMIT");
-    return { ok: true, prize, state: buildState(r, cl, 0) };
+    return { ok: true, prize, state: buildState(r, cl, 0), pigeonDrop };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
 /** «Золотой котик»: случайный летящий бонус. Кулдаун 45с (анти-чит), сумма по уровню. */
 const BONUS_COOLDOWN_MS = 45000;
-export async function claimBonus(chatId: number): Promise<{ ok: boolean; amount?: number; state?: ClickerState; reason?: string }> {
+export async function claimBonus(chatId: number): Promise<{ ok: boolean; amount?: number; state?: ClickerState; reason?: string; pigeonDrop?: { breed: string; isNew: boolean } }> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -632,8 +657,9 @@ export async function claimBonus(chatId: number): Promise<{ ok: boolean; amount?
     const amount = Math.min(60000, Math.round(300 + Math.random() * (700 + lvl * 600)));
     r.balance = Number(r.balance) + amount; r.total_earned = Number(r.total_earned) + amount;
     await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, bonus_at=NOW(), updated_at=NOW() WHERE chat_id=$1`, [chatId, r.balance, r.total_earned]);
+    const pigeonDrop = await maybeDropPigeon(chatId, 0.05, client);
     await client.query("COMMIT");
-    return { ok: true, amount, state: buildState(r, cl, 0) };
+    return { ok: true, amount, state: buildState(r, cl, 0), pigeonDrop };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
@@ -659,17 +685,40 @@ export async function boostClicker(chatId: number, type: string): Promise<{ ok: 
 
 /** Топ игроков за СЕЗОН (текущая неделя): очки = total_earned − week_base. Имя из subscribers. */
 export async function getTop(chatId: number, limit = 30): Promise<{
-  top: { name: string; total: number; me: boolean; prestige: number }[]; myRank: number | null; seasonEndsTs: number;
+  top: { name: string; total: number; me: boolean; prestige: number; showcase: { breed: string; stars: number }[]; title: string | null }[];
+  myRank: number | null; seasonEndsTs: number;
   weekly: { enabled: boolean; prizes: { rank: number; points: number; label: string }[]; lastWeek: { rank: number; name: string; points: number; me: boolean }[] };
 }> {
   const cur = weekKey();
   const { rows } = await pool.query(
-    `SELECT c.chat_id, (c.total_earned - c.week_base) AS pts, c.prestige, s.first_name, s.username
+    `SELECT c.chat_id, (c.total_earned - c.week_base) AS pts, c.prestige, c.album_bonus, s.first_name, s.username
        FROM clicker_state c LEFT JOIN subscribers s ON s.chat_id = c.chat_id
       WHERE c.week_key = $2 AND (c.total_earned - c.week_base) > 0
       ORDER BY pts DESC LIMIT $1`, [limit, cur]
   );
-  const top = rows.map((r) => ({ name: (r.first_name || r.username || "Котовод").toString().slice(0, 24), total: Number(r.pts), me: Number(r.chat_id) === chatId, prestige: Number(r.prestige || 0) }));
+  // Витрины топа — один запрос на всех (не по одному на игрока).
+  const topIds = rows.map((r) => Number(r.chat_id));
+  const showcaseByChat = new Map<number, { breed: string; stars: number }[]>();
+  if (topIds.length) {
+    const sc = await pool.query(
+      `SELECT chat_id, breed, stars, showcase FROM pigeon_inventory WHERE chat_id = ANY($1) AND showcase > 0 ORDER BY showcase`,
+      [topIds]
+    );
+    for (const s of sc.rows) {
+      const cid = Number(s.chat_id);
+      let list = showcaseByChat.get(cid);
+      if (!list) { list = []; showcaseByChat.set(cid, list); }
+      if (list.length < 3) list.push({ breed: String(s.breed), stars: Number(s.stars) });
+    }
+  }
+  const top = rows.map((r) => ({
+    name: (r.first_name || r.username || "Котовод").toString().slice(0, 24),
+    total: Number(r.pts),
+    me: Number(r.chat_id) === chatId,
+    prestige: Number(r.prestige || 0),
+    showcase: showcaseByChat.get(Number(r.chat_id)) || [],
+    title: r.album_bonus ? "Голубиный барон" : null,
+  }));
   const me = await pool.query(`SELECT week_key, (total_earned - week_base) AS pts FROM clicker_state WHERE chat_id=$1`, [chatId]);
   const myPts = me.rows.length && me.rows[0].week_key === cur ? Number(me.rows[0].pts) : 0;
   const rank = await pool.query(`SELECT COUNT(*)::int AS n FROM clicker_state WHERE week_key=$2 AND (total_earned - week_base) > $1`, [myPts, cur]);
@@ -1107,7 +1156,7 @@ export async function claimMilestone(chatId: number, id: string): Promise<{ ok: 
 // чтобы не дёргать сайт. Первый заход начисляет за весь YTD (приветствие лояльным).
 const PURCHASE_RATE = 20;            // монет за 1₽ покупок
 const PURCHASE_CAP = 5_000_000;      // потолок одной сверки (защита от выбросов/данных)
-export async function syncPurchaseBonus(chatId: number): Promise<{ ok: boolean; granted: number; yearSpent?: number; state?: ClickerState }> {
+export async function syncPurchaseBonus(chatId: number): Promise<{ ok: boolean; granted: number; yearSpent?: number; state?: ClickerState; pigeonDrops?: { breed: string; isNew: boolean }[] }> {
   // Атомарно «застолбить» сверку: вставить/обновить last_check, только если прошло >1ч.
   const claim = await pool.query(
     `INSERT INTO clicker_purchase_sync (chat_id, last_check) VALUES ($1, NOW())
@@ -1140,8 +1189,17 @@ export async function syncPurchaseBonus(chatId: number): Promise<{ ok: boolean; 
     // отдельным query ДО начисления → краш между ними терял бонус навсегда
     // (следующая сверка дала бы delta=0).
     await client.query(`UPDATE clicker_purchase_sync SET spent_synced=$2 WHERE chat_id=$1`, [chatId, yearSpent]);
+    // Каждые полные 1000₽ новых покупок (delta) → гарантированный голубь rare+ (кап 3 за сверку).
+    const birds = Math.min(3, Math.floor(delta / 1000));
+    const pigeonDrops: { breed: string; isNew: boolean }[] = [];
+    if (birds > 0) {
+      const { pickPurchaseBreed, grantPigeon } = await import("./pigeons");
+      for (let i = 0; i < birds; i++) {
+        pigeonDrops.push(await grantPigeon(chatId, pickPurchaseBreed(Math.random(), Math.random(), !!activeEvent()), client));
+      }
+    }
     const st = buildState(r, cl, 0); st.gamesDone = await gamesDoneToday(client, chatId);
     await client.query("COMMIT");
-    return { ok: true, granted: grant, yearSpent, state: st };
+    return { ok: true, granted: grant, yearSpent, state: st, pigeonDrops };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
