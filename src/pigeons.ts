@@ -189,6 +189,8 @@ export async function initPigeonSchema(): Promise<void> {
   await pool.query(`ALTER TABLE pigeon_inventory ADD COLUMN IF NOT EXISTS tune_stamina SMALLINT NOT NULL DEFAULT 0`);
   await pool.query(`ALTER TABLE pigeon_inventory ADD COLUMN IF NOT EXISTS tune_luck SMALLINT NOT NULL DEFAULT 0`);
   await pool.query(`ALTER TABLE pigeon_race_entries ADD COLUMN IF NOT EXISTS division TEXT NOT NULL DEFAULT 'bronze'`);
+  // Стартовый голубь: флаг одноразовой выдачи Сизаря новому игроку (см. refresh в clicker.ts).
+  await pool.query(`ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS starter_pigeon BOOLEAN NOT NULL DEFAULT FALSE`);
 }
 
 // ── Инвентарь ──────────────────────────────────────────────────────────────

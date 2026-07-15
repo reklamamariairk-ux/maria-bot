@@ -350,6 +350,14 @@ async function refresh(client: any, chatId: number): Promise<{ r: any; cl: Recor
   await client.query(`INSERT INTO clicker_state (chat_id) VALUES ($1) ON CONFLICT (chat_id) DO NOTHING`, [chatId]);
   const { rows } = await client.query(`SELECT * FROM clicker_state WHERE chat_id=$1 FOR UPDATE`, [chatId]);
   const r = rows[0];
+  // Стартовый голубь: при первом заходе выдаём Сизаря один раз (флаг starter_pigeon),
+  // чтобы коллекция не была пустой и механика была сразу понятна. Дёшево: r уже загружен.
+  if (!r.starter_pigeon) {
+    const { grantPigeon } = await import("./pigeons");
+    await grantPigeon(chatId, "sizar", client);
+    await client.query(`UPDATE clicker_state SET starter_pigeon=TRUE WHERE chat_id=$1`, [chatId]);
+    r.starter_pigeon = true;
+  }
   const cl = await readCards(client, chatId);
   const today = irkToday();
   if (r.boost_date !== today) { r.boost_energy_used = 0; r.boost_turbo_used = 0; r.boost_date = today; }
