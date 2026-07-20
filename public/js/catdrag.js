@@ -97,6 +97,21 @@
     return rec;
   }
 
+  // полётные спрайт-листы (горизонтальная полоса квадратных кадров, позы отсортированы
+  // «крылья вверх → вниз» — играем пинг-понгом). Нет файла → статичный спрайт как раньше.
+  const flyCache = {};
+  function loadFly(breed) {
+    let rec = flyCache[breed];
+    if (rec) return rec;
+    const img = new Image();
+    rec = { img, ok: null, frames: 0 };
+    img.onload = () => { rec.frames = Math.max(1, Math.round(img.width / img.height)); rec.ok = rec.frames >= 2; };
+    img.onerror = () => { rec.ok = false; };
+    img.src = `/img/pigeons/fly/${encodeURIComponent(breed)}.webp?v=1`;
+    flyCache[breed] = rec;
+    return rec;
+  }
+
   function loadArt(breed) {
     let rec = artCache[breed];
     if (rec) return rec;
@@ -260,6 +275,7 @@
     if (mySession !== session || !ov) return; // оверлей закрыт/переоткрыт — не трогаем DOM
     opponentsPreview = (d && Array.isArray(d.opponents)) ? d.opponents : [];
     myPower = (d && typeof d.myPower === 'number') ? d.myPower : myPower;
+    opponentsPreview.forEach((o) => loadFly(o.breed)); // прогреваем полётные листы к старту
     if (step === 'setup') renderSetup();
   }
 
@@ -500,22 +516,40 @@
     ctx.beginPath(); ctx.ellipse(x, y + size * 0.44, size * 0.36, size * 0.11, 0, 0, Math.PI * 2); ctx.fill();
     const wing = ts / 85 + laneIdx * 1.7;
     const bob = running ? Math.sin(wing) * size * 0.08 : 0;
-    const squash = running ? 1 + 0.05 * Math.sin(wing + Math.PI / 2) : 1;
-    const tilt = running ? (0.06 + 0.1 * (speedNorm || 0)) : 0;
-    const rec = loadArt(breed);
-    ctx.save();
-    ctx.translate(x, y + bob);
-    ctx.scale(-1, 1);           // арт смотрит влево — разворачиваем по ходу движения
-    ctx.rotate(-tilt);          // в зеркальных координатах нос «вниз-вперёд»
-    ctx.scale(1, squash);
-    if (isMe) { ctx.shadowColor = 'rgba(240,194,78,.85)'; ctx.shadowBlur = 12; }
-    if (rec.ok) {
-      ctx.drawImage(rec.img, -size / 2, -size / 2, size, size);
+    const fly = running ? loadFly(breed) : null;
+    if (fly && fly.ok) {
+      // покадровый взмах: пинг-понг по отсортированным позам, темп чуть быстрее у быстрых
+      const n = fly.frames, period = 2 * n - 2;
+      const stepMs = 52 - 14 * (speedNorm || 0);
+      const idx = Math.floor(ts / stepMs + laneIdx * 2.3) % period;
+      const frame = idx < n ? idx : period - idx;
+      const cell = fly.img.height;
+      const drawSize = size * 1.18; // в полётных кадрах тело меньше ячейки (размах крыльев)
+      const tilt = 0.04 + 0.06 * (speedNorm || 0);
+      ctx.save();
+      ctx.translate(x, y + bob);
+      ctx.rotate(tilt);         // полётный арт уже смотрит вправо — без флипа
+      if (isMe) { ctx.shadowColor = 'rgba(240,194,78,.85)'; ctx.shadowBlur = 12; }
+      ctx.drawImage(fly.img, frame * cell, 0, cell, cell, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
+      ctx.restore();
     } else {
-      ctx.fillStyle = isMe ? '#f0c24e' : '#5b6472';
-      ctx.beginPath(); ctx.arc(0, 0, size / 2, 0, Math.PI * 2); ctx.fill();
+      const squash = running ? 1 + 0.05 * Math.sin(wing + Math.PI / 2) : 1;
+      const tilt = running ? (0.06 + 0.1 * (speedNorm || 0)) : 0;
+      const rec = loadArt(breed);
+      ctx.save();
+      ctx.translate(x, y + bob);
+      ctx.scale(-1, 1);         // статичный арт смотрит влево — разворачиваем по ходу движения
+      ctx.rotate(-tilt);        // в зеркальных координатах нос «вниз-вперёд»
+      ctx.scale(1, squash);
+      if (isMe) { ctx.shadowColor = 'rgba(240,194,78,.85)'; ctx.shadowBlur = 12; }
+      if (rec.ok) {
+        ctx.drawImage(rec.img, -size / 2, -size / 2, size, size);
+      } else {
+        ctx.fillStyle = isMe ? '#f0c24e' : '#5b6472';
+        ctx.beginPath(); ctx.arc(0, 0, size / 2, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
     }
-    ctx.restore();
     if (isMe) {
       ctx.fillStyle = '#ffe39c'; ctx.font = '700 10px Nunito, sans-serif'; ctx.textAlign = 'center';
       ctx.fillText('ты', x, y + bob - size / 2 - 5);
@@ -742,6 +776,7 @@
     }
     haptic('medium');
     raceData = d;
+    d.racers.forEach((r) => loadFly(r.breed)); // сервер мог подобрать других соперников
     const maxFinishT = d.racers.reduce((m, r) => Math.max(m, num(r.finishT)), 0.5);
     const displayDur = Math.min(5, Math.max(1.6, maxFinishT)); // нормируем реальную длину анимации в приятный диапазон
     animScale = displayDur / maxFinishT;
@@ -795,6 +830,7 @@
     opponentsPreview = null; myPower = null; raceBusy = false; phase = 'idle'; raceData = null;
     session++;
     const mySession = session;
+    loadFly(curBreed); // полётный лист своей птицы — заранее
     styles();
     if (!ov) { ov = document.createElement('div'); ov.className = 'cd-drag-ov'; document.body.appendChild(ov); }
     renderSetup();
