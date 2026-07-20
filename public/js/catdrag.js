@@ -44,7 +44,7 @@
   function flash(msg) { if (window.ckFlash) window.ckFlash(msg); }
   function haptic(k) { window.haptic && window.haptic(k); }
   function meta(breed) { return BREED_META[breed] || { name: String(breed || ''), rarity: 'common' }; }
-  function artSrc(breed) { return `/img/pigeons/${encodeURIComponent(breed)}.webp?v=1`; }
+  function artSrc(breed) { return `/img/pigeons/${encodeURIComponent(breed)}.webp?v=2`; }
   function artTag(breed) {
     return `<img src="${artSrc(breed)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;align-items:center;justify-content:center;width:100%;height:100%;font-size:22px">🕊️</span>`;
   }
