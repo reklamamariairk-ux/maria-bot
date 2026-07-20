@@ -1914,7 +1914,7 @@
     const pop = ov.querySelector('#ck-pop'); if (!pop) return;
     pop.innerHTML = `<h3>${ICON.dove(20)} Прилетел голубь!</h3>
       <div style="width:78px;height:78px;margin:8px auto;border-radius:16px;border:2px solid ${DOVE_RCOLOR[meta.r]};display:flex;align-items:center;justify-content:center;overflow:hidden;background:rgba(238,191,82,.08);box-shadow:${meta.r === 'legendary' ? '0 0 12px rgba(238,191,82,.35)' : 'none'}">
-        <img src="/img/pigeons/${drop.breed}.webp?v=1" alt="" style="width:82%;height:82%;object-fit:contain" onerror="this.style.display='none'">
+        <img src="/img/pigeons/${drop.breed}.webp?v=2" alt="" style="width:82%;height:82%;object-fit:contain" onerror="this.style.display='none'">
       </div>
       <div class="v" style="font-size:19px">${meta.name}</div>
       <div style="color:var(--muted);font-size:13px">${drop.isNew ? 'Новый в альбоме!' : 'Дубликат — можно обменять или отправить'}</div>

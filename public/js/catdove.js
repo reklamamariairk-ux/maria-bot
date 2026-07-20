@@ -238,7 +238,7 @@
     const inv = data.invMap[b.id];
     const owned = !!inv && inv.count > 0;
     const week = data.weekBreed === b.id;
-    const artSrc = `/img/pigeons/${b.id}.webp?v=1`;
+    const artSrc = `/img/pigeons/${b.id}.webp?v=2`;
     const art = `<img src="${artSrc}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;align-items:center;justify-content:center;width:100%;height:100%">${DOVE_ICON(30)}</span>`;
     if (!owned) {
       return `<div class="cd-card cd-locked" data-r="${b.rarity}" data-breed="${b.id}">
@@ -263,7 +263,7 @@
     const b = BY_ID.get('champion');
     const inv = data.invMap.champion;
     if (!inv || inv.count <= 0) return '';
-    const artSrc = `/img/pigeons/champion.webp?v=1`;
+    const artSrc = `/img/pigeons/champion.webp?v=2`;
     const art = `<img src="${artSrc}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;align-items:center;justify-content:center;width:100%;height:100%">${DOVE_ICON(30)}</span>`;
     return `<div class="cd-champ" data-breed="champion">
       <div class="cd-champ__art">${art}</div>
@@ -490,7 +490,7 @@
   function pickGridHtml(ids, selectedId) {
     return `<div class="cd-pickgrid">${ids.map(id => {
       const b = BY_ID.get(id); if (!b) return '';
-      const artSrc = `/img/pigeons/${id}.webp?v=1`;
+      const artSrc = `/img/pigeons/${id}.webp?v=2`;
       return `<div class="cd-pickcard${id === selectedId ? ' sel' : ''}" data-r="${b.rarity}" data-breed="${id}">
         <div class="cd-art"><img src="${artSrc}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;align-items:center;justify-content:center;width:100%;height:100%">${DOVE_ICON(24)}</span></div>
         <div class="cd-n" style="font-size:9.5px">${b.name}</div>
@@ -604,9 +604,9 @@
       : `<button class="cd-tbtn" data-accept="${t.id}">Принять</button>`;
     return `<div class="cd-traderow">
       <div class="cd-traderow__swap">
-        <div class="cd-traderow__art"><img src="/img/pigeons/${t.give}.webp?v=1" alt="" onerror="this.style.display='none'"></div>
+        <div class="cd-traderow__art"><img src="/img/pigeons/${t.give}.webp?v=2" alt="" onerror="this.style.display='none'"></div>
         <span class="cd-traderow__arrow">→</span>
-        <div class="cd-traderow__art"><img src="/img/pigeons/${t.want}.webp?v=1" alt="" onerror="this.style.display='none'"></div>
+        <div class="cd-traderow__art"><img src="/img/pigeons/${t.want}.webp?v=2" alt="" onerror="this.style.display='none'"></div>
         <div style="min-width:0;flex:1">
           <div style="font-size:11.5px;color:var(--ink);font-weight:700">${give ? give.name : t.give} → ${want ? want.name : t.want}</div>
           <div class="cd-traderow__meta">${kind === 'mine' ? 'от тебя' : 'от ' + esc(t.fromName)}</div>
@@ -701,7 +701,7 @@
     const thanked = m.thanksSticker != null;
     return `<div class="cd-mailcard">
       <div class="cd-mailcard__top">
-        <div class="cd-mailcard__art"><img src="/img/pigeons/${m.breed}.webp?v=1" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;align-items:center;justify-content:center;width:100%;height:100%">${DOVE_ICON(18)}</span></div>
+        <div class="cd-mailcard__art"><img src="/img/pigeons/${m.breed}.webp?v=2" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;align-items:center;justify-content:center;width:100%;height:100%">${DOVE_ICON(18)}</span></div>
         <div class="cd-mailcard__b">
           <div class="cd-mailcard__n">${b ? b.name : m.breed}</div>
           <div class="cd-mailcard__phrase">«${STICKERS[m.sticker] || ''}»</div>
@@ -820,7 +820,7 @@
     return `<div class="cd-traderow">
       <div class="cd-traderow__swap">
         <div style="width:24px;text-align:center;font-weight:800;color:var(--gold-l);flex:none;font-size:12px">№${num(r.place)}</div>
-        <div class="cd-traderow__art"><img src="/img/pigeons/${r.breed}.webp?v=1" alt="" onerror="this.style.display='none'"></div>
+        <div class="cd-traderow__art"><img src="/img/pigeons/${r.breed}.webp?v=2" alt="" onerror="this.style.display='none'"></div>
         <div style="min-width:0;flex:1"><div style="font-size:12px;color:var(--ink);font-weight:700">${b ? b.name : r.breed}</div><div class="cd-traderow__meta">${num(r.score)} очков</div></div>
       </div>
       <div style="font-size:11.5px;color:var(--gold-l);font-weight:800;flex:none">${COIN_ICON(12)} ${fmt(r.prize)}</div>
@@ -956,7 +956,7 @@
       if (!id) return '';
       const b = BY_ID.get(id);
       const rarity = b ? b.rarity : 'common';
-      const artSrc = `/img/pigeons/${esc(id)}.webp?v=1`;
+      const artSrc = `/img/pigeons/${esc(id)}.webp?v=2`;
       return `<span class="cd-mini" data-r="${rarity}"><img src="${artSrc}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;align-items:center;justify-content:center;width:100%;height:100%">${DOVE_ICON(8)}</span></span>`;
     }).join('');
     return items ? `<span class="cd-mini-row">${items}</span>` : '';

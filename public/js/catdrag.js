@@ -44,7 +44,7 @@
   function flash(msg) { if (window.ckFlash) window.ckFlash(msg); }
   function haptic(k) { window.haptic && window.haptic(k); }
   function meta(breed) { return BREED_META[breed] || { name: String(breed || ''), rarity: 'common' }; }
-  function artSrc(breed) { return `/img/pigeons/${encodeURIComponent(breed)}.webp?v=1`; }
+  function artSrc(breed) { return `/img/pigeons/${encodeURIComponent(breed)}.webp?v=2`; }
   function artTag(breed) {
     return `<img src="${artSrc(breed)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;align-items:center;justify-content:center;width:100%;height:100%;font-size:22px">🕊️</span>`;
   }
@@ -71,6 +71,31 @@
   let t0 = 0, raceStartTs = 0, raceData = null, animScale = 1;
   let tapZoneEl = null, tapCaptured = false;
   let countdownTimers = [];
+
+  // ── сцена: арт-слои, pre-render-тайлы, частицы (пулы переживают заезды) ────────
+  const layerCache = {};          // sky/city: {img, ok} — как artCache, живёт между open()
+  let tiles = null;               // pre-render под текущий размер: {W,H,groundTop,sky,city,vignette,roadGrad}
+  const START_PAD = 46;           // мировой отступ старта — голуби на решётке целиком в кадре
+  const POOL_MAX = 80;
+  const dust = [];                // пул частиц пыли/пёрышек (переиспользуем объекты)
+  let speedLines = null;          // штрихи скорости (пересоздаются на заезд)
+  let confetti = null;            // конфетти финиша (только моё 1 место)
+  let shakeT0 = -1;               // встряска камеры на СТАРТ
+  let lastTickTs = 0;
+  let reducedMotion = false;
+  try { reducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { /* не критично */ }
+
+  function loadLayer(name) {
+    let rec = layerCache[name];
+    if (rec) return rec;
+    const img = new Image();
+    rec = { img, ok: null };
+    img.onload = () => { rec.ok = true; tiles = null; };   // слой доехал — пересобрать тайлы
+    img.onerror = () => { rec.ok = false; };
+    img.src = `/img/drag/${name}.webp?v=1`;
+    layerCache[name] = rec;
+    return rec;
+  }
 
   function loadArt(breed) {
     let rec = artCache[breed];
@@ -105,7 +130,10 @@
       .cd-drag-x{width:32px;height:32px;flex:none;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.28);color:var(--cream);font-size:15px;cursor:pointer}
       .cd-drag-body{flex:1;min-height:0;overflow-y:auto;padding:6px 14px calc(16px + env(safe-area-inset-bottom,0px))}
       .cd-drag-my{display:flex;align-items:center;gap:12px;background:var(--panel);border:2px solid var(--gold);border-radius:16px;padding:11px 12px;margin-bottom:14px;box-shadow:0 3px 12px rgba(238,191,82,.15)}
-      .cd-drag-my__art{width:52px;height:52px;flex:none;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.22)}
+      .cd-drag-my__art{width:52px;height:52px;flex:none;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 34%,rgba(141,146,156,.30),rgba(141,146,156,.04) 76%)}
+      .cd-drag-my__art[data-r="rare"]{background:radial-gradient(circle at 50% 34%,rgba(184,129,63,.34),rgba(184,129,63,.05) 76%)}
+      .cd-drag-my__art[data-r="epic"]{background:radial-gradient(circle at 50% 34%,rgba(144,112,194,.34),rgba(144,112,194,.05) 76%)}
+      .cd-drag-my__art[data-r="legendary"]{background:radial-gradient(circle at 50% 34%,rgba(240,194,78,.36),rgba(240,194,78,.06) 76%)}
       .cd-drag-my__art img{width:86%;height:86%;object-fit:contain}
       .cd-drag-my__b{flex:1;min-width:0}
       .cd-drag-my__n{font-weight:800;font-size:14.5px;color:var(--gold-l)}
@@ -124,23 +152,40 @@
       .cd-drag-card[data-r="rare"]{border-color:#b8813f}
       .cd-drag-card[data-r="epic"]{border-color:#9070c2}
       .cd-drag-card[data-r="legendary"]{border-color:var(--gold);box-shadow:0 0 8px rgba(238,191,82,.28)}
-      .cd-drag-card__art{width:100%;aspect-ratio:1;border-radius:9px;margin:0 auto 5px;display:flex;align-items:center;justify-content:center;background:rgba(238,191,82,.08);overflow:hidden}
+      .cd-drag-card__art{width:100%;aspect-ratio:1;border-radius:9px;margin:0 auto 5px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:radial-gradient(circle at 50% 34%,rgba(141,146,156,.30),rgba(141,146,156,.04) 76%)}
+      .cd-drag-card[data-r="rare"] .cd-drag-card__art{background:radial-gradient(circle at 50% 34%,rgba(184,129,63,.34),rgba(184,129,63,.05) 76%)}
+      .cd-drag-card[data-r="epic"] .cd-drag-card__art{background:radial-gradient(circle at 50% 34%,rgba(144,112,194,.34),rgba(144,112,194,.05) 76%)}
+      .cd-drag-card[data-r="legendary"] .cd-drag-card__art{background:radial-gradient(circle at 50% 34%,rgba(240,194,78,.36),rgba(240,194,78,.06) 76%)}
       .cd-drag-card__art img{width:78%;height:78%;object-fit:contain}
       .cd-drag-card__n{font-weight:700;font-size:9.5px;color:var(--ink);line-height:1.2;min-height:2.2em;display:flex;align-items:center;justify-content:center}
       .cd-drag-card__p{font-size:10px;color:var(--gold-l);font-weight:800;margin-top:2px}
       .cd-drag-hint{font-size:11.5px;color:var(--muted);text-align:center;margin:10px 2px 0;line-height:1.5}
       .cd-drag-cta{width:100%;box-sizing:border-box;display:flex;align-items:center;justify-content:center;gap:7px;border:1px solid #ffe9b3;border-radius:14px;padding:14px;font-weight:800;font-size:15px;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;cursor:pointer;margin-top:16px;min-height:48px}
       .cd-drag-cta:disabled{background:rgba(255,255,255,.07);color:var(--muted);border-color:transparent;cursor:default}
-      .cd-drag-race{position:relative;flex:1;display:flex;flex-direction:column;padding:0 10px 10px}
-      .cd-drag-canvas{width:100%;display:block;border-radius:14px;background:#120d0b}
+      .cd-drag-race{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;padding:0 10px 10px}
+      .cd-drag-canvas{display:block;border-radius:14px;background:#120d0b}
       .cd-drag-tap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;pointer-events:none}
       .cd-drag-cd{font-family:'Nunito',sans-serif;font-weight:900;color:var(--gold-l);text-shadow:0 4px 18px rgba(0,0,0,.6);animation:cdDragPop .5s ease-out}
       .cd-drag-cd--num{font-size:64px}
-      .cd-drag-cd--go{font-size:48px;color:#9be7a8}
+      .cd-drag-cd--go{font-size:44px;color:#9be7a8}
       @keyframes cdDragPop{0%{opacity:0;transform:scale(.5)}55%{opacity:1;transform:scale(1.12)}100%{opacity:1;transform:scale(1)}}
+      .cd-drag-treewrap{display:flex;align-items:center;gap:20px;animation:cdDragPop .4s ease-out}
+      .cd-drag-tree{display:flex;flex-direction:column;gap:7px;background:rgba(18,10,7,.78);border:1px solid var(--line);border-radius:14px;padding:10px 9px;box-shadow:0 6px 18px rgba(0,0,0,.4)}
+      .cd-drag-tree i{width:16px;height:16px;border-radius:50%;background:#3a2a24;box-shadow:inset 0 0 4px rgba(0,0,0,.55)}
+      .cd-drag-tree i.r.on{background:#e5484d;box-shadow:0 0 10px rgba(229,72,77,.85)}
+      .cd-drag-tree i.g.on{background:#43c465;box-shadow:0 0 12px rgba(67,196,101,.9)}
       .cd-drag-tapline{font-size:14px;font-weight:800;color:var(--cream);background:rgba(0,0,0,.42);border-radius:12px;padding:8px 16px;animation:cdDragPulse 1s ease-in-out infinite}
       @keyframes cdDragPulse{0%,100%{opacity:.7}50%{opacity:1}}
-      .cd-drag-result{position:absolute;left:10px;right:10px;bottom:10px;background:linear-gradient(180deg,#2e1119,#1d0a11);border:1px solid var(--line);border-radius:18px;padding:18px;text-align:center;box-shadow:0 -10px 30px rgba(0,0,0,.5)}
+      .cd-drag-result{position:absolute;left:10px;right:10px;bottom:10px;background:linear-gradient(180deg,rgba(46,17,25,.96),rgba(29,10,17,.97));border:1px solid var(--line);border-radius:18px;padding:14px 18px 18px;text-align:center;box-shadow:0 -10px 30px rgba(0,0,0,.5)}
+      .cd-drag-podium{display:flex;align-items:flex-end;justify-content:center;gap:12px;margin:2px 0 10px}
+      .cd-drag-pod{display:flex;flex-direction:column;align-items:center;gap:3px}
+      .cd-drag-pod img{width:46px;height:46px;object-fit:contain;filter:drop-shadow(0 3px 5px rgba(0,0,0,.45))}
+      .cd-drag-pod.me img{filter:drop-shadow(0 0 9px rgba(240,194,78,.9))}
+      .cd-drag-pod__base{width:58px;border-radius:8px 8px 4px 4px;display:flex;align-items:flex-start;justify-content:center;font-weight:900;font-size:14px;color:#3a2413;padding-top:3px}
+      .cd-drag-pod--1 .cd-drag-pod__base{height:50px;background:linear-gradient(180deg,#ffe7a6,#eebf52)}
+      .cd-drag-pod--2 .cd-drag-pod__base{height:36px;background:linear-gradient(180deg,#d9dade,#a7abb5)}
+      .cd-drag-pod--3 .cd-drag-pod__base{height:28px;background:linear-gradient(180deg,#d9a26a,#b8813f)}
+      .cd-drag-pod__n{font-size:9px;color:var(--muted);max-width:62px;line-height:1.15;text-align:center}
       .cd-drag-place{font-family:'Nunito',sans-serif;font-weight:900;font-size:26px;color:var(--gold-l)}
       .cd-drag-reward{font-size:16px;font-weight:800;margin-top:6px;color:var(--muted)}
       .cd-drag-reward.pos{color:#9be7a8}
@@ -181,7 +226,7 @@
     return `<div class="cd-drag-hd"><div class="cd-drag-t">🏁 Драг-заезд</div><button class="cd-drag-x" id="cd-drag-x">×</button></div>
       <div class="cd-drag-body">
         <div class="cd-drag-my">
-          <div class="cd-drag-my__art">${artTag(curBreed)}</div>
+          <div class="cd-drag-my__art" data-r="${esc(m.rarity)}">${artTag(curBreed)}</div>
           <div class="cd-drag-my__b"><div class="cd-drag-my__n">${esc(m.name)}</div><div class="cd-drag-my__p">${myPower !== null ? `Мощность: ⚡ ${Math.round(myPower)}` : 'Твой боец на старте'}</div></div>
         </div>
         <div class="cd-drag-sect">Режим</div>
@@ -240,21 +285,23 @@
     ctx = canvas.getContext('2d');
     setupCanvasSize();
     raceStartTs = 0; phase = 'idle';
+    // свежий заезд — сброс эффектов (пулы переиспользуем, но частицы гасим)
+    for (let i = 0; i < dust.length; i++) dust[i].on = false;
+    speedLines = null; confetti = null; shakeT0 = -1; lastTickTs = 0;
     stopLoop();
     raf = requestAnimationFrame(tick);
   }
 
   function setupCanvasSize() {
     if (!canvas || !ctx) return;
-    const wrap = canvas.parentElement;
-    cssW = (wrap && wrap.clientWidth) || 320;
-    const lanes = (raceData && Array.isArray(raceData.racers)) ? raceData.racers.length : (previewRacers().length || 4);
-    // +46 headroom под небо/скайлайн (землю рисуем с 24% высоты), 58/лейн под голубя+тень
-    cssH = Math.max(220, lanes * 58 + 46);
+    const wrap = canvas.parentElement; // .cd-drag-race, padding 0 10px 10px
+    cssW = Math.max(280, ((wrap && wrap.clientWidth) || 340) - 20);
+    cssH = Math.max(300, ((wrap && wrap.clientHeight) || 430) - 10);
     dpr = window.devicePixelRatio || 1;
     canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
     canvas.style.width = cssW + 'px'; canvas.style.height = cssH + 'px';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    tiles = null; // размер сменился — pre-render-тайлы пересобрать
   }
 
   function previewRacers() {
@@ -263,123 +310,337 @@
     return [mine, ...opps];
   }
 
-  // ── сайд-скролл-сцена: параллакс-фон + камера за лидером + бегущие голуби ──────
-  // Мир длиннее экрана (worldLen), позиции по finishT нормированы в frac[0..1] → worldX =
-  // frac*worldLen; финиш — на worldLen. Камера держит лидера у ~40% ширины, поэтому мир
-  // (столбы/разметка/фон) стримится справа налево со скоростью лидера → ощущение движения.
-  // Всё процедурное, без нового арта. Дёшево на кадр (только заливки/дуги) → держит 60fps.
+  // ── сайд-скролл-сцена: закатные арт-слои + камера за лидером + бегущие голуби ──
+  // Мир длиннее экрана (worldLen); worldX(frac)=START_PAD+frac*(worldL-START_PAD), финиш на
+  // worldL. Камера держит лидера у ~40% ширины и в конце останавливается так, чтобы арка
+  // финиша стояла на ~72% ширины — все голуби в кадре. Слои sky(×0.2)/city(×0.5) — webp,
+  // pre-render в зеркальный тайл (бесшовный цикл); при отсутствии файла — процедурный
+  // fallback того же слоя. На кадр — только drawImage/заливки → держит 60fps.
   function worldLen() { return Math.max(cssW * 2.2, cssW + 240); }
+  function worldX(frac, worldL) { return START_PAD + frac * (worldL - START_PAD); }
 
-  function drawScene(list, fracs, ts) {
-    if (!ctx || !cssW || !cssH) return;
+  function buildTiles() {
     const W = cssW, H = cssH;
-    const worldL = worldLen();
-    const leaderFrac = fracs.length ? Math.max.apply(null, fracs) : 0;
-    const anchorX = W * 0.4;
-    const camX = Math.max(0, Math.min(worldL - W, leaderFrac * worldL - anchorX));
-    const groundTop = Math.round(H * 0.24);
-
-    // небо (тёплый бренд-градиент)
-    const sky = ctx.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0, '#3a2c22'); sky.addColorStop(0.55, '#241a15'); sky.addColorStop(1, '#140d0a');
-    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
-
-    drawClouds(camX * 0.25, W);                 // дальний слой (медленный)
-    drawSkyline(camX * 0.5, W, groundTop);       // средний слой (быстрее)
-
-    // земля/асфальт
-    ctx.fillStyle = '#19110d'; ctx.fillRect(0, groundTop, W, H - groundTop);
-
-    const n = list.length || 1;
-    const laneArea = H - groundTop, laneH = laneArea / n;
-    for (let i = 0; i < n; i++) {
-      ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,.03)' : 'rgba(0,0,0,.12)';
-      ctx.fillRect(0, groundTop + i * laneH, W, laneH);
+    const groundTop = Math.round(H * 0.40);
+    tiles = { W, H, groundTop };
+    const sky = loadLayer('sky'), city = loadLayer('city');
+    if (sky.ok) {
+      const h = groundTop + 12;
+      const w = Math.max(1, Math.round(sky.img.width * (h / sky.img.height)));
+      const c = document.createElement('canvas'); c.width = w * 2; c.height = h;
+      const g = c.getContext('2d');
+      g.drawImage(sky.img, 0, 0, w, h);
+      g.save(); g.translate(w * 2, 0); g.scale(-1, 1); g.drawImage(sky.img, 0, 0, w, h); g.restore();
+      tiles.sky = c;
     }
-    drawLaneDashes(camX, groundTop, laneArea, n, W);   // разметка стримится с камерой
-    drawPoles(camX, groundTop, W);                     // фонарные столбы (ближний слой, скорость мира)
-
-    // финишный чекер-баннер выезжает справа под конец
-    const finishX = worldL - camX;
-    if (finishX <= W + 40) drawFinish(finishX, groundTop, laneArea);
-
-    // голуби: worldX=frac*worldLen, экранный x=worldX-camX; лёгкий боб + тень
-    list.forEach((r, i) => {
-      const y = groundTop + i * laneH + laneH / 2;
-      const x = fracs[i] * worldL - camX;
-      const running = phase === 'animating' && fracs[i] < 1;
-      drawPigeon(r.breed, x, y, Math.min(laneH * 0.82, 48), !!r.me, ts, running);
-    });
+    if (city.ok) {
+      // город НЕ зеркалим (вывеска «МАРИЯ» читаемая) — тайлим внахлёст: тёмные силуэты
+      // на перекрытии сливаются в union, шва не видно
+      const h = Math.min(Math.round(groundTop * 0.85), Math.round(H * 0.36));
+      const w = Math.max(1, Math.round(city.img.width * (h / city.img.height)));
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(city.img, 0, 0, w, h);
+      tiles.city = c;
+      tiles.cityStep = Math.max(1, w - 28);
+    }
+    // асфальт: тёплый градиент глубины (дальняя кромка темнее)
+    const rg = ctx.createLinearGradient(0, groundTop, 0, H);
+    rg.addColorStop(0, '#1d1210'); rg.addColorStop(0.25, '#241711'); rg.addColorStop(1, '#2d1e15');
+    tiles.roadGrad = rg;
+    // виньетка — один pre-render на кадр целиком
+    const v = document.createElement('canvas'); v.width = Math.max(1, W); v.height = Math.max(1, H);
+    const vg = v.getContext('2d');
+    const grad = vg.createRadialGradient(W / 2, H * 0.46, Math.min(W, H) * 0.44, W / 2, H * 0.5, Math.max(W, H) * 0.8);
+    grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(1, 'rgba(10,5,3,.42)');
+    vg.fillStyle = grad; vg.fillRect(0, 0, W, H);
+    tiles.vignette = v;
   }
 
-  function drawClouds(scroll, W) {
-    const spacing = 240, r = 32;
-    ctx.fillStyle = 'rgba(255,225,170,.06)';
-    for (let k = Math.floor(scroll / spacing) - 1; k * spacing - scroll < W + spacing; k++) {
-      const x = k * spacing - scroll + 40, y = 26 + (((k % 3) + 3) % 3) * 15;
+  function drawTile(cnv, scroll, y, step) {
+    const tw = step || cnv.width;
+    const off = ((scroll % tw) + tw) % tw;
+    for (let x = -off; x < cssW; x += tw) ctx.drawImage(cnv, Math.round(x), y);
+  }
+  function drawSkyFallback(scroll, groundTop) {
+    if (!tiles.skyGrad) {
+      const g = ctx.createLinearGradient(0, 0, 0, groundTop + 10);
+      g.addColorStop(0, '#8a5a52'); g.addColorStop(0.45, '#c98a54'); g.addColorStop(1, '#f2bf6e');
+      tiles.skyGrad = g;
+    }
+    ctx.fillStyle = tiles.skyGrad; ctx.fillRect(0, 0, cssW, groundTop + 2);
+    const spacing = 230;
+    ctx.fillStyle = 'rgba(255,232,190,.30)';
+    for (let k = Math.floor(scroll / spacing) - 1; k * spacing - scroll < cssW + spacing; k++) {
+      const x = k * spacing - scroll + 40, y = 22 + (((k % 3) + 3) % 3) * 16;
       ctx.beginPath();
-      ctx.ellipse(x, y, r, r * 0.55, 0, 0, Math.PI * 2);
-      ctx.ellipse(x + r * 0.8, y + 4, r * 0.7, r * 0.45, 0, 0, Math.PI * 2);
+      ctx.ellipse(x, y, 30, 15, 0, 0, Math.PI * 2);
+      ctx.ellipse(x + 24, y + 5, 22, 11, 0, 0, Math.PI * 2);
       ctx.fill();
     }
   }
-  function drawSkyline(scroll, W, groundTop) {
-    const spacing = 92;
-    ctx.fillStyle = 'rgba(74,50,34,.5)';
-    for (let k = Math.floor(scroll / spacing) - 1; k * spacing - scroll < W + spacing; k++) {
-      const x = k * spacing - scroll, h = 26 + ((k * 37) % 42 + 42) % 42;
-      ctx.fillRect(x, groundTop - h, 64, h);
+  function drawCityFallback(scroll, groundTop) {
+    const spacing = 88;
+    for (let k = Math.floor(scroll / spacing) - 1; k * spacing - scroll < cssW + spacing; k++) {
+      const x = k * spacing - scroll, hh = 30 + (((k * 37) % 40) + 40) % 40;
+      ctx.fillStyle = 'rgba(44,26,18,.88)';
+      ctx.fillRect(x, groundTop - hh, 62, hh);
+      ctx.fillStyle = 'rgba(255,215,122,.5)';
+      const wn = (((k % 3) + 3) % 3) + 1;
+      for (let w = 0; w < wn; w++) ctx.fillRect(x + 8 + w * 16, groundTop - hh + 8, 5, 7);
     }
   }
+
+  function drawScene(list, fracs, ts) {
+    if (!ctx || !cssW || !cssH) return;
+    if (!tiles || tiles.W !== cssW || tiles.H !== cssH) buildTiles();
+    const W = cssW, H = cssH, worldL = worldLen();
+    const leaderFrac = fracs.length ? Math.max.apply(null, fracs) : 0;
+    const camEnd = Math.max(0, worldL - W * 0.72);
+    const camX = Math.max(0, Math.min(camEnd, worldX(leaderFrac, worldL) - W * 0.4));
+    const groundTop = tiles.groundTop;
+
+    ctx.save();
+    if (shakeT0 > 0 && !reducedMotion) {
+      const st = ts - shakeT0;
+      if (st >= 0 && st < 250) {
+        const k = 3 * (1 - st / 250);
+        ctx.translate(Math.sin(ts * 0.09) * k, Math.cos(ts * 0.117) * k);
+      }
+    }
+
+    if (tiles.sky) drawTile(tiles.sky, camX * 0.2, 0); else drawSkyFallback(camX * 0.2, groundTop);
+    if (tiles.city) drawTile(tiles.city, camX * 0.5, groundTop - tiles.city.height, tiles.cityStep); else drawCityFallback(camX * 0.5, groundTop);
+
+    // асфальт + золотая кромка горизонта
+    ctx.fillStyle = tiles.roadGrad; ctx.fillRect(0, groundTop, W, H - groundTop);
+    ctx.fillStyle = 'rgba(240,194,78,.18)'; ctx.fillRect(0, groundTop, W, 2);
+
+    const n = list.length || 1;
+    const laneArea = H - groundTop - 6, laneH = laneArea / n;
+    for (let i = 0; i < n; i++) {
+      ctx.fillStyle = i % 2 === 0 ? 'rgba(255,235,205,.03)' : 'rgba(0,0,0,.10)';
+      ctx.fillRect(0, groundTop + i * laneH, W, laneH);
+    }
+    drawLaneDashes(camX, groundTop, laneArea, n, W);
+
+    // стартовая решётка (видна пока камера у старта)
+    const startX = START_PAD - camX - 26;
+    if (startX > -10 && startX < W) {
+      ctx.fillStyle = 'rgba(244,237,226,.5)'; ctx.fillRect(startX, groundTop, 3, laneArea);
+      ctx.fillStyle = 'rgba(244,237,226,.22)'; ctx.fillRect(startX + 6, groundTop, 3, laneArea);
+    }
+
+    const finishX = worldL - camX;
+    if (finishX <= W + 60) drawFinishArch(finishX, groundTop, laneArea);
+
+    if (phase === 'animating' && !reducedMotion) drawSpeedLines(ts);
+
+    // позиции голубей: сначала пыль (за спрайтами), потом сами спрайты
+    const pos = [];
+    list.forEach((r, i) => {
+      const size = Math.min(laneH * 0.85, 64);
+      const y = groundTop + i * laneH + laneH * 0.56;
+      const frac = fracs[i];
+      let x = worldX(frac, worldL) - camX;
+      if (frac >= 1) x = finishX + 24 + size * 0.34 + (i % 2) * 9; // финишировали — стоим ЗА чекер-лентой, в кадре
+      const running = phase === 'animating' && frac < 1;
+      const ft = raceData && raceData.racers && raceData.racers[i] ? num(raceData.racers[i].finishT) : 0;
+      pos.push({ r, i, x, y, size, frac, running, sp: ft > 0 ? Math.min(1, 2.2 / ft) : 0 });
+      if (running && !reducedMotion && Math.random() < 0.85) {
+        spawnDust(x - size * 0.42, y + size * 0.3, !!r.me);
+        if (r.me && Math.random() < 0.35) spawnDust(x - size * 0.5, y + size * 0.18, true);
+      }
+    });
+    stepDust(ts);
+    drawDust();
+    pos.forEach((p) => {
+      drawPigeon(p.r.breed, p.x, p.y, p.size, !!p.r.me, ts, p.running, p.sp, p.i);
+      const place = raceData && raceData.racers && raceData.racers[p.i] ? num(raceData.racers[p.i].place) : 0;
+      if (p.frac >= 1 && place) drawPlaceBadge(p.x, p.y - p.size * 0.78, place, !!p.r.me);
+    });
+
+    if (confetti) { stepConfetti(ts); drawConfetti(); }
+    ctx.restore();
+
+    ctx.drawImage(tiles.vignette, 0, 0);
+    if (phase === 'animating' || phase === 'done') drawProgressBar(list, fracs);
+    lastTickTs = ts;
+  }
+
   function drawLaneDashes(scroll, top, area, n, W) {
-    const laneH = area / n, spacing = 46, dashW = 22, off = ((scroll % spacing) + spacing) % spacing;
-    ctx.fillStyle = 'rgba(240,194,78,.26)';
+    const laneH = area / n, spacing = 46, dashW = 20, off = ((scroll % spacing) + spacing) % spacing;
+    ctx.fillStyle = 'rgba(240,194,78,.20)';
     for (let i = 1; i < n; i++) {
-      const y = top + i * laneH - 1.5;
-      for (let x = -off; x < W; x += spacing) ctx.fillRect(x, y, dashW, 3);
+      const y = top + i * laneH - 1;
+      for (let x = -off; x < W; x += spacing) ctx.fillRect(x, y, dashW, 2);
     }
   }
-  function drawPoles(camX, groundTop, W) {
-    const spacing = 200;
-    for (let k = Math.floor(camX / spacing) - 1; k * spacing - camX < W + spacing; k++) {
-      const x = k * spacing - camX + 26;
-      if (x < -14 || x > W + 14) continue;
-      ctx.fillStyle = 'rgba(18,12,9,.85)'; ctx.fillRect(x, groundTop - 46, 5, 52);
-      ctx.fillStyle = 'rgba(240,194,78,.5)';
-      ctx.beginPath(); ctx.arc(x + 2.5, groundTop - 47, 6, 0, Math.PI * 2); ctx.fill();
-    }
-  }
-  function drawFinish(x, top, area) {
-    const sq = 10;
+  function drawFinishArch(x, top, area) {
+    // чекер-лента поперёк дорожек + табличка «ФИНИШ» на стойке
+    const sq = 8;
     for (let yy = top; yy < top + area; yy += sq) {
       const row = Math.floor((yy - top) / sq);
-      for (let c = 0; c < 2; c++) { ctx.fillStyle = ((row + c) % 2 === 0) ? '#f4ede2' : '#1a120e'; ctx.fillRect(x + c * sq, yy, sq, sq); }
+      for (let c = 0; c < 2; c++) {
+        ctx.fillStyle = ((row + c) % 2 === 0) ? 'rgba(244,237,226,.92)' : 'rgba(26,18,14,.92)';
+        ctx.fillRect(x + c * sq, yy, sq, Math.min(sq, top + area - yy));
+      }
     }
-    ctx.fillStyle = '#e5484d'; ctx.fillRect(x - 4, top - 15, sq * 2 + 8, 13);
-    ctx.fillStyle = '#fff'; ctx.font = '700 8px Nunito, sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('ФИНИШ', x + sq, top - 5.5);
+    ctx.fillStyle = '#3a2413'; ctx.fillRect(x + 6, top - 30, 4, 30);
+    ctx.fillStyle = '#e5484d';
+    ctx.beginPath();
+    if (ctx.roundRect) { ctx.roundRect(x - 22, top - 44, 60, 18, 5); ctx.fill(); }
+    else ctx.fillRect(x - 22, top - 44, 60, 18);
+    ctx.fillStyle = '#fff'; ctx.font = '800 9px Nunito, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('ФИНИШ', x + 8, top - 31.5);
   }
-  function drawPigeon(breed, x, y, size, isMe, ts, running) {
-    const bob = running ? Math.sin(ts / 90 + x * 0.05) * size * 0.09 : 0;
-    const cy = y + bob;
-    // тень под голубем (не двигается с бобом — «на земле»)
-    ctx.save();
+
+  function drawPigeon(breed, x, y, size, isMe, ts, running, speedNorm, laneIdx) {
+    // тень на земле (без боба)
     ctx.fillStyle = 'rgba(0,0,0,.32)';
-    ctx.beginPath(); ctx.ellipse(x, y + size * 0.42, size * 0.34, size * 0.12, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
+    ctx.beginPath(); ctx.ellipse(x, y + size * 0.44, size * 0.36, size * 0.11, 0, 0, Math.PI * 2); ctx.fill();
+    const wing = ts / 85 + laneIdx * 1.7;
+    const bob = running ? Math.sin(wing) * size * 0.08 : 0;
+    const squash = running ? 1 + 0.05 * Math.sin(wing + Math.PI / 2) : 1;
+    const tilt = running ? (0.06 + 0.1 * (speedNorm || 0)) : 0;
     const rec = loadArt(breed);
     ctx.save();
+    ctx.translate(x, y + bob);
+    ctx.scale(-1, 1);           // арт смотрит влево — разворачиваем по ходу движения
+    ctx.rotate(-tilt);          // в зеркальных координатах нос «вниз-вперёд»
+    ctx.scale(1, squash);
     if (isMe) { ctx.shadowColor = 'rgba(240,194,78,.85)'; ctx.shadowBlur = 12; }
     if (rec.ok) {
-      ctx.drawImage(rec.img, x - size / 2, cy - size / 2, size, size);
+      ctx.drawImage(rec.img, -size / 2, -size / 2, size, size);
     } else {
       ctx.fillStyle = isMe ? '#f0c24e' : '#5b6472';
-      ctx.beginPath(); ctx.arc(x, cy, size / 2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(0, 0, size / 2, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
     if (isMe) {
       ctx.fillStyle = '#ffe39c'; ctx.font = '700 10px Nunito, sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('ты', x, cy - size / 2 - 4);
+      ctx.fillText('ты', x, y + bob - size / 2 - 5);
+    }
+  }
+  function drawPlaceBadge(x, y, place, isMe) {
+    ctx.save();
+    ctx.fillStyle = isMe ? '#f0c24e' : 'rgba(244,237,226,.94)';
+    ctx.strokeStyle = 'rgba(26,18,14,.6)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(x, y, 10, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#3a2413'; ctx.font = '900 11px Nunito, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(place), x, y + 0.5);
+    ctx.restore();
+    ctx.textBaseline = 'alphabetic';
+  }
+  function drawProgressBar(list, fracs) {
+    const y = 13, x0 = 16, x1 = cssW - 26;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+    // чекер-флажок финиша
+    for (let r = 0; r < 2; r++) for (let c = 0; c < 2; c++) {
+      ctx.fillStyle = (r + c) % 2 === 0 ? '#f4ede2' : '#1a120e';
+      ctx.fillRect(x1 + 6 + c * 4, y - 6 + r * 4, 4, 4);
+    }
+    let meDot = null;
+    list.forEach((r, i) => {
+      const dx = x0 + Math.min(1, fracs[i]) * (x1 - x0);
+      if (r.me) { meDot = dx; return; }
+      ctx.fillStyle = 'rgba(216,206,194,.85)';
+      ctx.beginPath(); ctx.arc(dx, y, 3.2, 0, Math.PI * 2); ctx.fill();
+    });
+    if (meDot !== null) {
+      ctx.fillStyle = '#f0c24e'; ctx.strokeStyle = 'rgba(58,36,19,.8)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(meDot, y, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // ── частицы: пыль/пёрышки (пул), спидлайны, конфетти ───────────────────────────
+  function spawnDust(x, y, gold) {
+    let p = null;
+    for (let i = 0; i < dust.length; i++) if (!dust[i].on) { p = dust[i]; break; }
+    if (!p) {
+      if (dust.length >= POOL_MAX) return;
+      p = {}; dust.push(p);
+    }
+    p.on = true; p.x = x; p.y = y;
+    p.vx = -(50 + Math.random() * 90); p.vy = -(6 + Math.random() * 26);
+    p.t0 = 0; p.life = 380 + Math.random() * 320; p.k = 1;
+    p.r = 1.4 + Math.random() * 2.4; p.gold = !!gold;
+  }
+  function stepDust(ts) {
+    const dt = lastTickTs ? Math.min(50, ts - lastTickTs) : 16;
+    for (let i = 0; i < dust.length; i++) {
+      const p = dust[i];
+      if (!p.on) continue;
+      if (!p.t0) p.t0 = ts;
+      const age = ts - p.t0;
+      if (age > p.life) { p.on = false; continue; }
+      p.k = 1 - age / p.life;
+      p.x += p.vx * dt / 1000; p.y += p.vy * dt / 1000;
+    }
+  }
+  function drawDust() {
+    for (let i = 0; i < dust.length; i++) {
+      const p = dust[i];
+      if (!p.on) continue;
+      ctx.globalAlpha = 0.5 * p.k;
+      ctx.fillStyle = p.gold ? '#f0c24e' : '#d6ba96';
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+  function drawSpeedLines(ts) {
+    if (!speedLines) {
+      speedLines = [];
+      for (let i = 0; i < 10; i++) speedLines.push({ x: Math.random() * cssW, y: Math.random() * cssH, len: 40 + Math.random() * 50, sp: 520 + Math.random() * 420 });
+    }
+    const dt = lastTickTs ? Math.min(50, ts - lastTickTs) : 16;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,236,200,.10)'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    for (let i = 0; i < speedLines.length; i++) {
+      const l = speedLines[i];
+      l.x -= l.sp * dt / 1000;
+      if (l.x + l.len < 0) { l.x = cssW + Math.random() * 80; l.y = Math.random() * cssH; }
+      ctx.beginPath(); ctx.moveTo(l.x, l.y); ctx.lineTo(l.x + l.len, l.y); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function startConfetti() {
+    if (reducedMotion) return;
+    confetti = [];
+    const colors = ['#f0c24e', '#ffe39c', '#eee7dd', '#c96f7f'];
+    for (let i = 0; i < 54; i++) {
+      confetti.push({
+        x: Math.random() * cssW, y: -12 - Math.random() * cssH * 0.4,
+        vx: -30 + Math.random() * 60, vy: 90 + Math.random() * 130,
+        w: 3 + Math.random() * 3.5, rot: Math.random() * Math.PI, vr: -3 + Math.random() * 6,
+        c: colors[i % colors.length],
+      });
+    }
+  }
+  function stepConfetti(ts) {
+    const dt = lastTickTs ? Math.min(50, ts - lastTickTs) : 16;
+    let alive = 0;
+    for (let i = 0; i < confetti.length; i++) {
+      const p = confetti[i];
+      p.x += p.vx * dt / 1000; p.y += p.vy * dt / 1000; p.rot += p.vr * dt / 1000;
+      p.vy += 60 * dt / 1000;
+      if (p.y < cssH + 14) alive++;
+    }
+    if (!alive) confetti = null;
+  }
+  function drawConfetti() {
+    if (!confetti) return;
+    for (let i = 0; i < confetti.length; i++) {
+      const p = confetti[i];
+      if (p.y >= cssH + 14) continue;
+      ctx.save();
+      ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.fillStyle = p.c;
+      ctx.fillRect(-p.w / 2, -p.w / 3, p.w, p.w / 1.5);
+      ctx.restore();
     }
   }
 
@@ -398,10 +659,16 @@
       });
       drawScene(raceData.racers, positions, ts);
       if (!allDone) { raf = requestAnimationFrame(tick); return; }
-      raf = 0; phase = 'done';
-      // застывший финальный кадр (все на финише), затем плашка результата
+      phase = 'done';
+      if (num(raceData.myPlace) === 1) startConfetti();
+      setTimeout(() => { if (ov && step === 'race') renderResult(); }, 650);
+      raf = requestAnimationFrame(tick);
+      return;
+    }
+    if (phase === 'done' && raceData) {
+      // финальный кадр: все у арки; пока живут конфетти/пыль — дорисовываем
       drawScene(raceData.racers, raceData.racers.map(() => 1), ts);
-      setTimeout(() => { if (ov && step === 'race') renderResult(); }, 450);
+      raf = confetti || dust.some((p) => p.on) ? requestAnimationFrame(tick) : 0;
       return;
     }
     // countdown/idle/go — стартовая решётка (моя птица + превью соперников), мир статичен
@@ -410,21 +677,29 @@
     raf = requestAnimationFrame(tick);
   }
 
-  // ── отсчёт 3-2-1-GO → замер реакции по первому тапу ─────────────────────────────
+  // ── отсчёт 3-2-1-GO (драг-«ёлка») → замер реакции по первому тапу ───────────────
+  function treeHtml(reds, go) {
+    let h = '<div class="cd-drag-tree">';
+    for (let i = 0; i < 3; i++) h += `<i class="r${i < reds ? ' on' : ''}"></i>`;
+    h += `<i class="g${go ? ' on' : ''}"></i></div>`;
+    return h;
+  }
   function runCountdown() {
     clearTimers();
     const setTap = (html) => { const el = ov && ov.querySelector('#cd-drag-tap'); if (el) el.innerHTML = html; };
-    setTap('<div class="cd-drag-cd cd-drag-cd--num">3</div>');
-    countdownTimers.push(setTimeout(() => setTap('<div class="cd-drag-cd cd-drag-cd--num">2</div>'), 650));
-    countdownTimers.push(setTimeout(() => setTap('<div class="cd-drag-cd cd-drag-cd--num">1</div>'), 1300));
+    const stepHtml = (reds, num) => `<div class="cd-drag-treewrap">${treeHtml(reds, false)}<div class="cd-drag-cd cd-drag-cd--num">${num}</div></div>`;
+    setTap(stepHtml(1, 3));
+    countdownTimers.push(setTimeout(() => setTap(stepHtml(2, 2)), 650));
+    countdownTimers.push(setTimeout(() => setTap(stepHtml(3, 1)), 1300));
     countdownTimers.push(setTimeout(() => {
-      setTap('<div class="cd-drag-cd cd-drag-cd--go">СТАРТ!</div><div class="cd-drag-tapline">Тапни как можно быстрее!</div>');
+      setTap(`<div class="cd-drag-treewrap">${treeHtml(3, true)}<div class="cd-drag-cd cd-drag-cd--go">СТАРТ!</div></div><div class="cd-drag-tapline">Тапни как можно быстрее!</div>`);
       armTap();
     }, 1950));
   }
   function armTap() {
     tapCaptured = false;
     phase = 'go';
+    shakeT0 = performance.now(); // встряска камеры на СТАРТ (в reduced-motion не рисуется)
     t0 = performance.now();
     tapZoneEl = ov && ov.querySelector('#cd-drag-race');
     if (tapZoneEl) tapZoneEl.addEventListener('pointerdown', onTap, { passive: true });
@@ -486,9 +761,18 @@
     const reward = num(raceData.reward);
     const race = ov.querySelector('#cd-drag-race');
     if (!race) return;
+    // мини-подиум топ-3 (2-1-3), мой голубь подсвечен
+    const byPlace = raceData.racers.slice().sort((a, b) => num(a.place) - num(b.place)).slice(0, 3);
+    const podOrder = [byPlace[1], byPlace[0], byPlace[2]].filter(Boolean);
+    const podHtml = podOrder.map((r) => `<div class="cd-drag-pod cd-drag-pod--${num(r.place)}${r.me ? ' me' : ''}">
+        <img src="${artSrc(r.breed)}" alt="" onerror="this.style.display='none'">
+        <div class="cd-drag-pod__base">${num(r.place)}</div>
+        <div class="cd-drag-pod__n">${r.me ? 'Ты' : esc(meta(r.breed).name)}</div>
+      </div>`).join('');
     const panel = document.createElement('div');
     panel.className = 'cd-drag-result';
     panel.innerHTML = `
+      <div class="cd-drag-podium">${podHtml}</div>
       <div class="cd-drag-place">${place || '—'} место</div>
       ${isBet
         ? `<div class="cd-drag-reward ${reward > 0 ? 'pos' : reward < 0 ? 'neg' : ''}">${reward > 0 ? '+' : ''}${fmt(reward)} монет</div>`
