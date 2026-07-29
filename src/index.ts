@@ -1876,6 +1876,13 @@ app.post("/api/order", rateLimit(15), async (req, res) => {
   }
   const richComment = ctx.join("\n");
 
+  // Имена/цены позиций из кэша каталога — для B24-fallback, когда шлюз сайта лежит
+  // (обычный путь берёт их из ответа PHP, fallback-путь иначе показал бы «Товар #id»)
+  const itemsInfo = items.map((i) => {
+    const p = catalog.find((c) => c.id === i.id);
+    return { id: i.id, name: p?.name ?? `Товар #${i.id}`, price: p?.priceNumber ?? 0, qty: i.qty };
+  });
+
   const result = await createOrder({
     phone,
     name:          String(body.name).trim(),
@@ -1886,7 +1893,7 @@ app.post("/api/order", rateLimit(15), async (req, res) => {
     delivery_time: body.delivery_time ? String(body.delivery_time).trim() : undefined,
     comment:       richComment,
     email:         body.email         ? String(body.email).trim()         : undefined,
-  });
+  }, itemsInfo);
 
   if (!result.ok) {
     console.error(`[ORDER] PHP error: ${result.error} for phone=${maskPhone(phone)} items=${JSON.stringify(bodySnap.itemIds)}`);
@@ -1895,7 +1902,7 @@ app.post("/api/order", rateLimit(15), async (req, res) => {
     res.status(502).json({ ok: false, error: result.error ?? "order_failed", message: userMsg });
     return;
   }
-  console.log(`[ORDER] created #${result.orderId} for ${maskPhone(phone)}`);
+  console.log(`[ORDER] created ${result.leadOnly ? "B24-lead (сайт недоступен)" : `#${result.orderId}`} for ${maskPhone(phone)}`);
   logOrderAttempt({ ...baseAttempt, outcome: "success", status: 200, orderId: result.orderId });
 
   // Корзина превратилась в заказ — снимаем snapshot чтобы не пушить abandonment
@@ -1914,7 +1921,7 @@ app.post("/api/order", rateLimit(15), async (req, res) => {
       ? `\n📅 ${body.delivery_date} · ${body.delivery_time}`
       : "";
     const addrLine = body.address ? `\n📍 ${String(body.address).slice(0, 80)}` : "";
-    const msg = `✅ *Заявка №${result.orderId} принята!*
+    const msg = `✅ *Заявка ${result.orderId ? `№${result.orderId} ` : ""}принята!*
 
 🛒 ${itemsLine}${moreLine}${dateLine}${addrLine}
 

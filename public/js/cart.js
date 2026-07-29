@@ -844,7 +844,7 @@ async function cartSubmit() {
       <button class="cat-modal__close" onclick="cartClose()">×</button>
       <div class="cart-success">
         <div class="cart-success__ic">🎉</div>
-        <div class="cart-success__h">Заказ #${data.orderId} принят!</div>
+        <div class="cart-success__h">Заказ${data.orderId ? ' #' + data.orderId : ''} принят!</div>
         <div class="cart-success__sub">${escHtml(data.message || 'Менеджер свяжется для подтверждения')}</div>
         <div class="cart-total">Сумма: <b>${Number(data.total || 0).toLocaleString('ru-RU')} ₽</b></div>
         <button class="btn-outline" data-haptic="medium" onclick="cartRepeatLast()">↻ Повторить такой же заказ</button>
