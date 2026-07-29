@@ -83,6 +83,10 @@ for fp in sorted(glob.glob(os.path.join(SRC, "*.png"))):
         print(breed, f"SKIP: живых кадров {len(frames)} (<5)"); continue
 
     frames.sort(key=lambda f: -f["score"])  # крылья сверху -> снизу; клиент играет пинг-понг
+    # ручной выброс бракованных кадров (артефакты генерации), индексы ПОСЛЕ сортировки —
+    # проверены глазами по контактному листу 29.07.2026
+    DROP = {"sizar": [6], "ryaboy": [3], "svadebny": [4]}
+    frames = [f for i, f in enumerate(frames) if i not in DROP.get(breed, [])]
     # общий масштаб на все кадры (относительные размеры поз сохраняются)
     max_dim = max(max(f["img"].width, f["img"].height) for f in frames)
     scale = (CELL * 0.94) / max_dim
