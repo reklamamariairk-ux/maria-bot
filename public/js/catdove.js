@@ -63,6 +63,7 @@
   const SWAP_ICON = (s) => svg('<path d="M4 7h13m0 0-3.5-3.5M17 7l-3.5 3.5M20 17H7m0 0 3.5-3.5M7 17l3.5 3.5"/>', s || 16);
   const MAILBOX_ICON = (s) => svg('<path d="M4 6.5 12 12l8-5.5"/><rect x="4" y="6.5" width="16" height="11" rx="2"/>', s || 16);
   const GEAR_ICON = (s) => svg('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>', s || 16);
+  const FLAG_ICON = (s) => svg('<path d="M5 21V4m0 1h12l-2.5 3.5L17 12H5"/>', s || 14);
 
   function authed() { return !!(window.App && App.isAuthed && App.isAuthed()); }
   const PURE = () => document.documentElement.classList.contains('ck-pure');
@@ -89,6 +90,45 @@
       .cd-summary{text-align:center;color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.5}
       .cd-summary b{color:var(--gold-l)}
       .cd-sect-t{color:var(--muted);font-weight:700;font-size:11px;margin:4px 4px 7px;text-transform:uppercase;letter-spacing:.7px}
+      /* ── Гонка стаи: закатный hero (слои драг-трассы), дивизион-чипы, медали ── */
+      .cd-racehero{position:relative;border:1px solid var(--line);border-radius:16px;overflow:hidden;margin-bottom:12px;background:linear-gradient(180deg,#3a2c22,#241a15)}
+      .cd-racehero__bg{position:absolute;inset:0;background:url(/img/drag/sky.webp) top/cover no-repeat}
+      .cd-racehero__bg::after{content:'';position:absolute;left:0;right:0;bottom:0;height:64%;background:url(/img/drag/city.webp) bottom left/auto 100% repeat-x}
+      .cd-racehero__scrim{position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,12,9,.12),rgba(20,12,9,.5) 80%)}
+      .cd-racehero__in{position:relative;display:flex;align-items:center;gap:10px;padding:12px 12px 2px;min-height:72px}
+      .cd-racehero__b{flex:1;min-width:0}
+      .cd-racehero__t{font-weight:800;font-size:15.5px;color:var(--gold-l);text-shadow:0 2px 8px rgba(0,0,0,.75)}
+      .cd-racehero__s{font-size:11.5px;color:var(--cream);opacity:.9;margin-top:2px;text-shadow:0 1px 6px rgba(0,0,0,.75)}
+      .cd-racehero__art{width:76px;height:76px;flex:none;filter:drop-shadow(0 3px 10px rgba(0,0,0,.5)) drop-shadow(0 0 10px rgba(240,194,78,.45))}
+      .cd-racehero__art img{width:100%;height:100%;object-fit:contain}
+      .cd-racehero__acts{position:relative;display:flex;gap:8px;padding:10px 12px 12px}
+      .cd-ctabtn{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;border:1px solid #ffe9b3;border-radius:12px;padding:10px 8px;font-weight:800;font-size:12.5px;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;cursor:pointer}
+      .cd-ctabtn--ghost{background:rgba(0,0,0,.42);color:var(--cream);border-color:var(--line)}
+      .cd-divchip{display:inline-flex;align-items:center;border-radius:9px;padding:2.5px 9px;font-size:10.5px;font-weight:900;letter-spacing:.3px;margin-top:6px}
+      .cd-divchip--gold{background:linear-gradient(180deg,#ffe7a6,#eebf52);color:#5a3a0c}
+      .cd-divchip--silver{background:linear-gradient(180deg,#d9dade,#a7abb5);color:#33363d}
+      .cd-divchip--bronze{background:linear-gradient(180deg,#d9a26a,#b8813f);color:#3d2410}
+      .cd-divhead{display:flex;align-items:center;gap:8px;margin:12px 2px 7px}
+      .cd-divhead .cd-divchip{margin-top:0}
+      .cd-divhead__line{flex:1;height:1px;background:var(--line)}
+      .cd-racerow{display:flex;align-items:center;gap:9px;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:8px 11px;margin-bottom:6px}
+      .cd-racerow--top{border-color:rgba(240,194,78,.5);background:linear-gradient(90deg,rgba(255,231,166,.10),rgba(238,191,82,.03))}
+      .cd-racerow--top.cd-racerow--silver{border-color:rgba(199,203,212,.5);background:linear-gradient(90deg,rgba(217,218,222,.10),rgba(167,171,181,.03))}
+      .cd-racerow--top.cd-racerow--bronze{border-color:rgba(217,162,106,.5);background:linear-gradient(90deg,rgba(217,162,106,.10),rgba(184,129,63,.03))}
+      .cd-medal{width:22px;height:22px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;box-shadow:inset 0 -1px 2px rgba(0,0,0,.25)}
+      .cd-medal--gold{background:linear-gradient(180deg,#ffe7a6,#eebf52);color:#5a3a0c}
+      .cd-medal--silver{background:linear-gradient(180deg,#d9dade,#a7abb5);color:#33363d}
+      .cd-medal--bronze{background:linear-gradient(180deg,#d9a26a,#b8813f);color:#3d2410}
+      .cd-medal--dim{background:rgba(255,255,255,.08);color:var(--muted);box-shadow:none}
+      .cd-racerow__art{width:34px;height:34px;flex:none;border-radius:9px;background:radial-gradient(circle at 50% 35%,rgba(238,191,82,.16),transparent 78%);display:flex;align-items:center;justify-content:center}
+      .cd-racerow__art img{width:92%;height:92%;object-fit:contain}
+      .cd-racerow__b{flex:1;min-width:0}
+      .cd-racerow__n{font-size:12px;font-weight:700;color:var(--ink)}
+      .cd-racerow__s{font-size:10.5px;color:var(--muted);margin-top:1px}
+      .cd-racerow__prize{font-size:11.5px;color:var(--gold-l);font-weight:800;flex:none;display:flex;align-items:center;gap:3px}
+      .cd-divbar{position:relative;height:8px;border-radius:4px;background:rgba(255,255,255,.1);margin:8px 0 4px;overflow:hidden}
+      .cd-divbar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:linear-gradient(90deg,#b8813f,#a7abb5 45%,#f0c24e);}
+      .cd-divbar b{position:absolute;top:-1px;bottom:-1px;width:2px;background:rgba(20,12,9,.85)}
       .cd-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:14px}
       .cd-card{position:relative;background:var(--panel);border:2px solid var(--line);border-radius:13px;padding:6px 4px 8px;text-align:center;cursor:pointer;opacity:0;animation:cdIn .3s ease-out forwards;box-sizing:border-box}
       .cd-card:not(.cd-locked):active{transform:scale(.96)}
@@ -387,7 +427,6 @@
   }
 
   // ── Тюнинг гонщика: 3 характеристики за монеты, дивизион по сумме уровней ──
-  const DIV_LABEL = { bronze: '🥉 Бронза', silver: '🥈 Серебро', gold: '🥇 Золото' };
   const STAT_LABEL = { speed: 'Скорость', stamina: 'Выносливость', luck: 'Удача' };
   const STAT_HINT = { speed: 'плоская сила', stamina: 'плоская сила', luck: 'шире случайный рывок' };
   const TUNE_MAX = 10;
@@ -426,7 +465,15 @@
         <div style="display:flex;gap:3px">${bars}</div>
       </div>`;
     }).join('');
-    body.innerHTML = `<div class="cd-setrow" style="margin-bottom:4px"><div class="cd-setrow__n"><b>Дивизион: ${DIV_LABEL[t.division]}</b><div class="cd-setrow__p">рейтинг силы ${num(t.powerRating)}/30 — сумма уровней</div></div></div>${rows}`;
+    // дивизион-бар: зоны 0-8 бронза / 9-17 серебро / 18-30 золото (зеркало src/drag.ts::raceDivision)
+    const pr = Math.max(0, Math.min(30, num(t.powerRating)));
+    body.innerHTML = `<div class="cd-setrow" style="margin-bottom:4px">
+      <div class="cd-setrow__n" style="flex:1">
+        <div style="display:flex;align-items:center;gap:8px"><b>Дивизион:</b><span style="display:inline-flex" class="cd-divhead">${divChip(t.division)}</span></div>
+        <div class="cd-divbar"><i style="width:${Math.round(pr / 30 * 100)}%"></i><b style="left:30%"></b><b style="left:60%"></b></div>
+        <div class="cd-setrow__p">рейтинг силы ${pr}/30 — сумма уровней тюнинга</div>
+      </div>
+    </div>${rows}`;
     body.querySelectorAll('button[data-stat]').forEach(btn => { btn.onclick = () => tuneAct(breedId, btn.dataset.stat, btn); });
   }
 
@@ -815,15 +862,19 @@
   // не вернёт enabled=true). Прошлонедельные результаты хранят только chat_id, а
   // клиент не знает свой chat_id (нет такого поля в App-мосте catclick.js) — «своё
   // место» намеренно НЕ подсвечиваем, честно показываем весь топ без выделения.
-  function raceRow(r) {
+  function divChip(d) {
+    const names = { gold: 'Золото', silver: 'Серебро', bronze: 'Бронза' };
+    return names[d] ? `<span class="cd-divchip cd-divchip--${d}">${names[d]}</span>` : '';
+  }
+  function raceRow(r, d) {
     const b = BY_ID.get(r.breed);
-    return `<div class="cd-traderow">
-      <div class="cd-traderow__swap">
-        <div style="width:24px;text-align:center;font-weight:800;color:var(--gold-l);flex:none;font-size:12px">№${num(r.place)}</div>
-        <div class="cd-traderow__art"><img src="/img/pigeons/${r.breed}.webp?v=2" alt="" onerror="this.style.display='none'"></div>
-        <div style="min-width:0;flex:1"><div style="font-size:12px;color:var(--ink);font-weight:700">${b ? b.name : r.breed}</div><div class="cd-traderow__meta">${num(r.score)} очков</div></div>
-      </div>
-      <div style="font-size:11.5px;color:var(--gold-l);font-weight:800;flex:none">${COIN_ICON(12)} ${fmt(r.prize)}</div>
+    const place = num(r.place);
+    const top = place === 1;
+    return `<div class="cd-racerow${top ? ` cd-racerow--top cd-racerow--${d}` : ''}">
+      <span class="cd-medal ${top ? `cd-medal--${d}` : 'cd-medal--dim'}">${place}</span>
+      <div class="cd-racerow__art"><img src="/img/pigeons/${r.breed}.webp?v=2" alt="" onerror="this.style.display='none'"></div>
+      <div class="cd-racerow__b"><div class="cd-racerow__n">${b ? b.name : r.breed}</div><div class="cd-racerow__s">${num(r.score)} очков</div></div>
+      <div class="cd-racerow__prize">${COIN_ICON(12)} ${fmt(r.prize)}</div>
     </div>`;
   }
   function raceHtml() {
@@ -835,17 +886,27 @@
     const blocks = anyResults ? ['gold', 'silver', 'bronze'].map(d => {
       const arr = Array.isArray(lr[d]) ? lr[d] : [];
       if (!arr.length) return '';
-      return `<div class="cd-setrow__p" style="margin:8px 2px 3px;font-weight:800;color:var(--ink)">${DIV_LABEL[d]}</div>${arr.map(raceRow).join('')}`;
+      return `<div class="cd-divhead">${divChip(d)}<span class="cd-divhead__line"></span></div>${arr.map((r) => raceRow(r, d)).join('')}`;
     }).join('') : `<div style="color:var(--muted);font-size:12.5px;text-align:center;padding:8px 0">Итоги прошлой недели ещё не подведены</div>`;
-    const myLine = mine
-      ? `Заявлен: ${mine.name}${race.myDivision ? ' · ' + DIV_LABEL[race.myDivision] : ''}`
-      : 'Пока не участвуешь';
+    // hero — закатная сцена драг-трассы (те же слои /img/drag/), мой заявленный голубь крупно
+    const heroArt = mine
+      ? `<div class="cd-racehero__art"><img src="/img/pigeons/${mine.id}.webp?v=2" alt="" loading="lazy" onerror="this.style.display='none'"></div>`
+      : '';
     return `<div class="cd-sect-t">Гонка стаи</div>
-      <div class="cd-setrow">
-        <div class="cd-setrow__n"><b>${myLine}</b><div class="cd-setrow__p">${num(race.entrants)} участников на этой неделе</div></div>
-        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
-          ${!mine ? `<button class="cd-claimbtn" id="cd-race-enter">Заявить</button>` : ''}
-          <button class="cd-claimbtn" id="cd-drag-enter">🏁 Драг-заезд</button>
+      <div class="cd-racehero">
+        <div class="cd-racehero__bg"></div>
+        <div class="cd-racehero__scrim"></div>
+        <div class="cd-racehero__in">
+          <div class="cd-racehero__b">
+            <div class="cd-racehero__t">${mine ? mine.name : 'Пока не участвуешь'}</div>
+            <div class="cd-racehero__s">${mine ? 'заявлен на этой неделе' : 'заяви голубя и борись за призы'} · ${num(race.entrants)} участ.</div>
+            ${mine && race.myDivision ? divChip(race.myDivision) : ''}
+          </div>
+          ${heroArt}
+        </div>
+        <div class="cd-racehero__acts">
+          ${!mine ? `<button class="cd-ctabtn" id="cd-race-enter">Заявить голубя</button>` : ''}
+          <button class="cd-ctabtn${!mine ? ' cd-ctabtn--ghost' : ''}" id="cd-drag-enter">${FLAG_ICON(14)} Драг-заезд</button>
         </div>
       </div>
       ${blocks}`;
