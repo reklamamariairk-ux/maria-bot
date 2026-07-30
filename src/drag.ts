@@ -8,8 +8,13 @@ export const DRAG_ENERGY_COST = 250;
 export const TRACK_LEN = 2000;
 export const BASE_SPEED = 220;
 export const SPEED_PER_POWER = 5;      // мощность доминирует: разрыв power перевешивает реакцию
-export const REACT_MIN = 120, REACT_MAX = 3000;
+export const REACT_MIN = 200, REACT_MAX = 3000; // floor 200мс: быстрее — предугадывание/скрипт, преимущества не даёт
 export const REACT_WEIGHT = 0.25;      // реакция решает близкие дуэли (≲15 power), но не перебивает большой разрыв мощности
+// Конкурентный диапазон реакций поля в режиме «Ставка» (раздаёт сервер, см. hardenBetField).
+// Подобран Монте-Карло (спека 2026-07-30-drag-bet-ev-fix): EV идеального скрипта ≈ −3.7%,
+// честного быстрого ≈ −20%, при этом реакция остаётся значимым навыком.
+export const COMP_REACT_LO = 205, COMP_REACT_HI = 325;
+export const BET_POWER_GAP = 10;       // «Ставка»: соперник слабее target−GAP заменяется ботом ≈target
 export const LUCK_SPREAD = 0.15;       // маленький рандом (сек)
 export const POWER_BAND = 25;          // коридор подбора соперников по мощности
 export const STAKE_PRESETS = [500, 2000, 10000];
@@ -48,18 +53,28 @@ function synthReaction(target: number): number {
   return clampReact(250 + Math.round((target % 7) * 40));
 }
 
+// Реакция соперника в режиме «Ставка»: раздаёт СЕРВЕР из конкурентного диапазона —
+// сохранённые (протухшие/медленные) реакции реальных игроков и предсказуемые реакции
+// ботов не должны превращать поле в кормушку для скриптера с константной реакцией.
+export function competitiveReaction(rng: () => number = Math.random): number {
+  return clampReact(Math.round(COMP_REACT_LO + rng() * (COMP_REACT_HI - COMP_REACT_LO)));
+}
+
 // Синтетический соперник-бот под целевую мощность target: не-чемпионская порода нужной
 // редкости (чемпион — только приз, не гоняется как соперник), tune_speed/tune_stamina
 // подобраны так, чтобы dragPower ≈ target. Редкость выбираем под target: у common база
 // всего 10, и потолка тюнинга (2×TUNE_MAX=20 → +120 power) не хватает дотянуть до высоких
 // таргетов — поэтому чем выше target, тем выше стартовая редкость (её RARITY_BASE даёт
 // нижнюю границу), дальше 6 очков power за пункт тюнинга, поровну speed/stamina, кламп 0..TUNE_MAX.
-function makeBot(target: number, seed: number): Racer {
+// Если и максимальной редкости со stars=1 не хватает (эндгейм: игрок 156 > потолок бота 148),
+// поднимаем звёзды до 3 — бот достижим на всей лестнице, гарантированных побед «по мощности» нет.
+export function makeBot(target: number, seed: number): Racer {
   const wantRarity: Rarity = target >= 130 ? "legendary" : target >= 90 ? "epic" : target >= 45 ? "rare" : "common";
   let candidates = PIGEON_BREEDS.filter(b => b.id !== "champion" && b.rarity === wantRarity);
   if (!candidates.length) candidates = PIGEON_BREEDS.filter(b => b.id !== "champion");
   const b = candidates[Math.floor(Math.random() * candidates.length)];
-  const stars = 1;
+  let stars = 1;
+  while (stars < 3 && Math.round((target - dragPower(b.rarity, stars, 0, 0)) / 6) > 2 * TUNE_MAX) stars++;
   const base = dragPower(b.rarity, stars, 0, 0);
   const totalPoints = Math.min(2 * TUNE_MAX, Math.max(0, Math.round((target - base) / 6)));
   const speed = Math.min(TUNE_MAX, Math.ceil(totalPoints / 2));
@@ -67,6 +82,18 @@ function makeBot(target: number, seed: number): Racer {
   const power = dragPower(b.rarity, stars, speed, stamina);
   const reactionMs = clampReact(synthReaction(target) + ((seed % 5) - 2) * 15 + Math.round((Math.random() - 0.5) * 60));
   return { breed: b.id, power, reactionMs, bot: true, name: "Соперник" };
+}
+
+// Ужесточение поля для режима «Ставка» (спека 2026-07-30-drag-bet-ev-fix):
+// 1) соперник слабее target−BET_POWER_GAP → замена ботом ≈target (иначе игрок на вершине
+//    лестницы получает поле строго слабее себя = гарантированная победа);
+// 2) реакции ВСЕХ соперников — серверная конкурентная выборка на этот заезд.
+// Порода/мощность реальных соперников в допуске сохраняются (флейвор «гоняюсь с живыми»).
+export function hardenBetField(opps: Racer[], target: number): Racer[] {
+  return opps.map((o, i) => {
+    const r = o.power < target - BET_POWER_GAP ? makeBot(target, i) : o;
+    return { ...r, reactionMs: competitiveReaction() };
+  });
 }
 
 // n соперников для игрока chatId под целевую мощность targetPower: сперва реальные голуби
@@ -127,7 +154,10 @@ export async function runRace(chatId: number, breed: string, mode: "training" | 
     if (mode === "bet" && st.balance < stake) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
     const b = BREED_BY_ID.get(breed)!;
     const myPower = dragPower(b.rarity, inv.rows[0].stars, inv.rows[0].tune_speed, inv.rows[0].tune_stamina);
-    const opps = await pickOpponents(chatId, myPower, 3);
+    // В «Ставке» поле ужесточается: серверные реакции + гард мощности (анти-EV-фарм).
+    // Тренировка (без монет) оставляет сохранённые реакции реальных игроков — флейвор.
+    const picked = await pickOpponents(chatId, myPower, 3);
+    const opps = mode === "bet" ? hardenBetField(picked, myPower) : picked;
     const react = Math.min(REACT_MAX, Math.max(REACT_MIN, Math.round(reactionMs)));
     const field: { breed: string; power: number; reactionMs: number; bot: boolean; me: boolean }[] = [
       { breed, power: myPower, reactionMs: react, bot: false, me: true },
