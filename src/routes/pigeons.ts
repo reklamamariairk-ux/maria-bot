@@ -167,14 +167,21 @@ export function createPigeonsRouter(push: PushService): Router {
   });
 
   router.post("/api/pigeons/drag/race", requireTgUser, rateLimit(20), async (req, res) => {
-    const u = getTgUser(req)!; const b = req.body as { breed?: string; mode?: string; stake?: number; reactionMs?: number };
+    const u = getTgUser(req)!; const b = req.body as { breed?: string; mode?: string; stake?: number; reactionMs?: number; skill?: { rev1?: number; rev2?: number; reactionMs?: number } };
     try {
       const { runRace } = await import("../drag");
       // reactionMs — untrusted: нормализуем на границе. Math.max(0,·) ловит отрицательные
       // (−1 truthy обошёл бы `||3000` и clampReact подтянул бы к REACT_MIN=ЛУЧШАЯ реакция —
       // чит на монеты в bet). −1/0/NaN → 3000 (худшая), валидные значения проходят.
       const reactionMs = Math.max(0, Number(b.reactionMs)) || 3000;
-      const r = await runRace(u.id, String(b.breed || ""), b.mode === "bet" ? "bet" : "training", Number(b.stake) || 0, reactionMs);
+      // v2 «Идеальный запуск»: skill-объект тоже untrusted. Отступы свипов — signed мс:
+      // NaN/Infinity → худший (9999, accuracy 0 после серверного клампа); реакция — как выше.
+      const launch = b.skill && typeof b.skill === "object" ? {
+        rev1: Number.isFinite(Number(b.skill.rev1)) ? Number(b.skill.rev1) : 9999,
+        rev2: Number.isFinite(Number(b.skill.rev2)) ? Number(b.skill.rev2) : 9999,
+        reactionMs: Math.max(0, Number(b.skill.reactionMs)) || 3000,
+      } : null;
+      const r = await runRace(u.id, String(b.breed || ""), b.mode === "bet" ? "bet" : "training", Number(b.stake) || 0, launch ? launch.reactionMs : reactionMs, launch);
       if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
       res.json(r);
     } catch (e) { log.error({ err: e, chatId: u.id }, "[drag/race]"); res.status(500).json({ error: "internal" }); }

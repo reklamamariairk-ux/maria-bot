@@ -71,6 +71,22 @@ try {
   const badS = await runRace(A1, "zolotoy", "bet", 777, 200);
   ok(!badS.ok && badS.reason === "bad_stake", "ставка не из пресетов → bad_stake");
 
+  // v2 «Идеальный запуск»: skill-инпут → v2-резолв, брейкдаун в ответе, реакция в БД
+  console.log("\n[V2] launch-механика");
+  await seed(A1, 1000, 200000);
+  const v2 = await runRace(A1, "zolotoy", "bet", stake, 300, { rev1: 40, rev2: -60, reactionMs: 300 });
+  ok(v2.ok && [1, 2, 3, 4].includes(v2.myPlace), "v2 ставка: заезд прошёл, место " + v2.myPlace);
+  ok(v2.reward === stake * (PAYOUT[v2.myPlace] ?? 0) - stake, "v2 выплата соответствует месту");
+  ok(!!v2.mySkill && v2.mySkill.total > 0.7 && v2.mySkill.total <= 1, "v2 mySkill.total разумный для хорошего запуска (=" + (v2.mySkill ? v2.mySkill.total.toFixed(2) : "нет") + ")");
+  ok(!!v2.mySkill && v2.mySkill.rev1 > v2.mySkill.rev2, "v2 брейкдаун: rev1(40мс) точнее rev2(60мс)");
+  ok(v2.racers.every(r => typeof r.finishT === "number"), "v2 finishT есть у всех гонщиков");
+  const rrV2 = Number((await pool.query(`SELECT race_reaction_ms FROM clicker_state WHERE chat_id=$1`, [A1])).rows[0].race_reaction_ms);
+  ok(rrV2 === 300, "v2 реакция записана в race_reaction_ms (=" + rrV2 + ")");
+  // легаси-вызов (без launch) продолжает работать — кэшированные клиенты v4
+  await seed(A1, 1000, 200000);
+  const lg = await runRace(A1, "zolotoy", "training", 0, 250);
+  ok(lg.ok && lg.mySkill === undefined, "легаси-путь без skill жив, mySkill отсутствует");
+
   // античит: reactionMs=0 зажимается до REACT_MIN в БД
   console.log("\n[C] античит реакции");
   await seed(A1, 1000, 200000);

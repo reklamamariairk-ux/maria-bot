@@ -20,6 +20,47 @@ export const POWER_BAND = 25;          // коридор подбора сопе
 export const STAKE_PRESETS = [500, 2000, 10000];
 export const PAYOUT: Record<number, number> = { 1: 2, 2: 1, 3: 0, 4: 0 }; // множитель к ставке (2=+ставка, 1=возврат, 0=потеря)
 
+// ── Механика v2 «Идеальный запуск» (спека 2026-07-30-drag-launch-mechanic-v2) ──
+// Три навыковых инпута до старта: прогрев + форсаж (отступ стрелки от центра золотой
+// зоны, мс) и реакция на зелёный. Константы подобраны Монте-Карло (tests/drag.test.ts):
+// дом-эдж поля из 4 равных = −25%; перфект-скрипт получает лишь лёгкий буст (EV < 0).
+export const REV_HALF = 300;            // окно точности свипа: |отступ| ≥ 300мс → 0
+export const REACT_SPAN = 600;          // реакция 200мс → 1.0, ≥800мс → 0
+export const SKILL_SPREAD = 0.14;       // сек штрафа между запуском 1.0 и 0.0
+export const LUCK_SPREAD_V2 = 0.15;     // сек случайного разброса (правит близкие дуэли)
+export const COMP_SKILL_LO = 0.75, COMP_SKILL_HI = 1.0;   // поле «Ставки»
+export const TRAIN_SKILL_LO = 0.45, TRAIN_SKILL_HI = 0.95; // поле «Тренировки»
+
+const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
+
+export type LaunchInput = { rev1: number; rev2: number; reactionMs: number };
+
+export function revAccuracy(offsetMs: number): number {
+  const off = Math.abs(Number(offsetMs));
+  if (!Number.isFinite(off)) return 0;
+  return clamp01(1 - off / REV_HALF);
+}
+export function reactAccuracy(ms: number): number {
+  return clamp01(1 - (clampReact(ms) - REACT_MIN) / REACT_SPAN);
+}
+export function launchSkill(inp: LaunchInput): number {
+  return 0.3 * revAccuracy(inp.rev1) + 0.3 * revAccuracy(inp.rev2) + 0.4 * reactAccuracy(inp.reactionMs);
+}
+export function dragFinishTimeV2(power: number, skill: number, r: number): number {
+  const speed = BASE_SPEED + power * SPEED_PER_POWER;
+  return TRACK_LEN / speed + (1 - clamp01(skill)) * SKILL_SPREAD + r * LUCK_SPREAD_V2;
+}
+export function resolveRaceV2(racers: { power: number; skill: number; r: number }[]): number[] {
+  const times = racers.map((x, i) => ({ i, t: dragFinishTimeV2(x.power, x.skill, x.r) }));
+  times.sort((a, b) => a.t - b.t || a.i - b.i);
+  const places = new Array(racers.length);
+  times.forEach((x, rank) => { places[x.i] = rank + 1; });
+  return places;
+}
+export function competitiveSkill(lo = COMP_SKILL_LO, hi = COMP_SKILL_HI, rng: () => number = Math.random): number {
+  return lo + rng() * (hi - lo);
+}
+
 const RARITY_BASE: Record<Rarity, number> = { common: 10, rare: 16, epic: 22, legendary: 28 };
 
 export function dragPower(rarity: Rarity, stars: number, speed: number, stamina: number): number {
@@ -84,6 +125,21 @@ export function makeBot(target: number, seed: number): Racer {
   return { breed: b.id, power, reactionMs, bot: true, name: "Соперник" };
 }
 
+// v2: то же ужесточение поля «Ставки» по мощности, но вместо реакций сервер раздаёт
+// сопернику launch-skill из конкурентного диапазона. Для «Тренировки» — диапазон шире
+// и добрее (казуальное поле), см. assignFieldSkill.
+export type RacerV2 = Racer & { skill: number };
+export function hardenBetFieldV2(opps: Racer[], target: number, rng: () => number = Math.random): RacerV2[] {
+  return opps.map((o, i) => {
+    const r = o.power < target - BET_POWER_GAP ? makeBot(target, i) : o;
+    return { ...r, skill: competitiveSkill(COMP_SKILL_LO, COMP_SKILL_HI, rng) };
+  });
+}
+export function assignFieldSkill(opps: Racer[], mode: "training" | "bet", target: number): RacerV2[] {
+  if (mode === "bet") return hardenBetFieldV2(opps, target);
+  return opps.map(o => ({ ...o, skill: competitiveSkill(TRAIN_SKILL_LO, TRAIN_SKILL_HI) }));
+}
+
 // Ужесточение поля для режима «Ставка» (спека 2026-07-30-drag-bet-ev-fix):
 // 1) соперник слабее target−BET_POWER_GAP → замена ботом ≈target (иначе игрок на вершине
 //    лестницы получает поле строго слабее себя = гарантированная победа);
@@ -136,8 +192,8 @@ export async function dragTargetPower(chatId: number, breed: string): Promise<nu
 // Всё под FOR UPDATE clicker_state (внутри refreshEnergyFor): реген энергии → проверки
 // (владение породой/энергия/ставка) → подбор соперников → резолв мест → списание энергии
 // + расчёт/начисление ставки → фиксация race_reaction_ms (для будущего pickOpponents).
-export async function runRace(chatId: number, breed: string, mode: "training" | "bet", stake: number, reactionMs: number):
-  Promise<{ ok: boolean; racers?: any[]; myPlace?: number; reward?: number; newBalance?: number; newEnergy?: number; reason?: string }> {
+export async function runRace(chatId: number, breed: string, mode: "training" | "bet", stake: number, reactionMs: number, launch?: LaunchInput | null):
+  Promise<{ ok: boolean; racers?: any[]; myPlace?: number; reward?: number; newBalance?: number; newEnergy?: number; mySkill?: any; reason?: string }> {
   if (!BREED_BY_ID.has(breed)) return { ok: false, reason: "not_owned" };
   if (mode !== "training" && mode !== "bet") return { ok: false, reason: "bad_mode" };
   if (mode === "bet" && !STAKE_PRESETS.includes(stake)) return { ok: false, reason: "bad_stake" };
@@ -154,30 +210,48 @@ export async function runRace(chatId: number, breed: string, mode: "training" | 
     if (mode === "bet" && st.balance < stake) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
     const b = BREED_BY_ID.get(breed)!;
     const myPower = dragPower(b.rarity, inv.rows[0].stars, inv.rows[0].tune_speed, inv.rows[0].tune_stamina);
-    // В «Ставке» поле ужесточается: серверные реакции + гард мощности (анти-EV-фарм).
-    // Тренировка (без монет) оставляет сохранённые реакции реальных игроков — флейвор.
     const picked = await pickOpponents(chatId, myPower, 3);
-    const opps = mode === "bet" ? hardenBetField(picked, myPower) : picked;
-    const react = Math.min(REACT_MAX, Math.max(REACT_MIN, Math.round(reactionMs)));
-    const field: { breed: string; power: number; reactionMs: number; bot: boolean; me: boolean }[] = [
-      { breed, power: myPower, reactionMs: react, bot: false, me: true },
-      ...opps.map(o => ({ breed: o.breed, power: o.power, reactionMs: o.reactionMs, bot: o.bot, me: false })),
-    ];
-    // Один рандомный «luck»-ролл на гонщика, зафиксированный ДО резолва — resolveRace и
-    // finishT ниже должны использовать один и тот же r по индексу, иначе места и показанное
+    const react = Math.min(REACT_MAX, Math.max(REACT_MIN, Math.round(launch ? launch.reactionMs : reactionMs)));
+    // Один рандомный «luck»-ролл на гонщика, зафиксированный ДО резолва — места и finishT
+    // ниже должны использовать один и тот же r по индексу, иначе места и показанное
     // время анимации разъедутся (клиент анимирует по finishT).
-    const rolls = field.map(() => Math.random());
-    const places = resolveRace(field.map((f, i) => ({ power: f.power, reactionMs: f.reactionMs, r: rolls[i] })));
-    const racers = field
-      .map((f, i) => ({
-        breed: f.breed,
-        power: f.power,
+    let racersUnsorted: any[]; let places: number[]; let mySkillOut: any = undefined;
+    if (launch) {
+      // v2 «Идеальный запуск»: мой skill из трёх инпутов, соперникам skill раздаёт сервер
+      // (bet — конкурентный диапазон + гард мощности, training — шире и добрее).
+      const opps = assignFieldSkill(picked, mode, myPower);
+      const mySkill = launchSkill(launch);
+      const field = [
+        { breed, power: myPower, skill: mySkill, bot: false, me: true },
+        ...opps.map(o => ({ breed: o.breed, power: o.power, skill: o.skill, bot: o.bot, me: false })),
+      ];
+      const rolls = field.map(() => Math.random());
+      places = resolveRaceV2(field.map((f, i) => ({ power: f.power, skill: f.skill, r: rolls[i] })));
+      racersUnsorted = field.map((f, i) => ({
+        breed: f.breed, power: f.power,
+        finishT: dragFinishTimeV2(f.power, f.skill, rolls[i]),
+        place: places[i], me: f.me, bot: f.bot,
+      }));
+      mySkillOut = {
+        rev1: revAccuracy(launch.rev1), rev2: revAccuracy(launch.rev2),
+        react: reactAccuracy(launch.reactionMs), reactionMs: react, total: mySkill,
+      };
+    } else {
+      // Легаси-путь v1 (кэшированные клиенты catdrag ≤4 шлют только reactionMs).
+      const opps = mode === "bet" ? hardenBetField(picked, myPower) : picked;
+      const field = [
+        { breed, power: myPower, reactionMs: react, bot: false, me: true },
+        ...opps.map(o => ({ breed: o.breed, power: o.power, reactionMs: o.reactionMs, bot: o.bot, me: false })),
+      ];
+      const rolls = field.map(() => Math.random());
+      places = resolveRace(field.map((f, i) => ({ power: f.power, reactionMs: f.reactionMs, r: rolls[i] })));
+      racersUnsorted = field.map((f, i) => ({
+        breed: f.breed, power: f.power,
         finishT: dragFinishTime(f.power, f.reactionMs, rolls[i]),
-        place: places[i],
-        me: f.me,
-        bot: f.bot,
-      }))
-      .sort((a, b) => a.place - b.place);
+        place: places[i], me: f.me, bot: f.bot,
+      }));
+    }
+    const racers = racersUnsorted.sort((a, b) => a.place - b.place);
     const myPlace = places[0];
     // Списания/выплата: энергия списывается всегда (training тоже тратит попытку); ставка —
     // только в режиме bet, и только после проверки balance>=stake выше, так что баланс не
@@ -196,7 +270,7 @@ export async function runRace(chatId: number, breed: string, mode: "training" | 
       [chatId, energyLeft, balance, react]
     );
     await client.query("COMMIT");
-    return { ok: true, racers, myPlace, reward, newBalance: balance, newEnergy: energyLeft };
+    return { ok: true, racers, myPlace, reward, newBalance: balance, newEnergy: energyLeft, mySkill: mySkillOut };
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;

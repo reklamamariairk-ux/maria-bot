@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   dragPower, dragFinishTime, resolveRace, PAYOUT, REACT_MIN,
   COMP_REACT_LO, COMP_REACT_HI, competitiveReaction, hardenBetField, makeBot,
+  revAccuracy, reactAccuracy, launchSkill, dragFinishTimeV2, resolveRaceV2,
+  competitiveSkill, hardenBetFieldV2, REV_HALF, COMP_SKILL_LO, COMP_SKILL_HI,
 } from "../src/drag";
 
 describe("dragPower — мощность голубя для заезда", () => {
@@ -105,6 +107,98 @@ describe("hardenBetField — серверное поле режима «Став
     const field = hardenBetField(opps.map(o => ({ ...o })), target);
     expect(field.some(r => r.breed === "ryaboy" && r.power === target - 5)).toBe(true);
     expect(field.some(r => r.breed === "zolotoy" && r.power === target + 10)).toBe(true);
+  });
+});
+
+// ── Механика v2 «Идеальный запуск» (спека 2026-07-30-drag-launch-mechanic-v2) ──
+
+describe("v2 accuracy — клампы навыковых инпутов", () => {
+  it("revAccuracy: центр зоны = 1, край окна = 0, дальше не уходит в минус", () => {
+    expect(revAccuracy(0)).toBe(1);
+    expect(revAccuracy(REV_HALF)).toBe(0);
+    expect(revAccuracy(-REV_HALF)).toBe(0);
+    expect(revAccuracy(99999)).toBe(0);
+    expect(revAccuracy(REV_HALF / 2)).toBeCloseTo(0.5, 5);
+  });
+  it("reactAccuracy: 200мс = 1.0, ≥800мс = 0, скрипт <200мс не лучше 200", () => {
+    expect(reactAccuracy(200)).toBe(1);
+    expect(reactAccuracy(0)).toBe(1);       // кламп к REACT_MIN — предугадывание не награждается
+    expect(reactAccuracy(800)).toBe(0);
+    expect(reactAccuracy(3000)).toBe(0);
+    expect(reactAccuracy(500)).toBeCloseTo(0.5, 5);
+  });
+  it("launchSkill ∈ [0,1], идеальный запуск = 1, полностью мимо = 0", () => {
+    expect(launchSkill({ rev1: 0, rev2: 0, reactionMs: 200 })).toBe(1);
+    expect(launchSkill({ rev1: 9999, rev2: -9999, reactionMs: 3000 })).toBe(0);
+    const mid = launchSkill({ rev1: 150, rev2: 150, reactionMs: 500 });
+    expect(mid).toBeGreaterThan(0.3);
+    expect(mid).toBeLessThan(0.8);
+  });
+});
+
+describe("v2 resolveRaceV2 — мощность главнее, при равной решает запуск", () => {
+  it("при равной мощности выше skill → первый (без люка)", () => {
+    const places = resolveRaceV2([{ power: 80, skill: 0.4, r: 0.5 }, { power: 80, skill: 0.9, r: 0.5 }]);
+    expect(places[1]).toBe(1);
+  });
+  it("большой разрыв мощности (25+) не перебивается идеальным запуском", () => {
+    const places = resolveRaceV2([{ power: 80, skill: 0, r: 0.5 }, { power: 50, skill: 1, r: 0.5 }]);
+    expect(places[0]).toBe(1);
+  });
+  it("места уникальны 1..N", () => {
+    const places = resolveRaceV2([{ power: 80, skill: 0.5, r: 0.1 }, { power: 80, skill: 0.5, r: 0.9 }, { power: 82, skill: 0.5, r: 0.5 }]);
+    expect([...places].sort()).toEqual([1, 2, 3]);
+  });
+});
+
+// EV ставки v2: поле равной мощности, skill соперников раздаёт сервер.
+function betEVv2(mySkill: number, N: number): number {
+  let sum = 0;
+  for (let k = 0; k < N; k++) {
+    const field = [
+      { power: 50, skill: mySkill, r: Math.random() },
+      { power: 50, skill: competitiveSkill(), r: Math.random() },
+      { power: 50, skill: competitiveSkill(), r: Math.random() },
+      { power: 50, skill: competitiveSkill(), r: Math.random() },
+    ];
+    sum += (PAYOUT[resolveRaceV2(field)[0]] ?? 0) - 1;
+  }
+  return sum / N;
+}
+
+describe("v2 экономика ставки — Монте-Карло", () => {
+  it("идеальный скрипт (skill=1.0) в минусе: казна не кормит читера", () => {
+    expect(betEVv2(1.0, 200_000)).toBeLessThan(-0.01);
+  });
+  it("честный хороший запуск (~0.8) — умеренный минус, не грабёж", () => {
+    const ev = betEVv2(0.8, 200_000);
+    expect(ev).toBeLessThan(-0.05);
+    expect(ev).toBeGreaterThan(-0.45);
+  });
+  it("навык значим: разрыв EV между 0.85 и 0.4 больше 0.3 ставки", () => {
+    expect(betEVv2(0.85, 100_000) - betEVv2(0.4, 100_000)).toBeGreaterThan(0.3);
+  });
+});
+
+describe("v2 hardenBetFieldV2 — серверное поле «Ставки»", () => {
+  const target = 80;
+  const opps = [
+    { breed: "sizar", power: target - 25, reactionMs: 1500, bot: false },
+    { breed: "ryaboy", power: target - 5, reactionMs: 900, bot: false },
+    { breed: "zolotoy", power: target + 10, reactionMs: 120, bot: false },
+  ];
+  it("skill всех соперников — серверный, в конкурентном диапазоне", () => {
+    for (let i = 0; i < 50; i++) {
+      for (const r of hardenBetFieldV2(opps.map(o => ({ ...o })), target)) {
+        expect(r.skill).toBeGreaterThanOrEqual(COMP_SKILL_LO);
+        expect(r.skill).toBeLessThanOrEqual(COMP_SKILL_HI);
+      }
+    }
+  });
+  it("слабее target−10 заменяется ботом ≈target (как v1)", () => {
+    const field = hardenBetFieldV2(opps.map(o => ({ ...o })), target);
+    for (const r of field) expect(r.power).toBeGreaterThanOrEqual(target - 10);
+    expect(field.filter(r => r.bot)).toHaveLength(1);
   });
 });
 
