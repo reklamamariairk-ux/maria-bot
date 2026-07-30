@@ -322,15 +322,9 @@
   }
   function fmtDur(ms) { const h = Math.max(0, Math.floor(ms / 3600e3)); const d = Math.floor(h / 24); return d > 0 ? `${d}д ${h % 24}ч` : `${h}ч`; }
 
-  // ── Реальные награды (витрина). Флаг приходит с бэка (/api/clicker/rewards ← env
-  // CLICKER_REWARDS_ENABLED); до включения Машей и для гостей — false («Скоро»). ──
-  let rewardsEnabled = false;
-  const REWARDS = [
-    { id: 'promo5', name: 'Промокод −5%', cost: 100000, note: 'скидка на заказ' },
-    { id: 'promo10', name: 'Промокод −10%', cost: 250000, note: 'скидка на заказ' },
-    { id: 'bonus300', name: '300 баллов на карту', cost: 200000, note: 'клуб «Мария»' },
-    { id: 'dessert', name: 'Десерт в подарок', cost: 500000, note: 'при заказе' },
-  ];
+  // Витрина обмена монет→реальные награды вычищена из UI 30.07.2026 (решение юзера:
+  // не обещать неработающее). Бэк (/api/clicker/redeem, CLICKER_REWARDS_ENABLED) жив —
+  // при включении Машей вернуть витрину из git-истории (catclick v122).
 
   let ov, audio, raf, lastTs = 0, pending = 0, syncT = 0, curLevel = 1, tab = 'cat';
   let renderAcc = 0; // копилка dt для 30fps-капа главного цикла (тап-обработка вне цикла — не влияет)
@@ -801,13 +795,6 @@
       .ck-nav__b{position:relative;transition:color .18s}.ck-nav__b.on::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:24px;height:3px;border-radius:0 0 3px 3px;background:var(--gold);box-shadow:0 0 8px var(--gold)}
       .cat-staff .ck-biz__art{background:linear-gradient(150deg,#8fae4f,#3f5e1e)}.cat-net .ck-biz__art{background:linear-gradient(150deg,#6f76c2,#2f3470)}
       .ck-card__buy,.ck-biz__buy{min-height:44px;box-sizing:border-box}
-      .ck-reward{display:flex;align-items:center;gap:12px;border-radius:16px;padding:11px 12px;margin-bottom:9px;background:linear-gradient(180deg,rgba(255,231,166,.10),rgba(238,191,82,.03));border:1px solid rgba(238,191,82,.22);box-shadow:0 3px 10px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.05)}
-      .ck-reward__ic{width:46px;height:46px;flex:none;border-radius:13px;display:flex;align-items:center;justify-content:center;color:#fff8ec;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 2px 6px rgba(0,0,0,.3);background:linear-gradient(150deg,#f0c24e,#9c6a1c)}
-      .ck-reward__ic::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 32% 22%,rgba(255,255,255,.22),transparent 60%);pointer-events:none}
-      .ck-reward__ic svg{position:relative;z-index:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))}
-      .ck-reward.r-promo .ck-reward__ic{background:linear-gradient(150deg,#cc5e72,#7a2030)}.ck-reward.r-dessert .ck-reward__ic{background:linear-gradient(150deg,#ff9ec4,#cf5e8a)}
-      .ck-reward__b{flex:1;min-width:0}
-      .ck-soon{flex:none;font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--gold-l);background:rgba(238,191,82,.14);border:1px solid rgba(238,191,82,.4);border-radius:20px;padding:6px 12px}
       .ck-skel{position:relative;overflow:hidden;background:rgba(255,255,255,.05)}.ck-skel::after{content:'';position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(255,255,255,.10),transparent);animation:ckShimmer 1.2s ease-in-out infinite}@keyframes ckShimmer{100%{transform:translateX(100%)}}
       .ck-skrow{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:7px}.ck-skrow .sk-r{width:24px;height:24px;border-radius:50%;flex:none}.ck-skrow .sk-n{height:12px;border-radius:6px;flex:1}.ck-skrow .sk-v{width:62px;height:12px;border-radius:6px;flex:none}
       .ck-empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding:30px 18px;color:var(--muted)}.ck-empty__ic{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(238,191,82,.08);border:1px solid var(--line);color:var(--gold);margin-bottom:12px}.ck-empty__ic svg{width:30px;height:30px}.ck-empty__t{font-weight:800;font-size:15px;color:var(--cream);margin-bottom:4px}.ck-empty__s{font-size:12.5px;line-height:1.5;max-width:240px}
@@ -987,7 +974,7 @@
       { ic: ICON.users(20), t: 'Друзья', d: 'Позови друга в игру по своей ссылке — как только он присоединится, тебе начислится 5 000 монет, а другу — 2 500 монет на старт. Ссылку можно скопировать или отправить прямо из игры кнопкой «Позвать».' },
     ];
     s.push({ ic: ICON.list(20), t: 'Призы и задания', d: 'На вкладке «Призы» — простые поручения за монеты: заглянуть на сайт «Марии», оставить отзыв, открыть Telegram-бот, пригласить друга или просто держать серию заходов и баланс. Выполнил условие — жми кнопку с наградой рядом с заданием. Ниже, в Достижениях — более долгие цели вроде количества тапов, уровня, собранных бизнесов или дней подряд, тоже с наградой в монетах.' });
-    s.push({ ic: ICON.medal(20), t: 'Награды «Марии»', d: 'Здесь же — витрина настоящих призов «Марии»: промокоды на скидку, баллы на карту клуба, десерт в подарок. Обменивать монеты на них можно будет, когда «Мария» откроет витрину — сейчас место для неё уже готово, она появится по мере запуска. А лестница «Награды за прогресс» уже работает: доходишь до нужного уровня, собираешь коллекцию голубей, приглашаешь друзей или заботишься о Василии подряд несколько дней — и получаешь баллы на карту клуба или купон.' });
+    s.push({ ic: ICON.medal(20), t: 'Награды за прогресс', d: 'Лестница наград работает по-настоящему: доходишь до нужного уровня, собираешь коллекцию голубей, приглашаешь друзей или заботишься о Василии подряд несколько дней — и получаешь баллы на карту клуба «Мария» или купон.' });
     return s;
   }
   function guideHtml() {
@@ -1538,8 +1525,7 @@
     if (!ov || !st) return; const list = ov.querySelector('#ck-uplist');
     const biz = (cat, art, name, metaHtml, buyHtml, idx) => `<div class="ck-biz cat-${cat.replace(' locked', '')}${cat.includes('locked') ? ' locked' : ''}" style="animation-delay:${(idx * 0.035).toFixed(2)}s"><div class="ck-biz__art">${art}</div><div class="ck-biz__b"><div class="ck-biz__n">${name}</div><div class="ck-biz__meta">${metaHtml}</div></div>${buyHtml}</div>`;
     const buyBtn = (price, dis, act, id) => `<button class="ck-biz__buy" data-act="${act}" data-id="${id || ''}" ${dis ? 'disabled' : ''}>${COIN(15)} ${fmt(price)}</button>`;
-    let h = PURE ? '' : rewardsBlock();
-    h += '<div class="ck-sect">Бусты</div>';
+    let h = '<div class="ck-sect">Бусты</div>';
     h += biz('boost', cardArt('multitap'), 'Мультитап', `<span class="ck-biz__lvl">+1 за тап</span><span class="ck-biz__prof">сейчас +${st.perTap}</span>`, buyBtn(st.multitapPrice, st.balance < st.multitapPrice, 'multitap'), 0);
     h += biz('boost', cardArt('energy'), 'Запас энергии', `<span class="ck-biz__lvl">+500 энергии</span><span class="ck-biz__prof">сейчас ${st.energyMax}</span>`, buyBtn(st.energyPrice, st.balance < st.energyPrice, 'energy'), 1);
     h += '<div class="ck-sect">Бизнесы — пассивный доход</div>';
@@ -1554,34 +1540,7 @@
     if (lastBought) { const el = list.querySelector(`[data-id="${lastBought}"]`); const card = el && el.closest('.ck-biz'); if (card) { card.classList.add('bump'); if (bizCoachPending) coach('bizFirst', COACH.bizFirst.t, card, { icon: ICON[COACH.bizFirst.icon](18) }); } bizCoachPending = false; lastBought = null; }
     list.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { window.haptic && window.haptic('selection'); upCat = b.dataset.cat; renderUpgrades(); });
     list.querySelectorAll('[data-act]').forEach(b => b.onclick = () => buy(b.dataset.act, b.dataset.id || undefined));
-    list.querySelectorAll('[data-redeem]').forEach(b => b.onclick = () => redeem(b.dataset.redeem));
   }
-  function rewardsBlock() {
-    const bal = (st && st.balance) || 0;
-    const banner = !rewardsEnabled
-      ? `<div class="ck-card" style="background:linear-gradient(90deg,rgba(238,191,82,.18),rgba(238,191,82,.05))"><div class="ck-card__ic">${ICON.gift(26)}</div><div class="ck-card__b"><div class="ck-card__n">Обменивай монеты на реальное</div><div class="ck-card__s">Скидки и бонусы «Марии» — скоро открываем!</div></div></div>`
-      : '';
-    const RMETA = { promo5: { ic: ICON.medal, cls: 'r-promo' }, promo10: { ic: ICON.gem, cls: 'r-promo' }, bonus300: { ic: ICON.wallet, cls: 'r-bonus' }, dessert: { ic: ICON.cupcake, cls: 'r-dessert' } };
-    const cards = REWARDS.map(r => {
-      const m = RMETA[r.id] || { ic: ICON.gift, cls: '' };
-      const right = !rewardsEnabled
-        ? `<span class="ck-soon">Скоро</span>`
-        : `<button class="ck-card__buy" data-redeem="${r.id}" ${bal >= r.cost ? '' : 'disabled'}>${COIN(14)} ${fmt(r.cost)}</button>`;
-      return `<div class="ck-reward ${m.cls}"><div class="ck-reward__ic">${m.ic(24)}</div><div class="ck-reward__b"><div class="ck-card__n">${r.name}</div><div class="ck-card__s">${r.note} · ${fmt(r.cost)} монет</div></div>${right}</div>`;
-    }).join('');
-    return '<div class="ck-sect">Награды «Марии»</div>' + banner + cards;
-  }
-  function redeem(id) {
-    if (!rewardsEnabled) { flashMsg('Скоро откроем'); return; }
-    if (!authed()) { flashMsg('Войди через приложение «Мария»'); return; }
-    // Самая дорогая кнопка в игре (реальные коды/баллы) — строго один запрос за раз
-    withLock('redeem', () => api('/api/clicker/redeem', { method: 'POST', body: JSON.stringify({ id }) }).then(d => {
-      if (d && !d.error && (d.code || d.points)) { st = d; sfxLevel(); window.haptic && window.haptic('success'); if (d.code) codePopup(d.code); else pointsPopup(d.points); renderAll(); renderUpgrades(); }
-      else flashMsg(d && d.error === 'daily_limit' ? 'Лимит на сегодня' : d && d.error === 'need_phone' ? 'Сначала подтверди телефон в профиле' : d && d.error === 'disabled' ? 'Скоро откроем' : 'Не хватает монет');
-    }).catch(() => flashMsg('Нет связи — попробуй ещё раз')));
-  }
-  function codePopup(code) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Награда твоя!</h3><div class="v" style="font-size:22px">${code}</div><div style="color:var(--muted);font-size:13px">Применить в корзине или показать кассиру</div><div style="display:flex;gap:8px;justify-content:center;margin-top:12px"><button class="ck-card__buy" id="ck-pop-copy" style="justify-content:center">Скопировать</button></div><button id="ck-pop-ok" style="margin-top:10px">Класс!</button>`; pop.classList.add('on'); const cp = pop.querySelector('#ck-pop-copy'); if (cp) cp.onclick = () => { const done = () => { cp.textContent = 'Скопировано'; }; if (navigator.clipboard) { navigator.clipboard.writeText(code).then(done, done); } else { done(); } }; pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
-  function pointsPopup(points) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Баллы на карте!</h3><div class="v" style="font-size:22px">+${fmt(points)}</div><div style="color:var(--muted);font-size:13px">Реальные баллы клуба «Мария» — спишутся при заказе</div><button id="ck-pop-ok" style="margin-top:10px">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
   function renderDove() {
     const list = ov.querySelector('#ck-dovelist'); if (!st) { list.innerHTML = ''; return; }
     const owned = st.cards.filter(c => c.level > 0).length, total = st.cards.length;
@@ -1627,14 +1586,14 @@
   }
   function weeklyPrizeCard(w) {
     if (!w) return '';
-    const head = '<div class="ck-sect">Приз недели</div>';
-    let body;
+    // Баннер «призы недели — скоро» вычищен 30.07.2026 вместе с витриной обмена
+    // (не обещаем неработающее); секция появится сама, когда бэк пришлёт enabled+prizes.
+    let head = '', body = '';
     if (w.enabled && w.prizes && w.prizes.length) {
+      head = '<div class="ck-sect">Приз недели</div>';
       body = '<div class="ck-card ck-bonus" style="flex-direction:column;align-items:stretch;gap:8px;padding:12px 14px">'
         + w.prizes.map((p) => `<div class="ck-row"><div class="r">${ICON.medal(20)}</div><div class="n">${p.rank} место</div><div class="v" style="color:var(--gold-l)">${(p.label || '').replace(/</g, '&lt;')}</div></div>`).join('')
         + '</div>';
-    } else {
-      body = `<div class="ck-card" style="background:linear-gradient(90deg,rgba(238,191,82,.18),rgba(238,191,82,.05))"><div class="ck-card__ic">${ICON.trophy(26)}</div><div class="ck-card__b"><div class="ck-card__n">Призы за топ-3 недели</div><div class="ck-card__s">Реальные награды «Марии» лучшим игрокам недели — скоро!</div></div><span class="ck-soon">Скоро</span></div>`;
     }
     let lw = '';
     if (w.lastWeek && w.lastWeek.length) {
@@ -1990,7 +1949,6 @@
     applyCatSize(ov.querySelector('#ck-cat'));
     setTab('cat'); renderAll(); spawnSparks(); applySeason(); scheduleBonus(); loadDoveBadge();
     if (loadNetFail) flashMsg('Нет связи — офлайн-режим, прогресс синхронизируется позже'); // авторизованный получил гостевой фолбэк — не молчать про «пропавший» баланс
-    if (authed()) api('/api/clicker/rewards').then(d => { if (d && typeof d.enabled === 'boolean' && d.enabled !== rewardsEnabled) { rewardsEnabled = d.enabled; if (tab === 'up') renderUpgrades(); } }).catch(() => {});
     let _seenTut = true; try { _seenTut = !!localStorage.getItem('ck_tut_v1'); } catch (e) {}
     if (!_seenTut) showTutorial();
     else {
