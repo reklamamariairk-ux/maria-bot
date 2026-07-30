@@ -360,7 +360,7 @@
     const ownedCount = BREEDS.filter(b => b.id !== 'champion' && data.invMap[b.id] && data.invMap[b.id].count > 0).length;
     const setBlocks = SETS.map(setBlockHtml).join('');
     container.innerHTML = `<div class="cd-root">
-      <div class="cd-summary">Собери коллекцию голубей — <b>${ownedCount}/16</b>. Голуби прилетают за комбо дня, мини-игры, сундук удачи и покупки; «порода недели» выпадает чаще.</div>
+      <div class="cd-summary">Альбом пород — <b>${ownedCount}/16</b>. Породы <b>выпадают за игру</b>: комбо дня, мини-игры, сундук удачи и покупки; «порода недели» — чаще.</div>
       <div class="cd-navrow">
         <button class="cd-navbtn" id="cd-nav-trades">${SWAP_ICON(15)} Обмены</button>
         <button class="cd-navbtn" id="cd-nav-mail">${MAILBOX_ICON(15)} Почта${data.unreadMail > 0 ? `<span class="cd-navbadge">${data.unreadMail > 9 ? '9+' : data.unreadMail}</span>` : ''}</button>

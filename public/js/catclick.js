@@ -703,6 +703,9 @@
       .ck-seg__b{position:relative;flex:1;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:12px;padding:9px 4px;font-weight:700;font-size:12.5px;cursor:pointer;min-height:38px}
       .ck-seg__b.on{background:linear-gradient(180deg,#ffe7a6,#eebf52 58%,#cf9a36);color:#5a2028;border-color:#ffe9b3}
       .ck-seg__b--new::after{content:'';position:absolute;top:6px;right:9px;width:8px;height:8px;border-radius:50%;background:#e5484d;box-shadow:0 0 0 2px var(--panel)}
+      /* Подпись-источник под названием сегмента («за бизнесы» / «выпадают за игру») —
+         цвет наследует кнопку: на золотом активе тёмная, на панели приглушённая */
+      .ck-seg__sub{display:block;font-size:9px;font-weight:600;line-height:1.2;margin-top:1px;color:inherit;opacity:.75;text-transform:none;letter-spacing:0}
       .ck-badge{display:inline-flex;align-items:center;justify-content:center;position:absolute;top:1px;right:22%;min-width:15px;height:15px;padding:0 4px;border-radius:8px;background:#e5484d;color:#fff;font-size:9px;font-weight:800;line-height:1;box-shadow:0 0 0 2px rgba(18,8,11,.6)}
       .ck-badge[hidden]{display:none}
       .ck-games-hd{margin:10px 2px 2px;padding:11px 14px;border-radius:14px;background:linear-gradient(90deg,rgba(238,191,82,.16),rgba(238,191,82,.04));border:1px solid var(--line);color:var(--cream);font-size:13.5px;font-weight:700;text-align:center}.ck-games-hd b{color:var(--gold-l);font-size:16px}
@@ -907,7 +910,7 @@
       </div>
       <div class="ck-screen" id="ck-scr-up"><div class="ck-uphd"><div class="ck-bal" style="justify-content:center;font-size:30px">${COIN(26)} <span id="ck-bal2">0</span></div><div class="p" id="ck-prof2">${COIN(13)} +0 / час</div></div><div class="ck-uplist" id="ck-uplist"></div></div>
       <div class="ck-screen" id="ck-scr-dove"><div class="ck-uphd"><div class="b">${ICON.dove(22)} Голубятня</div></div>
-        <div class="ck-seg" id="ck-dove-seg"><button class="ck-seg__b on" data-seg="help" type="button">Помощники</button><button class="ck-seg__b" data-seg="col" type="button">Коллекция</button></div>
+        <div class="ck-seg" id="ck-dove-seg"><button class="ck-seg__b on" data-seg="help" type="button">Помощники<span class="ck-seg__sub">приходят за бизнесы</span></button><button class="ck-seg__b" data-seg="col" type="button">Альбом пород<span class="ck-seg__sub">выпадают за игру</span></button></div>
         <div class="ck-uplist" id="ck-dovelist"></div><div class="ck-uplist" id="ck-dove-col" style="display:none"></div></div>
       <div class="ck-screen" id="ck-scr-tasks"><div class="ck-uphd"><div class="b">${ICON.gift(22)} Призы</div></div><div class="ck-uplist" id="ck-taskslist"></div></div>
       <div class="ck-screen" id="ck-scr-top"><div class="ck-uphd"><div class="b">${ICON.trophy(22)} Рейтинг</div><div class="p" id="ck-myrank"></div></div><div class="ck-uplist" id="ck-toplist"></div></div>
@@ -1544,7 +1547,10 @@
   function renderDove() {
     const list = ov.querySelector('#ck-dovelist'); if (!st) { list.innerHTML = ''; return; }
     const owned = st.cards.filter(c => c.level > 0).length, total = st.cards.length;
-    let h = `<div style="text-align:center;color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.5">Собери всех помощников кота — <b style="color:var(--gold-l)">${owned}/${total}</b>. Заводи бизнесы в «Прокачке»; награды за комплект — в «Призах» → Достижения.</div>`;
+    // Интро строится на КОНТРАСТЕ с альбомом пород: помощники не выпадают и не
+    // покупаются здесь — приходят сами за бизнесы «Прокачки» (витрина прогресса).
+    let h = `<div style="text-align:center;color:var(--muted);font-size:13px;margin:0 0 10px;line-height:1.5">Помощники приходят <b style="color:var(--gold-l)">сами</b>: заведи бизнес в «Прокачке» — голубь займёт место здесь. Собрано <b style="color:var(--gold-l)">${owned}/${total}</b>; награды за комплект — в «Призах» → Достижения.</div>`;
+    if (owned < total) h += `<button class="ck-card__buy" id="ck-dove-goup" style="width:100%;justify-content:center;margin-bottom:12px">${ICON.bolt(15)} Открыть «Прокачку»</button>`;
     for (const ct of CARD_CATS) {
       const cards = st.cards.filter(c => c.cat === ct.id); const got = cards.filter(c => c.level > 0).length;
       h += `<div class="ck-sect">${ct.name} · ${got}/${cards.length}</div><div class="ck-dovegrid">`;
@@ -1558,6 +1564,8 @@
       h += '</div>';
     }
     list.innerHTML = h;
+    const goUp = list.querySelector('#ck-dove-goup');
+    if (goUp) goUp.onclick = () => { window.haptic && window.haptic('selection'); setTab('up'); };
   }
   function skelRows(n) { let h = ''; for (let i = 0; i < n; i++) h += '<div class="ck-skrow"><span class="sk-r ck-skel"></span><span class="sk-n ck-skel"></span><span class="sk-v ck-skel"></span></div>'; return h; }
   function emptyState(ic, title, sub) { return `<div class="ck-empty"><div class="ck-empty__ic">${ic}</div><div class="ck-empty__t">${title}</div><div class="ck-empty__s">${sub}</div></div>`; }
