@@ -47,6 +47,65 @@ add 200 "vasily-cafe (игры)"        "https://vasily.145-223-121-47.sslip.io/
 add 200 "sales-dashboard (Timeweb)" "http://186.246.14.117/"
 add 200 "план выпуска production.html" "http://186.246.14.117/production.html"
 
+# Я.Директ-скрейп на sales-dashboard: свежесть + сессия.
+# Добавлено 2026-07-29: скрейпер молча лежал 7 недель (sessionExpired), никто не видел.
+DASH_TOKEN="8694d65d-b857-491f-9b3b-8c7285fe0340"
+DIRECT_LINE=$(curl -sS -m 40 -H "X-User-Token: ${DASH_TOKEN}" "http://186.246.14.117/api/marketing/channels" 2>/dev/null | python3 -c '
+import json,sys,datetime
+try:
+    d = json.load(sys.stdin)
+    dr = (d.get("external") or {}).get("direct") or {}
+    if dr.get("sessionExpired"):
+        print("FAIL Я.Директ-скрейп: sessionExpired (нужен релогин yandex-state)")
+        raise SystemExit
+    ts = dr.get("scrapedAt") or ""
+    age_h = (datetime.datetime.now(datetime.timezone.utc)
+             - datetime.datetime.fromisoformat(ts.replace("Z", "+00:00"))).total_seconds() / 3600
+    spend = (dr.get("totals") or {}).get("spend")
+    if age_h < 30 and spend is not None:
+        print(f"OK Я.Директ-скрейп ({age_h:.0f}ч назад, {spend:,.0f} руб MTD)".replace(",", " "))
+    else:
+        print(f"FAIL Я.Директ-скрейп: протух ({age_h:.0f}ч, spend={spend})")
+except Exception as e:
+    print("FAIL Я.Директ-скрейп: проверка сломалась (" + str(e)[:60] + ")")
+' 2>/dev/null)
+[ -z "$DIRECT_LINE" ] && DIRECT_LINE="FAIL Я.Директ-скрейп: дашборд не ответил"
+case "$DIRECT_LINE" in FAIL*) FAILS=$((FAILS+1));; esac
+LINES+=("$DIRECT_LINE")
+
+# Кофе-контроль (антифрод, добавлено 2026-07-30): красные точки = стаканы уходят,
+# напитки не пробиваются. Эндпоинт открытый, кэш 6ч на стороне дашборда.
+COFFEE_LINE=$(curl -sS -m 60 "http://186.246.14.117/api/marketing/coffee-control" 2>/dev/null | python3 -c '
+import json,sys
+try:
+    d = json.load(sys.stdin)
+    reds = [s for s in d.get("stores", []) if s.get("status") == "red"]
+    if reds:
+        print("FAIL кофе-контроль: мимо кассы? " + ", ".join(
+            f"{s[\"store\"]} ({s[\"cups\"]} стак/{s[\"drinks\"]} проб.)" for s in reds[:5]))
+    else:
+        print("OK кофе-контроль: красных точек нет")
+except Exception:
+    print("OK кофе-контроль: н/д (эндпоинт не ответил)")
+' 2>/dev/null)
+[ -z "$COFFEE_LINE" ] && COFFEE_LINE="OK кофе-контроль: н/д"
+case "$COFFEE_LINE" in FAIL*) FAILS=$((FAILS+1));; esac
+LINES+=("$COFFEE_LINE")
+
+# Гонка стаи (добавлено 2026-07-30, аудит): заявки на прошлой неделе были, а строки
+# итогов нет = cron проспал понедельник и призы не выданы. Пустая неделя без строки — не беда.
+RACE_LINE=$(DBURL=$(grep -oE 'postgresql://[^"]*' /opt/maria/.env-files/bot.env | head -1); docker exec -i postgres psql "$DBURL" -t -A -c "
+WITH d AS (SELECT ((EXTRACT(EPOCH FROM NOW())::bigint + 28800)/86400)::bigint AS day),
+w AS (SELECT (day - ((day+3)%7) - 7)::text AS prev FROM d)
+SELECT (SELECT COUNT(*) FROM pigeon_race_entries e, w WHERE e.week=w.prev) || ':' ||
+       (SELECT COUNT(*) FROM pigeon_race_winners r, w WHERE r.week=w.prev);" 2>/dev/null)
+case "$RACE_LINE" in
+  0:*) LINES+=("OK гонка стаи: прошлая неделя без заявок");;
+  *:0) FAILS=$((FAILS+1)); LINES+=("FAIL гонка стаи: заявки были, итоги НЕ подведены — призы не выданы");;
+  *:*) LINES+=("OK гонка стаи: итоги прошлой недели подведены");;
+  *)   LINES+=("OK гонка стаи: н/д");;
+esac
+
 # Контейнеры docker: рестартящиеся/нездоровые
 BAD=$(docker ps --format '{{.Names}} {{.Status}}' 2>/dev/null | grep -Ei 'restarting|unhealthy' || true)
 if [ -n "$BAD" ]; then

@@ -122,12 +122,12 @@ export const LEAGUES = [
   { level: 11, name: "Шеф-кондитер",       need: 2600000 },
   { level: 12, name: "Художник десертов",  need: 5200000 },
   { level: 13, name: "Управляющий",        need: 10000000 },
-  { level: 14, name: "Владелец кафе",      need: 20000000 },
-  { level: 15, name: "Ресторатор",         need: 42000000 },
-  { level: 16, name: "Магнат выпечки",     need: 90000000 },
-  { level: 17, name: "Легенда",            need: 200000000 },
-  { level: 18, name: "Король тортов",      need: 500000000 },
-  { level: 19, name: "Император выпечки",  need: 1500000000 },
+  { level: 14, name: "Владелец кафе",      need: 18000000 },
+  { level: 15, name: "Ресторатор",         need: 30000000 },
+  { level: 16, name: "Магнат выпечки",     need: 50000000 },
+  { level: 17, name: "Легенда",            need: 80000000 },
+  { level: 18, name: "Король тортов",      need: 120000000 },
+  { level: 19, name: "Император выпечки",  need: 180000000 },
 ];
 function leagueFor(total: number) { let l = LEAGUES[0]; for (const x of LEAGUES) if (total >= x.need) l = x; return l; }
 function nextNeed(total: number): number | null { const n = LEAGUES.find((x) => x.need > total); return n ? n.need : null; }
@@ -213,6 +213,20 @@ const MORSE: Record<string, string> = {
 function dateSeed(day: string, salt: string): number { let h = 2166136261 >>> 0; const s = day + salt; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h >>> 0; }
 function todaysCombo(day: string): string[] { let h = dateSeed(day, "combo"); const pool2 = CARDS.map((c) => c.id); const pick: string[] = []; for (let i = 0; i < 3; i++) { h = (Math.imul(h, 1664525) + 1013904223) >>> 0; pick.push(pool2.splice(h % pool2.length, 1)[0]); } return pick; }
 function todaysCipher(day: string): string { return CIPHER_WORDS[dateSeed(day, "cipher") % CIPHER_WORDS.length]; }
+// Анаграмма вместо морзе (аудит 30.07: азбука Морзе — барьер для аудитории кондитерской;
+// слово и проверка те же, меняется только подача). Детерминированный шафл от даты —
+// у всех игроков одинаковая перемешка. ⚠️ Зеркало в catclick.js — менять синхронно.
+function scrambleWord(word: string, day: string): string {
+  const letters = word.split("");
+  let s = (dateSeed(day, "scramble") || 1) & 0x7fffffff;
+  for (let i = letters.length - 1; i > 0; i--) {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    const j = s % (i + 1);
+    [letters[i], letters[j]] = [letters[j], letters[i]];
+  }
+  const out = letters.join("");
+  return out === word ? letters.reverse().join("") : out;
+}
 function toMorse(w: string): string { return w.split("").map((c) => MORSE[c] || "").join(" "); }
 function parseHits(s: string | null): string[] { return s ? s.split(",").filter(Boolean) : []; }
 
@@ -229,7 +243,7 @@ export interface ClickerState {
   boostEnergyLeft: number; boostTurboLeft: number; turboMsLeft: number;
   referrals: number; refCode: string; refLink: string;
   combo: { cards: string[]; hits: string[]; complete: boolean; claimed: boolean; reward: number };
-  cipher: { morse: string; len: number; claimed: boolean; reward: number };
+  cipher: { morse: string; anagram: string; len: number; claimed: boolean; reward: number };
   taps: number; cardsOwned: number;
   season: { points: number; endsTs: number };
   prestige: number; prestigeMult: number; prestigeReady: boolean;
@@ -343,7 +357,7 @@ function buildState(r: any, cl: Record<string, number>, passiveEarned: number): 
     boostEnergyLeft: DAILY_BOOSTS - bUsedE, boostTurboLeft: DAILY_BOOSTS - bUsedT, turboMsLeft: turboMs,
     referrals: r.referrals || 0, refCode: String(r.chat_id), refLink: clickerReferralLink(Number(r.chat_id)),
     combo: (() => { const cards = todaysCombo(today); const hits = r.combo_date === today ? parseHits(r.combo_hits) : []; return { cards, hits, complete: cards.every((c) => hits.includes(c)), claimed: r.combo_claimed === today, reward: COMBO_REWARD }; })(),
-    cipher: { morse: toMorse(todaysCipher(today)), len: todaysCipher(today).length, claimed: r.cipher_date === today, reward: CIPHER_REWARD },
+    cipher: { morse: toMorse(todaysCipher(today)), anagram: scrambleWord(todaysCipher(today), today), len: todaysCipher(today).length, claimed: r.cipher_date === today, reward: CIPHER_REWARD },
     taps: Number(r.taps || 0), cardsOwned: CARDS.filter((c) => (cl[c.id] || 0) > 0).length,
     season: { points: r.week_key === weekKey() ? Math.max(0, Number(r.total_earned) - Number(r.week_base || 0)) : 0, endsTs: seasonEndsTs() },
     prestige: Number(r.prestige || 0), prestigeMult: prestigeMultOf(Number(r.prestige || 0)), prestigeReady: lg.level >= PRESTIGE_MIN_LEVEL,

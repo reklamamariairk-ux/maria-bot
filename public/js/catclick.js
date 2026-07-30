@@ -52,12 +52,12 @@
     { level: 11, name: 'Шеф-кондитер',       need: 2600000,  cat: 'vasily-stage11.webp' },
     { level: 12, name: 'Художник десертов',  need: 5200000,  cat: 'vasily-stage12.webp' },
     { level: 13, name: 'Управляющий',        need: 10000000, cat: 'vasily-stage13.webp' },
-    { level: 14, name: 'Владелец кафе',      need: 20000000, cat: 'vasily-stage14.webp' },
-    { level: 15, name: 'Ресторатор',         need: 42000000,  cat: 'vasily-stage15.webp' },
-    { level: 16, name: 'Магнат выпечки',     need: 90000000,  cat: 'vasily-stage16.webp' },
-    { level: 17, name: 'Легенда',            need: 200000000, cat: 'vasily-stage17.webp' },
-    { level: 18, name: 'Король тортов',      need: 500000000, cat: 'vasily-stage18.webp' },
-    { level: 19, name: 'Император выпечки',  need: 1500000000, cat: 'vasily-stage19.webp' },
+    { level: 14, name: 'Владелец кафе',      need: 18000000, cat: 'vasily-stage14.webp' },
+    { level: 15, name: 'Ресторатор',         need: 30000000,  cat: 'vasily-stage15.webp' },
+    { level: 16, name: 'Магнат выпечки',     need: 50000000,  cat: 'vasily-stage16.webp' },
+    { level: 17, name: 'Легенда',            need: 80000000, cat: 'vasily-stage17.webp' },
+    { level: 18, name: 'Король тортов',      need: 120000000, cat: 'vasily-stage18.webp' },
+    { level: 19, name: 'Император выпечки',  need: 180000000, cat: 'vasily-stage19.webp' },
   ];
   const REF_REFERRER = 5000, REF_INVITEE = 2500, BOT = 'mariatortik_bot';
   // Соцссылки «Марии» — зеркало SOCIAL в src/clicker.ts (менять синхронно). Пустая = задание скрыто.
@@ -262,6 +262,18 @@
     return out;
   }
   function todaysCipher(day) { return CIPHER_WORDS[dateSeed(day, 'cipher') % CIPHER_WORDS.length]; }
+  // Анаграмма вместо морзе — зеркало src/clicker.ts::scrambleWord (менять синхронно)
+  function scrambleWord(word, day) {
+    const letters = word.split('');
+    let s = (dateSeed(day, 'scramble') || 1) & 0x7fffffff;
+    for (let i = letters.length - 1; i > 0; i--) {
+      s = (s * 1103515245 + 12345) & 0x7fffffff;
+      const j = s % (i + 1);
+      const t = letters[i]; letters[i] = letters[j]; letters[j] = t;
+    }
+    const out = letters.join('');
+    return out === word ? letters.reverse().join('') : out;
+  }
   function toMorse(w) { return w.split('').map(c => MORSE[c] || '').join(' '); }
   const cardName = (id) => (CARDS.find(c => c.id === id) || {}).name || id;
 
@@ -460,7 +472,7 @@
       rainAvailable: s.rainDate !== today,
       boostEnergyLeft: DAILY_BOOSTS - s.bE, boostTurboLeft: DAILY_BOOSTS - s.bT, turboMsLeft: Math.max(0, (s.turboUntil || 0) - Date.now()),
       combo: (() => { const cards = todaysCombo(today); const hits = s.comboDate === today ? (s.comboHits || []) : []; return { cards, hits, complete: cards.every(c => hits.includes(c)), claimed: s.comboClaimed === today, reward: COMBO_REWARD }; })(),
-      cipher: { morse: toMorse(todaysCipher(today)), len: todaysCipher(today).length, claimed: s.cipherDate === today, reward: CIPHER_REWARD },
+      cipher: { morse: toMorse(todaysCipher(today)), anagram: scrambleWord(todaysCipher(today), today), len: todaysCipher(today).length, claimed: s.cipherDate === today, reward: CIPHER_REWARD },
       taps: s.taps || 0, cardsOwned: CARDS.filter(c => (s.cards[c.id] || 0) > 0).length,
       season: { points: 0, endsTs: seasonEndsTs() },
       prestige: 0, prestigeMult: 1, prestigeReady: false, event: ckEvent(),
@@ -1600,7 +1612,9 @@
   async function renderTop() {
     const list = ov.querySelector('#ck-toplist'); const rank = ov.querySelector('#ck-myrank');
     const left = fmtDur(seasonEndsTs() - Date.now());
-    const brag = `<button class="ck-card__buy" id="ck-brag" style="width:100%;justify-content:center;margin-bottom:12px">${ICON.trophy(15)} Похвастаться карточкой</button>`;
+    // «Похвастаться» — только когда есть чем: у гостя и игрока с 0 очков сезона кнопка спрятана (аудит 30.07)
+    const canBrag = authed() && st && st.season && Number(st.season.points) > 0;
+    const brag = canBrag ? `<button class="ck-card__buy" id="ck-brag" style="width:100%;justify-content:center;margin-bottom:12px">${ICON.trophy(15)} Похвастаться карточкой</button>` : '';
     const ref = PURE ? refCard('ck-invite2') : '';
     const sq = await squadBlock();
     const wire = () => { const bb = ov.querySelector('#ck-brag'); if (bb) bb.onclick = shareCard; const inv = ov.querySelector('#ck-invite2'); if (inv) inv.onclick = shareRef; sq.wire(); };
@@ -1648,7 +1662,7 @@
     const my = d.mySquad;
     const rows = d.squads.map((s, i) => `<div class="ck-row${s.id === my ? ' me' : ''}"><div class="r">${i < 3 ? ICON.medal(18) : i + 1}</div><div class="n">${s.name} <span style="color:var(--muted);font-size:11px">· ${s.members}</span></div><div class="v">${COIN(13)} ${fmt(s.points)}</div></div>`).join('');
     const chips = SQUADS.map(s => `<button class="ck-cat-chip${s.id === my ? ' on' : ''}" data-squad="${s.id}">${s.name}</button>`).join('');
-    return { html: `<div class="ck-sect">Команды</div>${rows}<div style="color:var(--muted);font-size:12px;text-align:center;margin:6px 0 4px">${my ? 'Сменить команду:' : 'Выбери команду:'}</div><div class="ck-cats">${chips}</div>`, wire: () => { ov.querySelectorAll('[data-squad]').forEach(b => b.onclick = () => joinSquadAct(b.dataset.squad)); } };
+    return { html: `<div class="ck-sect">Команды</div><div style="color:var(--muted);font-size:12px;text-align:center;margin:0 0 6px">Монеты всех игроков команды складываются в общий счёт</div>${rows}<div style="color:var(--muted);font-size:12px;text-align:center;margin:6px 0 4px">${my ? 'Сменить команду:' : 'Выбери команду:'}</div><div class="ck-cats">${chips}</div>`, wire: () => { ov.querySelectorAll('[data-squad]').forEach(b => b.onclick = () => joinSquadAct(b.dataset.squad)); } };
   }
   async function joinSquadAct(id) {
     const d = await api('/api/clicker/squad', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null);
@@ -1847,11 +1861,14 @@
     const comboCard = `<div class="ck-card ck-bonus">
       <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.star(26)}</div><div class="ck-card__b"><div class="ck-card__n">Комбо дня</div><div class="ck-card__s">Прокачай эти 3 бизнеса сегодня · +${fmt(cmb.reward)} ${COIN(13)}</div></div></div>
       <div class="ck-combo3">${slots}</div>${comboBtn}</div>`;
+    // Анаграмма вместо морзе (аудит 30.07): буквы «вкусного» слова вперемешку —
+    // без барьера для аудитории кондитерской. Старое поле morse живёт для кэшей.
+    const cipherLetters = (cph.anagram || '').split('').join(' ');
     const cipherCard = `<div class="ck-card ck-bonus">
-      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.bolt(26)}</div><div class="ck-card__b"><div class="ck-card__n">Шифр дня</div><div class="ck-card__s">Расшифруй морзе и впиши слово · +${fmt(cph.reward)} ${COIN(13)}</div></div></div>
+      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.bolt(26)}</div><div class="ck-card__b"><div class="ck-card__n">Слово дня</div><div class="ck-card__s">Собери слово из букв · +${fmt(cph.reward)} ${COIN(13)}</div></div></div>
       ${cph.claimed
-        ? `<button class="ck-card__buy" disabled style="width:100%;justify-content:center">✓ Разгадан сегодня</button>`
-        : `<div class="ck-morse">${cph.morse}</div><div style="display:flex;gap:8px"><input class="ck-cipher-in" id="ck-cipher-in" maxlength="14" placeholder="${cph.len} букв" autocomplete="off" spellcheck="false" enterkeyhint="done" autocapitalize="characters"/><button class="ck-card__buy" id="ck-cipher-go" style="justify-content:center">Разгадать</button></div>`}</div>`;
+        ? `<button class="ck-card__buy" disabled style="width:100%;justify-content:center">✓ Разгадано сегодня</button>`
+        : `<div class="ck-morse">${cipherLetters || cph.morse}</div><div style="display:flex;gap:8px"><input class="ck-cipher-in" id="ck-cipher-in" maxlength="14" placeholder="${cph.len} букв" autocomplete="off" spellcheck="false" enterkeyhint="done" autocapitalize="characters"/><button class="ck-card__buy" id="ck-cipher-go" style="justify-content:center">Разгадать</button></div>`}</div>`;
     const chestAvail = !st || st.chestAvailable;
     const chestCard = `<div class="ck-card ck-bonus" style="background:linear-gradient(90deg,rgba(238,191,82,.16),rgba(238,191,82,.04))">
       <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.chest(26)}</div><div class="ck-card__b"><div class="ck-card__n">Сундук удачи</div><div class="ck-card__s">${chestAvail ? 'Монеты, турбо или джекпот!' : 'Возвращайся завтра за новым'}</div></div>
