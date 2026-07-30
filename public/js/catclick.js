@@ -737,6 +737,8 @@
       .ck-biz__buy:disabled{background:rgba(255,255,255,.07);color:var(--muted);border-color:transparent;box-shadow:none;cursor:default}
       .ck-dovegrid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-bottom:6px}
       .ck-dove{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 8px;text-align:center;opacity:0;animation:ckBizIn .34s ease-out forwards}
+      .ck-dove.silh{cursor:pointer}
+      .ck-dove.silh:active{transform:scale(.97)}
       .ck-dove__art{position:relative;width:88px;height:88px;margin:0 auto;border-radius:14px;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,rgba(238,191,82,.18),rgba(238,191,82,.04));border:1px solid var(--line);overflow:hidden}
       .ck-dove__art img{width:100%;height:100%;object-fit:contain;position:relative;z-index:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
       .ck-dove.silh .ck-dove__art img{filter:brightness(0);opacity:.3}
@@ -1558,7 +1560,7 @@
       for (const c of cards) {
         const has = c.level > 0;
         const art = BIZ_ART_V ? `<img src="/assets/images/biz/${c.id}.png?v=${BIZ_ART_V}" alt="" loading="lazy">` : cardIcon(c.id, 36);
-        h += `<div class="ck-dove ${has ? 'got' : 'silh'}" style="animation-delay:${(i * 0.03).toFixed(2)}s"><div class="ck-dove__art">${art}${has ? '' : `<span class="ck-dove__q">${ICON.lock(30)}</span>`}</div><div class="ck-dove__n">${has ? c.name : '???'}</div><div class="ck-dove__role">${has ? 'Ур. ' + c.level : 'не открыт'}</div></div>`;
+        h += `<div class="ck-dove ${has ? 'got' : 'silh'}" data-helper="${c.id}" style="animation-delay:${(i * 0.03).toFixed(2)}s"><div class="ck-dove__art">${art}${has ? '' : `<span class="ck-dove__q">${ICON.lock(30)}</span>`}</div><div class="ck-dove__n">${has ? c.name : '???'}</div><div class="ck-dove__role">${has ? 'Ур. ' + c.level : 'не открыт'}</div></div>`;
         i++;
       }
       h += '</div>';
@@ -1566,6 +1568,32 @@
     list.innerHTML = h;
     const goUp = list.querySelector('#ck-dove-goup');
     if (goUp) goUp.onclick = () => { window.haptic && window.haptic('selection'); setTab('up'); };
+    // Тап по закрытому помощнику → попап возможностей (что за бизнес, доход, как открыть)
+    list.querySelectorAll('.ck-dove.silh').forEach(el => {
+      el.onclick = () => { const c = st.cards.find(x => x.id === el.dataset.helper); if (c) helperPopup(c); };
+    });
+  }
+  // Возможности закрытого помощника: имя бизнеса не секрет (виден в «Прокачке»), поэтому
+  // показываем честно — направление, доход 1-го уровня, цену/условие открытия и CTA.
+  function helperPopup(c) {
+    const pop = ov && ov.querySelector('#ck-pop'); if (!pop) return;
+    window.haptic && window.haptic('light');
+    const catName = (CARD_CATS.find(x => x.id === c.cat) || {}).name || '';
+    const art = BIZ_ART_V ? `<img src="/assets/images/biz/${c.id}.png?v=${BIZ_ART_V}" alt="" style="width:84px;height:84px;object-fit:contain;filter:brightness(0);opacity:.3">` : '';
+    const how = c.locked
+      ? `Бизнес станет доступен с ${c.req} уровня котика`
+      : `Заведи бизнес «${c.name}» в «Прокачке» — первый уровень за ${fmt(c.price)} монет`;
+    pop.innerHTML = `<h3>${ICON.dove(20)} ${c.name}</h3>
+      <div style="margin:4px 0">${art}</div>
+      <div style="color:var(--muted);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.7px">${catName}</div>
+      <div class="v" style="font-size:20px">${COIN(18)} +${fmt(c.profit)} / час</div>
+      <div style="color:var(--muted);font-size:13px;line-height:1.5;max-width:250px;margin:0 auto">${how}. Как только бизнес заработает — этот голубь займёт своё место в голубятне.</div>
+      ${c.locked ? '' : `<button id="ck-hp-up">Открыть «Прокачку»</button>`}
+      <button id="ck-pop-ok" style="${c.locked ? '' : 'background:rgba(255,255,255,.07);color:var(--ink);border-color:var(--line);'}">Закрыть</button>`;
+    pop.classList.add('on');
+    const up = pop.querySelector('#ck-hp-up');
+    if (up) up.onclick = () => { pop.classList.remove('on'); window.haptic && window.haptic('selection'); setTab('up'); };
+    pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
   }
   function skelRows(n) { let h = ''; for (let i = 0; i < n; i++) h += '<div class="ck-skrow"><span class="sk-r ck-skel"></span><span class="sk-n ck-skel"></span><span class="sk-v ck-skel"></span></div>'; return h; }
   function emptyState(ic, title, sub) { return `<div class="ck-empty"><div class="ck-empty__ic">${ic}</div><div class="ck-empty__t">${title}</div><div class="ck-empty__s">${sub}</div></div>`; }
