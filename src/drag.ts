@@ -33,7 +33,9 @@ export const TRAIN_SKILL_LO = 0.45, TRAIN_SKILL_HI = 0.95; // поле «Тре�
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 
-export type LaunchInput = { rev1: number; rev2: number; reactionMs: number };
+// rev2 опционален: фидбек юзера 30.07 — второй свип («Форсаж») убран, запуск =
+// один прогрев + реакция 50/50. Клиенты v5 ещё шлют rev2 — сервер его игнорирует.
+export type LaunchInput = { rev1: number; rev2?: number; reactionMs: number };
 
 export function revAccuracy(offsetMs: number): number {
   const off = Math.abs(Number(offsetMs));
@@ -44,7 +46,7 @@ export function reactAccuracy(ms: number): number {
   return clamp01(1 - (clampReact(ms) - REACT_MIN) / REACT_SPAN);
 }
 export function launchSkill(inp: LaunchInput): number {
-  return 0.3 * revAccuracy(inp.rev1) + 0.3 * revAccuracy(inp.rev2) + 0.4 * reactAccuracy(inp.reactionMs);
+  return 0.5 * revAccuracy(inp.rev1) + 0.5 * reactAccuracy(inp.reactionMs);
 }
 export function dragFinishTimeV2(power: number, skill: number, r: number): number {
   const speed = BASE_SPEED + power * SPEED_PER_POWER;
@@ -233,7 +235,7 @@ export async function runRace(chatId: number, breed: string, mode: "training" | 
         place: places[i], me: f.me, bot: f.bot,
       }));
       mySkillOut = {
-        rev1: revAccuracy(launch.rev1), rev2: revAccuracy(launch.rev2),
+        rev1: revAccuracy(launch.rev1),
         react: reactAccuracy(launch.reactionMs), reactionMs: react, total: mySkill,
       };
     } else {

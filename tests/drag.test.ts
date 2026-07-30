@@ -127,10 +127,11 @@ describe("v2 accuracy — клампы навыковых инпутов", () =>
     expect(reactAccuracy(3000)).toBe(0);
     expect(reactAccuracy(500)).toBeCloseTo(0.5, 5);
   });
-  it("launchSkill ∈ [0,1], идеальный запуск = 1, полностью мимо = 0", () => {
-    expect(launchSkill({ rev1: 0, rev2: 0, reactionMs: 200 })).toBe(1);
-    expect(launchSkill({ rev1: 9999, rev2: -9999, reactionMs: 3000 })).toBe(0);
-    const mid = launchSkill({ rev1: 150, rev2: 150, reactionMs: 500 });
+  it("launchSkill ∈ [0,1]: 50/50 прогрев+реакция, rev2 игнорируется (v2.1)", () => {
+    expect(launchSkill({ rev1: 0, reactionMs: 200 })).toBe(1);
+    expect(launchSkill({ rev1: 0, rev2: 9999, reactionMs: 200 })).toBe(1); // v5-клиент с форсажем — не штрафуем
+    expect(launchSkill({ rev1: 9999, rev2: 0, reactionMs: 3000 })).toBe(0);
+    const mid = launchSkill({ rev1: 150, reactionMs: 500 });
     expect(mid).toBeGreaterThan(0.3);
     expect(mid).toBeLessThan(0.8);
   });

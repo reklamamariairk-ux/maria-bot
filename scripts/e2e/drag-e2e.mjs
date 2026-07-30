@@ -78,7 +78,7 @@ try {
   ok(v2.ok && [1, 2, 3, 4].includes(v2.myPlace), "v2 ставка: заезд прошёл, место " + v2.myPlace);
   ok(v2.reward === stake * (PAYOUT[v2.myPlace] ?? 0) - stake, "v2 выплата соответствует месту");
   ok(!!v2.mySkill && v2.mySkill.total > 0.7 && v2.mySkill.total <= 1, "v2 mySkill.total разумный для хорошего запуска (=" + (v2.mySkill ? v2.mySkill.total.toFixed(2) : "нет") + ")");
-  ok(!!v2.mySkill && v2.mySkill.rev1 > v2.mySkill.rev2, "v2 брейкдаун: rev1(40мс) точнее rev2(60мс)");
+  ok(!!v2.mySkill && v2.mySkill.rev1 > 0.8, "v2.1 брейкдаун: прогрев 40мс → точность >0.8 (=" + (v2.mySkill ? v2.mySkill.rev1.toFixed(2) : "нет") + ")");
   ok(v2.racers.every(r => typeof r.finishT === "number"), "v2 finishT есть у всех гонщиков");
   const rrV2 = Number((await pool.query(`SELECT race_reaction_ms FROM clicker_state WHERE chat_id=$1`, [A1])).rows[0].race_reaction_ms);
   ok(rrV2 === 300, "v2 реакция записана в race_reaction_ms (=" + rrV2 + ")");

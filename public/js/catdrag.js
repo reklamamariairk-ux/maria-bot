@@ -707,7 +707,10 @@
       let allDone = true;
       const positions = raceData.racers.map((r) => {
         const ft = num(r.finishT);
-        const frac = ft > 0 ? Math.min(1, scaledElapsed / ft) : 1;
+        // Показ прогресса со степенью 1.6: моменты финиша не меняются (t=ft → 1),
+        // но в середине заезда поле визуально кучнее — развязка смещается к концу
+        // (фидбек «не напряжённая»).
+        const frac = ft > 0 ? Math.min(1, Math.pow(scaledElapsed / ft, 1.6)) : 1;
         if (frac < 1) allDone = false;
         return frac;
       });
@@ -735,9 +738,10 @@
   // (спека 2026-07-30-drag-launch-mechanic-v2). Три честно измеренных инпута; исход
   // по-прежнему решает только сервер (POST /race c body.skill).
   const REV_HALF_MS = 300;          // зеркало src/drag.ts::REV_HALF — для оценок «Идеально/Хорошо»
+  // v2.1 (фидбек юзера 30.07): свип ОДИН («Форсаж» убран — «после этого опять тапать»),
+  // стрелка медленнее (700→1100мс на полсвипа — «стрелка слишком быстрая»).
   const REV_STAGES = [
-    { key: 'rev1', title: 'Прогрев', half: 700 },  // полсвипа стрелки, мс
-    { key: 'rev2', title: 'Форсаж', half: 500 },
+    { key: 'rev1', title: 'Прогрев', half: 1100 }, // полсвипа стрелки, мс
   ];
   const ZONE_CENTER = 0.65, ZONE_HALF = 0.15; // золотая зона у «красной черты» тахометра
   let launchInput = null, revRaf = 0, revStage = 0, revT0 = 0, revDone = false, falseFlashTs = 0;
@@ -748,7 +752,7 @@
   function startLaunch() {
     clearTimers();
     // дефолты = худший результат этапа; каждый тап перезаписывает свой
-    launchInput = { rev1: REV_HALF_MS * 2, rev2: REV_HALF_MS * 2, reactionMs: 3000 };
+    launchInput = { rev1: REV_HALF_MS * 2, reactionMs: 3000 };
     revStage = 0;
     runRevStage();
   }
@@ -877,7 +881,8 @@
     raceData = d;
     d.racers.forEach((r) => loadFly(r.breed)); // сервер мог подобрать других соперников
     const maxFinishT = d.racers.reduce((m, r) => Math.max(m, num(r.finishT)), 0.5);
-    const displayDur = Math.min(5, Math.max(1.6, maxFinishT)); // нормируем реальную длину анимации в приятный диапазон
+    // v2.1: заезд дольше (фидбек «слишком быстрая и не напряжённая») — ~5-7с реального времени
+    const displayDur = Math.min(7, Math.max(4.5, maxFinishT * 2.4));
     animScale = displayDur / maxFinishT;
     raceStartTs = 0;
     phase = 'animating';
@@ -911,7 +916,7 @@
       ${isBet
         ? `<div class="cd-drag-reward ${reward > 0 ? 'pos' : reward < 0 ? 'neg' : ''}">${reward > 0 ? '+' : ''}${fmt(reward)} монет</div>`
         : `<div class="cd-drag-reward">Тренировка — без ставок</div>`}
-      ${raceData.mySkill ? `<div class="cd-drag-launch">Запуск: прогрев ${Math.round(num(raceData.mySkill.rev1) * 100)}% · форсаж ${Math.round(num(raceData.mySkill.rev2) * 100)}% · старт ${(num(raceData.mySkill.reactionMs) / 1000).toFixed(2)} с</div>` : ''}
+      ${raceData.mySkill ? `<div class="cd-drag-launch">Запуск: прогрев ${Math.round(num(raceData.mySkill.rev1) * 100)}% · старт ${(num(raceData.mySkill.reactionMs) / 1000).toFixed(2)} с</div>` : ''}
       <div class="cd-drag-resrow">
         <button class="cd-drag-resbtn" id="cd-drag-again">Ещё раз</button>
         <button class="cd-drag-resbtn cd-drag-resbtn--ghost" id="cd-drag-done">Закрыть</button>
