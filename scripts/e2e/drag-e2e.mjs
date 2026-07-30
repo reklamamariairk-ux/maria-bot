@@ -2,7 +2,7 @@
 // Тестовые chat_id 1.99e12 (выше TG, ниже VK-сдвига). В finally всё удаляется.
 import { pool } from "./dist/db.js";
 import { grantPigeon, upgradeTune } from "./dist/pigeons.js";
-import { runRace, pickOpponents, dragTargetPower, DRAG_ENERGY_COST, STAKE_PRESETS, PAYOUT } from "./dist/drag.js";
+import { runRace, pickOpponents, dragTargetPower, DRAG_ENERGY_COST, STAKE_PRESETS, PAYOUT, REACT_MIN } from "./dist/drag.js";
 
 const B = 1990000000000;
 const A1 = B + 1, A2 = B + 2, A3 = B + 3;
@@ -71,12 +71,12 @@ try {
   const badS = await runRace(A1, "zolotoy", "bet", 777, 200);
   ok(!badS.ok && badS.reason === "bad_stake", "ставка не из пресетов → bad_stake");
 
-  // античит: reactionMs=0 зажимается до 120 в БД
+  // античит: reactionMs=0 зажимается до REACT_MIN в БД
   console.log("\n[C] античит реакции");
   await seed(A1, 1000, 200000);
   await runRace(A1, "zolotoy", "training", 0, 0);
   const rr = Number((await pool.query(`SELECT race_reaction_ms FROM clicker_state WHERE chat_id=$1`, [A1])).rows[0].race_reaction_ms);
-  ok(rr === 120, "reactionMs=0 → в БД зажато до 120 (=" + rr + ")");
+  ok(rr === REACT_MIN, "reactionMs=0 → в БД зажато до REACT_MIN=" + REACT_MIN + " (=" + rr + ")");
 
   console.log(`\n=== ИТОГ: ${pass} pass, ${fail} fail ===`);
 } catch (e) { console.error("EXCEPTION:", e); fail++; }
