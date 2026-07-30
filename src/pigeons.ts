@@ -712,10 +712,43 @@ export async function upgradeTune(chatId: number, breed: string, stat: string):
 // Флаг: гонка выключена по умолчанию (v1 фичи почты/обменов/сетов не зависят от неё).
 export const RACE_ENABLED = process.env.PIGEON_RACE_ENABLED === "true";
 
+// Очки за отборочный полёт при заявке (v2, спека 2026-07-30-drag-launch-mechanic-v2):
+// launch-skill 0..1 → 0..12 очков. Меньше ролла удачи (0..23) и много меньше статов —
+// полёт ощутим, но скриптер (+2-3 очка к честному хорошему) погоды не делает.
+export const RACE_SKILL_PTS = 12;
+
+// Текущая таблица дивизиона недели: топ-10 (breed+score, имена не светим) + моё место
+// по полному списку. Отдаётся и в getRace (наблюдаемость недели), и из enterRace
+// (клиент анимирует отборочный полёт против РЕАЛЬНЫХ заявок дивизиона).
+async function divisionStandings(week: string, division: Division, chatId: number) {
+  const [top, all] = await Promise.all([
+    pool.query(
+      `SELECT chat_id, breed, score FROM pigeon_race_entries WHERE week=$1 AND division=$2
+       ORDER BY score DESC, entered_at ASC LIMIT 10`, [week, division]),
+    pool.query(
+      `SELECT chat_id, score FROM pigeon_race_entries WHERE week=$1 AND division=$2
+       ORDER BY score DESC, entered_at ASC`, [week, division]),
+  ]);
+  const myIdx = all.rows.findIndex((r: any) => Number(r.chat_id) === chatId);
+  return {
+    standings: top.rows.map((r: any) => ({ breed: r.breed, score: Number(r.score), me: Number(r.chat_id) === chatId })),
+    myPlace: myIdx >= 0 ? myIdx + 1 : null,
+    total: all.rowCount ?? 0,
+  };
+}
+
+// Конец текущей игровой недели (мс UTC) — формула weekMonday из clicker (Иркутск).
+async function raceWeekEndsTs(): Promise<number> {
+  const { weekMonday } = await import("./clicker");
+  return (weekMonday() + 7) * 86400000 - 8 * 3600 * 1000;
+}
+
 // Заявка фиксирует очки И дивизион снапшотом (по текущим звёздам+тюнингу) — поздняя
 // прокачка после заявки не перекидывает между лигами задним числом. Птица НЕ списывается,
-// одна заявка на неделю (PK week,chat_id).
-export async function enterRace(chatId: number, breed: string): Promise<{ ok: boolean; reason?: string }> {
+// одна заявка на неделю (PK week,chat_id). skill01 — качество отборочного полёта (0..1),
+// прилетает из клиента через launchSkill (клампы серверные, см. роут).
+export async function enterRace(chatId: number, breed: string, skill01 = 0):
+  Promise<{ ok: boolean; reason?: string; score?: number; division?: Division; standings?: any[]; myPlace?: number | null; total?: number; weekEndsTs?: number }> {
   if (!RACE_ENABLED) return { ok: false, reason: "disabled" };
   if (!BREED_BY_ID.has(breed)) return { ok: false, reason: "unknown_breed" };
   const inv = await pool.query(
@@ -723,26 +756,36 @@ export async function enterRace(chatId: number, breed: string): Promise<{ ok: bo
     [chatId, breed]);
   if (!inv.rowCount) return { ok: false, reason: "not_owned" };
   const { stars, tune_speed, tune_stamina, tune_luck } = inv.rows[0];
-  const score = raceScore(breed, stars, tune_speed, tune_stamina, tune_luck, Math.random());
+  const skillPts = Math.round(Math.min(1, Math.max(0, Number(skill01) || 0)) * RACE_SKILL_PTS);
+  const score = raceScore(breed, stars, tune_speed, tune_stamina, tune_luck, Math.random()) + skillPts;
   const division = raceDivision(tune_speed + tune_stamina + tune_luck);
   const week = await currentWeekKey();
   const ins = await pool.query(
     `INSERT INTO pigeon_race_entries (week, chat_id, breed, score, division) VALUES ($1,$2,$3,$4,$5)
      ON CONFLICT (week, chat_id) DO NOTHING RETURNING 1`,
     [week, chatId, breed, score, division]);
-  return ins.rowCount ? { ok: true } : { ok: false, reason: "already" };
+  if (!ins.rowCount) return { ok: false, reason: "already" };
+  const st = await divisionStandings(week, division, chatId);
+  return { ok: true, score, division, ...st, weekEndsTs: await raceWeekEndsTs() };
 }
 
 export async function getRace(chatId: number) {
   const week = await currentWeekKey();
   const [mine, last, entrants] = await Promise.all([
-    pool.query(`SELECT breed, division FROM pigeon_race_entries WHERE week=$1 AND chat_id=$2`, [week, chatId]),
+    pool.query(`SELECT breed, division, score FROM pigeon_race_entries WHERE week=$1 AND chat_id=$2`, [week, chatId]),
     pool.query(`SELECT results FROM pigeon_race_winners ORDER BY week DESC LIMIT 1`),
     pool.query(`SELECT COUNT(*) AS n FROM pigeon_race_entries WHERE week=$1`, [week]),
   ]);
+  const my = mine.rows[0];
+  const st = my ? await divisionStandings(week, my.division as Division, chatId) : null;
   return {
-    enabled: RACE_ENABLED, week, myBreed: mine.rows[0]?.breed ?? null,
-    myDivision: mine.rows[0]?.division ?? null,
+    enabled: RACE_ENABLED, week, myBreed: my?.breed ?? null,
+    myDivision: my?.division ?? null,
+    myScore: my ? Number(my.score) : null,
+    myPlace: st?.myPlace ?? null,
+    divisionTotal: st?.total ?? null,
+    standings: st?.standings ?? null,
+    weekEndsTs: await raceWeekEndsTs(),
     entrants: Number(entrants.rows[0].n), lastResults: last.rows[0]?.results ?? null,
   };
 }

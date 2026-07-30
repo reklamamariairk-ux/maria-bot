@@ -967,6 +967,12 @@
     const heroArt = mine
       ? `<div class="cd-racehero__art"><img src="/img/pigeons/${mine.id}.webp?v=2" alt="" loading="lazy" onerror="this.style.display='none'"></div>`
       : '';
+    // заявлен и сервер отдаёт живую неделю → очки, место и таймер прямо в hero
+    const heroSub = mine
+      ? (race.myScore != null && race.myPlace
+        ? `${fmt(race.myScore)} очков · ${race.myPlace}-е из ${num(race.divisionTotal)} · итоги через ${fmtLeft(race.weekEndsTs)}`
+        : 'заявлен на этой неделе')
+      : `заяви голубя — отборочный полёт решает часть очков · ${num(race.entrants)} участ.`;
     return `<div class="cd-sect-t">Гонка стаи</div>
       <div class="cd-racehero">
         <div class="cd-racehero__bg"></div>
@@ -974,17 +980,43 @@
         <div class="cd-racehero__in">
           <div class="cd-racehero__b">
             <div class="cd-racehero__t">${mine ? mine.name : 'Пока не участвуешь'}</div>
-            <div class="cd-racehero__s">${mine ? 'заявлен на этой неделе' : 'заяви голубя и борись за призы'} · ${num(race.entrants)} участ.</div>
+            <div class="cd-racehero__s">${heroSub}</div>
             ${mine && race.myDivision ? divChip(race.myDivision) : ''}
           </div>
           ${heroArt}
         </div>
         <div class="cd-racehero__acts">
-          ${!mine ? `<button class="cd-ctabtn" id="cd-race-enter">Заявить голубя</button>` : ''}
+          ${!mine ? `<button class="cd-ctabtn" id="cd-race-enter">Отборочный полёт</button>` : ''}
           <button class="cd-ctabtn${!mine ? ' cd-ctabtn--ghost' : ''}" id="cd-drag-enter">${FLAG_ICON(14)} Драг-заезд</button>
         </div>
       </div>
+      ${weekStandingsHtml()}
       ${teaser}`;
+  }
+  function fmtLeft(ts) {
+    const ms = num(ts) - Date.now();
+    if (ms <= 0) return 'считаются';
+    const d = Math.floor(ms / 86400000), h = Math.floor((ms % 86400000) / 3600000);
+    return d > 0 ? `${d} д ${h} ч` : h > 0 ? `${h} ч` : 'меньше часа';
+  }
+  // Живая таблица моего дивизиона на ЭТОЙ неделе (топ-3 + моя строка, если ниже).
+  function weekStandingsHtml() {
+    if (!race || !Array.isArray(race.standings) || !race.standings.length || !race.myBreed) return '';
+    const rows = [];
+    race.standings.slice(0, 3).forEach((s, i) => rows.push([s, i + 1]));
+    if (race.myPlace > 3) {
+      const meRow = race.standings.find(s => s.me);
+      if (meRow) rows.push([meRow, race.myPlace]);
+    }
+    const medal = (p) => p === 1 ? 'cd-medal--gold' : p === 2 ? 'cd-medal--silver' : p === 3 ? 'cd-medal--bronze' : 'cd-medal--dim';
+    return rows.map(([s, p]) => {
+      const b = BY_ID.get(s.breed);
+      return `<div class="cd-racerow${s.me ? ' cd-racerow--top cd-racerow--gold' : ''}">
+        <span class="cd-medal ${medal(p)}">${p}</span>
+        <div class="cd-racerow__art"><img src="/img/pigeons/${s.breed}.webp?v=2" alt="" onerror="this.style.display='none'"></div>
+        <div class="cd-racerow__b"><div class="cd-racerow__n">${b ? b.name : s.breed}${s.me ? ' · ты' : ''}</div><div class="cd-racerow__s">${fmt(s.score)} очков</div></div>
+      </div>`;
+    }).join('');
   }
   // Шит «Итоги недели»: три дивизиона той же вёрсткой, что раньше в ленте.
   function openRaceResultsSheet() {
@@ -1023,6 +1055,8 @@
       };
     });
   }
+  // Заявка недели = отборочный полёт (CatDrag.openQualify): прогрев + реакция дают
+  // часть очков; после успешной заявки полёт сам дёргает refresh голубятни.
   function openRaceBreedPicker() {
     if (!data) return;
     const owned = Object.keys(data.invMap).filter(id => data.invMap[id].count > 0);
@@ -1030,26 +1064,21 @@
     haptic('light');
     const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
     if (!sc || !sh) return;
-    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Заяви птицу на гонку</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>${pickGridHtml(owned, null)}`;
+    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Кто летит за стаю?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
+      <div class="cd-sheet__hint">Отборочный полёт — одна попытка в неделю: прогрев и реакция добавляют очков</div>
+      ${pickGridHtml(owned, null)}`;
     sc.classList.add('on');
     requestAnimationFrame(() => sh.classList.add('on'));
     sh.querySelector('#cd-sheet-x').onclick = closeSheet;
-    sh.querySelectorAll('.cd-pickcard').forEach(el => { el.onclick = () => raceEnterAct(el.dataset.breed); });
-  }
-  const RACE_ENTER_REASON = { disabled: 'Гонка сейчас недоступна', unknown_breed: 'Неизвестная порода', not_owned: 'Птица не найдена', already: 'Ты уже заявил голубя на этой неделе' };
-  async function raceEnterAct(breedId) {
-    if (busy) return; busy = true;
-    try {
-      const d = await apiRef('/api/pigeons/race/enter', { method: 'POST', body: JSON.stringify({ breed: breedId }) }).catch(() => null);
-      if (d && d.ok) {
-        haptic('medium'); flash('Заявка принята!');
-        if (race) race.myBreed = breedId;
+    sh.querySelectorAll('.cd-pickcard').forEach(el => {
+      el.onclick = () => {
+        const breedId = el.dataset.breed;
         closeSheet();
-        render();
-      } else {
-        flash(RACE_ENTER_REASON[d && d.error] || 'Не получилось заявить');
-      }
-    } finally { busy = false; }
+        if (window.CatDrag && window.CatDrag.openQualify) {
+          window.CatDrag.openQualify(apiRef, breedId, async () => { await load(); render(); });
+        }
+      };
+    });
   }
 
   // ── попап награды сета ───────────────────────────────────────────────────

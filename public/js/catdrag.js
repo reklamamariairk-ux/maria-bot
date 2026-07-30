@@ -59,7 +59,8 @@
 
   // ── состояние оверлея (модульный синглтон — открыт максимум один заезд разом) ───
   let ov = null, apiRef = null, session = 0, resizeHandler = null;
-  let curBreed = null, mode = 'training', stake = STAKE_PRESETS[0];
+  let curBreed = null, mode = 'training', stake = STAKE_PRESETS[0]; // mode: training | bet | qualify
+  let qualifyData = null, qualifyDone = null, qualifySucceeded = false; // отборочный полёт недельной гонки
   let myPower = null;          // мощность моего голубя из ответа /opponents (null=ещё не знаем)
   let opponentsPreview = null; // null=грузится, []=подобрать не удалось (не блокирует старт — сервер подберёт сам)
   let raceBusy = false, step = 'setup'; // setup | race | result
@@ -852,10 +853,50 @@
     submitRace();
   }
 
+  // ── Отборочный полёт недельной гонки: очки решает сервер, анимация — против
+  // РЕАЛЬНЫХ заявок дивизиона этой недели (standings из ответа /race/enter). ──
+  const DIV_NAME = { gold: 'Золото', silver: 'Серебро', bronze: 'Бронза' };
+  function buildQualifyRace(d) {
+    const others = (Array.isArray(d.standings) ? d.standings : []).filter((s) => !s.me).slice(0, 3);
+    const field = [{ breed: curBreed, score: num(d.score), me: true }, ...others.map((s) => ({ breed: s.breed, score: num(s.score), me: false }))];
+    const maxScore = field.reduce((m, f) => Math.max(m, f.score), 0);
+    // очки → время: лидер ~2.1с, каждый недостающий балл +15мс (кап разрыва 1.4с)
+    const racers = field.map((f) => ({
+      breed: f.breed, me: f.me, bot: false,
+      finishT: 2.1 + Math.min(1.4, (maxScore - f.score) * 0.015),
+    }));
+    const ranked = racers.slice().sort((a, b) => a.finishT - b.finishT);
+    racers.forEach((r) => { r.place = ranked.indexOf(r) + 1; });
+    return { racers, myPlace: racers.find((r) => r.me).place };
+  }
+  async function submitQualify(mySession) {
+    const d = await apiRef('/api/pigeons/race/enter', { method: 'POST', body: JSON.stringify({ breed: curBreed, skill: launchInput }) }).catch(() => null);
+    if (mySession !== session || !ov) return;
+    raceBusy = false;
+    if (!d || !d.ok) {
+      flash(d && d.error === 'already' ? 'Ты уже заявлял голубя на этой неделе' : d && d.error === 'disabled' ? 'Гонка сейчас недоступна' : 'Не получилось заявить');
+      close();
+      return;
+    }
+    qualifySucceeded = true;
+    qualifyData = d;
+    haptic('medium');
+    raceData = buildQualifyRace(d);
+    raceData.racers.forEach((r) => loadFly(r.breed));
+    const maxFinishT = raceData.racers.reduce((m, r) => Math.max(m, num(r.finishT)), 0.5);
+    const displayDur = Math.min(7, Math.max(4.5, maxFinishT * 2.4));
+    animScale = displayDur / maxFinishT;
+    raceStartTs = 0;
+    phase = 'animating';
+    setupCanvasSize();
+    setTapHtml('');
+  }
+
   async function submitRace() {
     if (raceBusy) return; // busy-guard: не даём повторный POST, пока первый не ответил
     raceBusy = true;
     const mySession = session;
+    if (mode === 'qualify') { submitQualify(mySession); return; }
     // reactionMs дублируется на верхнем уровне — совместимость со старым сервером,
     // если клиент доехал до юзера раньше деплоя бэка (тогда просто легаси-формула).
     const body = { breed: curBreed, mode, skill: launchInput, reactionMs: launchInput.reactionMs };
@@ -908,9 +949,17 @@
         <div class="cd-drag-pod__base">${num(r.place)}</div>
         <div class="cd-drag-pod__n">${r.me ? 'Ты' : esc(meta(r.breed).name)}</div>
       </div>`).join('');
+    const isQ = mode === 'qualify' && qualifyData;
     const panel = document.createElement('div');
     panel.className = 'cd-drag-result';
-    panel.innerHTML = `
+    panel.innerHTML = isQ ? `
+      <div class="cd-drag-podium">${podHtml}</div>
+      <div class="cd-drag-place">${fmt(qualifyData.score)} очков</div>
+      <div class="cd-drag-reward">${qualifyData.myPlace ? `${qualifyData.myPlace}-е место из ${num(qualifyData.total)} · ${DIV_NAME[qualifyData.division] || ''}` : (DIV_NAME[qualifyData.division] || '')}</div>
+      <div class="cd-drag-launch">Заявка принята · одна попытка в неделю · итоги в ночь на понедельник</div>
+      <div class="cd-drag-resrow">
+        <button class="cd-drag-resbtn" id="cd-drag-done">Отлично!</button>
+      </div>` : `
       <div class="cd-drag-podium">${podHtml}</div>
       <div class="cd-drag-place">${place || '—'} место</div>
       ${isBet
@@ -933,6 +982,7 @@
     if (!api || !breed) return;
     apiRef = api; curBreed = breed; mode = 'training'; stake = STAKE_PRESETS[0];
     opponentsPreview = null; myPower = null; raceBusy = false; phase = 'idle'; raceData = null;
+    qualifyData = null; qualifyDone = null; qualifySucceeded = false;
     session++;
     const mySession = session;
     loadFly(curBreed); // полётный лист своей птицы — заранее
@@ -947,6 +997,28 @@
     loadOpponents(mySession);
   }
 
+  // Отборочный полёт недельной гонки: без сеттапа (режим/ставка не нужны) — сразу
+  // сцена + запуск. onDone дёргается после закрытия, если заявка прошла (обновить
+  // голубятню). Ошибка «already»/«disabled» — flash и закрытие.
+  function openQualify(api, breed, onDone) {
+    if (!api || !breed) return;
+    apiRef = api; curBreed = breed; mode = 'qualify'; stake = STAKE_PRESETS[0];
+    opponentsPreview = []; myPower = null; raceBusy = false; phase = 'idle'; raceData = null;
+    qualifyData = null; qualifyDone = typeof onDone === 'function' ? onDone : null; qualifySucceeded = false;
+    session++;
+    loadFly(curBreed);
+    styles();
+    if (!ov) { ov = document.createElement('div'); ov.className = 'cd-drag-ov'; document.body.appendChild(ov); }
+    renderRaceScreen();
+    const t = ov.querySelector('.cd-drag-t'); if (t) t.textContent = '🕊️ Отборочный полёт';
+    requestAnimationFrame(() => { if (ov) ov.classList.add('on'); });
+    haptic('medium');
+    if (resizeHandler) window.removeEventListener('resize', resizeHandler);
+    resizeHandler = () => { if (canvas && document.body.contains(canvas)) setupCanvasSize(); };
+    window.addEventListener('resize', resizeHandler);
+    startLaunch();
+  }
+
   function close() {
     clearTimers(); stopLoop(); stopRevLoop(); removeTapZone();
     if (resizeHandler) { window.removeEventListener('resize', resizeHandler); resizeHandler = null; }
@@ -954,7 +1026,10 @@
     const el = ov; ov = null; canvas = null; ctx = null;
     if (el) { el.classList.remove('on'); setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 240); }
     raceBusy = false; phase = 'idle'; step = 'setup'; raceData = null;
+    const cb = qualifySucceeded ? qualifyDone : null;
+    qualifyData = null; qualifyDone = null; qualifySucceeded = false; mode = 'training';
+    if (cb) setTimeout(cb, 0);
   }
 
-  window.CatDrag = { open };
+  window.CatDrag = { open, openQualify };
 })();

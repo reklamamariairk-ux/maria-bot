@@ -129,8 +129,23 @@ export function createPigeonsRouter(push: PushService): Router {
   });
 
   router.post("/api/pigeons/race/enter", requireTgUser, rateLimit(20), async (req, res) => {
-    const u = getTgUser(req)!; const breed = String((req.body as { breed?: string }).breed || "");
-    try { const r = await enterRace(u.id, breed); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json(r); }
+    const u = getTgUser(req)!;
+    const b = req.body as { breed?: string; skill?: { rev1?: number; reactionMs?: number } };
+    const breed = String(b.breed || "");
+    try {
+      // Отборочный полёт (v2): skill-инпут untrusted, та же нормализация, что в drag/race.
+      let skill01 = 0;
+      if (b.skill && typeof b.skill === "object") {
+        const { launchSkill } = await import("../drag");
+        skill01 = launchSkill({
+          rev1: Number.isFinite(Number(b.skill.rev1)) ? Number(b.skill.rev1) : 9999,
+          reactionMs: Math.max(0, Number(b.skill.reactionMs)) || 3000,
+        });
+      }
+      const r = await enterRace(u.id, breed, skill01);
+      if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
+      res.json(r);
+    }
     catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/race/enter]"); res.status(500).json({ error: "internal" }); }
   });
 
