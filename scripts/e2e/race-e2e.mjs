@@ -46,9 +46,12 @@ try {
   ok(!notOwned.ok && notOwned.reason === "not_owned", "не владеешь → not_owned");
 
   // --- Заявка: снапшот дивизиона ---
-  console.log("\n[A] enterRace — снапшот score+division");
-  const e1 = await enterRace(A1, "sizar"); // speed=10 → silver
+  console.log("\n[A] enterRace — снапшот score+division (+skill отборочного полёта)");
+  const e1 = await enterRace(A1, "sizar", 1); // speed=10 → silver; идеальный полёт = +12 очков
   ok(e1.ok === true, "заявка принята");
+  ok(typeof e1.score === "number" && e1.score >= 82, "skill=1 добавил RACE_SKILL_PTS (score=" + e1.score + " ≥ 82)");
+  ok(Array.isArray(e1.standings) && e1.myPlace >= 1 && e1.total >= 1, "enterRace вернул живую таблицу дивизиона (место " + e1.myPlace + " из " + e1.total + ")");
+  ok(typeof e1.weekEndsTs === "number" && e1.weekEndsTs > Date.now(), "weekEndsTs в будущем");
   const entryRow = await pool.query("SELECT score, division FROM pigeon_race_entries WHERE week=$1 AND chat_id=$2", [week, A1]);
   ok(entryRow.rows[0].division === "silver", "дивизион заявки = silver (снапшот)");
   ok(entryRow.rows[0].score >= 10 + 60, "очки заявки учитывают тюнинг (score=" + entryRow.rows[0].score + ")");
@@ -81,6 +84,7 @@ try {
   for (const a of ALL2) { const r = await pool.query("SELECT balance FROM clicker_state WHERE chat_id=$1", [a]); balB[a] = r.rowCount ? Number(r.rows[0].balance) : 0; }
 
   const close1 = await closeRaceWeek();
+  globalThis.__CLOSED_BY_TEST = close1.closed === true; // строку winners создал тест → её и удаляем
   ok(close1.closed === true, "неделя закрыта");
   ok(close1.entries === 6, "учтено 6 заявок во всех дивизионах (entries=" + close1.entries + ")");
 
@@ -121,7 +125,9 @@ finally {
   const clean = globalThis.__CLEAN || ALL;
   const prev = await previousWeekKey().catch(() => null);
   await pool.query("DELETE FROM pigeon_race_entries WHERE chat_id = ANY($1)", [clean]).catch(() => {});
-  if (prev) await pool.query("DELETE FROM pigeon_race_winners WHERE week=$1", [prev]).catch(() => {});
+  // Строку winners прошлой недели удаляем ТОЛЬКО если её создал этот прогон —
+  // иначе на проде с уже закрытой неделей тест снёс бы РЕАЛЬНЫЕ итоги.
+  if (prev && globalThis.__CLOSED_BY_TEST) await pool.query("DELETE FROM pigeon_race_winners WHERE week=$1", [prev]).catch(() => {});
   await pool.query("DELETE FROM pigeon_inventory WHERE chat_id = ANY($1)", [clean]).catch(() => {});
   await pool.query("DELETE FROM clicker_state WHERE chat_id = ANY($1)", [clean]).catch(() => {});
   const l = await pool.query("SELECT (SELECT COUNT(*) FROM pigeon_race_entries WHERE chat_id=ANY($1)) e, (SELECT COUNT(*) FROM pigeon_inventory WHERE chat_id=ANY($1)) i, (SELECT COUNT(*) FROM clicker_state WHERE chat_id=ANY($1)) s", [clean]).catch(() => ({ rows: [{ e: "?", i: "?", s: "?" }] }));
