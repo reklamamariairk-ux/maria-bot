@@ -111,6 +111,20 @@
       .cd-divhead{display:flex;align-items:center;gap:8px;margin:12px 2px 7px}
       .cd-divhead .cd-divchip{margin-top:0}
       .cd-divhead__line{flex:1;height:1px;background:var(--line)}
+      /* Строка-тизер «Итоги прошлой недели» — полные таблицы дивизионов живут в шите */
+      .cd-resultsrow{display:flex;align-items:center;gap:9px;width:100%;box-sizing:border-box;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:10px 12px;margin-bottom:12px;color:var(--ink);font-weight:700;font-size:12.5px;cursor:pointer;text-align:left}
+      .cd-resultsrow:active{transform:scale(.98)}
+      .cd-resultsrow__medal{width:22px;height:22px;flex:none;border-radius:50%;background:linear-gradient(180deg,#ffe7a6,#eebf52);display:flex;align-items:center;justify-content:center;color:#5a3a0c;font-size:11px;font-weight:900}
+      .cd-resultsrow__s{flex:1;min-width:0}
+      .cd-resultsrow__sub{display:block;font-weight:500;font-size:10.5px;color:var(--muted);margin-top:1px}
+      .cd-resultsrow__chev{flex:none;color:var(--muted)}
+      /* Заголовок сета над своей четвёркой карточек: имя + прогресс + награда/клейм */
+      .cd-sethead{display:flex;align-items:center;gap:8px;margin:2px 2px 7px;min-height:38px}
+      .cd-sethead__n{flex:1;min-width:0;display:flex;align-items:baseline;gap:7px}
+      .cd-sethead__n b{font-weight:800;font-size:13.5px;color:var(--ink)}
+      .cd-sethead__p{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+      .cd-sethead__p.full{color:#9be7a8}
+      .cd-sethead__prize{flex:none;display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--muted)}
       .cd-racerow{display:flex;align-items:center;gap:9px;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:8px 11px;margin-bottom:6px}
       .cd-racerow--top{border-color:rgba(240,194,78,.5);background:linear-gradient(90deg,rgba(255,231,166,.10),rgba(238,191,82,.03))}
       .cd-racerow--top.cd-racerow--silver{border-color:rgba(199,203,212,.5);background:linear-gradient(90deg,rgba(217,218,222,.10),rgba(167,171,181,.03))}
@@ -314,17 +328,21 @@
     </div>`;
   }
 
-  function setRowHtml(setDef) {
+  // Блок сета в альбоме: заголовок (имя + прогресс + награда/клейм) прямо над
+  // своей четвёркой карточек — награда живёт рядом с тем, за что её дают.
+  function setBlockHtml(setDef) {
     const s = (data.sets || []).find(x => x.id === setDef.id) || { owned: 0, claimed: false };
     const owned = num(s.owned), full = owned >= 4;
     let action;
     if (s.claimed) action = '<span class="cd-setrow__done">Получено ✓</span>';
     else if (full) action = `<button class="cd-claimbtn" data-claim="${setDef.id}">${COIN_ICON(14)} Забрать ${fmt(setDef.reward)}</button>`;
-    else action = '';
-    return `<div class="cd-setrow">
-      <div class="cd-setrow__n"><b>${setDef.name}</b><div class="cd-setrow__p">${owned}/4 собрано</div></div>
+    else action = `<span class="cd-sethead__prize">приз ${COIN_ICON(12)} ${fmt(setDef.reward)}</span>`;
+    const cards = BREEDS.filter(b => b.set === setDef.id).map(cardHtml).join('');
+    return `<div class="cd-sethead">
+      <div class="cd-sethead__n"><b>${setDef.name}</b><span class="cd-sethead__p${full ? ' full' : ''}">${owned}/4</span></div>
       ${action}
-    </div>`;
+    </div>
+    <div class="cd-grid">${cards}</div>`;
   }
 
   function render() {
@@ -340,8 +358,7 @@
       return;
     }
     const ownedCount = BREEDS.filter(b => b.id !== 'champion' && data.invMap[b.id] && data.invMap[b.id].count > 0).length;
-    const grid = BREEDS.filter(b => b.id !== 'champion').map(cardHtml).join('');
-    const sets = SETS.map(setRowHtml).join('');
+    const setBlocks = SETS.map(setBlockHtml).join('');
     container.innerHTML = `<div class="cd-root">
       <div class="cd-summary">Собери коллекцию голубей — <b>${ownedCount}/16</b>. Голуби прилетают за комбо дня, мини-игры, сундук удачи и покупки; «порода недели» выпадает чаще.</div>
       <div class="cd-navrow">
@@ -349,10 +366,9 @@
         <button class="cd-navbtn" id="cd-nav-mail">${MAILBOX_ICON(15)} Почта${data.unreadMail > 0 ? `<span class="cd-navbadge">${data.unreadMail > 9 ? '9+' : data.unreadMail}</span>` : ''}</button>
       </div>
       ${raceHtml()}
-      <div class="cd-grid">${grid}</div>
+      <div class="cd-sect-t">Альбом · собери сет — забери приз</div>
+      ${setBlocks}
       ${championHtml()}
-      <div class="cd-sect-t">Сеты</div>
-      ${sets}
       <div class="cd-scrim" id="cd-scrim"></div>
       <div class="cd-sheet" id="cd-sheet"></div>
       <div class="cd-pop-scrim" id="cd-pop-scrim"><div class="cd-pop" id="cd-pop"></div></div>
@@ -375,6 +391,7 @@
     const navM = container.querySelector('#cd-nav-mail'); if (navM) navM.onclick = openMailPage;
     const raceBtn = container.querySelector('#cd-race-enter'); if (raceBtn) raceBtn.onclick = openRaceBreedPicker;
     const dragBtn = container.querySelector('#cd-drag-enter'); if (dragBtn) dragBtn.onclick = openDragBreedPicker;
+    const resBtn = container.querySelector('#cd-race-results'); if (resBtn) resBtn.onclick = openRaceResultsSheet;
   }
 
   // ── шит действий (звёзды/витрина/обмены/почта/гонка) — общий #cd-scrim/#cd-sheet,
@@ -877,17 +894,27 @@
       <div class="cd-racerow__prize">${COIN_ICON(12)} ${fmt(r.prize)}</div>
     </div>`;
   }
+  // Есть ли что показывать в «Итогах недели» (объект по дивизионам {bronze:[],silver:[],gold:[]})
+  function raceResults() {
+    const lr = race && race.lastResults && typeof race.lastResults === 'object' && !Array.isArray(race.lastResults) ? race.lastResults : null;
+    if (!lr || !['gold', 'silver', 'bronze'].some(d => Array.isArray(lr[d]) && lr[d].length)) return null;
+    return lr;
+  }
   function raceHtml() {
     if (!race || !race.enabled) return '';
     const mine = race.myBreed ? BY_ID.get(race.myBreed) : null;
-    // lastResults теперь объект по дивизионам {bronze:[],silver:[],gold:[]}
-    const lr = race.lastResults && typeof race.lastResults === 'object' && !Array.isArray(race.lastResults) ? race.lastResults : null;
-    const anyResults = lr && ['gold', 'silver', 'bronze'].some(d => Array.isArray(lr[d]) && lr[d].length);
-    const blocks = anyResults ? ['gold', 'silver', 'bronze'].map(d => {
-      const arr = Array.isArray(lr[d]) ? lr[d] : [];
-      if (!arr.length) return '';
-      return `<div class="cd-divhead">${divChip(d)}<span class="cd-divhead__line"></span></div>${arr.map((r) => raceRow(r, d)).join('')}`;
-    }).join('') : `<div style="color:var(--muted);font-size:12.5px;text-align:center;padding:8px 0">Итоги прошлой недели ещё не подведены</div>`;
+    const lr = raceResults();
+    // Полные таблицы трёх дивизионов НЕ в ленте (стена из 9 строк хоронила альбом) —
+    // компактная строка-тизер открывает их шитом.
+    const winner = lr ? (['gold', 'silver', 'bronze'].map(d => (lr[d] || [])[0]).find(Boolean)) : null;
+    const winnerB = winner ? BY_ID.get(winner.breed) : null;
+    const teaser = lr
+      ? `<button class="cd-resultsrow" id="cd-race-results" type="button">
+          <span class="cd-resultsrow__medal">1</span>
+          <span class="cd-resultsrow__s">Итоги прошлой недели${winnerB ? `<span class="cd-resultsrow__sub">победитель — ${winnerB.name}</span>` : ''}</span>
+          <span class="cd-resultsrow__chev">›</span>
+        </button>`
+      : '';
     // hero — закатная сцена драг-трассы (те же слои /img/drag/), мой заявленный голубь крупно
     const heroArt = mine
       ? `<div class="cd-racehero__art"><img src="/img/pigeons/${mine.id}.webp?v=2" alt="" loading="lazy" onerror="this.style.display='none'"></div>`
@@ -909,7 +936,23 @@
           <button class="cd-ctabtn${!mine ? ' cd-ctabtn--ghost' : ''}" id="cd-drag-enter">${FLAG_ICON(14)} Драг-заезд</button>
         </div>
       </div>
-      ${blocks}`;
+      ${teaser}`;
+  }
+  // Шит «Итоги недели»: три дивизиона той же вёрсткой, что раньше в ленте.
+  function openRaceResultsSheet() {
+    const lr = raceResults(); if (!lr) return;
+    haptic('light');
+    const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
+    if (!sc || !sh) return;
+    const blocks = ['gold', 'silver', 'bronze'].map(d => {
+      const arr = Array.isArray(lr[d]) ? lr[d] : [];
+      if (!arr.length) return '';
+      return `<div class="cd-divhead">${divChip(d)}<span class="cd-divhead__line"></span></div>${arr.map((r) => raceRow(r, d)).join('')}`;
+    }).join('');
+    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Итоги прошлой недели</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>${blocks}`;
+    sc.classList.add('on');
+    requestAnimationFrame(() => sh.classList.add('on'));
+    sh.querySelector('#cd-sheet-x').onclick = closeSheet;
   }
   // Драг-заезд (отдельный always-on режим поверх недельной гонки, catdrag.js) — выбор
   // владеемой породы через тот же пикер-шит, что и заявка на недельную гонку.
