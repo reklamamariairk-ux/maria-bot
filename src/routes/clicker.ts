@@ -5,7 +5,7 @@
  * POST /api/clicker/boost {type:turbo|energy} · GET /api/clicker/top
  */
 import { Router } from "express";
-import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements, getRewards, redeemReward, claimBonus, openChest, claimRain, claimGame, getMilestones, claimMilestone, syncPurchaseBonus, migrateGuest, redeemCode, getSquads, joinSquad, prestigeReset, welcomePromoShown, markWelcomePromoShown } from "../clicker";
+import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements, getRewards, redeemReward, claimBonus, openChest, claimRain, claimGame, getMilestones, claimMilestone, syncPurchaseBonus, migrateGuest, redeemCode, getSquads, joinSquad, prestigeReset, welcomePromoShown, markWelcomePromoShown, getFtue, claimFtue } from "../clicker";
 import { rateLimit, requireAdminToken } from "../middleware";
 import { requireTgUser, getTgUser } from "../auth";
 import { getBonusQueue, ackBonusQueue, queueAuthOk } from "../bonus1c";
@@ -23,6 +23,22 @@ router.get("/api/clicker", requireTgUser, rateLimit(120), async (req, res) => {
     const source = String(req.query.source || "").trim().slice(0, 32).replace(/[^a-zA-Z0-9_-]/g, "");
     if (source) trackEvent(u.id, "open", { source });
   } catch (e) { log.error({ err: e, chatId: u.id }, "[GET /api/clicker]"); res.status(500).json({ error: "internal" }); }
+});
+
+// FTUE «Первый день» (аудит 30.07): чеклист 5 вех первой сессии, награды за шаги.
+router.get("/api/clicker/ftue", requireTgUser, rateLimit(60), async (req, res) => {
+  const u = getTgUser(req)!;
+  try { res.json(await getFtue(u.id)); }
+  catch (e) { log.error({ err: e, chatId: u.id }, "[clicker/ftue]"); res.status(500).json({ error: "internal" }); }
+});
+router.post("/api/clicker/ftue/claim", requireTgUser, rateLimit(30), async (req, res) => {
+  const u = getTgUser(req)!;
+  try {
+    const r = await claimFtue(u.id, Number((req.body as { step?: number }).step));
+    if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
+    trackEvent(u.id, "ftue_claim", { step: Number((req.body as { step?: number }).step) });
+    res.json(r);
+  } catch (e) { log.error({ err: e, chatId: u.id }, "[clicker/ftue/claim]"); res.status(500).json({ error: "internal" }); }
 });
 
 // T5 — Welcome-квест: реальный промокод новичку после первой мини-победы.

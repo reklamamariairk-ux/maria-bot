@@ -485,6 +485,55 @@
   async function withLock(key, fn) { if (inflight.has(key)) return; inflight.add(key); try { return await fn(); } finally { inflight.delete(key); } }
   let loadNetFail = false; // авторизованный юзер получил гостевой фолбэк из-за сети — скажем об этом
   async function load() { let q = ''; try { const sp = (window.App && App.startParam && App.startParam()) || ''; const m = /^src[_-]([a-zA-Z0-9_-]{1,32})/.exec(sp); if (m) q = '?source=' + encodeURIComponent(m[1]); } catch (_) {} loadNetFail = false; st = authed() ? await api('/api/clicker' + q).catch(() => { loadNetFail = true; return guestDerive(); }) : guestDerive(); turboUntil = Date.now() + (st.turboMsLeft || 0); }
+
+  // ── FTUE «Первый день»: чип на главной + попап-чеклист (аудит 30.07) ─────────
+  let ftueData = null;
+  async function loadFtue() {
+    if (!authed()) return;
+    ftueData = await api('/api/clicker/ftue').catch(() => null);
+    renderFtueChip();
+  }
+  function renderFtueChip() {
+    const btn = ov && ov.querySelector('#ck-ftue');
+    if (!btn) return;
+    if (!ftueData || !Array.isArray(ftueData.steps) || ftueData.allClaimed) { btn.hidden = true; return; }
+    const doneN = ftueData.steps.filter(s => s.claimed).length;
+    const pending = ftueData.steps.filter(s => s.done && !s.claimed).reduce((m, s) => m + s.reward, 0);
+    btn.hidden = false;
+    btn.innerHTML = `${ICON.star(14)} Первый день · ${doneN}/${ftueData.steps.length}${pending > 0 ? ` · <b>забери +${fmt(pending)}</b>` : ''}`;
+    btn.onclick = openFtuePopup;
+  }
+  function openFtuePopup() {
+    const pop = ov && ov.querySelector('#ck-pop');
+    if (!pop || !ftueData) return;
+    window.haptic && window.haptic('light');
+    const rows = ftueData.steps.map(s => `
+      <div class="ck-ftue-row ${s.claimed ? 'done dim' : s.done ? 'done' : 'dim'}">
+        <span class="st">${(s.done || s.claimed) ? '✓' : s.id + 1}</span>
+        <span class="t">${s.name}</span>
+        ${s.claimed ? `<span style="font-size:11px;color:var(--muted);flex:none">✓</span>`
+          : s.done ? `<button class="ck-card__buy" data-ftue="${s.id}" style="justify-content:center;flex:none">+${fmt(s.reward)}</button>`
+          : `<span style="font-size:11px;color:var(--muted);flex:none">${COIN(11)} ${fmt(s.reward)}</span>`}
+      </div>`).join('');
+    pop.innerHTML = `<h3>${ICON.star(20)} Первый день</h3>
+      <div style="color:var(--muted);font-size:12.5px;margin-bottom:6px">Пять шагов — и ты в игре. Награда за каждый.</div>
+      <div style="text-align:left">${rows}</div>
+      <button id="ck-pop-ok">Закрыть</button>`;
+    pop.classList.add('on');
+    pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
+    pop.querySelectorAll('[data-ftue]').forEach(b => {
+      b.onclick = async () => {
+        b.disabled = true;
+        const r = await api('/api/clicker/ftue/claim', { method: 'POST', body: JSON.stringify({ step: Number(b.dataset.ftue) }) }).catch(() => null);
+        if (r && r.ok) {
+          window.haptic && window.haptic('success'); sfxReward(); coinShower();
+          if (st) { st.balance = r.newBalance; st.totalEarned += r.reward; renderAll(); bumpBalance(); }
+          await loadFtue();
+          openFtuePopup(); // перерисовать чеклист поверх
+        } else { flashMsg(r && r.error === 'already' ? 'Уже забрано' : 'Шаг ещё не выполнен'); b.disabled = false; }
+      };
+    });
+  }
   // T5: welcome-промокод новичку (первая победа). Показ 1 раз; сервер решает eligibility.
   async function maybeWelcomePromo() {
     if (!authed()) return;
@@ -779,6 +828,17 @@
       .ck-cal-day .d{font-weight:700;color:var(--cream);font-size:11px}.ck-cal-day .a{color:var(--gold-l);font-weight:700;font-variant-numeric:tabular-nums;font-size:9.5px;margin-top:3px}
       .ck-cal-day.done{opacity:.5}.ck-cal-day.today{background:rgba(238,191,82,.16);border-color:rgba(238,191,82,.55)}
       .ck-daily.done{background:var(--panel);color:var(--muted);border-color:var(--line);box-shadow:none}
+      /* FTUE «Первый день»: чип-чеклист первой сессии (аудит 30.07) */
+      .ck-ftue{margin-top:8px;display:inline-flex;align-items:center;gap:7px;background:rgba(0,0,0,.3);border:1px solid var(--gold);color:var(--gold-l);border-radius:12px;padding:7px 14px;font-size:12.5px;font-weight:800;cursor:pointer}
+      .ck-ftue b{color:#9be7a8}
+      .ck-ftue:active{transform:scale(.96)}
+      .ck-ftue-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);text-align:left}
+      .ck-ftue-row:last-child{border-bottom:none}
+      .ck-ftue-row .st{width:22px;height:22px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;background:rgba(255,255,255,.08);color:var(--muted)}
+      .ck-ftue-row.done .st{background:linear-gradient(180deg,#9be7a8,#48bb78);color:#0b2e17}
+      .ck-ftue-row .t{flex:1;min-width:0;font-size:12.5px;font-weight:700;color:var(--ink);line-height:1.35}
+      .ck-ftue-row.dim .t{color:var(--muted)}
+      .ck-ftue-row .ck-card__buy{padding:7px 12px;font-size:12px}
       .ck-nav{display:flex;border-top:1px solid var(--line);background:rgba(18,8,11,.5);backdrop-filter:blur(8px)}
       .ck-nav__b{flex:1;border:none;background:transparent;color:var(--muted);padding:9px 0 12px;font-weight:600;font-size:11.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px}.ck-nav__b.on{color:var(--gold-l)}
       .ck-levelup{position:absolute;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;pointer-events:none}.ck-levelup span{font-family:'Nunito',sans-serif;color:var(--gold-l);font-weight:700;font-size:26px;background:linear-gradient(180deg,rgba(46,17,25,.92),rgba(26,10,15,.92));border:1px solid var(--line);padding:14px 24px;border-radius:18px;opacity:0;box-shadow:0 12px 36px rgba(0,0,0,.5)}.ck-levelup span.show{animation:ckLU 1.6s ease-out}@keyframes ckLU{0%{opacity:0;transform:scale(.6)}20%{opacity:1;transform:scale(1.1)}80%{opacity:1}100%{opacity:0}}
@@ -912,6 +972,7 @@
         <div class="ck-bal">${COIN(32)} <span id="ck-bal">0</span></div>
         <div class="ck-prof" id="ck-prof">${COIN(14)} +0 / час</div>
         <div class="ck-event" id="ck-event" hidden></div>
+        <button class="ck-ftue" id="ck-ftue" hidden></button>
         <div class="ck-progwrap"><div class="ck-prog"><div class="ck-prog__bar"><div class="ck-prog__fill" id="ck-prog"></div></div><div class="ck-prog__t" id="ck-progt"></div></div><div class="ck-goal" id="ck-goal" hidden><div class="ck-goal__av"><img id="ck-goal-img" alt="" draggable="false"/></div><div class="ck-goal__l" id="ck-goal-l"></div></div></div>
         <button class="ck-prestige" id="ck-prestige" hidden></button>
         <div class="ck-scene" id="ck-scene"></div>
@@ -1998,6 +2059,7 @@
     if (!ov) build();
     ov.classList.add('on'); document.documentElement.classList.remove('ck-gamefirst'); window.scrollLock && window.scrollLock(); ac();
     await load(); await maybeMigrateGuest(); await ensureRefRegistered(); await maybePurchaseBonus(); curLevel = leagueFor(st.totalEarned).level;
+    loadFtue(); // не await — чип «Первый день» догрузится сам, старт не тормозим
     ov.querySelector('#ck-cat').src = A(leagueFor(st.totalEarned).cat || 'idle.png');
     applyCatSize(ov.querySelector('#ck-cat'));
     setTab('cat'); renderAll(); spawnSparks(); applySeason(); scheduleBonus(); loadDoveBadge();

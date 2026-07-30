@@ -284,6 +284,7 @@ export async function initClickerSchema(): Promise<void> {
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS rain_date TEXT;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS squad TEXT;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS prestige INT NOT NULL DEFAULT 0;
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS ftue_claimed INT NOT NULL DEFAULT 0;
     CREATE INDEX IF NOT EXISTS clicker_squad_idx ON clicker_state (squad);
     CREATE TABLE IF NOT EXISTS clicker_cards (
       chat_id BIGINT NOT NULL, card TEXT NOT NULL, level INT NOT NULL DEFAULT 0,
@@ -592,6 +593,58 @@ export async function claimCipher(chatId: number, guess: string): Promise<{ ok: 
 function loadCodes(): { code: string; reward: number; active?: boolean }[] {
   try { const raw = fs.readFileSync(path.resolve("data/clicker-codes.json"), "utf8"); const arr = JSON.parse(raw); return Array.isArray(arr) ? arr : []; } catch (_) { return []; }
 }
+// ── FTUE «Первый день» (аудит 30.07): 5 шагов-вех первой сессии ────────────────
+// Прогресс НЕ хранится отдельно — вычисляется из существующего состояния (тапы,
+// пекарня, сундук, голубь, заезд); хранится только битовая маска забранных наград
+// (ftue_claimed). Отдельные эндпоинты — hot path тапов не трогаем.
+export const FTUE_STEPS = [
+  { id: 0, name: "Разбуди котика — заработай 50 монет", reward: 500 },
+  { id: 1, name: "Заведи «Пекарню» в Прокачке", reward: 1000 },
+  { id: 2, name: "Открой Сундук удачи в «Призах»", reward: 1500 },
+  { id: 3, name: "Получи первого голубя", reward: 2000 },
+  { id: 4, name: "Проведи драг-заезд в голубятне", reward: 5000 },
+];
+const FTUE_ALL_MASK = (1 << FTUE_STEPS.length) - 1;
+
+async function ftueDoneFlags(chatId: number): Promise<boolean[]> {
+  const [st, bakery, pigeon] = await Promise.all([
+    pool.query(`SELECT total_earned, chest_date, race_reaction_ms FROM clicker_state WHERE chat_id=$1`, [chatId]),
+    pool.query(`SELECT 1 FROM clicker_cards WHERE chat_id=$1 AND card='bakery' AND level>0`, [chatId]),
+    pool.query(`SELECT 1 FROM pigeon_inventory WHERE chat_id=$1 AND count>0 LIMIT 1`, [chatId]),
+  ]);
+  const r = st.rows[0] || {};
+  return [
+    Number(r.total_earned || 0) >= 50,
+    !!bakery.rowCount,
+    r.chest_date != null,
+    !!pigeon.rowCount,
+    r.race_reaction_ms != null,
+  ];
+}
+
+export async function getFtue(chatId: number): Promise<{ steps: { id: number; name: string; reward: number; done: boolean; claimed: boolean }[]; allClaimed: boolean }> {
+  const [done, mask] = await Promise.all([
+    ftueDoneFlags(chatId),
+    pool.query(`SELECT ftue_claimed FROM clicker_state WHERE chat_id=$1`, [chatId]).then(r => Number(r.rows[0]?.ftue_claimed || 0)),
+  ]);
+  const steps = FTUE_STEPS.map((s, i) => ({ ...s, done: done[i], claimed: !!(mask & (1 << i)) }));
+  return { steps, allClaimed: (mask & FTUE_ALL_MASK) === FTUE_ALL_MASK };
+}
+
+export async function claimFtue(chatId: number, stepId: number): Promise<{ ok: boolean; reward?: number; newBalance?: number; reason?: string }> {
+  const s = FTUE_STEPS.find(x => x.id === stepId);
+  if (!s) return { ok: false, reason: "bad_step" };
+  const done = await ftueDoneFlags(chatId);
+  if (!done[stepId]) return { ok: false, reason: "not_done" };
+  // атомарно: бит ещё не стоит → ставим и начисляем (двойной клейм невозможен)
+  const upd = await pool.query(
+    `UPDATE clicker_state SET ftue_claimed = ftue_claimed | $2, balance = balance + $3, total_earned = total_earned + $3
+      WHERE chat_id=$1 AND (ftue_claimed & $2) = 0 RETURNING balance`,
+    [chatId, 1 << stepId, s.reward]);
+  if (!upd.rowCount) return { ok: false, reason: "already" };
+  return { ok: true, reward: s.reward, newBalance: Number(upd.rows[0].balance) };
+}
+
 export async function redeemCode(chatId: number, codeInput: string): Promise<{ ok: boolean; reward?: number; state?: ClickerState; reason?: string }> {
   const code = String(codeInput || "").trim().toUpperCase().replace(/Ё/g, "Е"); if (!code) return { ok: false, reason: "empty" };
   const def = loadCodes().find((c) => String(c.code || "").trim().toUpperCase().replace(/Ё/g, "Е") === code && c.active !== false);
