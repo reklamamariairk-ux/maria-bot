@@ -108,7 +108,7 @@
     rec = { img, ok: null, frames: 0 };
     img.onload = () => { rec.frames = Math.max(1, Math.round(img.width / img.height)); rec.ok = rec.frames >= 2; };
     img.onerror = () => { rec.ok = false; };
-    img.src = `/img/pigeons/fly/${encodeURIComponent(breed)}.webp?v=3`;
+    img.src = `/img/pigeons/fly/${encodeURIComponent(breed)}.webp?v=4`;
     flyCache[breed] = rec;
     return rec;
   }
