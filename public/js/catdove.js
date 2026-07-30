@@ -151,7 +151,20 @@
       .cd-card[data-r="rare"]{border-color:#b8813f}
       .cd-card[data-r="epic"]{border-color:#9070c2}
       .cd-card[data-r="legendary"]{border-color:var(--gold);box-shadow:0 0 10px rgba(238,191,82,.3)}
-      .cd-card.cd-locked{cursor:default}
+      .cd-card.cd-locked{cursor:pointer}
+      .cd-card.cd-locked:active{transform:scale(.96)}
+      /* Шит закрытой породы: приглушённый силуэт + чипы характеристик */
+      .cd-lk-art{width:96px;height:96px;margin:2px auto 10px;border-radius:14px;background:linear-gradient(160deg,rgba(238,191,82,.10),rgba(238,191,82,.02));display:flex;align-items:center;justify-content:center;overflow:hidden}
+      .cd-lk-art img{width:84%;height:84%;object-fit:contain;filter:brightness(0);opacity:.28}
+      .cd-lk-rows{display:flex;flex-direction:column;gap:7px;margin-bottom:12px}
+      .cd-lk-row{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:9px 12px}
+      .cd-lk-row b{font-size:12px;color:var(--muted);font-weight:700}
+      .cd-lk-row span{font-size:12.5px;color:var(--ink);font-weight:700;text-align:right}
+      .cd-rarity{display:inline-flex;border-radius:9px;padding:2.5px 9px;font-size:10.5px;font-weight:900;letter-spacing:.3px}
+      .cd-rarity--common{background:rgba(141,146,156,.25);color:#c6cad2}
+      .cd-rarity--rare{background:rgba(184,129,63,.28);color:#e8b877}
+      .cd-rarity--epic{background:rgba(144,112,194,.28);color:#c9b3ef}
+      .cd-rarity--legendary{background:linear-gradient(180deg,#ffe7a6,#eebf52);color:#5a3a0c}
       .cd-art{position:relative;width:100%;aspect-ratio:1;border-radius:10px;margin:0 auto 6px;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,rgba(238,191,82,.14),rgba(238,191,82,.03));overflow:hidden}
       .cd-art img{width:82%;height:82%;object-fit:contain;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
       .cd-art svg{width:50%;height:50%;color:var(--gold-l)}
@@ -380,6 +393,9 @@
     container.querySelectorAll('.cd-card:not(.cd-locked)').forEach(el => {
       el.onclick = () => openSheet(el.dataset.breed);
     });
+    container.querySelectorAll('.cd-card.cd-locked').forEach(el => {
+      el.onclick = () => openLockedSheet(el.dataset.breed);
+    });
     const champ = container.querySelector('.cd-champ');
     if (champ) champ.onclick = () => openSheet('champion');
     container.querySelectorAll('[data-claim]').forEach(el => {
@@ -441,6 +457,38 @@
     if (tuneBtn) tuneBtn.onclick = () => openTune(breedId);
     const tradeBtn = sh.querySelector('#cd-trade-start');
     if (tradeBtn) tradeBtn.onclick = () => openTradeWant(breedId);
+  }
+
+  // ── Шит закрытой породы: характеристики до получения (имя не раскрываем —
+  // интрига «???» остаётся до первого дропа, но игрок видит, ЧТО ищет и ЗАЧЕМ) ──
+  const RARITY_LABEL = { common: 'Обычный', rare: 'Редкий', epic: 'Эпический', legendary: 'Легендарный' };
+  // Базовая сила пород в заезде — зеркало src/drag.ts::RARITY_BASE (менять синхронно).
+  const DRAG_RARITY_BASE = { common: 10, rare: 16, epic: 22, legendary: 28 };
+  const DRAG_POWER_CAP = (r) => DRAG_RARITY_BASE[r] + 2 * 4 + 6 * 10 + 6 * 10; // ★3 + тюнинг 10/10
+  function openLockedSheet(breedId) {
+    const b = BY_ID.get(breedId);
+    if (!b || b.id === 'champion') return;
+    haptic('light');
+    const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
+    if (!sc || !sh) return;
+    const setDef = SETS.find(s => s.id === b.set);
+    const week = data && data.weekBreed === b.id;
+    const drop = week
+      ? 'Порода недели — выпадает чаще! Комбо дня, мини-игры, сундук удачи, покупки.'
+      : 'Выпадает за комбо дня, мини-игры, сундук удачи и покупки.';
+    sh.innerHTML = `
+      <div class="cd-sheet__hd"><div class="cd-sheet__t">Кто здесь живёт?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
+      <div class="cd-lk-art"><img src="/img/pigeons/${b.id}.webp?v=2" alt="" onerror="this.style.display='none'"></div>
+      <div class="cd-lk-rows">
+        <div class="cd-lk-row"><b>Редкость</b><span class="cd-rarity cd-rarity--${b.rarity}">${RARITY_LABEL[b.rarity]}</span></div>
+        <div class="cd-lk-row"><b>Сила в заезде</b><span>${DRAG_RARITY_BASE[b.rarity]} база · до ${DRAG_POWER_CAP(b.rarity)} с прокачкой</span></div>
+        ${setDef ? `<div class="cd-lk-row"><b>Сет</b><span>«${setDef.name}» · приз ${fmt(setDef.reward)} монет</span></div>` : ''}
+      </div>
+      <div class="cd-sheet__hint" style="margin:0">${drop}</div>
+    `;
+    sc.classList.add('on');
+    requestAnimationFrame(() => sh.classList.add('on'));
+    sh.querySelector('#cd-sheet-x').onclick = closeSheet;
   }
 
   // ── Тюнинг гонщика: 3 характеристики за монеты, дивизион по сумме уровней ──
