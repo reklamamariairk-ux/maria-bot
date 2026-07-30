@@ -335,6 +335,7 @@
   let ov, audio, raf, lastTs = 0, pending = 0, syncT = 0, curLevel = 1, tab = 'cat';
   let renderAcc = 0; // копилка dt для 30fps-капа главного цикла (тап-обработка вне цикла — не влияет)
   const LOOP_FRAME_BUDGET = 1 / 30;
+  const MG_MIN_FRAME_MS = 15; // кап рендера экшен-мини-игр ~60fps: на 120–144 Гц не жжём батарею лишними кадрами (геймплей на dt, скорость не меняется)
   let st = null, turboUntil = 0, combo = 0, comboT = 0, bonusTimer = 0, rainState = null, rainRAF = 0, upCat = 'prod', lastBought = null;
   let sessionTapCount = 0, energyHintFired = false, boostsHintFired = false, bizCoachPending = false;
 
@@ -1336,7 +1337,9 @@
   }
   function rainLoop(ts) {
     const s = rainState; if (!s || s.ended) return;
-    const now = ts || performance.now(); const dt = Math.min(0.05, (now - s.lastTs) / 1000); s.lastTs = now;
+    const now = ts || performance.now();
+    if (now - s.lastTs < MG_MIN_FRAME_MS) { rainRAF = requestAnimationFrame(rainLoop); return; }
+    const dt = Math.min(0.05, (now - s.lastTs) / 1000); s.lastTs = now;
     const left = Math.max(0, (s.tEnd - now) / 1000); ov.querySelector('#ck-rain-t').textContent = Math.ceil(left);
     if (left <= 0) { endRain(false); return; }
     if (now - s.lastSpawn > Math.max(230, 420 - s.score * 3)) { s.lastSpawn = now; const gold = Math.random() < 0.15; const r = gold ? 21 : 16; s.items.push({ x: r + Math.random() * (s.W - 2 * r), y: -r, r, vy: 110 + Math.random() * 150, gold }); }
@@ -2139,6 +2142,7 @@
   }
   function towerLoop(ts) {
     const s = towerState; if (!s || s.ended) return;
+    if (ts - s.last < MG_MIN_FRAME_MS) { s.raf = requestAnimationFrame(towerLoop); return; }
     const dt = Math.min(0.05, (ts - s.last) / 1000); s.last = ts; const c = s.cur;
     c.x += c.dir * c.speed * dt;
     if (c.x <= 0) { c.x = 0; c.dir = 1; } if (c.x + c.w >= s.W) { c.x = s.W - c.w; c.dir = -1; }
