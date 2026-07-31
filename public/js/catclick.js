@@ -1093,7 +1093,19 @@
         b.className = 'ck-card__buy';
         b.style.cssText = 'width:100%;justify-content:center;margin:2px 0 12px';
         b.innerHTML = `${ICON.paw(15)} Пройти обучение с Василием`;
-        b.onclick = () => { try { ['cat', 'up', 'dove', 'tasks', 'top', 'home'].forEach(k => localStorage.removeItem('ck_tour2_' + k)); } catch (e) {} closeGuide(); if (tab !== 'cat') setTab('cat'); setTimeout(() => startTour('cat'), 250); };
+        b.onclick = () => {
+          // Полный перепросмотр онбординга: welcome-карта + все 6 туров + коучи
+          try {
+            ['cat', 'up', 'dove', 'tasks', 'top', 'home'].forEach(k => localStorage.removeItem('ck_tour2_' + k));
+            localStorage.removeItem('ck_tut_v1');
+            localStorage.removeItem('ck_dove_col_seen');
+            Object.keys(localStorage).filter(k => k.indexOf('ck_coach_') === 0).forEach(k => localStorage.removeItem(k));
+          } catch (e) {}
+          coachSeenMem.clear();
+          closeGuide();
+          if (tab !== 'cat') setTab('cat');
+          setTimeout(showTutorial, 250);
+        };
         body.prepend(b);
       }
     }
