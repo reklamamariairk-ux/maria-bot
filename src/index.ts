@@ -583,7 +583,7 @@ bot.command("start", async (ctx) => {
         const r = await registerRef(ctx.from.id, String(ownerId)).catch(() => null);
         if (r?.ok) {
           const userName = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" ") || "Новый друг";
-          await sendRaw(ownerId, `🎉 *${userName}* зашёл в «Котик Комбат» по твоей ссылке — тебе +5000 монет 🪙 Спасибо, что зовёшь друзей!`, { parse_mode: "Markdown" }).catch(() => {});
+          await sendRaw(ownerId, `🎉 *${userName}* зашёл в «Котик Комбат» по твоей ссылке — тебе +30000 монет 🪙 Спасибо, что зовёшь друзей!`, { parse_mode: "Markdown" }).catch(() => {});
         }
         await ctx.reply(`🐱 Добро пожаловать в «Котик Комбат»!\n\nТебе начислено +2500 монет за вход по приглашению. Жми и качай котика 👇`, { reply_markup: webAppButton("", "🎮 Играть") }).catch(() => {});
         return;

@@ -38,7 +38,7 @@ const TURBO_MULT = 5;
 const TURBO_SEC = 20;
 const DAILY_BOOSTS = 6;           // бесплатных бустов каждого типа в день
 const REF_INVITEE = 2500;         // бонус приглашённому
-const REF_REFERRER = 5000;        // бонус пригласившему
+const REF_REFERRER = 30000;       // бонус пригласившему (поднято юзером 31.07 с 5000)
 const irkToday = () => new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
 // Экспорт для голубиной почты (pigeons.ts::sendMail — лимит 1 письмо/день по Иркутску).
 // Ленивый импорт на стороне pigeons.ts (await import("./clicker")) — см. комментарий там.
