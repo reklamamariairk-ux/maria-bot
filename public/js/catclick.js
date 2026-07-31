@@ -834,12 +834,12 @@
       /* Тур Василия (обучение новичка, 31.07): спотлайт-дырка + пузырь-проводник */
       /* Тур живёт в document.body (поверх пет-оверлея) — переменные бренда объявляем
          на себе, снаружи .ck-ov они не каскадируются (баг «тёмный текст на тёмном») */
-      .ck-tour{--gold:#f0c24e;--gold-l:#ffe39c;--cream:#eee7dd;--ink:#f1ece6;--muted:#9aa0ab;--line:rgba(255,255,255,.14);position:fixed;inset:0;z-index:10060;pointer-events:none}
+      .ck-tour{--gold:#f0c24e;--gold-l:#ffe39c;--cream:#eee7dd;--ink:#f1ece6;--muted:#9aa0ab;--line:rgba(255,255,255,.14);position:fixed;inset:0;z-index:10060;pointer-events:none;font-family:'Nunito','Mulish',system-ui,-apple-system,sans-serif}
       .ck-tour__hole{position:fixed;border-radius:16px;box-shadow:0 0 0 9999px rgba(10,6,5,.72);border:2px solid var(--gold);transition:left .28s ease,top .28s ease,width .28s ease,height .28s ease}
       .ck-tour__bub{position:fixed;pointer-events:auto;background:linear-gradient(180deg,#2e1119,#1d0a11);border:1px solid var(--gold);border-radius:18px;padding:14px;box-shadow:0 16px 44px rgba(0,0,0,.55);transition:top .28s ease,left .28s ease}
       .ck-tour__head{display:flex;gap:10px;align-items:flex-start}
       .ck-tour__head img{width:46px;height:46px;object-fit:contain;flex:none;filter:drop-shadow(0 2px 6px rgba(0,0,0,.4))}
-      .ck-tour__t{font-size:13.5px;font-weight:700;color:var(--cream);line-height:1.45;padding-top:3px}
+      .ck-tour__t{font-size:14.5px;font-weight:600;color:var(--cream);line-height:1.5;padding-top:3px;letter-spacing:.1px}
       .ck-tour__row{display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:10px}
       .ck-tour__next{border:1px solid #ffe9b3;border-radius:12px;padding:9px 22px;font-weight:800;font-size:13px;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;cursor:pointer}
       .ck-tour__skip{border:none;background:none;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;padding:8px 4px}
