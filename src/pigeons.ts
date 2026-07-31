@@ -172,6 +172,11 @@ export async function initPigeonSchema(): Promise<void> {
     CREATE TABLE IF NOT EXISTS pigeon_sets_claimed (
       chat_id BIGINT NOT NULL, set_id TEXT NOT NULL, claimed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (chat_id, set_id));
+    CREATE TABLE IF NOT EXISTS pigeon_friends (
+      chat_a BIGINT NOT NULL, chat_b BIGINT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (chat_a, chat_b));
+    CREATE INDEX IF NOT EXISTS pigeon_friends_b ON pigeon_friends (chat_b);
     CREATE TABLE IF NOT EXISTS pigeon_race_entries (
       week TEXT NOT NULL, chat_id BIGINT NOT NULL, breed TEXT NOT NULL,
       score INT, entered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -632,8 +637,24 @@ export async function thankMail(chatId: number, mailId: number, sticker: number)
 // (кого пригласил chatId И его собственный реферер), активные 7 дней — тот же критерий
 // (updated_at), что и в sendMail(to="squad"|"ref"), чтобы список кандидатов совпадал
 // с тем, кому реально можно отправить письмо.
+// ── Друзья голубятни («код дружбы» ckfr_<id>, спека: почта 31.07): клик по ссылке
+// = взаимное согласие, бот связывает пару. Пара хранится нормализованно (min,max).
+const FRIENDS_LIMIT = 100;
+export async function addFriend(chatId: number, otherId: number):
+  Promise<{ ok: boolean; already?: boolean; reason?: string }> {
+  if (!Number.isInteger(otherId) || otherId <= 0) return { ok: false, reason: "bad_input" };
+  if (otherId === chatId) return { ok: false, reason: "self" };
+  const a = Math.min(chatId, otherId), b = Math.max(chatId, otherId);
+  const cnt = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM pigeon_friends WHERE chat_a=$1 OR chat_b=$1`, [chatId]);
+  if (Number(cnt.rows[0].n) >= FRIENDS_LIMIT) return { ok: false, reason: "limit" };
+  const ins = await pool.query(
+    `INSERT INTO pigeon_friends (chat_a, chat_b) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING 1`, [a, b]);
+  return { ok: true, already: !ins.rowCount };
+}
+
 export async function getMailRecipients(chatId: number):
-  Promise<{ squad: { chat: number; name: string }[]; refs: { chat: number; name: string }[] }> {
+  Promise<{ squad: { chat: number; name: string }[]; refs: { chat: number; name: string }[]; friends: { chat: number; name: string }[]; friendLink: string }> {
   const mapRows = (rows: any[]) => rows.map((r: any) => ({
     chat: Number(r.chat_id),
     name: (r.first_name || r.username || "Котовод").toString().slice(0, 24),
@@ -658,7 +679,15 @@ export async function getMailRecipients(chatId: number):
       WHERE (c.referred_by=$1 OR c.chat_id = (SELECT referred_by FROM clicker_state WHERE chat_id=$1))
         AND c.chat_id<>$1 AND c.updated_at > NOW() - INTERVAL '${MAIL_ACTIVE_WINDOW}'
       LIMIT 20`, [chatId]);
-  return { squad: mapRows(squadRows), refs: mapRows(refR.rows) };
+  // Друзья по «коду дружбы» — без окна активности (дружба явная, не протухает в списке)
+  const frR = await pool.query(
+    `SELECT f.other AS chat_id, s.first_name, s.username
+       FROM (SELECT CASE WHEN chat_a=$1 THEN chat_b ELSE chat_a END AS other
+               FROM pigeon_friends WHERE chat_a=$1 OR chat_b=$1) f
+       LEFT JOIN subscribers s ON s.chat_id = f.other
+      LIMIT 50`, [chatId]);
+  const { clickerFriendLink } = await import("./links");
+  return { squad: mapRows(squadRows), refs: mapRows(refR.rows), friends: mapRows(frR.rows), friendLink: clickerFriendLink(chatId) };
 }
 
 // ── Тюнинг гонщика (операции с БД) ──────────────────────────────────────────

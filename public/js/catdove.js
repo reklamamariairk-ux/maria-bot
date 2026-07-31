@@ -648,11 +648,13 @@
     const rec = await loadRecipients();
     const box = sh.querySelector('#cd-trade-recip');
     if (!box) return; // шит уже закрыт/сменился, пока грузили
-    const rows = rec.squad.concat(rec.refs);
-    box.innerHTML = rows.length
+    const rows = (Array.isArray(rec.friends) ? rec.friends : []).concat(rec.squad, rec.refs);
+    box.innerHTML = (rows.length
       ? rows.map(r => `<div class="cd-reciperow" data-chat="${r.chat}"><span>${esc(r.name)}</span></div>`).join('')
-      : `<div style="color:var(--muted);font-size:12.5px;text-align:center;padding:8px 0">Пока нет активных знакомых — предложи всем на доску</div>`;
+      : `<div style="color:var(--muted);font-size:12.5px;text-align:center;padding:8px 0">Пока нет знакомых — предложи всем на доску</div>`)
+      + `<button class="cd-tbtn cd-tbtn--ghost" id="cd-tr-addfr" style="width:100%;box-sizing:border-box;margin-top:4px">＋ Позвать друга по ссылке</button>`;
     box.querySelectorAll('.cd-reciperow').forEach(el => { el.onclick = () => submitTrade(Number(el.dataset.chat)); });
+    const addFr = box.querySelector('#cd-tr-addfr'); if (addFr) addFr.onclick = () => shareFriendLink(rec);
   }
   const TRADE_CREATE_REASON = { bad_input: 'Неверный выбор породы', self: 'Нельзя предложить самому себе', limit: 'Не больше 3 предложений одновременно', need_duplicate: 'Отдать можно только запасного', no_player: 'Игрок не найден' };
   async function submitTrade(to) {
@@ -863,6 +865,13 @@
     sh.querySelector('#cd-sheet-x').onclick = closeSheet;
     sh.querySelectorAll('.cd-pickcard').forEach(el => { el.onclick = () => openMailSendRecipient(el.dataset.breed); });
   }
+  // Шаринг «кода дружбы»: получатель кликает ссылку — бот связывает вас взаимно.
+  function shareFriendLink(rec) {
+    if (!rec || !rec.friendLink) { flash('Ссылка дружбы недоступна'); return; }
+    haptic('light');
+    const txt = `🕊️ Добавь меня в друзья в «Котик Комбат» — будем слать друг другу голубей и меняться породами! ${rec.friendLink}`;
+    if (window.ckShare) window.ckShare(txt); else flash(rec.friendLink);
+  }
   async function openMailSendRecipient(breedId) {
     if (!msState) return;
     msState.breed = breedId;
@@ -872,6 +881,8 @@
     sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Кому отправить?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
       <div class="cd-sheet__hint">Отправишь: ${BY_ID.get(breedId).name}</div>
       <button class="cd-sheet__act" id="cd-ms-random">Случайному игроку</button>
+      <div class="cd-sect-t">Друзья</div>
+      <div id="cd-ms-friends">${skeletonRows(1)}</div>
       <div class="cd-sect-t">Однокомандцы</div>
       <div id="cd-ms-squad">${skeletonRows(2)}</div>
       <div class="cd-sect-t">Рефералы</div>
@@ -879,16 +890,22 @@
     sh.querySelector('#cd-sheet-x').onclick = closeSheet;
     sh.querySelector('#cd-ms-random').onclick = () => openMailSendSticker('random');
     const rec = await loadRecipients();
-    const sqBox = sh.querySelector('#cd-ms-squad'), rfBox = sh.querySelector('#cd-ms-refs');
-    if (!sqBox || !rfBox) return; // шит уже закрыт/сменился, пока грузили
+    const frBox = sh.querySelector('#cd-ms-friends'), sqBox = sh.querySelector('#cd-ms-squad'), rfBox = sh.querySelector('#cd-ms-refs');
+    if (!frBox || !sqBox || !rfBox) return; // шит уже закрыт/сменился, пока грузили
+    const friends = Array.isArray(rec.friends) ? rec.friends : [];
+    frBox.innerHTML = (friends.length
+      ? friends.map(r => `<div class="cd-reciperow" data-chat="${r.chat}"><span>${esc(r.name)}</span></div>`).join('')
+      : '')
+      + `<button class="cd-tbtn cd-tbtn--ghost" id="cd-ms-addfr" style="width:100%;box-sizing:border-box;margin-bottom:7px">＋ Позвать друга по ссылке</button>`;
     sqBox.innerHTML = rec.squad.length
       ? rec.squad.map(r => `<div class="cd-reciperow" data-chat="${r.chat}"><span>${esc(r.name)}</span></div>`).join('')
-      : `<div style="color:var(--muted);font-size:12px;padding:4px 2px 10px">Пока нет активных однокомандцев</div>`;
+      : `<button class="cd-tbtn cd-tbtn--ghost" id="cd-ms-jointeam" style="width:100%;box-sizing:border-box;margin-bottom:7px">Вступить в команду — в «Рейтинге»</button>`;
     rfBox.innerHTML = rec.refs.length
       ? rec.refs.map(r => `<div class="cd-reciperow" data-chat="${r.chat}"><span>${esc(r.name)}</span></div>`).join('')
-      : `<div style="color:var(--muted);font-size:12px;padding:4px 2px 10px">Пока нет активных рефералов</div>`;
-    sqBox.querySelectorAll('.cd-reciperow').forEach(el => { el.onclick = () => openMailSendSticker(Number(el.dataset.chat)); });
-    rfBox.querySelectorAll('.cd-reciperow').forEach(el => { el.onclick = () => openMailSendSticker(Number(el.dataset.chat)); });
+      : `<div style="color:var(--muted);font-size:12px;padding:4px 2px 10px">Пригласи друга в игру — он появится тут («Рейтинг» → «Пригласи друзей»)</div>`;
+    const addFr = sh.querySelector('#cd-ms-addfr'); if (addFr) addFr.onclick = () => shareFriendLink(rec);
+    const joinT = sh.querySelector('#cd-ms-jointeam'); if (joinT) joinT.onclick = () => { closeSheet(); if (window.ckSetTab) window.ckSetTab('top'); };
+    [frBox, sqBox, rfBox].forEach(box => box.querySelectorAll('.cd-reciperow').forEach(el => { el.onclick = () => openMailSendSticker(Number(el.dataset.chat)); }));
   }
   function openMailSendSticker(to) {
     if (!msState) return;

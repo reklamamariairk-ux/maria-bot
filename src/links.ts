@@ -50,6 +50,15 @@ export function clickerReferralLink(internalId: number): string {
 }
 
 /**
+ * Ссылка «кода дружбы» голубятни (`ckfr_<internalId>`): получатель кликает —
+ * бот связывает обоих в pigeon_friends (взаимно, клик = согласие). TG-only MVP:
+ * VK-юзерам отдаём ту же t.me-ссылку (перейдут в TG-бота).
+ */
+export function clickerFriendLink(internalId: number): string {
+  return `https://t.me/${BOT_USERNAME}?start=ckfr_${internalId}`;
+}
+
+/**
  * Для VK-получателя добавляет в конец текста ссылку на мини-апп (в VK push
  * без ссылки ведёт в никуда — нет постоянной webApp-кнопки как в TG-чате).
  * Для TG возвращает текст без изменений (байт-в-байт прежнее поведение).

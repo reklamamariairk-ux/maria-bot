@@ -589,6 +589,24 @@ bot.command("start", async (ctx) => {
         return;
       }
     }
+    // «Код дружбы» голубятни: /start ckfr_<internalId владельца ссылки>. Клик =
+    // взаимное согласие — связываем пару в pigeon_friends, оба видят друг друга
+    // в адресатах голубиной почты.
+    if (payload && payload.startsWith("ckfr_")) {
+      const ownerId = Number(payload.slice(5));
+      if (Number.isFinite(ownerId) && ownerId !== ctx.from.id) {
+        const { addFriend } = await import("./pigeons");
+        const r = await addFriend(ctx.from.id, ownerId).catch(() => null);
+        if (r?.ok && !r.already) {
+          const userName = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" ") || "Новый друг";
+          await sendRaw(ownerId, `🕊️ *${userName}* принял твой код дружбы! Теперь вы можете слать друг другу голубей — загляни в Голубятню → Обмены/Почта.`, { parse_mode: "Markdown" }).catch(() => {});
+          await ctx.reply(`🕊️ Вы теперь друзья! Отправляй голубей из Голубятни — вкладка «Голуби» → «Почта».`, { reply_markup: webAppButton("", "🎮 Открыть игру") }).catch(() => {});
+        } else {
+          await ctx.reply(r?.already ? `🕊️ Вы уже друзья! Открывай голубятню и шли голубей.` : `Не получилось добавить в друзья — попробуй позже.`, { reply_markup: webAppButton("", "🎮 Открыть игру") }).catch(() => {});
+        }
+        return;
+      }
+    }
     if (payload && payload.startsWith("ref_")) {
       const rest = payload.slice(4);
       if (/^MARIA-/i.test(rest)) {

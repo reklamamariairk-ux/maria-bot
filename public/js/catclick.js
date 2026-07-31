@@ -2641,6 +2641,10 @@
   // initData-заголовками, flashMsg — тост об ошибке, updateDoveBadge — бейдж непрочитанной
   // почты на кнопке навбара (учитывая, что мьютить его дальше будет Task 10 — почта).
   window.ckApi = api; window.ckFlash = flashMsg; window.ckUpdateDoveBadge = updateDoveBadge;
+  // Мосты для catdove: переключение вкладок (кнопка «Вступить в команду» из почты)
+  // и системный шаринг (ссылка «кода дружбы»)
+  window.ckSetTab = setTab;
+  window.ckShare = (txt) => { if (window.App && App.share) App.share(txt); else if (navigator.share) navigator.share({ text: txt }).catch(() => {}); };
   // Мост для catdrag.js (драг-заезд): читать текущий баланс/энергию для UI (дизейбл ставок
   // выше баланса и т.п.) и синхронизировать стейт кликера после серверного списания
   // энергии/ставки — иначе игрок видит устаревшие цифры, пока не откроет кликер заново.
