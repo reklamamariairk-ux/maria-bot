@@ -2349,7 +2349,9 @@
     // Метки обучения живут в УСТРОЙСТВЕ, а аккаунт — на сервере: девственный аккаунт
     // (0 монет, 0 тапов) на устройстве со старыми метками = другой человек или сброс —
     // переигрываем онбординг целиком (welcome + туры + коучи).
-    if (authed() && st && Number(st.totalEarned || 0) === 0 && Number(st.taps || 0) === 0 && _seenTut) {
+    // «Девственный» = ни одного тапа и ни одного бизнеса; авто-капнувшая награда дня
+    // (до 500) девственности не отменяет — иначе первый же вход «съедал» условие.
+    if (authed() && st && Number(st.taps || 0) === 0 && Number(st.cardsOwned || 0) === 0 && Number(st.totalEarned || 0) <= 500 && _seenTut) {
       try {
         localStorage.removeItem('ck_tut_v1');
         ['cat', 'up', 'dove', 'col', 'tasks', 'top', 'home'].forEach(k => localStorage.removeItem('ck_tour2_' + k));
