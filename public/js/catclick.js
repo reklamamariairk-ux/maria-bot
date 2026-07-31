@@ -1006,6 +1006,7 @@
         <div class="ck-boosts">
           <button class="ck-boost" id="ck-bt-turbo">${ICON.rocket(16)} Турбо <span id="ck-bt-turbo-n"></span></button>
           <button class="ck-boost" id="ck-bt-energy">${ICON.bolt(16)} Энергия <span id="ck-bt-energy-n"></span></button>
+          <button class="ck-boost" id="ck-bt-games">${ICON.game(16)} Игры</button>
         </div>
         <div class="ck-energy"><div class="ck-energy__row" id="ck-enrow"><span id="ck-enpre">${ICON.bolt(15)}</span> <span id="ck-en">0</span> / <span id="ck-enmax">1000</span></div><div class="ck-energy__bar"><div class="ck-energy__fill" id="ck-enfill"></div></div></div>
       </div>
@@ -1047,6 +1048,7 @@
     ov.querySelector('#ck-daily').onclick = dailyBtn;
     ov.querySelector('#ck-bt-turbo').onclick = () => boost('turbo');
     ov.querySelector('#ck-bt-energy').onclick = () => boost('energy');
+    ov.querySelector('#ck-bt-games').onclick = openGamesHub;
     ov.querySelector('#ck-prestige').onclick = prestigeConfirm;
     ov.querySelectorAll('.ck-nav__b').forEach(b => b.onclick = () => setTab(b.dataset.tab));
     ov.querySelectorAll('#ck-dove-seg .ck-seg__b').forEach(b => b.onclick = () => setDoveSeg(b.dataset.seg, true));
@@ -1980,12 +1982,16 @@
           : `<button class="ck-card__buy" disabled>+${fmt(a.reward)}</button>`;
       return `<div class="ck-card"${a.done ? ' style="opacity:.6"' : ''}><div class="ck-card__ic">${achIcon(a.icon)}</div><div class="ck-card__b"><div class="ck-card__n">${a.name}</div><div class="ck-card__s">${achDesc(a)}</div></div>${btn}</div>`;
     }).join('');
-    const progRows = await milestonesHtml();
+    // «Награды за прогресс» (реальные промокоды/баллы) СКРЫТЫ — решение юзера 31.07:
+    // в «Призах» только внутриигровое до согласования внешних наград с Машей.
+    // Бэк (milestones/claim, GIFTS_ENABLED) жив — вернуть = флаг true.
+    const SHOW_PROGRESS_REWARDS = false;
+    const progRows = SHOW_PROGRESS_REWARDS ? await milestonesHtml() : '';
     if (gen !== tasksGen) return;
     const failCard = tasksFail ? `<div class="ck-card"><div class="ck-card__ic">${ICON.bolt(26)}</div><div class="ck-card__b"><div class="ck-card__n">Не всё загрузилось</div><div class="ck-card__s">Проверь связь</div></div><button class="ck-card__buy" id="ck-tasks-retry">Обновить</button></div>` : '';
     // Промокод убран из вкладки «Призы» по решению юзера (15.07). redeemCodeAct/эндпоинт живы —
     // при возврате секции достаточно вернуть promoCard в innerHTML ниже.
-    list.innerHTML = failCard + bonusBlock() + `<div class="ck-sect">${ICON.gift(13)} Награды за прогресс</div>` + progRows + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows + '<div class="ck-sect">Достижения</div>' + achRows;
+    list.innerHTML = failCard + bonusBlock() + (progRows ? `<div class="ck-sect">${ICON.gift(13)} Награды за прогресс</div>` + progRows : '') + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows + '<div class="ck-sect">Достижения</div>' + achRows;
     const rtb = list.querySelector('#ck-tasks-retry'); if (rtb) rtb.onclick = () => renderTasks();
     ov.querySelector('#ck-invite').onclick = shareRef;
     list.querySelectorAll('[data-open]').forEach(b => b.onclick = () => { const id = b.dataset.open, link = b.dataset.link; if (link) { if (window.App && App.openExternal) App.openExternal(link); else window.open(link, '_blank'); } linkOpened[id] = true; setTimeout(renderTasks, 400); });
@@ -2054,26 +2060,15 @@
     const comboCard = `<div class="ck-card ck-bonus">
       <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.star(26)}</div><div class="ck-card__b"><div class="ck-card__n">Комбо дня</div><div class="ck-card__s">Прокачай эти 3 бизнеса сегодня · +${fmt(cmb.reward)} ${COIN(13)}</div></div></div>
       <div class="ck-combo3">${slots}</div>${comboBtn}</div>`;
-    // Анаграмма вместо морзе (аудит 30.07): буквы «вкусного» слова вперемешку —
-    // без барьера для аудитории кондитерской. Старое поле morse живёт для кэшей.
-    const cipherLetters = (cph.anagram || '').split('').join(' ');
-    const cipherCard = `<div class="ck-card ck-bonus">
-      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.bolt(26)}</div><div class="ck-card__b"><div class="ck-card__n">Слово дня</div><div class="ck-card__s">Собери слово из букв · +${fmt(cph.reward)} ${COIN(13)}</div></div></div>
-      ${cph.claimed
-        ? `<button class="ck-card__buy" disabled style="width:100%;justify-content:center">✓ Разгадано сегодня</button>`
-        : `<div class="ck-morse">${cipherLetters || cph.morse}</div><div style="display:flex;gap:8px"><input class="ck-cipher-in" id="ck-cipher-in" maxlength="14" placeholder="${cph.len} букв" autocomplete="off" spellcheck="false" enterkeyhint="done" autocapitalize="characters"/><button class="ck-card__buy" id="ck-cipher-go" style="justify-content:center">Разгадать</button></div>`}</div>`;
+    // «Слово дня» переехало в хаб «Игры» (решение юзера 31.07: «Призы» — только
+    // призы, активности — в играх). См. renderGames/openCipherPopup.
     const chestAvail = !st || st.chestAvailable;
     const chestCard = `<div class="ck-card ck-bonus" style="background:linear-gradient(90deg,rgba(238,191,82,.16),rgba(238,191,82,.04))">
       <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.chest(26)}</div><div class="ck-card__b"><div class="ck-card__n">Сундук удачи</div><div class="ck-card__s">${chestAvail ? 'Монеты, турбо или джекпот!' : 'Возвращайся завтра за новым'}</div></div>
       ${chestAvail ? `<button class="ck-card__buy" id="ck-chest-open">Открыть</button>` : `<button class="ck-card__buy" disabled>✓ Открыт</button>`}</div>`;
-    // Хаб «Игры» (7 мини-игр, включая «Золотой дождь») — вход одной карточкой со счётчиком
-    const gated = ['quiz_kids', 'quiz_riddle', 'count', 'memory', 'gems', 'tower'];
-    const gDone = gated.filter(gameDone).length + ((!st || st.rainAvailable) ? 0 : 1);
-    const gAvail = 7 - gDone;
-    const gamesCard = `<div class="ck-card ck-bonus" style="background:linear-gradient(90deg,rgba(238,191,82,.16),rgba(238,191,82,.04))">
-      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.game(26)}</div><div class="ck-card__b"><div class="ck-card__n">Игры</div><div class="ck-card__s">${gAvail > 0 ? `Доступно сегодня: ${gAvail} из 7 · монеты за каждую` : 'Все пройдены — заходи завтра'}</div></div>
-      <button class="ck-card__buy" id="ck-games-open">${gAvail > 0 ? 'Играть' : 'Открыть'}</button></div>`;
-    return '<div class="ck-sect">Бонусы дня</div>' + chestCard + gamesCard + comboCard + cipherCard;
+    // Карточка «Игры» переехала на главную (кнопка в ряду бустов) — решение юзера
+    // 31.07: «Призы» = только призы. Хаб открывается openGamesHub.
+    return '<div class="ck-sect">Бонусы дня</div>' + chestCard + comboCard;
   }
   function wireBonus() {
     const cb = ov.querySelector('#ck-combo-claim'); if (cb) cb.onclick = claimCombo;
@@ -2186,7 +2181,7 @@
       { text: 'Тапай по мне — каждый тап приносит монету. Ну-ка, пять тапов!', anchor: '#ck-catwrap', pos: 'top', wait: 'taps' },
       { text: 'Кстати: каждый 40-й тап — «Сладкий», сразу ×8 монет. Лови золотые вспышки!', anchor: '#ck-catwrap', pos: 'top' },
       { text: 'Энергия: тап стоит единичку, сама восстанавливается. Кончилась — загляни в другие вкладки', anchor: '.ck-energy', pos: 'top' },
-      { text: 'Бусты: Турбо ×5 на 20 секунд и мгновенная энергия — бесплатные, по кулдауну', anchor: '.ck-boosts', pos: 'top' },
+      { text: 'Бусты: Турбо ×5 и мгновенная энергия — бесплатные, по кулдауну. А рядом — мини-игры, до 8 партий в день', anchor: '.ck-boosts', pos: 'top' },
       { text: 'Твои монеты и доход в час. Монеты тратим на бизнесы, тюнинг голубей и ставки', anchor: '.ck-bal', pos: 'bottom' },
       { text: 'Полоска карьеры: все заработанные монеты двигают меня по 19 уровням — от стажёра до Императора выпечки', anchor: '.ck-progwrap', pos: 'bottom' },
       { text: '«Награда дня»: заходи каждый день — стрик растёт, награды тоже', anchor: '#ck-daily', anchorFn: function () { return ov.querySelector('#ck-daily:not([style*="none"])') || ov.querySelector('.ck-progwrap'); }, pos: 'bottom' },
@@ -2206,10 +2201,8 @@
     ],
     tasks: [
       { text: '«Призы» — сюда каждый день! Сундук удачи: монеты, турбо или джекпот', anchor: '#ck-taskslist', anchorFn: function () { return ov.querySelectorAll('#ck-taskslist .ck-bonus')[0]; }, pos: 'bottom' },
-      { text: 'Мини-игры — до 7 партий в день, монеты за каждую', anchor: '#ck-taskslist', anchorFn: function () { return ov.querySelectorAll('#ck-taskslist .ck-bonus')[1]; }, pos: 'bottom' },
-      { text: '«Комбо дня»: прокачай 3 названных бизнеса сегодня — +12 000. Меняются каждый день', anchor: '#ck-taskslist', anchorFn: function () { return ov.querySelectorAll('#ck-taskslist .ck-bonus')[2]; }, pos: 'top' },
-      { text: '«Слово дня»: собери слово из букв — +3 000. Подсказка: это всегда что-то вкусное', anchor: '#ck-taskslist', anchorFn: function () { return ov.querySelectorAll('#ck-taskslist .ck-bonus')[3]; }, pos: 'top' },
-      { text: 'Ниже — награды за прогресс и достижения. Заглядывай, там копятся подарки', anchor: '#ck-taskslist', pos: 'top' },
+      { text: '«Комбо дня»: прокачай 3 названных бизнеса сегодня — +12 000. Меняются каждый день', anchor: '#ck-taskslist', anchorFn: function () { return ov.querySelectorAll('#ck-taskslist .ck-bonus')[1]; }, pos: 'bottom' },
+      { text: 'Ниже — задания и достижения: монеты за действия в игре. Заглядывай, тут копятся награды', anchor: '#ck-taskslist', pos: 'top' },
     ],
     top: [
       { text: '«Рейтинг»: топ недели по заработанным монетам, в воскресенье сезон закрывается и раздаются места', anchor: '#ck-myrank', anchorFn: function () { return ov.querySelector('#ck-myrank') || ov.querySelector('#ck-toplist'); }, pos: 'bottom' },
@@ -2403,8 +2396,11 @@
     };
     const rainAvail = !st || st.rainAvailable;
     const rainCard = `<div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.rain(26)}</div><div class="ck-card__b"><div class="ck-card__n">Золотой дождь</div><div class="ck-card__s">${rainAvail ? 'Лови монеты 20 секунд → бонус' : 'Сыграно — приходи завтра'}</div></div>${rainAvail ? `<button class="ck-card__buy" id="ck-games-rain">Играть</button>` : `<button class="ck-card__buy" disabled>✓ Сегодня</button>`}</div></div>`;
+    // «Слово дня» — часть хаба игр (переехало из «Призов», решение юзера 31.07)
+    const cph = (st && st.cipher) || { claimed: false, reward: CIPHER_REWARD };
+    const cipherCard = `<div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.bolt(26)}</div><div class="ck-card__b"><div class="ck-card__n">Слово дня</div><div class="ck-card__s">${cph.claimed ? 'Разгадано — приходи завтра' : `Собери слово из букв · +${fmt(cph.reward)} ` + COIN(13)}</div></div>${cph.claimed ? `<button class="ck-card__buy" disabled>✓ Сегодня</button>` : `<button class="ck-card__buy" id="ck-games-cipher">Играть</button>`}</div></div>`;
     const gated = ['quiz_kids', 'quiz_riddle', 'count', 'memory', 'gems', 'tower'];
-    const total = gated.length + 1, doneN = gated.filter(gameDone).length + (rainAvail ? 0 : 1), remain = total - doneN;
+    const total = gated.length + 2, doneN = gated.filter(gameDone).length + (rainAvail ? 0 : 1) + (cph.claimed ? 1 : 0), remain = total - doneN;
     const head = `<div class="ck-games-hd">${remain > 0 ? `Сегодня доступно игр: <b>${remain}</b> из ${total} · награды ждут ${COIN(14)}` : 'Все игры на сегодня пройдены — заходи завтра!'}</div>`;
     box.innerHTML = head +
       '<div class="ck-sect">Учимся и играем · детям</div>' +
@@ -2415,9 +2411,30 @@
       '<div class="ck-sect">Казуальные · всем</div>' +
       card('gems', ICON.gem(26), 'Сладкий ряд', 'Match-3: собирай 3+ конфеты в ряд · +до 9000 ' + COIN(13)) +
       card('tower', ICON.cake(26), 'Башня тортов', 'Ставь коржи ровно, строй башню · +до 12000 ' + COIN(13)) +
+      cipherCard +
       rainCard;
     box.querySelectorAll('.ck-card__buy[data-game]').forEach(b => b.onclick = () => startGame(b.dataset.game));
     const rb = box.querySelector('#ck-games-rain'); if (rb) rb.onclick = openRain;
+    const cb = box.querySelector('#ck-games-cipher'); if (cb) cb.onclick = openCipherPopup;
+  }
+  // Попап «Слова дня» (та же анаграмма и claimCipher, что жили в «Призах»)
+  function openCipherPopup() {
+    const pop = ov && ov.querySelector('#ck-pop'); if (!pop) return;
+    const cph = (st && st.cipher) || { anagram: '', morse: '', len: 0, reward: CIPHER_REWARD };
+    if (cph.claimed) { flashMsg('Уже разгадано сегодня'); return; }
+    window.haptic && window.haptic('light');
+    const letters = (cph.anagram || '').split('').join(' ');
+    pop.innerHTML = `<h3>${ICON.bolt(20)} Слово дня</h3>
+      <div style="color:var(--muted);font-size:12.5px;margin-bottom:8px">Собери слово из букв · +${fmt(cph.reward)} ${COIN(13)}</div>
+      <div class="ck-morse" style="margin-bottom:10px">${letters || cph.morse}</div>
+      <div style="display:flex;gap:8px"><input class="ck-cipher-in" id="ck-pop-cipher-in" maxlength="14" placeholder="${cph.len} букв" autocomplete="off" spellcheck="false" enterkeyhint="done" autocapitalize="characters"/><button class="ck-card__buy" id="ck-pop-cipher-go" style="justify-content:center">Разгадать</button></div>
+      <button id="ck-pop-ok" style="background:rgba(255,255,255,.07);color:var(--ink);border-color:var(--line)">Закрыть</button>`;
+    pop.classList.add('on');
+    const inp = pop.querySelector('#ck-pop-cipher-in');
+    const submit = () => { pop.classList.remove('on'); claimCipher(inp.value); };
+    pop.querySelector('#ck-pop-cipher-go').onclick = submit;
+    inp.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
+    pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
   }
   function startGame(g) { if (g === 'memory') openMemory(); else if (g === 'tower') openTower(); else if (g === 'gems') openGems(); else openQuiz(g); }
   function openGamesHub() { if (!ov) return; window.haptic && window.haptic('light'); ov.querySelector('#ck-games').classList.add('on'); renderGames(); }
