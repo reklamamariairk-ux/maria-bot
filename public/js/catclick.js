@@ -832,6 +832,10 @@
       .ck-cal-day.done{opacity:.5}.ck-cal-day.today{background:rgba(238,191,82,.16);border-color:rgba(238,191,82,.55)}
       .ck-daily.done{background:var(--panel);color:var(--muted);border-color:var(--line);box-shadow:none}
       /* Тур Василия (обучение новичка, 31.07): спотлайт-дырка + пузырь-проводник */
+      /* Пульс готового клейма (комбо собрано) — мягкое золотое дыхание кнопки */
+      .ck-claim-pulse{animation:ckClaimPulse 1.6s ease-in-out infinite}
+      @keyframes ckClaimPulse{0%,100%{box-shadow:0 0 0 0 rgba(240,194,78,.55)}50%{box-shadow:0 0 0 9px rgba(240,194,78,0)}}
+      @media (prefers-reduced-motion:reduce){.ck-claim-pulse{animation:none}}
       /* Тур живёт в document.body (поверх пет-оверлея) — переменные бренда объявляем
          на себе, снаружи .ck-ov они не каскадируются (баг «тёмный текст на тёмном») */
       .ck-tour{--gold:#f0c24e;--gold-l:#ffe39c;--cream:#eee7dd;--ink:#f1ece6;--muted:#9aa0ab;--line:rgba(255,255,255,.14);position:fixed;inset:0;z-index:10060;pointer-events:none;font-family:'Nunito','Mulish',system-ui,-apple-system,sans-serif}
@@ -1028,7 +1032,7 @@
         <button class="ck-nav__b" data-tab="up">${ICON.bolt(21)}Прокачка</button>
         <button class="ck-nav__b" data-tab="home">${ICON.paw(21)}Дом</button>
         <button class="ck-nav__b" data-tab="dove">${ICON.dove(21)}Голуби<span class="ck-badge" id="ck-dove-badge" hidden></span></button>
-        <button class="ck-nav__b" data-tab="tasks">${ICON.gift(21)}Призы</button>
+        <button class="ck-nav__b" data-tab="tasks">${ICON.gift(21)}Призы<span class="ck-badge" id="ck-tasks-badge" hidden></span></button>
         <button class="ck-nav__b" data-tab="top">${ICON.trophy(21)}Рейтинг</button>
       </div>`;
     document.body.appendChild(ov);
@@ -1667,6 +1671,13 @@
     const pBadge = st.prestige > 0 ? ` <span class="ck-pbadge">${ICON.star(12)} Престиж ${st.prestige}</span>` : '';
     ov.querySelector('#ck-lvl').innerHTML = `Уровень ${lg.level} · ${lg.name}${pBadge}`;
     const prof = `${COIN(13)} +${fmt(st.profitPerHour)} / час`; ov.querySelector('#ck-prof').innerHTML = prof; ov.querySelector('#ck-prof2').innerHTML = prof;
+    // бейдж «Призы»: сколько бесплатного ГОТОВО забрать прямо сейчас (сундук, комбо) —
+    // дискаверабилити ежедневок с любой вкладки (аудит: вкладка без индикатора)
+    const tb = ov.querySelector('#ck-tasks-badge');
+    if (tb) {
+      const ready = (st.chestAvailable ? 1 : 0) + ((st.combo && st.combo.complete && !st.combo.claimed) ? 1 : 0);
+      if (ready > 0) { tb.textContent = String(ready); tb.hidden = false; } else tb.hidden = true;
+    }
     // ивент-баннер (×N монеты)
     const evb = ov.querySelector('#ck-event');
     if (st.event && st.event.active) { evb.hidden = false; evb.innerHTML = `${ICON.bolt(15)} <b>${st.event.name}</b> · до конца ${fmtDur(st.event.endsTs - Date.now())}`; }
@@ -1995,7 +2006,7 @@
       else if (!authed()) btn = `<button class="ck-card__buy" disabled>Войти</button>`;
       else if (!m.reached) btn = `<button class="ck-card__buy" disabled>${ICON.lock(14)} Рано</button>`;
       else if (pv) btn = `<button class="ck-card__buy" data-ms="${m.id}">Забрать</button>`;
-      else btn = `<button class="ck-card__buy" data-ms="phone">Телефон</button>`;
+      else btn = `<button class="ck-card__buy" data-ms="phone">Подтвердить номер</button>`;
       return `<div class="ck-card"${m.granted ? ' style="opacity:.55"' : ''}><div class="ck-card__ic">${m.kind === 'points' ? ICON.star(26) : ICON.gift(26)}</div><div class="ck-card__b"><div class="ck-card__n">${m.title}</div><div class="ck-card__s">${rewardLabel}</div></div>${btn}</div>`;
     }).join('');
   }
@@ -2038,7 +2049,7 @@
     const comboBtn = cmb.claimed
       ? `<button class="ck-card__buy" disabled style="width:100%;justify-content:center">✓ Забрано сегодня</button>`
       : cmb.complete
-        ? `<button class="ck-card__buy" id="ck-combo-claim" style="width:100%;justify-content:center">Забрать +${fmt(cmb.reward)} ${COIN(14)}</button>`
+        ? `<button class="ck-card__buy ck-claim-pulse" id="ck-combo-claim" style="width:100%;justify-content:center">Забрать +${fmt(cmb.reward)} ${COIN(14)}</button>`
         : `<button class="ck-card__buy" disabled style="width:100%;justify-content:center">Собрано ${cmb.hits.length}/3 — прокачай их в «Прокачке»</button>`;
     const comboCard = `<div class="ck-card ck-bonus">
       <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.star(26)}</div><div class="ck-card__b"><div class="ck-card__n">Комбо дня</div><div class="ck-card__s">Прокачай эти 3 бизнеса сегодня · +${fmt(cmb.reward)} ${COIN(13)}</div></div></div>
