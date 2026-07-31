@@ -1098,7 +1098,7 @@
         b.onclick = () => {
           // Полный перепросмотр онбординга: welcome-карта + все 6 туров + коучи
           try {
-            ['cat', 'up', 'dove', 'tasks', 'top', 'home'].forEach(k => localStorage.removeItem('ck_tour2_' + k));
+            ['cat', 'up', 'dove', 'col', 'tasks', 'top', 'home'].forEach(k => localStorage.removeItem('ck_tour2_' + k));
             localStorage.removeItem('ck_tut_v1');
             localStorage.removeItem('ck_dove_col_seen');
             Object.keys(localStorage).filter(k => k.indexOf('ck_coach_') === 0).forEach(k => localStorage.removeItem(k));
@@ -1128,6 +1128,10 @@
     if (help) help.style.display = seg === 'help' ? '' : 'none';
     if (col) col.style.display = seg === 'col' ? '' : 'none';
     if (seg === 'col' && !doveColMounted && window.CatDove) { doveColMounted = true; window.CatDove.mount(col, api); }
+    // мини-тур альбома пород при первом входе новичка в сегмент (контент catdove
+    // грузится асинхронно — задержка; якорь ещё не отрисован → мягкий выход, покажется в след. раз)
+    if (seg === 'col' && tourActive && tourKind === 'dove') endTour(false); // обзорный тур уступает туру альбома
+    if (seg === 'col' && freshPlayer() && !tourSeen('col')) setTimeout(() => { if (tab === 'dove' && doveSeg === 'col' && !tourActive) startTour('col'); }, 1100);
     if (seg === 'col') { // открыл коллекцию — гасим «новинку» на сегменте
       try { localStorage.setItem('ck_dove_col_seen', '1'); } catch (_) {}
       const cb = ov.querySelector('#ck-dove-seg .ck-seg__b[data-seg="col"]'); if (cb) cb.classList.remove('ck-seg__b--new');
@@ -2200,6 +2204,13 @@
       { text: '«Рейтинг»: топ недели по заработанным монетам, в воскресенье сезон закрывается и раздаются места', anchor: '#ck-myrank', anchorFn: function () { return ov.querySelector('#ck-myrank') || ov.querySelector('#ck-toplist'); }, pos: 'bottom' },
       { text: 'Команды: монеты всех игроков команды складываются — выбери свою и тащи её в топ', anchor: '#ck-toplist', anchorFn: function () { return ov.querySelector('#ck-toplist .ck-cats') || ov.querySelector('#ck-toplist'); }, pos: 'bottom' },
       { text: 'Пригласи друга — обоим монеты: тебе +5 000, ему +2 500 на старт', anchor: '#ck-toplist', pos: 'bottom' },
+    ],
+    col: [
+      { text: 'Альбом пород: собери все 16! Породы выпадают за комбо дня, мини-игры, сундук и покупки', anchor: '#ck-dove-col .cd-summary', pos: 'bottom' },
+      { text: 'Породы собраны в сеты. Собери четвёрку — над ней появится кнопка «Забрать приз»', anchor: '#ck-dove-col .cd-sethead', pos: 'bottom' },
+      { text: '«Гонка стаи»: раз в неделю заяви голубя через отборочный полёт — и следи за таблицей дивизиона', anchor: '#ck-dove-col .cd-racehero', pos: 'bottom' },
+      { text: 'А «Драг-заезд» — гонка прямо сейчас: прогрей мотор, поймай старт. Можно тренироваться или ставить монеты', anchor: '#cd-drag-enter', pos: 'bottom' },
+      { text: 'Обмены и почта: меняйся дублями с другими игроками и отправляй голубей друзьям', anchor: '#ck-dove-col .cd-navrow', pos: 'bottom' },
     ],
     home: [
       { text: 'Мой дом! Наверху — мои потребности: сытость, настроение и сон. Не запускай их', anchor: '#pet-needs', pos: 'bottom', root: 'doc' },
