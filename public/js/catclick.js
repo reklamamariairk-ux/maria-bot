@@ -2218,6 +2218,8 @@
   function endTour(done) {
     if (!tourActive) return;
     tourActive = false;
+    // ушёл на последнем шаге — тур по сути пройден, не повторяем целиком
+    if (!done && TOURS[tourKind] && tourStep >= TOURS[tourKind].length - 1) done = true;
     if (done) tourMark(tourKind);
     tourKind = null;
     window.removeEventListener('resize', tourReposition);
