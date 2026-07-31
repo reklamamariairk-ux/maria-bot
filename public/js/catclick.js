@@ -2346,6 +2346,18 @@
     setTab('cat'); renderAll(); spawnSparks(); applySeason(); scheduleBonus(); loadDoveBadge();
     if (loadNetFail) flashMsg('Нет связи — офлайн-режим, прогресс синхронизируется позже'); // авторизованный получил гостевой фолбэк — не молчать про «пропавший» баланс
     let _seenTut = true; try { _seenTut = !!localStorage.getItem('ck_tut_v1'); } catch (e) {}
+    // Метки обучения живут в УСТРОЙСТВЕ, а аккаунт — на сервере: девственный аккаунт
+    // (0 монет, 0 тапов) на устройстве со старыми метками = другой человек или сброс —
+    // переигрываем онбординг целиком (welcome + туры + коучи).
+    if (authed() && st && Number(st.totalEarned || 0) === 0 && Number(st.taps || 0) === 0 && _seenTut) {
+      try {
+        localStorage.removeItem('ck_tut_v1');
+        ['cat', 'up', 'dove', 'col', 'tasks', 'top', 'home'].forEach(k => localStorage.removeItem('ck_tour2_' + k));
+        Object.keys(localStorage).filter(k => k.indexOf('ck_coach_') === 0).forEach(k => localStorage.removeItem(k));
+      } catch (e) {}
+      coachSeenMem.clear();
+      _seenTut = false;
+    }
     if (!_seenTut) showTutorial();
     else if (!tourSeen('cat') && st && Number(st.taps || 0) < 30) {
       // welcome видел, но тур главной не проходил и игрок ещё свежий (пришёл через
