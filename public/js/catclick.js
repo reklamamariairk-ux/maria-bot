@@ -832,7 +832,9 @@
       .ck-cal-day.done{opacity:.5}.ck-cal-day.today{background:rgba(238,191,82,.16);border-color:rgba(238,191,82,.55)}
       .ck-daily.done{background:var(--panel);color:var(--muted);border-color:var(--line);box-shadow:none}
       /* Тур Василия (обучение новичка, 31.07): спотлайт-дырка + пузырь-проводник */
-      .ck-tour{position:fixed;inset:0;z-index:10060;pointer-events:none}
+      /* Тур живёт в document.body (поверх пет-оверлея) — переменные бренда объявляем
+         на себе, снаружи .ck-ov они не каскадируются (баг «тёмный текст на тёмном») */
+      .ck-tour{--gold:#f0c24e;--gold-l:#ffe39c;--cream:#eee7dd;--ink:#f1ece6;--muted:#9aa0ab;--line:rgba(255,255,255,.14);position:fixed;inset:0;z-index:10060;pointer-events:none}
       .ck-tour__hole{position:fixed;border-radius:16px;box-shadow:0 0 0 9999px rgba(10,6,5,.72);border:2px solid var(--gold);transition:left .28s ease,top .28s ease,width .28s ease,height .28s ease}
       .ck-tour__bub{position:fixed;pointer-events:auto;background:linear-gradient(180deg,#2e1119,#1d0a11);border:1px solid var(--gold);border-radius:18px;padding:14px;box-shadow:0 16px 44px rgba(0,0,0,.55);transition:top .28s ease,left .28s ease}
       .ck-tour__head{display:flex;gap:10px;align-items:flex-start}
