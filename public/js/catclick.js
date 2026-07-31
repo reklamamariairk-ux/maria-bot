@@ -2146,7 +2146,7 @@
     { text: 'Это энергия: тап стоит единичку, сама восстанавливается. Кончилась — передохни в других вкладках', anchor: '.ck-energy', pos: 'top' },
     { text: 'Твои монеты и доход в час. Монеты тратим на бизнесы, тюнинг голубей и ставки', anchor: '.ck-bal', pos: 'bottom' },
     { text: 'Самое важное — «Прокачка»: бизнесы приносят монеты сами, даже офлайн. Открой её!', anchor: '[data-tab="up"]', pos: 'top', wait: 'tab:up' },
-    { text: 'Вот «Пекарня»: 300 монет — и +30 в час навсегда. Натапай и заведи первый бизнес', anchor: '#ck-uplist', anchorFn: () => { const b = ov.querySelector('[data-id="bakery"]'); return (b && b.closest('.ck-card')) || b; }, pos: 'bottom' },
+    { text: 'Вот «Пекарня»: 300 монет — и +30 в час навсегда. Натапай и заведи первый бизнес', anchor: '#ck-uplist', anchorFn: () => { const b = ov.querySelector('[data-id="bakery"]'); return (b && (b.closest('.ck-biz') || b.closest('.ck-card'))) || b; }, pos: 'bottom' },
     { text: '«Голуби»: помощники приходят за бизнесы, а породы выпадают за игру — собирай сеты, меняйся и гоняй в заездах', anchor: '[data-tab="dove"]', pos: 'top' },
     { text: '«Призы» — сюда каждый день: сундук, мини-игры, комбо дня и слово дня', anchor: '[data-tab="tasks"]', pos: 'top' },
     { text: 'В «Доме» корми и гладь меня. За заботу тоже капают монеты, между прочим', anchor: '[data-tab="home"]', pos: 'top' },
@@ -2186,6 +2186,8 @@
   function tourShow() {
     const s = TOUR[tourStep];
     if (!s) { endTour(); return; }
+    // финальный шаг (чеклист/кот) показываем на «Котике» — иначе анкор скрыт чужой вкладкой
+    if (tourStep === TOUR.length - 1 && tab !== 'cat') setTab('cat');
     const t = tourEl.querySelector('#ck-tour-t');
     t.textContent = s.text;
     const next = tourEl.querySelector('#ck-tour-next');
