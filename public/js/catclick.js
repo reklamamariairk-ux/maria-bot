@@ -832,7 +832,7 @@
       .ck-cal-day.done{opacity:.5}.ck-cal-day.today{background:rgba(238,191,82,.16);border-color:rgba(238,191,82,.55)}
       .ck-daily.done{background:var(--panel);color:var(--muted);border-color:var(--line);box-shadow:none}
       /* Тур Василия (обучение новичка, 31.07): спотлайт-дырка + пузырь-проводник */
-      .ck-tour{position:fixed;inset:0;z-index:44;pointer-events:none}
+      .ck-tour{position:fixed;inset:0;z-index:10060;pointer-events:none}
       .ck-tour__hole{position:fixed;border-radius:16px;box-shadow:0 0 0 9999px rgba(10,6,5,.72);border:2px solid var(--gold);transition:left .28s ease,top .28s ease,width .28s ease,height .28s ease}
       .ck-tour__bub{position:fixed;pointer-events:auto;background:linear-gradient(180deg,#2e1119,#1d0a11);border:1px solid var(--gold);border-radius:18px;padding:14px;box-shadow:0 16px 44px rgba(0,0,0,.55);transition:top .28s ease,left .28s ease}
       .ck-tour__head{display:flex;gap:10px;align-items:flex-start}
@@ -1093,7 +1093,7 @@
         b.className = 'ck-card__buy';
         b.style.cssText = 'width:100%;justify-content:center;margin:2px 0 12px';
         b.innerHTML = `${ICON.paw(15)} Пройти обучение с Василием`;
-        b.onclick = () => { try { localStorage.removeItem('ck_tour_v1'); } catch (e) {} closeGuide(); if (tab !== 'cat') setTab('cat'); setTimeout(startTour, 250); };
+        b.onclick = () => { try { ['cat', 'up', 'dove', 'tasks', 'top', 'home'].forEach(k => localStorage.removeItem('ck_tour2_' + k)); } catch (e) {} closeGuide(); if (tab !== 'cat') setTab('cat'); setTimeout(() => startTour('cat'), 250); };
         body.prepend(b);
       }
     }
@@ -1144,7 +1144,14 @@
   function setTab(t) {
     closeActiveCoach();
     const pop = ov && ov.querySelector('#ck-pop'); if (pop) pop.classList.remove('on'); // попап не должен висеть над чужой вкладкой
-    if (t === 'home') { window.haptic && window.haptic('light'); try { window.catPetOpen && window.catPetOpen(); } catch (_) {} return; }
+    if (t === 'home') {
+      window.haptic && window.haptic('light');
+      try { window.catPetOpen && window.catPetOpen(); } catch (_) {}
+      // тур «Дома» — поверх пет-оверлея, при первом входе новичка
+      if (tourActive) endTour(false);
+      if (freshPlayer() && !tourSeen('home')) setTimeout(() => { if (!tourActive) startTour('home'); }, 900);
+      return;
+    }
     window.haptic && window.haptic('selection');
     tab = t;
     ov.querySelector('#ck-scr-cat').classList.toggle('on', t === 'cat');
@@ -2135,28 +2142,64 @@
     raf = requestAnimationFrame(loop);
   }
 
-  // ── Интерактивный тур Василия (спека 2026-07-31-guided-tour): спотлайт + пузырь,
-  // два шага ждут реальное действие (5 тапов / переход в «Прокачку»). Мягкий тур:
-  // клики проходят сквозь затемнение, «Пропустить» всегда доступен. ─────────────
-  let tourActive = false, tourStep = 0, tourTapCount = 0, tourEl = null;
-  const tourDone = () => { try { return localStorage.getItem('ck_tour_v1') === 'done'; } catch (e) { return true; } };
-  const TOUR = [
-    { text: 'Мур! Я Василий — будущий император выпечки. Держись меня, всё покажу', anchor: '#ck-catwrap', pos: 'top' },
-    { text: 'Тапай по мне — каждый тап приносит монету. Ну-ка, пять тапов!', anchor: '#ck-catwrap', pos: 'top', wait: 'taps' },
-    { text: 'Это энергия: тап стоит единичку, сама восстанавливается. Кончилась — передохни в других вкладках', anchor: '.ck-energy', pos: 'top' },
-    { text: 'Твои монеты и доход в час. Монеты тратим на бизнесы, тюнинг голубей и ставки', anchor: '.ck-bal', pos: 'bottom' },
-    { text: 'Самое важное — «Прокачка»: бизнесы приносят монеты сами, даже офлайн. Открой её!', anchor: '[data-tab="up"]', pos: 'top', wait: 'tab:up' },
-    { text: 'Вот «Пекарня»: 300 монет — и +30 в час навсегда. Натапай и заведи первый бизнес', anchor: '#ck-uplist', anchorFn: () => { const b = ov.querySelector('[data-id="bakery"]'); return (b && (b.closest('.ck-biz') || b.closest('.ck-card'))) || b; }, pos: 'bottom' },
-    { text: '«Голуби»: помощники приходят за бизнесы, а породы выпадают за игру — собирай сеты, меняйся и гоняй в заездах', anchor: '[data-tab="dove"]', pos: 'top' },
-    { text: '«Призы» — сюда каждый день: сундук, мини-игры, комбо дня и слово дня', anchor: '[data-tab="tasks"]', pos: 'top' },
-    { text: 'В «Доме» корми и гладь меня. За заботу тоже капают монеты, между прочим', anchor: '[data-tab="home"]', pos: 'top' },
-    { text: '«Рейтинг» — топ недели и команды. Обгонишь всех — узнают всей пекарней', anchor: '[data-tab="top"]', pos: 'top' },
-    { text: 'И держи чеклист «Первый день» — за первые шаги плачу монетами. Удачи, партнёр!', anchor: '#ck-ftue', anchorFn: () => ov.querySelector('#ck-ftue:not([hidden])') || ov.querySelector('#ck-catwrap'), pos: 'bottom' },
-  ];
-  function startTour() {
-    if (tourActive || tourDone() || !ov) return;
+  // ── Повкладочное обучение (спека 2026-07-31-guided-tour, v2 по фидбеку юзера):
+  // у КАЖДОЙ вкладки свой мини-тур, запускается при первом входе новичка туда.
+  // Спотлайт-дырка + пузырь Василия; клики проходят сквозь затемнение (мягкий тур).
+  // Прогресс: ck_tour2_<kind>; свежесть игрока — totalEarned < 50k. Тур «Дома» живёт
+  // поверх пет-оверлея (z 9999) → тур-элемент в document.body с z выше.
+  let tourActive = false, tourKind = null, tourStep = 0, tourTapCount = 0, tourEl = null;
+  const tourSeen = (k) => { try { return localStorage.getItem('ck_tour2_' + k) === 'done'; } catch (e) { return true; } };
+  const tourMark = (k) => { try { localStorage.setItem('ck_tour2_' + k, 'done'); } catch (e) {} };
+  const freshPlayer = () => st && Number(st.totalEarned || 0) < 50000;
+  const TOURS = {
+    cat: [
+      { text: 'Мур! Я Василий — будущий император выпечки. Это мой главный зал, покажу что тут к чему', anchor: '#ck-catwrap', pos: 'top' },
+      { text: 'Тапай по мне — каждый тап приносит монету. Ну-ка, пять тапов!', anchor: '#ck-catwrap', pos: 'top', wait: 'taps' },
+      { text: 'Кстати: каждый 40-й тап — «Сладкий», сразу ×8 монет. Лови золотые вспышки!', anchor: '#ck-catwrap', pos: 'top' },
+      { text: 'Энергия: тап стоит единичку, сама восстанавливается. Кончилась — загляни в другие вкладки', anchor: '.ck-energy', pos: 'top' },
+      { text: 'Бусты: Турбо ×5 на 20 секунд и мгновенная энергия — бесплатные, по кулдауну', anchor: '.ck-boosts', pos: 'top' },
+      { text: 'Твои монеты и доход в час. Монеты тратим на бизнесы, тюнинг голубей и ставки', anchor: '.ck-bal', pos: 'bottom' },
+      { text: 'Полоска карьеры: все заработанные монеты двигают меня по 19 уровням — от стажёра до Императора выпечки', anchor: '.ck-progwrap', pos: 'bottom' },
+      { text: '«Награда дня»: заходи каждый день — стрик растёт, награды тоже', anchor: '#ck-daily', anchorFn: function () { return ov.querySelector('#ck-daily:not([style*="none"])') || ov.querySelector('.ck-progwrap'); }, pos: 'bottom' },
+      { text: 'И чеклист «Первый день» — за первые шаги плачу монетами. А теперь загляни во вкладки внизу: в каждой расскажу, что там', anchor: '#ck-ftue', anchorFn: function () { return ov.querySelector('#ck-ftue:not([hidden])') || ov.querySelector('#ck-catwrap'); }, pos: 'bottom' },
+    ],
+    up: [
+      { text: 'Это «Прокачка» — сердце дохода. Наверху бусты: Мультитап (+1 за тап) и Запас энергии', anchor: '#ck-uplist', anchorFn: function () { return ov.querySelector('#ck-uplist .ck-card'); }, pos: 'bottom' },
+      { text: 'Бизнесы приносят монеты САМИ, даже когда ты офлайн. «Пекарня» за 300 — отличный первый шаг', anchor: '#ck-uplist', anchorFn: function () { const b = ov.querySelector('[data-id="bakery"]'); return (b && (b.closest('.ck-biz') || b.closest('.ck-card'))) || ov.querySelector('#ck-uplist'); }, pos: 'bottom' },
+      { text: 'Четыре направления: Производство, Маркетинг, Персонал, Сеть. За каждый заведённый бизнес прилетает голубь-помощник', anchor: '.ck-cats', pos: 'bottom' },
+      { text: 'Чем выше уровень бизнеса, тем дороже следующий — но и доход растёт. Копи и вкладывай!', anchor: '#ck-uplist', anchorFn: function () { return ov.querySelector('#ck-uplist .ck-biz') || ov.querySelector('#ck-uplist'); }, pos: 'bottom' },
+    ],
+    dove: [
+      { text: 'Голубятня! Тут два вида птиц — смотри на подписи под кнопками', anchor: '#ck-dove-seg', pos: 'bottom' },
+      { text: '«Помощники» приходят сами за бизнесы из «Прокачки» — это витрина твоего прогресса. Тапни любого — расскажу про него', anchor: '#ck-dovelist', pos: 'top' },
+      { text: 'А в «Альбоме пород» птицы ВЫПАДАЮТ за игру: комбо, мини-игры, сундук. Собирай сеты — за полный сет приз', anchor: '#ck-dove-seg', anchorFn: function () { return ov.querySelector('#ck-dove-seg [data-seg="col"]'); }, pos: 'bottom' },
+      { text: 'Там же «Гонка стаи» (заявка раз в неделю, отборочный полёт) и драг-заезды со ставками. Мои голуби — быстрейшие!', anchor: '#ck-dove-seg', anchorFn: function () { return ov.querySelector('#ck-dove-seg [data-seg="col"]'); }, pos: 'bottom' },
+    ],
+    tasks: [
+      { text: '«Призы» — сюда каждый день! Сундук удачи: монеты, турбо или джекпот', anchor: '#ck-taskslist', anchorFn: function () { return ov.querySelectorAll('#ck-taskslist .ck-bonus')[0]; }, pos: 'bottom' },
+      { text: 'Мини-игры — до 7 партий в день, монеты за каждую', anchor: '#ck-taskslist', anchorFn: function () { return ov.querySelectorAll('#ck-taskslist .ck-bonus')[1]; }, pos: 'bottom' },
+      { text: '«Комбо дня»: прокачай 3 названных бизнеса сегодня — +12 000. Меняются каждый день', anchor: '#ck-taskslist', anchorFn: function () { return ov.querySelectorAll('#ck-taskslist .ck-bonus')[2]; }, pos: 'top' },
+      { text: '«Слово дня»: собери слово из букв — +3 000. Подсказка: это всегда что-то вкусное', anchor: '#ck-taskslist', anchorFn: function () { return ov.querySelectorAll('#ck-taskslist .ck-bonus')[3]; }, pos: 'top' },
+      { text: 'Ниже — награды за прогресс и достижения. Заглядывай, там копятся подарки', anchor: '#ck-taskslist', pos: 'top' },
+    ],
+    top: [
+      { text: '«Рейтинг»: топ недели по заработанным монетам, в воскресенье сезон закрывается и раздаются места', anchor: '#ck-myrank', anchorFn: function () { return ov.querySelector('#ck-myrank') || ov.querySelector('#ck-toplist'); }, pos: 'bottom' },
+      { text: 'Команды: монеты всех игроков команды складываются — выбери свою и тащи её в топ', anchor: '#ck-toplist', anchorFn: function () { return ov.querySelector('#ck-toplist .ck-cats') || ov.querySelector('#ck-toplist'); }, pos: 'bottom' },
+      { text: 'Пригласи друга — обоим монеты: тебе +5 000, ему +2 500 на старт', anchor: '#ck-toplist', pos: 'bottom' },
+    ],
+    home: [
+      { text: 'Мой дом! Наверху — мои потребности: сытость, настроение и сон. Не запускай их', anchor: '#pet-needs', pos: 'bottom', root: 'doc' },
+      { text: 'Большая кнопка — действие комнаты: покорми, уложи спать или поиграй со мной', anchor: '#pet-do', pos: 'top', root: 'doc' },
+      { text: 'Комнаты внизу: Кухня, Спальня, Игровая и Двор — в каждой своё занятие', anchor: '#pet-nav', pos: 'top', root: 'doc' },
+      { text: 'А тут гардероб — наряжай меня в шапки. За заботу капают монеты, между прочим!', anchor: '#pet-shop-btn', pos: 'bottom', root: 'doc' },
+    ],
+  };
+  const TAB_TOURS = { cat: 'cat', up: 'up', dove: 'dove', tasks: 'tasks', top: 'top' };
+  function tourRoot(s) { return (s && s.root === 'doc') ? document : ov; }
+  function startTour(kind) {
+    if (tourActive || !ov || !TOURS[kind] || tourSeen(kind)) return;
     closeActiveCoach();
-    tourActive = true; tourStep = 0; tourTapCount = 0;
+    tourActive = true; tourKind = kind; tourStep = 0; tourTapCount = 0;
     tourEl = document.createElement('div');
     tourEl.className = 'ck-tour';
     tourEl.innerHTML = `<div class="ck-tour__hole" id="ck-tour-hole"></div>
@@ -2164,41 +2207,45 @@
         <div class="ck-tour__head"><img src="/assets/images/cat-mascot-cut.png" alt=""><div class="ck-tour__t" id="ck-tour-t"></div></div>
         <div class="ck-tour__row"><button class="ck-tour__skip" id="ck-tour-skip" type="button">Пропустить</button><button class="ck-tour__next" id="ck-tour-next" type="button">Дальше</button></div>
       </div>`;
-    ov.appendChild(tourEl);
-    tourEl.querySelector('#ck-tour-skip').onclick = endTour;
+    document.body.appendChild(tourEl);
+    tourEl.querySelector('#ck-tour-skip').onclick = () => endTour(true);
     tourEl.querySelector('#ck-tour-next').onclick = () => tourAdvance('btn');
     window.addEventListener('resize', tourReposition);
     tourShow();
   }
-  function endTour() {
+  // done=true — тур пройден/пропущен (больше не показывать); false — мягкий выход
+  // (ушёл со вкладки/якорь пропал) — покажется заново при следующем входе.
+  function endTour(done) {
     if (!tourActive) return;
     tourActive = false;
-    try { localStorage.setItem('ck_tour_v1', 'done'); } catch (e) {}
+    if (done) tourMark(tourKind);
+    tourKind = null;
     window.removeEventListener('resize', tourReposition);
     if (tourEl) { tourEl.remove(); tourEl = null; }
-    if (tab !== 'cat') setTab('cat');
     window.haptic && window.haptic('light');
   }
   function tourAnchor(s) {
-    const el = (s.anchorFn && s.anchorFn()) || (s.anchor && ov.querySelector(s.anchor));
-    return (el && el.offsetParent !== null) ? el : ov.querySelector('#ck-catwrap');
+    const root = tourRoot(s);
+    const el = (s.anchorFn && s.anchorFn()) || (s.anchor && root.querySelector(s.anchor));
+    if (el && el.offsetParent !== null) return el;
+    if (tourKind === 'cat') return ov.querySelector('#ck-catwrap');
+    return null; // якорь пропал (закрыли оверлей/вкладку) — мягко выходим
   }
   function tourShow() {
-    const s = TOUR[tourStep];
-    if (!s) { endTour(); return; }
-    // финальный шаг (чеклист/кот) показываем на «Котике» — иначе анкор скрыт чужой вкладкой
-    if (tourStep === TOUR.length - 1 && tab !== 'cat') setTab('cat');
-    const t = tourEl.querySelector('#ck-tour-t');
-    t.textContent = s.text;
-    const next = tourEl.querySelector('#ck-tour-next');
-    next.style.display = s.wait ? 'none' : ''; // шаги-действия идут дальше сами
+    const steps = TOURS[tourKind];
+    const s = steps && steps[tourStep];
+    if (!s) { endTour(true); return; }
+    const a = tourAnchor(s);
+    if (!a) { endTour(false); return; }
+    tourEl.querySelector('#ck-tour-t').textContent = s.text;
+    tourEl.querySelector('#ck-tour-next').style.display = s.wait ? 'none' : '';
     window.haptic && window.haptic('light');
     tourReposition();
   }
   function tourReposition() {
     if (!tourActive || !tourEl) return;
-    const s = TOUR[tourStep]; if (!s) return;
-    const a = tourAnchor(s);
+    const s = TOURS[tourKind] && TOURS[tourKind][tourStep]; if (!s) return;
+    const a = tourAnchor(s); if (!a) { endTour(false); return; }
     const r = a.getBoundingClientRect();
     const hole = tourEl.querySelector('#ck-tour-hole');
     const pad = 8;
@@ -2220,23 +2267,30 @@
   }
   function tourAdvance(kind) {
     if (!tourActive) return;
-    const s = TOUR[tourStep];
-    if (s && s.wait && kind === 'btn') return; // wait-шаг двигают только события
+    const s = TOURS[tourKind][tourStep];
+    if (s && s.wait && kind === 'btn') return;
     tourStep++;
-    if (tourStep >= TOUR.length) { endTour(); return; }
     tourShow();
   }
-  // события для wait-шагов: тапы и смена вкладки (зовутся из onTap/setTab)
   function tourOnTap() {
     if (!tourActive) return;
-    const s = TOUR[tourStep];
+    const s = TOURS[tourKind] && TOURS[tourKind][tourStep];
     if (s && s.wait === 'taps' && ++tourTapCount >= 5) tourAdvance('event');
   }
+  // смена вкладки: активный тур чужой вкладки мягко закрываем и, если у новой есть
+  // свой непройденный тур — запускаем его (после отрисовки вкладки)
   function tourOnTab(t) {
-    if (!tourActive) return;
-    const s = TOUR[tourStep];
-    if (s && s.wait === 'tab:' + t) setTimeout(() => tourAdvance('event'), 350); // дать вкладке отрисоваться
-    else tourReposition(); // ушёл в сторону — спотлайт остаётся на своём шаге
+    if (tourActive) {
+      if (TAB_TOURS[t] === tourKind) { tourReposition(); return; }
+      endTour(false);
+    }
+    maybeTabTour(t);
+  }
+  function maybeTabTour(t) {
+    const kind = TAB_TOURS[t];
+    if (!kind || kind === 'cat') return; // cat-тур стартует из welcome/open()
+    if (!freshPlayer() || tourSeen(kind)) return;
+    setTimeout(() => { if (tab === t && !tourActive) startTour(kind); }, 500);
   }
 
   function showTutorial() {
@@ -2252,7 +2306,7 @@
       <button class="ck-tut__go" id="ck-tut-go">Поехали!</button>
       <button class="ck-tut__guide" id="ck-tut-guide" type="button">Полный гайд — как всё устроено</button></div>`;
     ov.appendChild(t);
-    t.querySelector('#ck-tut-go').onclick = () => { try { localStorage.setItem('ck_tut_v1', '1'); } catch (e) {} t.remove(); window.haptic && window.haptic('light'); startTour(); };
+    t.querySelector('#ck-tut-go').onclick = () => { try { localStorage.setItem('ck_tut_v1', '1'); } catch (e) {} t.remove(); window.haptic && window.haptic('light'); startTour('cat'); };
     t.querySelector('#ck-tut-guide').onclick = () => { try { localStorage.setItem('ck_tut_v1', '1'); } catch (e) {} t.remove(); window.haptic && window.haptic('light'); openGuide(); };
   }
   async function open() {
@@ -2266,10 +2320,10 @@
     if (loadNetFail) flashMsg('Нет связи — офлайн-режим, прогресс синхронизируется позже'); // авторизованный получил гостевой фолбэк — не молчать про «пропавший» баланс
     let _seenTut = true; try { _seenTut = !!localStorage.getItem('ck_tut_v1'); } catch (e) {}
     if (!_seenTut) showTutorial();
-    else if (!tourDone() && st && Number(st.taps || 0) < 30) {
-      // welcome видел, но тур не проходил и игрок ещё свежий (пришёл через «Полный гайд»
-      // или закрыл игру на середине) — доводим обучение
-      setTimeout(startTour, 600);
+    else if (!tourSeen('cat') && st && Number(st.taps || 0) < 30) {
+      // welcome видел, но тур главной не проходил и игрок ещё свежий (пришёл через
+      // «Полный гайд» или закрыл игру на середине) — доводим обучение
+      setTimeout(() => startTour('cat'), 600);
     } else {
       coach('tap', COACH.tap.t, '#ck-cat', { icon: ICON[COACH.tap.icon](18) });
       if (st.passiveEarned > 0) passivePopup(st.passiveEarned);
