@@ -22,6 +22,16 @@ export const GIFTS_ENABLED = true;
 
 const REGEN_PER_SEC = 1.5;
 const TAP_COST = 1;
+// «Сладкий тап» (вкладка Котик, 31.07): каждый N-й lifetime-тап — крит ×MULT.
+// Детерминирован от счётчика taps → клиент показывает бурст ровно на том же тапе,
+// на котором сервер начисляет (батчи сходятся до монеты). Средний буст тапов ≈ +17%.
+// ⚠️ Зеркало в catclick.js (SWEET_TAP_*) — менять синхронно.
+export const SWEET_TAP_EVERY = 40;
+export const SWEET_TAP_MULT = 8;
+/** Сколько «сладких» (кратных SWEET_TAP_EVERY) тапов попало в батч (oldTaps, oldTaps+can]. */
+export function sweetCritsIn(oldTaps: number, can: number): number {
+  return Math.floor((oldTaps + can) / SWEET_TAP_EVERY) - Math.floor(oldTaps / SWEET_TAP_EVERY);
+}
 const MAX_TAPS_PER_REQ = 600;
 const PASSIVE_CAP_HOURS = 3;
 const TURBO_MULT = 5;
@@ -455,7 +465,9 @@ export async function tapClicker(chatId: number, taps: number): Promise<ClickerS
     const { r, cl } = await refresh(client, chatId);
     const can = Math.min(want, Math.floor(r.energy / TAP_COST));
     const turbo = r.turbo_until && new Date(r.turbo_until).getTime() > Date.now() ? TURBO_MULT : 1;
-    const earned = Math.floor(can * perTapFor(r.multitap_level) * turbo * gainMult(r.prestige));
+    // «Сладкие тапы» в батче: сколько кратных SWEET_TAP_EVERY попало в (oldTaps, oldTaps+can]
+    const crits = sweetCritsIn(Number(r.taps || 0), can);
+    const earned = Math.floor((can + crits * (SWEET_TAP_MULT - 1)) * perTapFor(r.multitap_level) * turbo * gainMult(r.prestige));
     r.energy -= can * TAP_COST; r.balance = Number(r.balance) + earned; r.total_earned = Number(r.total_earned) + earned;
     await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, taps=taps+$4, energy=$5, updated_at=NOW() WHERE chat_id=$1`,
       [chatId, r.balance, r.total_earned, can, r.energy]);

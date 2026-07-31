@@ -338,7 +338,9 @@
   // не обещать неработающее). Бэк (/api/clicker/redeem, CLICKER_REWARDS_ENABLED) жив —
   // при включении Машей вернуть витрину из git-истории (catclick v122).
 
-  let ov, audio, raf, lastTs = 0, pending = 0, syncT = 0, curLevel = 1, tab = 'cat';
+  let ov, audio, raf, lastTs = 0, pending = 0, tapsInflight = 0, syncT = 0, curLevel = 1, tab = 'cat';
+  // «Сладкий тап» — зеркало src/clicker.ts::SWEET_TAP_* (менять синхронно)
+  const SWEET_TAP_EVERY = 40, SWEET_TAP_MULT = 8;
   let renderAcc = 0; // копилка dt для 30fps-капа главного цикла (тап-обработка вне цикла — не влияет)
   const LOOP_FRAME_BUDGET = 1 / 30;
   const MG_MIN_FRAME_MS = 15; // кап рендера экшен-мини-игр ~60fps: на 120–144 Гц не жжём батарею лишними кадрами (геймплей на dt, скорость не меняется)
@@ -549,7 +551,7 @@
       pop.querySelector('#ck-pop-ok').onclick = done;
     } catch (_) {}
   }
-  async function flush() { if (pending <= 0 || !authed()) return; const n = pending; pending = 0; try { const d = await api('/api/clicker/tap', { method: 'POST', body: JSON.stringify({ taps: n }) }); st = d; } catch (_) { pending += n; } }
+  async function flush() { if (pending <= 0 || !authed()) return; const n = pending; pending = 0; tapsInflight += n; try { const d = await api('/api/clicker/tap', { method: 'POST', body: JSON.stringify({ taps: n }) }); st = d; } catch (_) { pending += n; } finally { tapsInflight -= n; } }
 
   async function buy(type, id) {
     return withLock('buy', async () => {
@@ -828,6 +830,12 @@
       .ck-cal-day .d{font-weight:700;color:var(--cream);font-size:11px}.ck-cal-day .a{color:var(--gold-l);font-weight:700;font-variant-numeric:tabular-nums;font-size:9.5px;margin-top:3px}
       .ck-cal-day.done{opacity:.5}.ck-cal-day.today{background:rgba(238,191,82,.16);border-color:rgba(238,191,82,.55)}
       .ck-daily.done{background:var(--panel);color:var(--muted);border-color:var(--line);box-shadow:none}
+      /* «Сладкий тап» + реплики Василия (вкладка Котик, 31.07) */
+      .ck-sweettap{position:absolute;left:50%;top:34%;transform:translate(-50%,-50%) scale(.6);font-family:'Nunito',sans-serif;font-weight:900;font-size:34px;letter-spacing:1px;color:#ffe39c;text-shadow:0 0 18px rgba(240,194,78,.9),0 3px 10px rgba(0,0,0,.55);pointer-events:none;z-index:6;animation:ckSweetPop 1.05s ease-out forwards}
+      @keyframes ckSweetPop{0%{opacity:0;transform:translate(-50%,-50%) scale(.6)}18%{opacity:1;transform:translate(-50%,-50%) scale(1.15)}32%{transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-86%) scale(1)}}
+      .ck-say{position:absolute;left:50%;top:-6px;transform:translateX(-50%) translateY(6px);max-width:78%;background:rgba(20,12,9,.92);border:1px solid var(--line);color:var(--cream);font-weight:700;font-size:13.5px;line-height:1.35;padding:9px 14px;border-radius:14px 14px 14px 4px;box-shadow:0 8px 22px rgba(0,0,0,.4);opacity:0;transition:opacity .22s,transform .22s;pointer-events:none;z-index:6;text-align:center}
+      .ck-say.show{opacity:1;transform:translateX(-50%) translateY(0)}
+      @media (prefers-reduced-motion:reduce){.ck-sweettap{animation:none;opacity:1}}
       /* FTUE «Первый день»: чип-чеклист первой сессии (аудит 30.07) */
       .ck-ftue{margin-top:8px;display:inline-flex;align-items:center;gap:7px;background:rgba(0,0,0,.3);border:1px solid var(--gold);color:var(--gold-l);border-radius:12px;padding:7px 14px;font-size:12.5px;font-weight:800;cursor:pointer}
       .ck-ftue b{color:#9be7a8}
@@ -1133,9 +1141,18 @@
     if (st.energy < 1) { energyEmpty(); return; }
     const mult = turboOn() ? TURBO_MULT : 1;
     const eMult = (st.event && st.event.active) ? st.event.mult : 1; // ивент ×N (зеркало сервера)
-    const gain = Math.floor(st.perTap * mult * (st.prestigeMult || 1) * eMult);
+    // «Сладкий тап»: номер ЭТОГО тапа в lifetime-счётчике (st.taps с последнего синка
+    // + улетевшие inflight + несинканные pending + текущий). Кратен SWEET_TAP_EVERY →
+    // крит ×SWEET_TAP_MULT — сервер начислит ровно столько же в батче (детерминизм).
+    // authed: st.taps (последний синк) + улетевшие + несинканные; гость: st.taps ведётся
+    // локально прямо тут (pending у гостя не флашится и в счёт не входит)
+    const lifetime = (authed() ? Number(st.taps || 0) + tapsInflight + pending : Number(st.taps || 0)) + 1;
+    const sweet = lifetime % SWEET_TAP_EVERY === 0;
+    const gain = Math.floor(st.perTap * mult * (st.prestigeMult || 1) * eMult) * (sweet ? SWEET_TAP_MULT : 1);
     st.energy -= 1; st.balance += gain; st.totalEarned += gain; pending++;
-    if (!authed()) { const s = rawGet(); s.energy -= 1; s.balance += gain; s.totalEarned += gain; s.taps = (s.taps || 0) + 1; rawSave(s); }
+    if (!authed()) { const s = rawGet(); s.energy -= 1; s.balance += gain; s.totalEarned += gain; s.taps = (s.taps || 0) + 1; rawSave(s); st.taps = s.taps; }
+    if (sweet) sweetTapFx(e.clientX, e.clientY, gain);
+    else maybeCatSpeak();
     // комбо
     const now = performance.now(); combo = (now - comboT < 450) ? combo + 1 : 1; comboT = now;
     const cat = ov.querySelector('#ck-cat'); cat.classList.remove('tap'); void cat.offsetWidth; cat.classList.add('tap'); setTimeout(() => cat.classList.remove('tap'), 80);
@@ -1166,6 +1183,58 @@
     if (wrap) { wrap.classList.remove('ck-shake'); void wrap.offsetWidth; wrap.classList.add('ck-shake'); setTimeout(() => wrap.classList.remove('ck-shake'), 440); }
     burstSparks(8 + tier * 4);
   }
+  // ── «Сладкий тап» + реплики Василия (вкладка Котик, 31.07) ────────────────────
+  function sweetTapFx(x, y, gain) {
+    window.haptic && window.haptic('success');
+    sfxReward();
+    flyUp(x, y, `+${fmt(gain)}`, 46);
+    const fx = ov.querySelector('#ck-fx');
+    if (fx) {
+      const d = document.createElement('div');
+      d.className = 'ck-sweettap';
+      d.textContent = 'СЛАДКИЙ ТАП ×' + SWEET_TAP_MULT;
+      fx.appendChild(d);
+      setTimeout(() => d.remove(), 1100);
+    }
+    burstSparks(14);
+    coinShower();
+  }
+  // Реплики — характер кота: редкие (не спамят), только на вкладке «Котик».
+  const CAT_SPEAK = [
+    'Мур! Так и до эклера дотапаем', 'Ещё лапкой! Тесто само не замесится',
+    'Чую запах круассанов…', 'Гур-гур! То есть — тап-тап!',
+    'Голуби говорят, ты сегодня в ударе', 'После работы — по бенто?',
+    'Мои усы чуют премию', 'Крем взбит. Осталось всё остальное',
+    'Вот бы лапы не уставали…', 'Пекарня сама себя не прокачает',
+  ];
+  let speakAt = 0, lastTapAt = 0;
+  function catSay(text, ms) {
+    const wrap = ov.querySelector('#ck-catwrap');
+    if (!wrap) return;
+    const old = wrap.querySelector('.ck-say'); if (old) old.remove();
+    const b = document.createElement('div');
+    b.className = 'ck-say';
+    b.textContent = text;
+    wrap.appendChild(b);
+    requestAnimationFrame(() => b.classList.add('show'));
+    setTimeout(() => { b.classList.remove('show'); setTimeout(() => b.remove(), 260); }, ms || 2300);
+  }
+  function maybeCatSpeak() {
+    lastTapAt = Date.now();
+    if (Date.now() - speakAt < 45000 || Math.random() > 0.02) return;
+    speakAt = Date.now();
+    catSay(CAT_SPEAK[Math.floor(Math.random() * CAT_SPEAK.length)]);
+  }
+  // Простой 50с на вкладке «Котик» → Василий напоминает о себе (не чаще раза в 2 мин)
+  setInterval(() => {
+    if (!ov || tab !== 'cat' || !st) return;
+    const now = Date.now();
+    if (lastTapAt && now - lastTapAt > 50000 && now - speakAt > 120000) {
+      speakAt = now;
+      catSay(CAT_SPEAK[Math.floor(Math.random() * CAT_SPEAK.length)]);
+    }
+  }, 8000);
+
   function burstSparks(n) {
     let rm = false; try { rm = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
     if (rm) return;
