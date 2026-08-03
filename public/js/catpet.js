@@ -226,10 +226,11 @@
     t.classList.add('on');
     clearTimeout(t._tm); t._tm = setTimeout(() => t.classList.remove('on'), 2600);
   }
-  function showCareBonus(bonus, streak) { showToast('Василий рад! Забота ' + streak + ' дн. подряд · +' + bonus + ' монет'); window.haptic?.('success'); }
+  function showCareBonus(bonus, streak) { showToast('Василий рад! Забота ' + streak + ' ' + plu(streak, 'день', 'дня', 'дней') + ' подряд · +' + bonus + ' ' + plu(bonus, 'монета', 'монеты', 'монет')); window.haptic?.('success'); }
   function showSyncFail() { showToast('Нет связи — прогресс не сохранён'); window.haptic?.('error'); }
   async function saveLoc() { if (authed()) { api('/api/pet/location', { method: 'POST', body: JSON.stringify({ location: loc }) }).catch(() => {}); } else { const s = localGet(); s.location = loc; memState = s; lsSet(LS, JSON.stringify(s)); } }
   // Причины отказа бэка (routes/pet.ts) → человеческий текст; нет body = сеть упала
+  const plu = (n, one, few, many) => { const a = Math.abs(n) % 100, b = a % 10; return (a > 10 && a < 20) ? many : (b > 1 && b < 5) ? few : (b === 1) ? one : many; };
   const SHOP_ERR = { not_enough_coins: 'Не хватает монет', already_owned: 'Уже куплено', not_owned: 'Сначала купи эту шляпу' };
   function shopFail(e) {
     const reason = e && e.body && e.body.error;
@@ -400,7 +401,7 @@
       const v = state[n.k] ?? 0; el.style.width = v + '%';
       el.style.background = v > 50 ? 'linear-gradient(90deg,#7ed957,#aee571)' : v > 25 ? 'linear-gradient(90deg,#ffb347,#ffd23f)' : 'linear-gradient(90deg,#ff5a5a,#ff8a8a)';
     });
-    ov.querySelector('#pet-lvl').innerHTML = `Ур. ${state.level} · ${state.coins} монет<br><span style="font-weight:600;opacity:.85">${state.xp}/${state.xpNext} XP</span>`;
+    ov.querySelector('#pet-lvl').innerHTML = `Ур. ${state.level} · ${state.coins} ${plu(state.coins, 'монета', 'монеты', 'монет')}<br><span style="font-weight:600;opacity:.85">${state.xp}/${state.xpNext} XP</span>`;
     const ps = ov.querySelector('#pet-streak');
     if (ps) ps.innerHTML = (state.careStreak > 0)
       ? PIC.pet(14) + ' Забота: ' + state.careStreak + (state.careStreak >= 5 ? ' дней' : ' дн.')
@@ -474,7 +475,7 @@
     ov.querySelector('#pet-shop-grid').innerHTML = SHOP.map(h => {
       const own = owned.includes(h.id), on = eq === h.id;
       let btn;
-      if (!own) btn = `<button class="pet-item__b buy" data-buy="${h.id}" ${(state.coins ?? 0) < h.price ? 'disabled' : ''}>${h.price} монет</button>`;
+      if (!own) btn = `<button class="pet-item__b buy" data-buy="${h.id}" ${(state.coins ?? 0) < h.price ? 'disabled' : ''}>${h.price} ${plu(h.price, 'монета', 'монеты', 'монет')}</button>`;
       else if (on) btn = `<button class="pet-item__b on" data-equip="">Снять</button>`;
       else btn = `<button class="pet-item__b equip" data-equip="${h.id}">Надеть</button>`;
       return `<div class="pet-item"><img src="${A(h.img)}"/><div class="pet-item__n">${h.name}</div>${btn}</div>`;

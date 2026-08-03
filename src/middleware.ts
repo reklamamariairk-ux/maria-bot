@@ -31,8 +31,12 @@ export function rateLimit(maxPerMinute: number) {
     // req.ip уважает `app.set("trust proxy", 1)` — берёт реальный клиентский IP,
     // добавленный Caddy справа в X-Forwarded-For. Раньше здесь брался ЛЕВЫЙ элемент
     // XFF (клиентский, подделываемый) → лимит обходился любым заголовком.
-    const ip = req.ip || req.socket.remoteAddress || "unknown";
-    const key = `${ip}:${req.path}`;
+    // Авторизованные запросы лимитируем по юзеру, не по IP: мобильные операторы
+    // прячут толпу абонентов за одним CGNAT-IP, и общий IP-лимит душил бы всех разом.
+    // requireTgUser стоит в цепочке ДО rateLimit и уже положил appUser на req.
+    const uid = (req as { appUser?: { id?: number } }).appUser?.id;
+    const who = uid ? `u${uid}` : (req.ip || req.socket.remoteAddress || "unknown");
+    const key = `${who}:${req.path}`;
     const now = Date.now();
     const win = 60_000;
     const arr = (rateBuckets.get(key) || []).filter((t) => now - t < win);

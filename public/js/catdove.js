@@ -54,6 +54,7 @@
 
   const fmt = (n) => { n = Number(n) || 0; return Math.round(n).toLocaleString('ru-RU'); };
   const num = (n) => { n = Number(n); return Number.isFinite(n) ? n : 0; };
+  const plu = (n, one, few, many) => { const a = Math.abs(n) % 100, b = a % 10; return (a > 10 && a < 20) ? many : (b > 1 && b < 5) ? few : (b === 1) ? one : many; };
 
   function svg(inner, s) { return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`; }
   // Плейсхолдер до готового арта: тот же силуэт голубя, что ICON.dove в catclick — своя
@@ -955,7 +956,7 @@
     return `<div class="cd-racerow${top ? ` cd-racerow--top cd-racerow--${d}` : ''}">
       <span class="cd-medal ${top ? `cd-medal--${d}` : 'cd-medal--dim'}">${place}</span>
       <div class="cd-racerow__art"><img src="/img/pigeons/${r.breed}.webp?v=2" alt="" onerror="this.style.display='none'"></div>
-      <div class="cd-racerow__b"><div class="cd-racerow__n">${b ? b.name : r.breed}</div><div class="cd-racerow__s">${num(r.score)} очков</div></div>
+      <div class="cd-racerow__b"><div class="cd-racerow__n">${b ? b.name : r.breed}</div><div class="cd-racerow__s">${num(r.score)} ${plu(num(r.score), 'очко', 'очка', 'очков')}</div></div>
       <div class="cd-racerow__prize">${COIN_ICON(12)} ${fmt(r.prize)}</div>
     </div>`;
   }
@@ -987,9 +988,9 @@
     // заявлен и сервер отдаёт живую неделю → очки, место и таймер прямо в hero
     const heroSub = mine
       ? (race.myScore != null && race.myPlace
-        ? `${fmt(race.myScore)} очков · ${race.myPlace}-е из ${num(race.divisionTotal)} · итоги через ${fmtLeft(race.weekEndsTs)}`
+        ? `${fmt(race.myScore)} ${plu(num(race.myScore), 'очко', 'очка', 'очков')} · ${race.myPlace}-е из ${num(race.divisionTotal)} · итоги через ${fmtLeft(race.weekEndsTs)}`
         : 'заявлен на этой неделе')
-      : `заяви голубя — отборочный полёт решает часть очков · ${num(race.entrants)} участ.`;
+      : `заяви голубя — отборочный полёт решает часть очков · ${num(race.entrants)} ${plu(num(race.entrants), 'участник', 'участника', 'участников')}`;
     return `<div class="cd-sect-t">Гонка стаи</div>
       <div class="cd-racehero">
         <div class="cd-racehero__bg"></div>
@@ -1031,7 +1032,7 @@
       return `<div class="cd-racerow${s.me ? ' cd-racerow--top cd-racerow--gold' : ''}">
         <span class="cd-medal ${medal(p)}">${p}</span>
         <div class="cd-racerow__art"><img src="/img/pigeons/${s.breed}.webp?v=2" alt="" onerror="this.style.display='none'"></div>
-        <div class="cd-racerow__b"><div class="cd-racerow__n">${b ? b.name : s.breed}${s.me ? ' · ты' : ''}</div><div class="cd-racerow__s">${fmt(s.score)} очков</div></div>
+        <div class="cd-racerow__b"><div class="cd-racerow__n">${b ? b.name : s.breed}${s.me ? ' · ты' : ''}</div><div class="cd-racerow__s">${fmt(s.score)} ${plu(num(s.score), 'очко', 'очка', 'очков')}</div></div>
       </div>`;
     }).join('');
   }

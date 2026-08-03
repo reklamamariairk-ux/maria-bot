@@ -100,6 +100,14 @@
   }
   const fmt = (n) => Math.floor(n).toLocaleString('ru-RU');
   const irkToday = () => new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+  // Русские склонения: plu(2,'монета','монеты','монет') → «монеты»
+  const plu = (n, one, few, many) => { const a = Math.abs(n) % 100, b = a % 10; return (a > 10 && a < 20) ? many : (b > 1 && b < 5) ? few : (b === 1) ? one : many; };
+  // Сколько осталось до нового дня по Иркутску (UTC+8) — «через 5 ч 12 мин»
+  const untilNewDay = () => {
+    const secLeft = 86400 - Math.floor((Date.now() / 1000 + 8 * 3600) % 86400);
+    const h = Math.floor(secLeft / 3600), m = Math.ceil((secLeft % 3600) / 60);
+    return h > 0 ? `через ${h} ч ${m} мин` : `через ${Math.max(1, m)} мин`;
+  };
   const priceMultitap = (l) => Math.round(200 * Math.pow(2, l));
   const priceEnergy = (l) => Math.round(300 * Math.pow(2, l));
   const energyMaxFor = (l) => 1000 + 500 * l;
@@ -1502,7 +1510,7 @@
   // ── Мини-игра «Золотой дождь» (canvas, 20с лови монеты) ───────────────────────
   function rainAvailable() { return !st || st.rainAvailable; }
   function openRain() {
-    if (!rainAvailable()) { flashMsg('Игра будет завтра'); return; }
+    if (!rainAvailable()) { flashMsg('Игра будет снова ' + untilNewDay()); return; }
     let el = ov.querySelector('#ck-rain');
     if (!el) {
       el = document.createElement('div'); el.id = 'ck-rain'; el.className = 'ck-rain';
@@ -1574,7 +1582,7 @@
     if (authed()) { const d = await api('/api/clicker/rain', { method: 'POST', body: JSON.stringify({ score }) }).catch(() => { netfail = true; return null; }); if (d && !d.error) { st = d; reward = d.reward; } }
     else { const g = guestClaimRainRaw(score); if (g != null) { reward = g; st = guestDerive(); } }
     if (netfail && !reward) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); return; } // не праздновать «+0» с конфетти
-    sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); coinShower(); dailyPopupRaw(ICON.rain(20) + ` Золотой дождь · ${score} монет`, reward || 0); renderAll(); renderTasks(); bumpBalance();
+    sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); coinShower(); dailyPopupRaw(ICON.rain(20) + ` Золотой дождь · ${score} ${plu(score, 'монета', 'монеты', 'монет')}`, reward || 0); renderAll(); renderTasks(); bumpBalance();
   }
   // ── Хаб «Игры»: единый claim (clamp+гейт 1/день; для гостя — localStorage) ────
   const GAME_CAP = { quiz_kids: { cap: 5, per: 1000 }, quiz_riddle: { cap: 4, per: 1200 }, count: { cap: 6, per: 400 }, memory: { cap: 100, per: 60 }, gems: { cap: 200, per: 45 }, tower: { cap: 200, per: 60 } };
@@ -2047,7 +2055,7 @@
       else flashMsg(!d ? 'Нет связи — попробуй ещё раз' : d.error === 'used' ? 'Код уже использован' : d.error === 'invalid' ? 'Неверный код' : 'Не получилось');
     });
   }
-  function achDesc(a) { const m = { taps: `${fmt(a.target)} тапов`, balance: `Накопить ${fmt(a.target)}`, level: `Уровень ${a.target}`, cards: `Все ${a.target} бизнеса`, streak: `${a.target} дней подряд`, ref: `${a.target} друга` }; return m[a.type] || ''; }
+  function achDesc(a) { const m = { taps: `${fmt(a.target)} тапов`, balance: `Накопить ${fmt(a.target)}`, level: `Уровень ${a.target}`, cards: `Все ${a.target} бизнеса`, streak: `${a.target} ${plu(a.target, 'день', 'дня', 'дней')} подряд`, ref: `${a.target} ${plu(a.target, 'друг', 'друга', 'друзей')}` }; return m[a.type] || ''; }
   function bonusBlock() {
     const cmb = (st && st.combo) || { cards: [], hits: [], complete: false, claimed: false, reward: COMBO_REWARD };
     const cph = (st && st.cipher) || { morse: '', len: 0, claimed: false, reward: CIPHER_REWARD };
@@ -2064,7 +2072,7 @@
     // призы, активности — в играх). См. renderGames/openCipherPopup.
     const chestAvail = !st || st.chestAvailable;
     const chestCard = `<div class="ck-card ck-bonus" style="background:linear-gradient(90deg,rgba(238,191,82,.16),rgba(238,191,82,.04))">
-      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.chest(26)}</div><div class="ck-card__b"><div class="ck-card__n">Сундук удачи</div><div class="ck-card__s">${chestAvail ? 'Монеты, турбо или джекпот!' : 'Возвращайся завтра за новым'}</div></div>
+      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.chest(26)}</div><div class="ck-card__b"><div class="ck-card__n">Сундук удачи</div><div class="ck-card__s">${chestAvail ? 'Монеты, турбо или джекпот!' : 'Новый сундук ' + untilNewDay()}</div></div>
       ${chestAvail ? `<button class="ck-card__buy" id="ck-chest-open">Открыть</button>` : `<button class="ck-card__buy" disabled>✓ Открыт</button>`}</div>`;
     // Карточка «Игры» переехала на главную (кнопка в ряду бустов) — решение юзера
     // 31.07: «Призы» = только призы. Хаб открывается openGamesHub.
@@ -2392,16 +2400,16 @@
     const box = ov && ov.querySelector('#ck-gameslist'); if (!box) return;
     const card = (id, icon, name, desc) => {
       const done = gameDone(id);
-      return `<div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${icon}</div><div class="ck-card__b"><div class="ck-card__n">${name}</div><div class="ck-card__s">${done ? 'Сыграно — приходи завтра' : desc}</div></div>${done ? `<button class="ck-card__buy" disabled>✓ Сегодня</button>` : `<button class="ck-card__buy" data-game="${id}">Играть</button>`}</div></div>`;
+      return `<div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${icon}</div><div class="ck-card__b"><div class="ck-card__n">${name}</div><div class="ck-card__s">${done ? 'Сыграно — снова ' + untilNewDay() : desc}</div></div>${done ? `<button class="ck-card__buy" disabled>✓ Сегодня</button>` : `<button class="ck-card__buy" data-game="${id}">Играть</button>`}</div></div>`;
     };
     const rainAvail = !st || st.rainAvailable;
-    const rainCard = `<div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.rain(26)}</div><div class="ck-card__b"><div class="ck-card__n">Золотой дождь</div><div class="ck-card__s">${rainAvail ? 'Лови монеты 20 секунд → бонус' : 'Сыграно — приходи завтра'}</div></div>${rainAvail ? `<button class="ck-card__buy" id="ck-games-rain">Играть</button>` : `<button class="ck-card__buy" disabled>✓ Сегодня</button>`}</div></div>`;
+    const rainCard = `<div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.rain(26)}</div><div class="ck-card__b"><div class="ck-card__n">Золотой дождь</div><div class="ck-card__s">${rainAvail ? 'Лови монеты 20 секунд → бонус' : 'Сыграно — снова ' + untilNewDay()}</div></div>${rainAvail ? `<button class="ck-card__buy" id="ck-games-rain">Играть</button>` : `<button class="ck-card__buy" disabled>✓ Сегодня</button>`}</div></div>`;
     // «Слово дня» — часть хаба игр (переехало из «Призов», решение юзера 31.07)
     const cph = (st && st.cipher) || { claimed: false, reward: CIPHER_REWARD };
     const cipherCard = `<div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.bolt(26)}</div><div class="ck-card__b"><div class="ck-card__n">Слово дня</div><div class="ck-card__s">${cph.claimed ? 'Разгадано — приходи завтра' : `Собери слово из букв · +${fmt(cph.reward)} ` + COIN(13)}</div></div>${cph.claimed ? `<button class="ck-card__buy" disabled>✓ Сегодня</button>` : `<button class="ck-card__buy" id="ck-games-cipher">Играть</button>`}</div></div>`;
     const gated = ['quiz_kids', 'quiz_riddle', 'count', 'memory', 'gems', 'tower'];
     const total = gated.length + 2, doneN = gated.filter(gameDone).length + (rainAvail ? 0 : 1) + (cph.claimed ? 1 : 0), remain = total - doneN;
-    const head = `<div class="ck-games-hd">${remain > 0 ? `Сегодня доступно игр: <b>${remain}</b> из ${total} · награды ждут ${COIN(14)}` : 'Все игры на сегодня пройдены — заходи завтра!'}</div>`;
+    const head = `<div class="ck-games-hd">${remain > 0 ? `Сегодня доступно игр: <b>${remain}</b> из ${total} · награды ждут ${COIN(14)}` : 'Все игры на сегодня пройдены — новые ' + untilNewDay()}</div>`;
     box.innerHTML = head +
       '<div class="ck-sect">Учимся и играем · детям</div>' +
       card('quiz_kids', ICON.quiz(26), 'Котовикторина', '5 вопросов обо всём · +до 5000 ' + COIN(13)) +
@@ -2443,7 +2451,7 @@
 
   // — Квизы (Котовикторина / Загадки / Счёт конфет) —
   function openQuiz(deck) {
-    if (gameDone(deck)) { flashMsg('Сыграно — приходи завтра'); return; }
+    if (gameDone(deck)) { flashMsg('Сыграно — снова ' + untilNewDay()); return; }
     const qs = quizQuestions(deck); if (!qs.length) return;
     let el = ov.querySelector('#ck-quiz'); if (!el) { el = document.createElement('div'); el.id = 'ck-quiz'; el.className = 'ck-quiz'; ov.appendChild(el); }
     quizState = { deck, qs, i: 0, correct: 0, locked: false }; el.classList.add('on'); renderQuizStep();
@@ -2475,7 +2483,7 @@
 
   // — «Собери торт» (память/пары) —
   function openMemory() {
-    if (gameDone('memory')) { flashMsg('Сыграно — приходи завтра'); return; }
+    if (gameDone('memory')) { flashMsg('Сыграно — снова ' + untilNewDay()); return; }
     let el = ov.querySelector('#ck-mem'); if (!el) { el = document.createElement('div'); el.id = 'ck-mem'; el.className = 'ck-mem'; ov.appendChild(el); }
     const cards = shuffleSeed([...MEM_ICONS, ...MEM_ICONS], dateSeed(irkToday(), 'mem')).map(v => ({ v, done: false }));
     memState = { cards, flipped: [], matched: 0, moves: 0, t0: performance.now(), lock: false }; el.classList.add('on'); renderMemory();
@@ -2520,7 +2528,7 @@
     ctx.restore();
   }
   function openTower() {
-    if (gameDone('tower')) { flashMsg('Сыграно — приходи завтра'); return; }
+    if (gameDone('tower')) { flashMsg('Сыграно — снова ' + untilNewDay()); return; }
     let el = ov.querySelector('#ck-tower'); if (!el) { el = document.createElement('div'); el.id = 'ck-tower'; el.className = 'ck-tower'; ov.appendChild(el); }
     el.innerHTML = `<div class="ck-quiz__hd"><div class="t">${ICON.cake(20)} Башня тортов</div><button class="x" id="ck-tower-x">×</button></div><div class="ck-mem__sub">Тапни по экрану, чтобы поставить корж ровно. Чем выше башня — тем больше монет!</div><div class="ck-tower__score" id="ck-tower-score">0</div><canvas id="ck-tower-cv"></canvas>`;
     el.classList.add('on');
@@ -2596,7 +2604,7 @@
   const wait = (ms) => new Promise(r => setTimeout(r, ms));
 
   function openGems() {
-    if (gameDone('gems')) { flashMsg('Сыграно — приходи завтра'); return; }
+    if (gameDone('gems')) { flashMsg('Сыграно — снова ' + untilNewDay()); return; }
     let el = ov.querySelector('#ck-gems'); if (!el) { el = document.createElement('div'); el.id = 'ck-gems'; el.className = 'ck-gems'; ov.appendChild(el); }
     gemsState = { g: makeGemBoard(GN, Math.random), n: GN, sel: -1, score: 0, lock: false, ended: false, tEnd: performance.now() + GEM_SEC * 1000, raf: 0 };
     el.classList.add('on'); renderGemsUI();

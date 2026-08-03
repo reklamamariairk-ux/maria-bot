@@ -41,6 +41,7 @@
   const esc = (s) => (window.escapeHtml ? window.escapeHtml(s) : String(s == null ? '' : s));
   const fmt = (n) => Math.round(Number(n) || 0).toLocaleString('ru-RU');
   const num = (n) => { const v = Number(n); return Number.isFinite(v) ? v : 0; };
+  const plu = (n, one, few, many) => { const a = Math.abs(n) % 100, b = a % 10; return (a > 10 && a < 20) ? many : (b > 1 && b < 5) ? few : (b === 1) ? one : many; };
   function flash(msg) { if (window.ckFlash) window.ckFlash(msg); }
   function haptic(k) { window.haptic && window.haptic(k); }
   function meta(breed) { return BREED_META[breed] || { name: String(breed || ''), rarity: 'common' }; }
@@ -954,7 +955,7 @@
     panel.className = 'cd-drag-result';
     panel.innerHTML = isQ ? `
       <div class="cd-drag-podium">${podHtml}</div>
-      <div class="cd-drag-place">${fmt(qualifyData.score)} очков</div>
+      <div class="cd-drag-place">${fmt(qualifyData.score)} ${plu(num(qualifyData.score), 'очко', 'очка', 'очков')}</div>
       <div class="cd-drag-reward">${qualifyData.myPlace ? `${qualifyData.myPlace}-е место из ${num(qualifyData.total)} · ${DIV_NAME[qualifyData.division] || ''}` : (DIV_NAME[qualifyData.division] || '')}</div>
       <div class="cd-drag-launch">Заявка принята · одна попытка в неделю · итоги в ночь на понедельник</div>
       <div class="cd-drag-resrow">
@@ -963,7 +964,7 @@
       <div class="cd-drag-podium">${podHtml}</div>
       <div class="cd-drag-place">${place || '—'} место</div>
       ${isBet
-        ? `<div class="cd-drag-reward ${reward > 0 ? 'pos' : reward < 0 ? 'neg' : ''}">${reward > 0 ? '+' : ''}${fmt(reward)} монет</div>`
+        ? `<div class="cd-drag-reward ${reward > 0 ? 'pos' : reward < 0 ? 'neg' : ''}">${reward > 0 ? '+' : ''}${fmt(reward)} ${plu(Math.abs(num(reward)), 'монета', 'монеты', 'монет')}</div>`
         : `<div class="cd-drag-reward">Тренировка — без ставок</div>`}
       ${raceData.mySkill ? `<div class="cd-drag-launch">Запуск: прогрев ${Math.round(num(raceData.mySkill.rev1) * 100)}% · старт ${(num(raceData.mySkill.reactionMs) / 1000).toFixed(2)} с</div>` : ''}
       <div class="cd-drag-resrow">
