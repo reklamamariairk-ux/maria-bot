@@ -64,6 +64,12 @@ try {
   ok(!again.ok && again.reason === "already", "повторная заявка → already");
 
   // --- Закрытие недели по дивизионам ---
+  // По понедельникам реальный крон уже закрыл прошлую неделю (строка winners существует):
+  // повторно её не закрыть, а сносить реальные итоги нельзя. Блоки C и G пропускаем.
+  const realClosed = (await pool.query("SELECT 1 FROM pigeon_race_winners WHERE week=$1", [prev])).rowCount > 0;
+  if (realClosed) {
+    console.log("\n[C]+[G] ПРОПУЩЕНО: неделя " + prev + " уже закрыта реальным кроном (запуск в понедельник)");
+  } else {
   console.log("\n[C] closeRaceWeek — 3 дивизиона, топ-3, Чемпион только Золоту");
   // прямые заявки под prevWeek: 2 в bronze, 2 в silver, 2 в gold, с заданными score
   const seed = [
@@ -115,10 +121,11 @@ try {
   ok(gr.enabled === true && gr.myBreed === "sizar" && gr.myDivision === "silver", "getRace: myBreed+myDivision этой недели");
   ok(gr.lastResults && gr.lastResults.gold && gr.lastResults.gold.length === 2, "getRace.lastResults сгруппированы по дивизионам");
 
-  console.log(`\n=== ИТОГ: ${pass} pass, ${fail} fail ===`);
-
   // cleanup включает золотые аккаунты
   globalThis.__CLEAN = ALL2;
+  }
+
+  console.log(`\n=== ИТОГ: ${pass} pass, ${fail} fail ===`);
 } catch (e) { console.error("EXCEPTION:", e); fail++; }
 finally {
   console.log("\n[cleanup]…");

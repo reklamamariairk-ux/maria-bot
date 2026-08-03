@@ -106,6 +106,16 @@ case "$RACE_LINE" in
   *)   LINES+=("OK гонка стаи: н/д");;
 esac
 
+# Бэкап БД (добавлено 2026-08-03, переезд с Neon на локальный postgres):
+# свежий дамп maria_bot младше 26 часов и больше 10 КБ, иначе красный.
+BK=$(ls -t /opt/maria/pg-backups/daily/maria_bot_*.sql.gz 2>/dev/null | head -1)
+if [ -n "$BK" ] && [ "$(( $(date +%s) - $(stat -c %Y "$BK") ))" -lt 93600 ] && [ "$(stat -c%s "$BK")" -gt 10240 ]; then
+  LINES+=("OK бэкап БД: $(basename "$BK")")
+else
+  FAILS=$((FAILS+1))
+  LINES+=("FAIL бэкап БД: свежего дампа maria_bot нет (см. /opt/maria/pg-backups/daily/)")
+fi
+
 # Контейнеры docker: рестартящиеся/нездоровые
 BAD=$(docker ps --format '{{.Names}} {{.Status}}' 2>/dev/null | grep -Ei 'restarting|unhealthy' || true)
 if [ -n "$BAD" ]; then
