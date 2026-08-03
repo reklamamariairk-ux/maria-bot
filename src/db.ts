@@ -1,9 +1,11 @@
 import { Pool } from "pg";
 
+// SSL нужен только внешним managed-БД (Neon); локальный postgres в docker-сети без TLS.
+const needSsl = /neon\.tech|sslmode=require/.test(process.env.DATABASE_URL || "");
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-  max: 5,
+  ssl: needSsl ? { rejectUnauthorized: false } : undefined,
+  max: 10,
 });
 
 export async function initDb() {
