@@ -1,0 +1,24 @@
+{
+  "name": "maria-kotik-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Нативная обёртка игры «Котик Комбат» (LIVE-режим: грузит прод game.html; правки на сервере видны без переустановки). Гость-режим, прогресс в localStorage устройства.",
+  "scripts": {
+    "sync": "cap sync",
+    "add:android": "cap add android",
+    "add:ios": "cap add ios",
+    "icons": "capacitor-assets generate --assetPath resources"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/app": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/ios": "^6.0.0",
+    "@capacitor/splash-screen": "^6.0.0",
+    "@capacitor/status-bar": "^6.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.0",
+    "@capacitor/cli": "^6.0.0"
+  }
+}

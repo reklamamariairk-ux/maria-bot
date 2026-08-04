@@ -1,0 +1,33 @@
+{
+  "appId": "ru.mariairk.kotik",
+  "appName": "Котик Комбат",
+  "webDir": "www",
+  "server": {
+    "url": "https://bot.145-223-121-47.sslip.io/game.html",
+    "androidScheme": "https",
+    "cleartext": false,
+    "allowNavigation": ["bot.145-223-121-47.sslip.io", "*.sslip.io"]
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 600,
+      "launchAutoHide": true,
+      "backgroundColor": "#160409",
+      "androidScaleType": "CENTER_CROP",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#160409"
+    }
+  },
+  "ios": {
+    "contentInset": "always",
+    "limitsNavigationsToAppBoundDomains": false
+  },
+  "android": {
+    "backgroundColor": "#160409",
+    "allowMixedContent": false,
+    "captureInput": true
+  }
+}
