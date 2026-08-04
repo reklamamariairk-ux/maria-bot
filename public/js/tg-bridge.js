@@ -1,8 +1,10 @@
-/* ── Platform bridge: Telegram WebApp + VK Mini Apps ─────────────────────────
+/* ── Platform bridge: Telegram WebApp + VK Mini Apps + МАКС ──────────────────
    Детекция платформы:
      - VK:    в location.search есть vk_app_id (launch params от VK)
      - TG:    window.Telegram.WebApp.initData непустой
-     - guest: обычный браузер (дев-режим)
+     - max:   window.WebApp.initData непустой (бридж МАКС st.max.ru/js/max-web-app.js,
+              API — почти клон Telegram WebApp; скрипт подключён в html рядом с TG)
+     - guest: обычный браузер (дев-режим / телефонная обёртка)
 
    Экспортирует (как раньше):
      window.haptic, window.tgMain, window.tgBack, window.scrollLock/Unlock,
@@ -29,7 +31,10 @@
   const _search = new URLSearchParams(location.search);
   const IS_VK = _search.has('vk_app_id');
   const tg = !IS_VK ? window.Telegram?.WebApp : null;
-  const PLATFORM = IS_VK ? 'vk' : (tg?.initData ? 'tg' : 'guest');
+  // МАКС: его бридж кладёт window.WebApp (без window.Telegram-неймспейса)
+  const mx = !IS_VK && !tg?.initData ? window.WebApp : null;
+  const IS_MAX = Boolean(mx?.initData);
+  const PLATFORM = IS_VK ? 'vk' : (tg?.initData ? 'tg' : IS_MAX ? 'max' : 'guest');
 
   // VK state
   let _vkBridge = null;          // vkBridge global после загрузки SDK
@@ -40,6 +45,9 @@
   // ─── Telegram init + тема ──────────────────────────────────────────────────
   if (tg) {
     try { tg.ready(); tg.expand(); } catch {}
+  }
+  if (mx) {
+    try { mx.ready?.(); mx.expand?.(); } catch {}
   }
 
   function applyTheme() {
@@ -125,7 +133,8 @@
       } catch {}
       return;
     }
-    const h = window.Telegram?.WebApp?.HapticFeedback;
+    // TG и МАКС — одинаковый HapticFeedback API
+    const h = window.Telegram?.WebApp?.HapticFeedback || (IS_MAX && mx?.HapticFeedback);
     if (!h) return;
     try {
       if (kind === 'success' || kind === 'error' || kind === 'warning') h.notificationOccurred(kind);
@@ -245,12 +254,15 @@
     ready,
 
     isAuthed() {
-      return PLATFORM === 'tg' ? Boolean(tg?.initData) : PLATFORM === 'vk';
+      return PLATFORM === 'tg' ? Boolean(tg?.initData) : PLATFORM === 'max' ? Boolean(mx?.initData) : PLATFORM === 'vk';
     },
 
     authHeader() {
       if (PLATFORM === 'tg' && tg?.initData) {
         return { Authorization: 'tma ' + tg.initData };
+      }
+      if (PLATFORM === 'max' && mx?.initData) {
+        return { Authorization: 'max ' + mx.initData };
       }
       if (PLATFORM === 'vk') {
         const h = { Authorization: 'vk ' + location.search.slice(1) };
@@ -264,8 +276,8 @@
     },
 
     user() {
-      if (PLATFORM === 'tg') {
-        const u = tg?.initDataUnsafe?.user;
+      if (PLATFORM === 'tg' || PLATFORM === 'max') {
+        const u = (PLATFORM === 'max' ? mx : tg)?.initDataUnsafe?.user;
         return u ? { id: u.id, first_name: u.first_name, last_name: u.last_name, username: u.username, photo_url: u.photo_url } : null;
       }
       if (PLATFORM === 'vk') {
@@ -279,6 +291,7 @@
     startParam() {
       let sp = '';
       if (PLATFORM === 'tg') sp = tg?.initDataUnsafe?.start_param || '';
+      else if (PLATFORM === 'max') sp = mx?.initDataUnsafe?.start_param || '';
       else if (PLATFORM === 'vk') {
         try { sp = decodeURIComponent((location.hash || '').replace(/^#/, '')); } catch { sp = (location.hash || '').slice(1); }
       }
@@ -323,12 +336,18 @@
         const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text || '')}`;
         try { tg.openTelegramLink(shareUrl); return; } catch {}
       }
+      if (PLATFORM === 'max' && mx) {
+        // шаринг внутри МАКС; при отказе — системный share ниже
+        try { if (mx.shareMaxContent) { mx.shareMaxContent({ text: (text ? text + '\n' : '') + url }); return; } } catch {}
+        try { if (mx.shareContent) { mx.shareContent({ text: (text ? text + '\n' : '') + url }); return; } } catch {}
+      }
       if (navigator.share) { navigator.share({ url, text }).catch(() => {}); return; }
       try { navigator.clipboard?.writeText(url + (text ? '\n' + text : '')); } catch {}
     },
 
     openExternal(url) {
       if (PLATFORM === 'tg' && tg?.openLink) { try { tg.openLink(url); return; } catch {} }
+      if (PLATFORM === 'max' && mx?.openLink) { try { mx.openLink(url); return; } catch {} }
       window.open(url, '_blank', 'noopener');
     },
 
@@ -380,6 +399,7 @@
     /** Закрыть Mini App (используется pure-режимом game.html). Гость — no-op. */
     close() {
       if (PLATFORM === 'tg' && tg?.close) { try { tg.close(); return; } catch {} }
+      if (PLATFORM === 'max' && mx?.close) { try { mx.close(); return; } catch {} }
       if (PLATFORM === 'vk' && _vkBridge) { _vkBridge.send('VKWebAppClose', { status: 'success' }).catch(() => {}); }
     },
 

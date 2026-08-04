@@ -10,6 +10,9 @@ import { platformOf } from "./platform";
 
 const BOT_USERNAME = "mariatortik_bot";
 const VK_APP_ID = process.env.VK_APP_ID ?? "";
+// Публичная ссылка мини-аппа в МАКС (выдаётся после регистрации в dev.max.ru,
+// формат https://max.ru/... — задать в env). Пусто = МАКС-юзерам даём t.me-фоллбек.
+const MAX_APP_URL = process.env.MAX_APP_URL ?? "";
 
 /**
  * Ссылка на Mini App для конкретного получателя (по internalId).
@@ -22,6 +25,9 @@ const VK_APP_ID = process.env.VK_APP_ID ?? "";
 export function miniAppLink(internalId: number, startParam = ""): string {
   if (platformOf(internalId) === "vk" && VK_APP_ID) {
     return `https://vk.com/app${VK_APP_ID}${startParam ? `#${startParam}` : ""}`;
+  }
+  if (platformOf(internalId) === "max" && MAX_APP_URL) {
+    return `${MAX_APP_URL}${startParam ? `#${startParam}` : ""}`;
   }
   return `https://t.me/${BOT_USERNAME}${startParam ? `?startapp=${startParam}` : ""}`;
 }

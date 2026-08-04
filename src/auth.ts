@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
 import { verifyVkLaunchParams } from "./auth-vk";
+import { verifyMaxInitData } from "./auth-max";
 import { toInternalId, type Platform } from "./platform";
 
 export interface TgUser {
@@ -101,6 +102,11 @@ function resolveUser(req: Request): AppUser | undefined {
         platformId: vk.vkUserId,
         ...vkDisplayName(req),
       };
+    }
+  } else if (auth.startsWith("max ")) {
+    const mx = verifyMaxInitData(auth.slice(4));
+    if (mx) {
+      user = { ...mx, id: toInternalId("max", mx.id), platform: "max", platformId: mx.id };
     }
   }
   if (user) {

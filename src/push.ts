@@ -22,7 +22,7 @@
 
 import type { Bot } from "grammy";
 import { canSendNotification, logNotification, NotificationKind, getVkMessagesAllowed } from "./db";
-import { isVkId, toPlatformId } from "./platform";
+import { isVkId, isMaxId, toPlatformId } from "./platform";
 import type { VkSender } from "./vk/sender";
 import { log } from "./logger";
 
@@ -47,6 +47,12 @@ export function createPushService(bot: Bot, vkSender?: VkSender): PushService {
     text: string,
     opts?: { parse_mode?: "Markdown" | "HTML" }
   ): Promise<boolean> {
+    // МАКС: своего sender'а пока нет (Bot API botapi.max.ru, появится после
+    // регистрации бота «Марии»). Молча скипаем, НЕ роняя вызывающий код.
+    if (isMaxId(chatId)) {
+      log.debug({ chatId }, "[push] max-платформа: sender не настроен, скип");
+      return false;
+    }
     if (isVkId(chatId)) {
       if (!vkSender?.configured) return false;
       // Явный запрет сообщений от сообщества (message_deny) — не дёргаем API

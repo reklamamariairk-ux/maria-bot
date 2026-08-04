@@ -25,7 +25,7 @@ export interface OrderRequest {
   comment?: string;
   email?: string;
   /** Платформа заказчика — для SOURCE_DESCRIPTION в Bitrix24 (default tg). */
-  platform?: "tg" | "vk";
+  platform?: "tg" | "vk" | "max";
 }
 
 export interface OrderResultItem {
@@ -185,7 +185,7 @@ async function pushToBitrix24(req: OrderRequest, sale: OrderResult, siteDown = f
     PHONE:              [{ VALUE: req.phone, VALUE_TYPE: "WORK" }],
     COMMENTS:           comments,
     SOURCE_ID:          "WEB",
-    SOURCE_DESCRIPTION: req.platform === "vk" ? "VK Mini App" : "Telegram Mini App",
+    SOURCE_DESCRIPTION: req.platform === "vk" ? "VK Mini App" : req.platform === "max" ? "МАКС Mini App" : "Telegram Mini App",
     OPPORTUNITY:        sale.total ?? 0,
     CURRENCY_ID:        "RUB",
   };
