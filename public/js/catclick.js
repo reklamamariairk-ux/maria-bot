@@ -910,6 +910,16 @@
       .ck-lvl{text-shadow:0 1px 4px rgba(0,0,0,.75)}.ck-prog__t{color:#c2c7cf;text-shadow:0 1px 3px rgba(0,0,0,.8)}
       .ck-screen.on{animation:ckScreenIn .22s ease-out}@keyframes ckScreenIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
       .ck-nav__b{position:relative;transition:color .18s}.ck-nav__b.on::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:24px;height:3px;border-radius:0 0 3px 3px;background:var(--gold);box-shadow:0 0 8px var(--gold)}
+      .ck-nav__b.locked{opacity:.42}
+      .ck-intro{text-align:center;color:var(--muted);font-size:12px;line-height:1.45;margin:0 0 12px;padding:0 6px}
+      .ck-today{display:flex;flex-wrap:wrap;align-items:center;gap:6px;background:rgba(0,0,0,.22);border:1px solid var(--line);border-radius:13px;padding:9px 11px;margin:0 0 12px}
+      .ck-today__t{font-size:9px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:var(--muted);width:100%}
+      .ck-today__i{font-size:11px;font-weight:800;color:var(--muted);background:rgba(255,255,255,.05);border-radius:8px;padding:4px 8px}
+      .ck-today__i.pend{color:#5a2028;background:linear-gradient(180deg,#ffe7a6,#eebf52)}
+      .ck-today__i.done{color:#9be7a8;background:rgba(155,231,168,.1)}
+      .ck-navlk{position:absolute;top:2px;right:11%;font-size:8px;font-weight:800;color:var(--gold-l);background:rgba(0,0,0,.6);padding:1px 4px;border-radius:6px;line-height:1.35}
+      .ck-nav-pop{animation:ckNavPop .8s ease-out}
+      @keyframes ckNavPop{0%,100%{transform:none}30%{transform:translateY(-5px) scale(1.14)}}
       .cat-staff .ck-biz__art{background:linear-gradient(150deg,#8fae4f,#3f5e1e)}.cat-net .ck-biz__art{background:linear-gradient(150deg,#6f76c2,#2f3470)}
       .ck-card__buy,.ck-biz__buy{min-height:44px;box-sizing:border-box}
       .ck-skel{position:relative;overflow:hidden;background:rgba(255,255,255,.05)}.ck-skel::after{content:'';position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(255,255,255,.10),transparent);animation:ckShimmer 1.2s ease-in-out infinite}@keyframes ckShimmer{100%{transform:translateX(100%)}}
@@ -1156,7 +1166,42 @@
     updateDoveBadge(Number(d.unreadMail) || 0);
   }
 
+  // ── Прогрессивное открытие вкладок: у новичка активны «Котик»+«Прокачка»,
+  // остальные разблокируются по уровню. Безопасно для существующих игроков —
+  // level = leagueFor(totalEarned) МОНОТОНЕН (totalEarned только растёт), поэтому
+  // никто, кто уже был выше порога, вкладку не теряет; блокировка касается только
+  // самых первых минут новичка. Пороги низкие: Дом/Призы — ур.2, Голуби/Рейтинг — ур.3.
+  const TAB_UNLOCK = { cat: 1, up: 1, home: 1, tasks: 2, dove: 3, top: 3 };
+  const TAB_NAME = { home: 'Дом', tasks: 'Призы', dove: 'Голуби', top: 'Рейтинг' };
+  const tabReq = (t) => TAB_UNLOCK[t] || 1;
+  const playerLevel = () => (st ? leagueFor(st.totalEarned).level : 1);
+  const tabLocked = (t) => playerLevel() < tabReq(t);
+  let unlockedSeen = null;
+  function applyTabLocks() {
+    if (!ov || !st) return;
+    const lvl = playerLevel();
+    const nowUnlocked = new Set();
+    ov.querySelectorAll('.ck-nav__b').forEach(btn => {
+      const t = btn.dataset.tab, req = tabReq(t), locked = lvl < req;
+      btn.classList.toggle('locked', locked);
+      let lk = btn.querySelector('.ck-navlk');
+      if (locked) { if (!lk) { lk = document.createElement('span'); lk.className = 'ck-navlk'; btn.appendChild(lk); } lk.textContent = 'ур.' + req; }
+      else { if (lk) lk.remove(); nowUnlocked.add(t); }
+    });
+    if (unlockedSeen) { // празднуем новую разблокировку (не на первом рендере)
+      nowUnlocked.forEach(t => {
+        if (!unlockedSeen.has(t) && TAB_NAME[t]) {
+          flashMsg('Открыто: ' + TAB_NAME[t] + '!', 'light');
+          const b = ov.querySelector('.ck-nav__b[data-tab="' + t + '"]');
+          if (b) { b.classList.add('ck-nav-pop'); setTimeout(() => b.classList.remove('ck-nav-pop'), 800); }
+        }
+      });
+    }
+    unlockedSeen = nowUnlocked;
+  }
+
   function setTab(t) {
+    if (tabLocked(t)) { window.haptic && window.haptic('light'); flashMsg('Откроется на уровне ' + tabReq(t), 'light'); return; }
     closeActiveCoach();
     const pop = ov && ov.querySelector('#ck-pop'); if (pop) pop.classList.remove('on'); // попап не должен висеть над чужой вкладкой
     if (t === 'home') {
@@ -1707,6 +1752,7 @@
     if (lg.level !== curLevel) { if (lg.level > curLevel) levelUp(lg); curLevel = lg.level; }
     const tier = bgTier(lg.level); if (ov.dataset.tier !== '' + tier) ov.dataset.tier = '' + tier;
     applyCostume(lg);
+    applyTabLocks();
   }
   // Пер-уровневые сцены карьеры: фон = уровень 1..19 (career-N.webp)
   function bgTier(l) { return Math.min(19, Math.max(1, l)); }
@@ -1728,7 +1774,7 @@
     if (!ov || !st) return; const list = ov.querySelector('#ck-uplist');
     const biz = (cat, art, name, metaHtml, buyHtml, idx) => `<div class="ck-biz cat-${cat.replace(' locked', '')}${cat.includes('locked') ? ' locked' : ''}" style="animation-delay:${(idx * 0.035).toFixed(2)}s"><div class="ck-biz__art">${art}</div><div class="ck-biz__b"><div class="ck-biz__n">${name}</div><div class="ck-biz__meta">${metaHtml}</div></div>${buyHtml}</div>`;
     const buyBtn = (price, dis, act, id) => `<button class="ck-biz__buy" data-act="${act}" data-id="${id || ''}" ${dis ? 'disabled' : ''}>${COIN(15)} ${fmt(price)}</button>`;
-    let h = '<div class="ck-sect">Бусты</div>';
+    let h = '<div class="ck-intro">Бизнесы приносят монеты <b>сами</b> — доход капает даже когда игра закрыта. Бусты усиливают тап и энергию.</div><div class="ck-sect">Бусты</div>';
     h += biz('boost', cardArt('multitap'), 'Мультитап', `<span class="ck-biz__lvl">+1 за тап</span><span class="ck-biz__prof">сейчас +${st.perTap}</span>`, buyBtn(st.multitapPrice, st.balance < st.multitapPrice, 'multitap'), 0);
     h += biz('boost', cardArt('energy'), 'Запас энергии', `<span class="ck-biz__lvl">+500 энергии</span><span class="ck-biz__prof">сейчас ${st.energyMax}</span>`, buyBtn(st.energyPrice, st.balance < st.energyPrice, 'energy'), 1);
     h += '<div class="ck-sect">Бизнесы — пассивный доход</div>';
@@ -1747,25 +1793,41 @@
   // (renderDove/helperPopup — витрина бизнес-голубей «Помощники» — удалены 04.08.2026:
   //  вкладка «Голуби» теперь = альбом пород CatDove, монтируется в mountDoveCol.)
   function skelRows(n) { let h = ''; for (let i = 0; i < n; i++) h += '<div class="ck-skrow"><span class="sk-r ck-skel"></span><span class="sk-n ck-skel"></span><span class="sk-v ck-skel"></span></div>'; return h; }
+  // «Сегодня» — статус ежедневок одной строкой (в шапке вкладки «Призы»): что уже сделано,
+  // что ждёт. Подсвечиваем золотым то, что можно забрать/сделать прямо сейчас.
+  function todayStatusHtml() {
+    if (!st) return '';
+    const cmb = st.combo || {}, cph = st.cipher || {};
+    const chip = (label, done, pend) => `<span class="ck-today__i ${done ? 'done' : pend ? 'pend' : ''}">${label}</span>`;
+    const comboDone = !!cmb.claimed, comboPend = !!cmb.complete && !cmb.claimed;
+    const comboLbl = comboDone ? 'Комбо ✓' : comboPend ? 'Комбо готово!' : 'Комбо ' + ((cmb.hits && cmb.hits.length) || 0) + '/3';
+    return `<div class="ck-today"><span class="ck-today__t">Сегодня</span>
+      ${chip(st.dailyAvailable ? 'Награда дня' : 'Награда ✓', !st.dailyAvailable, st.dailyAvailable)}
+      ${chip(comboLbl, comboDone, comboPend)}
+      ${chip(st.chestAvailable ? 'Сундук готов!' : 'Сундук ✓', !st.chestAvailable, st.chestAvailable)}
+      ${chip(cph.claimed ? 'Слово ✓' : 'Слово дня', cph.claimed, !cph.claimed)}
+    </div>`;
+  }
   function emptyState(ic, title, sub) { return `<div class="ck-empty"><div class="ck-empty__ic">${ic}</div><div class="ck-empty__t">${title}</div><div class="ck-empty__s">${sub}</div></div>`; }
   async function renderTop() {
     const list = ov.querySelector('#ck-toplist'); const rank = ov.querySelector('#ck-myrank');
     const left = fmtDur(seasonEndsTs() - Date.now());
+    const introTop = '<div class="ck-intro">Топ недели — по заработанным монетам, в воскресенье сезон закрывается и раздаются места. Команды складывают монеты всех участников.</div>';
     // «Похвастаться» — только когда есть чем: у гостя и игрока с 0 очков сезона кнопка спрятана (аудит 30.07)
     const canBrag = authed() && st && st.season && Number(st.season.points) > 0;
     const brag = canBrag ? `<button class="ck-card__buy" id="ck-brag" style="width:100%;justify-content:center;margin-bottom:12px">${ICON.trophy(15)} Похвастаться карточкой</button>` : '';
     const ref = PURE ? refCard('ck-invite2') : '';
     const sq = await squadBlock();
     const wire = () => { const bb = ov.querySelector('#ck-brag'); if (bb) bb.onclick = shareCard; const inv = ov.querySelector('#ck-invite2'); if (inv) inv.onclick = shareRef; sq.wire(); };
-    if (!authed()) { rank.textContent = `Сезон недели · до сброса ${left}`; list.innerHTML = brag + ref + sq.html + '<div class="ck-sect">Топ недели</div>' + emptyState(ICON.trophy(30), 'Личный рейтинг закрыт', PURE ? 'Открой игру в Telegram — копи монеты и попадай в топ недели.' : 'Войди через приложение «Мария» — копи монеты и попадай в топ недели.'); wire(); return; }
-    list.innerHTML = brag + ref + sq.html + '<div class="ck-sect">Топ недели</div>' + skelRows(5); wire();
+    if (!authed()) { rank.textContent = `Сезон недели · до сброса ${left}`; list.innerHTML = introTop + brag + ref + sq.html + '<div class="ck-sect">Топ недели</div>' + emptyState(ICON.trophy(30), 'Личный рейтинг закрыт', PURE ? 'Открой игру в Telegram — копи монеты и попадай в топ недели.' : 'Войди через приложение «Мария» — копи монеты и попадай в топ недели.'); wire(); return; }
+    list.innerHTML = introTop + brag + ref + sq.html + '<div class="ck-sect">Топ недели</div>' + skelRows(5); wire();
     const d = await loadTop();
     const ends = d && d.seasonEndsTs ? fmtDur(d.seasonEndsTs - Date.now()) : left;
     rank.textContent = `Сезон недели · до сброса ${ends}` + (d && d.myRank ? ` · ты #${d.myRank}` : '');
     const wk = weeklyPrizeCard(d && d.weekly);
     const head = '<div class="ck-sect">Топ недели</div>';
-    if (!d || !d.top || !d.top.length) { list.innerHTML = brag + ref + wk + sq.html + head + emptyState(ICON.trophy(30), 'Сезон только начался', 'Заработай монеты и стань первым в топе недели!'); wire(); return; }
-    list.innerHTML = brag + ref + wk + sq.html + head + d.top.map((r, i) => {
+    if (!d || !d.top || !d.top.length) { list.innerHTML = introTop + brag + ref + wk + sq.html + head + emptyState(ICON.trophy(30), 'Сезон только начался', 'Заработай монеты и стань первым в топе недели!'); wire(); return; }
+    list.innerHTML = introTop + brag + ref + wk + sq.html + head + d.top.map((r, i) => {
       // showcase/title — Task 8 (getTop), могут отсутствовать у старого закэшированного клиента.
       const mini = (window.CatDove && window.CatDove.miniIconsHtml) ? window.CatDove.miniIconsHtml(r.showcase) : '';
       const titleBadge = r.title ? ` <span class="ck-pbadge ck-pbadge--sm ck-pbadge--baron">${ICON.dove(10)}${String(r.title).replace(/</g, '&lt;')}</span>` : '';
@@ -2036,7 +2098,7 @@
     const failCard = tasksFail ? `<div class="ck-card"><div class="ck-card__ic">${ICON.bolt(26)}</div><div class="ck-card__b"><div class="ck-card__n">Не всё загрузилось</div><div class="ck-card__s">Проверь связь</div></div><button class="ck-card__buy" id="ck-tasks-retry">Обновить</button></div>` : '';
     // Промокод убран из вкладки «Призы» по решению юзера (15.07). redeemCodeAct/эндпоинт живы —
     // при возврате секции достаточно вернуть promoCard в innerHTML ниже.
-    list.innerHTML = failCard + bonusBlock() + (progRows ? `<div class="ck-sect">${ICON.gift(13)} Награды за прогресс</div>` + progRows : '') + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows + '<div class="ck-sect">Достижения</div>' + achRows;
+    list.innerHTML = '<div class="ck-intro">Забирай бесплатное: награда дня, сундук удачи, комбо дня. Ниже — задания и достижения за монеты.</div>' + (authed() ? todayStatusHtml() : '') + failCard + bonusBlock() + (progRows ? `<div class="ck-sect">${ICON.gift(13)} Награды за прогресс</div>` + progRows : '') + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows + '<div class="ck-sect">Достижения</div>' + achRows;
     const rtb = list.querySelector('#ck-tasks-retry'); if (rtb) rtb.onclick = () => renderTasks();
     ov.querySelector('#ck-invite').onclick = shareRef;
     list.querySelectorAll('[data-open]').forEach(b => b.onclick = () => { const id = b.dataset.open, link = b.dataset.link; if (link) { if (window.App && App.openExternal) App.openExternal(link); else window.open(link, '_blank'); } linkOpened[id] = true; setTimeout(renderTasks, 400); });
