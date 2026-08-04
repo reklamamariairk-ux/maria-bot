@@ -1025,8 +1025,7 @@
       </div>
       <div class="ck-screen" id="ck-scr-up"><div class="ck-uphd"><div class="ck-bal" style="justify-content:center;font-size:30px">${COIN(26)} <span id="ck-bal2">0</span></div><div class="p" id="ck-prof2">${COIN(13)} +0 / час</div></div><div class="ck-uplist" id="ck-uplist"></div></div>
       <div class="ck-screen" id="ck-scr-dove"><div class="ck-uphd"><div class="b">${ICON.dove(22)} Голубятня</div></div>
-        <div class="ck-seg" id="ck-dove-seg"><button class="ck-seg__b on" data-seg="help" type="button">Помощники<span class="ck-seg__sub">приходят за бизнесы</span></button><button class="ck-seg__b" data-seg="col" type="button">Альбом пород<span class="ck-seg__sub">выпадают за игру</span></button></div>
-        <div class="ck-uplist" id="ck-dovelist"></div><div class="ck-uplist" id="ck-dove-col" style="display:none"></div></div>
+        <div class="ck-uplist" id="ck-dove-col"></div></div>
       <div class="ck-screen" id="ck-scr-tasks"><div class="ck-uphd"><div class="b">${ICON.gift(22)} Призы</div></div><div class="ck-uplist" id="ck-taskslist"></div></div>
       <div class="ck-screen" id="ck-scr-top"><div class="ck-uphd"><div class="b">${ICON.trophy(22)} Рейтинг</div><div class="p" id="ck-myrank"></div></div><div class="ck-uplist" id="ck-toplist"></div></div>
       <div class="ck-fx" id="ck-fx"></div>
@@ -1064,7 +1063,6 @@
     ov.querySelector('#ck-bt-games').onclick = openGamesHub;
     ov.querySelector('#ck-prestige').onclick = prestigeConfirm;
     ov.querySelectorAll('.ck-nav__b').forEach(b => b.onclick = () => setTab(b.dataset.tab));
-    ov.querySelectorAll('#ck-dove-seg .ck-seg__b').forEach(b => b.onclick = () => setDoveSeg(b.dataset.seg, true));
     ov.querySelector('#ck-guide-btn').onclick = () => { window.haptic && window.haptic('light'); openGuide(); };
     ov.querySelector('#ck-guide-x').onclick = closeGuide;
     ov.querySelector('#ck-games-x').onclick = closeGamesHub;
@@ -1088,7 +1086,7 @@
       { ic: ICON.gem(20), t: 'Комбо дня и Шифр', d: 'В «Прокачке» каждый день выбираются три случайных бизнеса — прокачай (купи хотя бы один уровень) все три, и получишь бонус +12 000 монет. Забрать бонус и разгадать Шифр дня можно на вкладке «Призы»: шифр — сегодняшнее слово, зашифрованное азбукой Морзе, точками и тире. Переведи морзянку и впиши разгаданное слово в поле рядом — угадаешь верно, получишь +3 000 монет. Оба бонуса обновляются раз в сутки.' },
       { ic: ICON.chest(20), t: 'Сундук и мини-игры', d: 'Иногда на главном экране пролетает золотая монетка — тронь её, пока не улетела, и получишь бонусные монеты. На вкладке «Призы» раз в день можно открыть Сундук удачи — там монеты, буст или неожиданный джекпот. Там же карточка «Игры» открывает семь мини-игр: Котовикторина, Загадки, Счёт конфет, «Собери торт» (пары на память), «Сладкий ряд» (три конфеты в ряд), «Башня тортов» и «Золотой дождь». В каждую можно сыграть раз в день, и каждая приносит монеты.' },
       { ic: ICON.paw(20), t: 'Дом Василия', d: 'В Доме Василия — четыре комнаты: Кухня, Спальня, Игровая и Двор. В каждой — своё действие (покормить, уложить спать, поиграть, погладить), которое поднимает нужную шкалу — сытость, энергию или настроение — и приносит коту немного опыта. Если заботиться о Василии каждый день подряд, раз в сутки капают монеты питомца — награда растёт с каждым днём серии и с десятого дня держится на максимуме. В Игровой, кроме заботы, есть две мини-игры — «Накорми» и «Ловилка», рекорды в них сохраняются. Во Дворе — магазин шляп для Василия: покупай их за монеты питомца, накопленные заботой.' },
-      { ic: ICON.dove(20), t: 'Голубятня', d: 'Шестнадцать голубей-помощников — по четыре на каждое из четырёх направлений «Прокачки». Как только заводишь бизнес хотя бы на первом уровне, голубь открывается и занимает своё место в коллекции — до этого на его месте молчаливый силуэт с замком. Собирай коллекцию по направлениям или полностью — Голубятня показывает прогресс по каждому разделу.' },
+      { ic: ICON.dove(20), t: 'Голубятня', d: 'Альбом из шестнадцати пород голубей — они выпадают за игру: комбо дня, мини-игры, сундук и покупки. Породы собраны в четыре сета, за полный сет — приз. Дубли можно скормить голубю и поднять ему звёзды, а любимцев выставить на витрину. Там же «Гонка стаи» раз в неделю и драг-заезды: тюнингуй голубя и тапай на старте, чтобы обойти соперников.' },
       { ic: ICON.trophy(20), t: 'Рейтинг и команды', d: 'Рейтинг недели показывает игроков по количеству монет, заработанных с начала недели — отсчёт идёт с понедельника, а в конце недели сезон обнуляется и начинается заново. Здесь же можно вступить в одну из четырёх команд — Шоколадные, Ванильные, Карамельные или Ягодные — и соревноваться вместе с командой в общем зачёте по сумме очков всех участников.' },
       { ic: ICON.users(20), t: 'Друзья', d: 'Позови друга в игру по своей ссылке — как только он присоединится, тебе начислится 30 000 монет, а другу — 2 500 монет на старт. Ссылку можно скопировать или отправить прямо из игры кнопкой «Позвать».' },
     ];
@@ -1133,28 +1131,16 @@
   }
   function closeGuide() { const g = ov && ov.querySelector('#ck-guide'); if (g) g.classList.remove('on'); }
 
-  // ── Вкладка «Голуби»: сегмент «Помощники» (карточки бизнесов, старая механика) /
-  // «Коллекция» (альбом пород — window.CatDove, public/js/catdove.js). Коллекция
-  // монтируется лениво при первом переключении на неё — не грузим лишний JS-модуль,
-  // пока юзер ни разу не открыл сегмент.
-  let doveSeg = 'help', doveColMounted = false, doveSegTouched = false;
-  const doveColSeen = () => { try { return localStorage.getItem('ck_dove_col_seen') === '1'; } catch (_) { return false; } };
-  function setDoveSeg(seg, byUser) {
-    if (byUser) doveSegTouched = true;
-    doveSeg = seg;
-    ov.querySelectorAll('#ck-dove-seg .ck-seg__b').forEach(b => b.classList.toggle('on', b.dataset.seg === seg));
-    const help = ov.querySelector('#ck-dovelist'), col = ov.querySelector('#ck-dove-col');
-    if (help) help.style.display = seg === 'help' ? '' : 'none';
-    if (col) col.style.display = seg === 'col' ? '' : 'none';
-    if (seg === 'col' && !doveColMounted && window.CatDove) { doveColMounted = true; window.CatDove.mount(col, api); }
-    // мини-тур альбома пород при первом входе новичка в сегмент (контент catdove
-    // грузится асинхронно — задержка; якорь ещё не отрисован → мягкий выход, покажется в след. раз)
-    if (seg === 'col' && tourActive && tourKind === 'dove') endTour(false); // обзорный тур уступает туру альбома
-    if (seg === 'col' && freshPlayer() && !tourSeen('col')) setTimeout(() => { if (tab === 'dove' && doveSeg === 'col' && !tourActive) startTour('col'); }, 1100);
-    if (seg === 'col') { // открыл коллекцию — гасим «новинку» на сегменте
-      try { localStorage.setItem('ck_dove_col_seen', '1'); } catch (_) {}
-      const cb = ov.querySelector('#ck-dove-seg .ck-seg__b[data-seg="col"]'); if (cb) cb.classList.remove('ck-seg__b--new');
-    }
+  // ── Вкладка «Голуби» = альбом пород (window.CatDove, public/js/catdove.js).
+  // Монтируется лениво при первом входе — не грузим модуль, пока вкладку не открыли.
+  // (Сегмент «Помощники» / витрина бизнес-голубей удалён по решению юзера 04.08.2026.)
+  let doveColMounted = false;
+  function mountDoveCol() {
+    const col = ov.querySelector('#ck-dove-col');
+    if (col && !doveColMounted && window.CatDove) { doveColMounted = true; window.CatDove.mount(col, api); }
+    // тур альбома при первом входе новичка — с задержкой на асинхронный монтаж CatDove
+    // (якорь ещё не отрисован → мягкий выход, покажется в следующий раз)
+    if (freshPlayer() && !tourSeen('col')) setTimeout(() => { if (tab === 'dove' && !tourActive) startTour('col'); }, 1100);
   }
   // Бейдж непрочитанной почты голубятни на кнопке навбара — грузится один раз при
   // старте игры и при каждом открытии вкладки «Голуби» (unreadMail из /api/pigeons).
@@ -1167,15 +1153,6 @@
     const d = await api('/api/pigeons').catch(() => null);
     if (!d) return;
     updateDoveBadge(Number(d.unreadMail) || 0);
-    // Дискаверабилити «Коллекции»: есть голуби, но игрок ещё не открывал сегмент —
-    // подсвечиваем его точкой и по умолчанию открываем вкладку «Голуби» сразу на нём
-    // (сегмент «Помощники» остаётся в одном тапе). Иначе новая коллекция незаметна.
-    const owned = Array.isArray(d.inventory) ? d.inventory.length : 0;
-    if (owned > 0 && !doveColSeen()) {
-      const cb = ov && ov.querySelector('#ck-dove-seg .ck-seg__b[data-seg="col"]');
-      if (cb) cb.classList.add('ck-seg__b--new');
-      if (!doveSegTouched) { doveSeg = 'col'; if (tab === 'dove') setDoveSeg('col'); }
-    }
   }
 
   function setTab(t) {
@@ -1198,7 +1175,7 @@
     ov.querySelector('#ck-scr-top').classList.toggle('on', t === 'top');
     ov.querySelectorAll('.ck-nav__b').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
     if (t === 'up') { renderUpgrades(); coach('up', COACH.up.t, '#ck-uplist', { icon: ICON[COACH.up.icon](18) }); }
-    if (t === 'dove') { renderDove(); setDoveSeg(doveSeg); coach('dove', COACH.dove.t, '#ck-dovelist', { icon: ICON[COACH.dove.icon](18) }); loadDoveBadge(); }
+    if (t === 'dove') { mountDoveCol(); loadDoveBadge(); }
     if (t === 'tasks') renderTasks();
     if (t === 'top') { renderTop(); coach('top', COACH.top.t, '#ck-toplist', { icon: ICON[COACH.top.icon](18) }); }
     tourOnTab(t);
@@ -1766,55 +1743,8 @@
     list.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { window.haptic && window.haptic('selection'); upCat = b.dataset.cat; renderUpgrades(); });
     list.querySelectorAll('[data-act]').forEach(b => b.onclick = () => buy(b.dataset.act, b.dataset.id || undefined));
   }
-  function renderDove() {
-    const list = ov.querySelector('#ck-dovelist'); if (!st) { list.innerHTML = ''; return; }
-    const owned = st.cards.filter(c => c.level > 0).length, total = st.cards.length;
-    // Интро строится на КОНТРАСТЕ с альбомом пород: помощники не выпадают и не
-    // покупаются здесь — приходят сами за бизнесы «Прокачки» (витрина прогресса).
-    let h = `<div style="text-align:center;color:var(--muted);font-size:13px;margin:0 0 10px;line-height:1.5">Помощники приходят <b style="color:var(--gold-l)">сами</b>: заведи бизнес в «Прокачке» — голубь займёт место здесь. Собрано <b style="color:var(--gold-l)">${owned}/${total}</b>; награды за комплект — в «Призах» → Достижения.</div>`;
-    if (owned < total) h += `<button class="ck-card__buy" id="ck-dove-goup" style="width:100%;justify-content:center;margin-bottom:12px">${ICON.bolt(15)} Открыть «Прокачку»</button>`;
-    for (const ct of CARD_CATS) {
-      const cards = st.cards.filter(c => c.cat === ct.id); const got = cards.filter(c => c.level > 0).length;
-      h += `<div class="ck-sect">${ct.name} · ${got}/${cards.length}</div><div class="ck-dovegrid">`;
-      let i = 0;
-      for (const c of cards) {
-        const has = c.level > 0;
-        const art = BIZ_ART_V ? `<img src="/assets/images/biz/${c.id}.png?v=${BIZ_ART_V}" alt="" loading="lazy">` : cardIcon(c.id, 36);
-        h += `<div class="ck-dove ${has ? 'got' : 'silh'}" data-helper="${c.id}" style="animation-delay:${(i * 0.03).toFixed(2)}s"><div class="ck-dove__art">${art}${has ? '' : `<span class="ck-dove__q">${ICON.lock(30)}</span>`}</div><div class="ck-dove__n">${has ? c.name : '???'}</div><div class="ck-dove__role">${has ? 'Ур. ' + c.level : 'не открыт'}</div></div>`;
-        i++;
-      }
-      h += '</div>';
-    }
-    list.innerHTML = h;
-    const goUp = list.querySelector('#ck-dove-goup');
-    if (goUp) goUp.onclick = () => { window.haptic && window.haptic('selection'); setTab('up'); };
-    // Тап по закрытому помощнику → попап возможностей (что за бизнес, доход, как открыть)
-    list.querySelectorAll('.ck-dove.silh').forEach(el => {
-      el.onclick = () => { const c = st.cards.find(x => x.id === el.dataset.helper); if (c) helperPopup(c); };
-    });
-  }
-  // Возможности закрытого помощника: имя бизнеса не секрет (виден в «Прокачке»), поэтому
-  // показываем честно — направление, доход 1-го уровня, цену/условие открытия и CTA.
-  function helperPopup(c) {
-    const pop = ov && ov.querySelector('#ck-pop'); if (!pop) return;
-    window.haptic && window.haptic('light');
-    const catName = (CARD_CATS.find(x => x.id === c.cat) || {}).name || '';
-    const art = BIZ_ART_V ? `<img src="/assets/images/biz/${c.id}.png?v=${BIZ_ART_V}" alt="" style="width:84px;height:84px;object-fit:contain;filter:brightness(0);opacity:.3">` : '';
-    const how = c.locked
-      ? `Бизнес станет доступен с ${c.req} уровня котика`
-      : `Заведи бизнес «${c.name}» в «Прокачке» — первый уровень за ${fmt(c.price)} монет`;
-    pop.innerHTML = `<h3>${ICON.dove(20)} ${c.name}</h3>
-      <div style="margin:4px 0">${art}</div>
-      <div style="color:var(--muted);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.7px">${catName}</div>
-      <div class="v" style="font-size:20px">${COIN(18)} +${fmt(c.profit)} / час</div>
-      <div style="color:var(--muted);font-size:13px;line-height:1.5;max-width:250px;margin:0 auto">${how}. Как только бизнес заработает — этот голубь займёт своё место в голубятне.</div>
-      ${c.locked ? '' : `<button id="ck-hp-up">Открыть «Прокачку»</button>`}
-      <button id="ck-pop-ok" style="${c.locked ? '' : 'background:rgba(255,255,255,.07);color:var(--ink);border-color:var(--line);'}">Закрыть</button>`;
-    pop.classList.add('on');
-    const up = pop.querySelector('#ck-hp-up');
-    if (up) up.onclick = () => { pop.classList.remove('on'); window.haptic && window.haptic('selection'); setTab('up'); };
-    pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
-  }
+  // (renderDove/helperPopup — витрина бизнес-голубей «Помощники» — удалены 04.08.2026:
+  //  вкладка «Голуби» теперь = альбом пород CatDove, монтируется в mountDoveCol.)
   function skelRows(n) { let h = ''; for (let i = 0; i < n; i++) h += '<div class="ck-skrow"><span class="sk-r ck-skel"></span><span class="sk-n ck-skel"></span><span class="sk-v ck-skel"></span></div>'; return h; }
   function emptyState(ic, title, sub) { return `<div class="ck-empty"><div class="ck-empty__ic">${ic}</div><div class="ck-empty__t">${title}</div><div class="ck-empty__s">${sub}</div></div>`; }
   async function renderTop() {
@@ -2228,14 +2158,8 @@
     up: [
       { text: 'Это «Прокачка» — сердце дохода. Наверху бусты: Мультитап (+1 за тап) и Запас энергии', anchor: '#ck-uplist', anchorFn: function () { return ov.querySelector('#ck-uplist .ck-card'); }, pos: 'bottom' },
       { text: 'Бизнесы приносят монеты САМИ, даже когда ты офлайн. «Пекарня» за 300 — отличный первый шаг', anchor: '#ck-uplist', anchorFn: function () { const b = ov.querySelector('[data-id="bakery"]'); return (b && (b.closest('.ck-biz') || b.closest('.ck-card'))) || ov.querySelector('#ck-uplist'); }, pos: 'bottom' },
-      { text: 'Четыре направления: Производство, Маркетинг, Персонал, Сеть. За каждый заведённый бизнес прилетает голубь-помощник', anchor: '.ck-cats', pos: 'bottom' },
+      { text: 'Четыре направления: Производство, Маркетинг, Персонал, Сеть. Заводи бизнесы — доход капает даже когда игра закрыта', anchor: '.ck-cats', pos: 'bottom' },
       { text: 'Чем выше уровень бизнеса, тем дороже следующий — но и доход растёт. Копи и вкладывай!', anchor: '#ck-uplist', anchorFn: function () { return ov.querySelector('#ck-uplist .ck-biz') || ov.querySelector('#ck-uplist'); }, pos: 'bottom' },
-    ],
-    dove: [
-      { text: 'Голубятня! Тут два вида птиц — смотри на подписи под кнопками', anchor: '#ck-dove-seg', pos: 'bottom' },
-      { text: '«Помощники» приходят сами за бизнесы из «Прокачки» — это витрина твоего прогресса. Тапни любого — расскажу про него', anchor: '#ck-dovelist', pos: 'top' },
-      { text: 'А в «Альбоме пород» птицы ВЫПАДАЮТ за игру: комбо, мини-игры, сундук. Собирай сеты — за полный сет приз', anchor: '#ck-dove-seg', anchorFn: function () { return ov.querySelector('#ck-dove-seg [data-seg="col"]'); }, pos: 'bottom' },
-      { text: 'Там же «Гонка стаи» (заявка раз в неделю, отборочный полёт) и драг-заезды со ставками. Мои голуби — быстрейшие!', anchor: '#ck-dove-seg', anchorFn: function () { return ov.querySelector('#ck-dove-seg [data-seg="col"]'); }, pos: 'bottom' },
     ],
     tasks: [
       { text: '«Призы» — сюда каждый день! Сундук удачи: монеты, турбо или джекпот', anchor: '#ck-taskslist', anchorFn: function () { return ov.querySelectorAll('#ck-taskslist .ck-bonus')[0]; }, pos: 'bottom' },
