@@ -771,6 +771,11 @@
       .ck-uphd{padding:16px 16px 6px;text-align:center;width:100%;box-sizing:border-box}.ck-uphd .b{font-family:'Nunito',sans-serif;font-weight:700;font-size:24px;display:inline-flex;align-items:center;gap:8px;color:var(--cream)}.ck-uphd .b .ck-i{color:var(--gold)}.ck-uphd .p{color:var(--gold);font-weight:700;font-size:13px;margin-top:3px;display:inline-flex;align-items:center;gap:5px;font-variant-numeric:tabular-nums}
       .ck-uplist{flex:1;overflow:auto;padding:6px 12px 16px;width:100%;box-sizing:border-box}
       .ck-sect{color:var(--muted);font-weight:700;font-size:11px;margin:12px 4px 7px;text-transform:uppercase;letter-spacing:.7px}
+      .ck-bank{background:linear-gradient(160deg,rgba(212,169,78,.14),rgba(212,169,78,.05));border:1px solid rgba(212,169,78,.35);border-radius:14px;padding:11px 12px;margin:0 0 10px}
+      .ck-bank__hd{font-weight:800;font-size:13.5px;color:var(--gold,#e8cf9a)}
+      .ck-bank__sub{color:var(--muted);font-size:11.5px;margin-top:3px}
+      .ck-bank__bar{height:8px;border-radius:6px;background:rgba(0,0,0,.35);overflow:hidden;margin-top:7px}
+      .ck-bank__bar i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,#d4a94e,#f0d896);transition:width .4s}
       .ck-seg{display:flex;gap:6px;width:100%;max-width:360px;margin:2px 0 8px;padding:0 12px;box-sizing:border-box}
       .ck-seg__b{position:relative;flex:1;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:12px;padding:9px 4px;font-weight:700;font-size:12.5px;cursor:pointer;min-height:38px}
       .ck-seg__b.on{background:linear-gradient(180deg,#ffe7a6,#eebf52 58%,#cf9a36);color:#5a2028;border-color:#ffe9b3}
@@ -1865,7 +1870,32 @@
     const my = d.mySquad;
     const rows = d.squads.map((s, i) => `<div class="ck-row${s.id === my ? ' me' : ''}"><div class="r">${i < 3 ? ICON.medal(18) : i + 1}</div><div class="n">${s.name} <span style="color:var(--muted);font-size:11px">· ${s.members}</span></div><div class="v">${COIN(13)} ${fmt(s.points)}</div></div>`).join('');
     const chips = SQUADS.map(s => `<button class="ck-cat-chip${s.id === my ? ' on' : ''}" data-squad="${s.id}">${s.name}</button>`).join('');
-    return { html: `<div class="ck-sect">Команды</div><div style="color:var(--muted);font-size:12px;text-align:center;margin:0 0 6px">Монеты всех игроков команды складываются в общий счёт</div>${rows}<div style="color:var(--muted);font-size:12px;text-align:center;margin:6px 0 4px">${my ? 'Сменить команду:' : 'Выбери команду:'}</div><div class="ck-cats">${chips}</div>`, wire: () => { ov.querySelectorAll('[data-squad]').forEach(b => b.onclick = () => joinSquadAct(b.dataset.squad)); } };
+    // Копилка стаи: прогресс к цели недели → ×1.25 к тапам всей команде
+    let bankHtml = '';
+    if (my && d.bank) {
+      const b = d.bank;
+      const pct = Math.min(100, Math.round(b.sum / b.target * 100));
+      const myName = (SQUADS.find(s => s.id === my) || {}).name || 'стаи';
+      const presets = [1000, 5000, 25000].map(v => `<button class="ck-cat-chip" data-bank="${v}" ${(st && st.balance < v) ? 'disabled' : ''}>${fmt(v)}</button>`).join('');
+      bankHtml = b.reached
+        ? `<div class="ck-bank"><div class="ck-bank__hd">🏆 Копилка «${myName}» полна!</div><div class="ck-bank__sub">Вся стая тапает с множителем ×${b.mult} до конца недели</div><div class="ck-bank__bar"><i style="width:100%"></i></div></div>`
+        : `<div class="ck-bank"><div class="ck-bank__hd">🏦 Копилка стаи · ${fmt(b.sum)} / ${fmt(b.target)}</div><div class="ck-bank__bar"><i style="width:${pct}%"></i></div><div class="ck-bank__sub">Наполните вместе до вс — вся стая получит ×${b.mult} к тапам${b.myTotal ? ` · твой вклад ${fmt(b.myTotal)}` : ''}</div><div class="ck-cats" style="margin-top:6px">${presets}</div>${b.myToday >= b.dayCap ? `<div class="ck-bank__sub">Дневной лимит вклада исчерпан — продолжишь ${untilNewDay()}</div>` : ''}</div>`;
+    }
+    return { html: `<div class="ck-sect">Команды</div><div style="color:var(--muted);font-size:12px;text-align:center;margin:0 0 6px">Монеты всех игроков команды складываются в общий счёт</div>${bankHtml}${rows}<div style="color:var(--muted);font-size:12px;text-align:center;margin:6px 0 4px">${my ? 'Сменить команду:' : 'Выбери команду:'}</div><div class="ck-cats">${chips}</div>`, wire: () => {
+      ov.querySelectorAll('[data-squad]').forEach(b => b.onclick = () => joinSquadAct(b.dataset.squad));
+      ov.querySelectorAll('[data-bank]').forEach(b => b.onclick = () => donateBank(Number(b.dataset.bank)));
+    } };
+  }
+  async function donateBank(amount) {
+    const d = await api('/api/clicker/squad-bank', { method: 'POST', body: JSON.stringify({ amount }) }).catch(() => null);
+    if (d && !d.error) {
+      st = d; sfxReward(); window.haptic && window.haptic('success');
+      if (d.bank && d.bank.reached) { confettiBurst(); flashMsg(`🏆 Копилка полна! ×${d.bank.mult} к тапам всей стаи`); }
+      else flashMsg(`В копилку: +${fmt(d.donated)}`);
+      renderTop(); bumpBalance();
+    } else {
+      flashMsg(!d ? 'Нет связи' : d.error === 'day_cap' ? 'Дневной лимит вклада исчерпан' : d.error === 'bad_amount' ? 'Не хватает монет' : 'Не получилось');
+    }
   }
   async function joinSquadAct(id) {
     const d = await api('/api/clicker/squad', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null);

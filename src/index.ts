@@ -41,7 +41,7 @@ import { initAccountLinkSchema } from "./account-link";
 import adminGameRouter from "./routes/admin-game";
 import { initPetSchema } from "./pet";
 import clickerRouter from "./routes/clicker";
-import { initClickerSchema, registerRef, closeWeeklySeason, pushWeeklyWinners, getRefOrderCandidates, markRefOrderRewarded } from "./clicker";
+import { initClickerSchema, initSquadBankSchema, registerRef, closeWeeklySeason, pushWeeklyWinners, getRefOrderCandidates, markRefOrderRewarded } from "./clicker";
 import { initPigeonSchema, RACE_ENABLED, closeRaceWeek, expireTrades } from "./pigeons";
 import { initAnalyticsSchema, trackEvent, wasFunnelSent, markFunnelSent, getDormantPlayers } from "./analytics";
 import { initClickerPushSchema, runClickerRetentionPush } from "./clicker-push";
@@ -2161,6 +2161,7 @@ async function main() {
   await initBonusSchema();
   await initAppAuthSchema();
   await initAccountLinkSchema();
+  await initSquadBankSchema();
   startBonusWorker();
 
   // Sentry error handler — после всех routes, до listen

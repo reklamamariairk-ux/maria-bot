@@ -467,7 +467,9 @@ export async function tapClicker(chatId: number, taps: number): Promise<ClickerS
     const turbo = r.turbo_until && new Date(r.turbo_until).getTime() > Date.now() ? TURBO_MULT : 1;
     // «Сладкие тапы» в батче: сколько кратных SWEET_TAP_EVERY попало в (oldTaps, oldTaps+can]
     const crits = sweetCritsIn(Number(r.taps || 0), can);
-    const earned = Math.floor((can + crits * (SWEET_TAP_MULT - 1)) * perTapFor(r.multitap_level) * turbo * gainMult(r.prestige));
+    // Копилка стаи: цель недели закрыта → ×SQUAD_BANK_MULT к тапам (кэш 60с)
+    const bankMult = (await squadBankActive(r.squad || null)) ? SQUAD_BANK_MULT : 1;
+    const earned = Math.floor((can + crits * (SWEET_TAP_MULT - 1)) * perTapFor(r.multitap_level) * turbo * gainMult(r.prestige) * bankMult);
     r.energy -= can * TAP_COST; r.balance = Number(r.balance) + earned; r.total_earned = Number(r.total_earned) + earned;
     await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, taps=taps+$4, energy=$5, updated_at=NOW() WHERE chat_id=$1`,
       [chatId, r.balance, r.total_earned, can, r.energy]);
@@ -927,6 +929,132 @@ export async function pushWeeklyWinners(push: PushService): Promise<{ sent: numb
   }
   if (sent) log.info({ endedKey, sent }, "[weekly] winners notified");
   return { sent };
+}
+
+// ── Копилка стаи (соц-механика, 08.2026) ────────────────────────────────────
+// Недельная общая цель команды: игроки жертвуют монеты из своего баланса
+// (монеты СГОРАЮТ — это sink, не передача другому игроку → экономика цела).
+// Цель достигнута → вся стая тапает с множителем до конца недели (Иркутск).
+// ⚠️ Константы продублированы во фронте catclick.js (squadBlock).
+export const SQUAD_BANK_MULT = 1.25;
+export const SQUAD_BANK_BASE_TARGET = 100_000;
+export const SQUAD_BANK_PER_MEMBER = 20_000;    // за каждого активного (7д) сверх 5
+export const SQUAD_BANK_MIN_DONATE = 100;
+export const SQUAD_BANK_DAY_CAP = 50_000;       // вклад одного игрока в день
+
+/** Цель недели по числу активных участников — чистая, для юнит-тестов. */
+export function squadBankTarget(activeMembers: number): number {
+  return SQUAD_BANK_BASE_TARGET + Math.max(0, Math.floor(activeMembers) - 5) * SQUAD_BANK_PER_MEMBER;
+}
+
+/** Сколько игрок может вложить сейчас — чистая, для юнит-тестов. */
+export function squadBankClamp(balance: number, donatedToday: number, want: number): number {
+  const room = Math.max(0, SQUAD_BANK_DAY_CAP - Math.max(0, donatedToday));
+  const amount = Math.min(Math.floor(want), Math.floor(balance), room);
+  return amount >= SQUAD_BANK_MIN_DONATE ? amount : 0;
+}
+
+export async function initSquadBankSchema(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS clicker_squad_bank (
+      week      TEXT   NOT NULL,
+      squad     TEXT   NOT NULL,
+      chat_id   BIGINT NOT NULL,
+      total     BIGINT NOT NULL DEFAULT 0,
+      today     BIGINT NOT NULL DEFAULT 0,
+      today_key TEXT,
+      PRIMARY KEY (week, squad, chat_id)
+    );
+    CREATE INDEX IF NOT EXISTS squad_bank_week_squad ON clicker_squad_bank (week, squad);
+  `);
+}
+
+export interface SquadBankStatus {
+  target: number; sum: number; reached: boolean; mult: number;
+  myTotal: number; myToday: number; dayCap: number; minDonate: number;
+  topDonors: { chatId: number; total: number }[];
+}
+
+async function squadBankSum(squad: string): Promise<number> {
+  const { rows } = await pool.query(
+    `SELECT COALESCE(SUM(total),0) AS s FROM clicker_squad_bank WHERE week=$1 AND squad=$2`,
+    [weekKey(), squad]);
+  return Number(rows[0].s);
+}
+
+export async function squadBankStatus(squad: string, chatId?: number): Promise<SquadBankStatus> {
+  const wk = weekKey();
+  const [sum, active, mine, top] = await Promise.all([
+    squadBankSum(squad),
+    pool.query(`SELECT COUNT(*)::int AS n FROM clicker_state WHERE squad=$1 AND updated_at > NOW() - INTERVAL '7 days'`, [squad]),
+    chatId
+      ? pool.query(`SELECT total, today, today_key FROM clicker_squad_bank WHERE week=$1 AND squad=$2 AND chat_id=$3`, [wk, squad, chatId])
+      : Promise.resolve({ rows: [] as { total: number; today: number; today_key: string }[] }),
+    pool.query(`SELECT chat_id, total FROM clicker_squad_bank WHERE week=$1 AND squad=$2 ORDER BY total DESC LIMIT 3`, [wk, squad]),
+  ]);
+  const target = squadBankTarget(Number(active.rows[0]?.n || 0));
+  const my = mine.rows[0];
+  const myToday = my && my.today_key === todayIrkutsk() ? Number(my.today) : 0;
+  return {
+    target, sum, reached: sum >= target, mult: SQUAD_BANK_MULT,
+    myTotal: Number(my?.total || 0), myToday, dayCap: SQUAD_BANK_DAY_CAP, minDonate: SQUAD_BANK_MIN_DONATE,
+    topDonors: top.rows.map((r) => ({ chatId: Number(r.chat_id), total: Number(r.total) })),
+  };
+}
+
+export async function donateSquadBank(chatId: number, want: number):
+  Promise<{ ok: boolean; reason?: string; donated?: number; bank?: SquadBankStatus; state?: ClickerState }> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { r, cl } = await refresh(client, chatId);
+    const squad = r.squad as string | null;
+    if (!squad) { await client.query("ROLLBACK"); return { ok: false, reason: "no_squad" }; }
+    const wk = weekKey(), today = todayIrkutsk();
+    const cur = await client.query(
+      `SELECT total, today, today_key FROM clicker_squad_bank WHERE week=$1 AND squad=$2 AND chat_id=$3 FOR UPDATE`,
+      [wk, squad, chatId]);
+    const donatedToday = cur.rows[0] && cur.rows[0].today_key === today ? Number(cur.rows[0].today) : 0;
+    const amount = squadBankClamp(Number(r.balance), donatedToday, want);
+    if (!amount) { await client.query("ROLLBACK"); return { ok: false, reason: donatedToday >= SQUAD_BANK_DAY_CAP ? "day_cap" : "bad_amount" }; }
+    r.balance = Number(r.balance) - amount;
+    await client.query(`UPDATE clicker_state SET balance=$2, updated_at=NOW() WHERE chat_id=$1`, [chatId, r.balance]);
+    await client.query(
+      `INSERT INTO clicker_squad_bank (week, squad, chat_id, total, today, today_key)
+       VALUES ($1,$2,$3,$4,$4,$5)
+       ON CONFLICT (week, squad, chat_id) DO UPDATE SET
+         total = clicker_squad_bank.total + $4,
+         today = CASE WHEN clicker_squad_bank.today_key = $5 THEN clicker_squad_bank.today + $4 ELSE $4 END,
+         today_key = $5`,
+      [wk, squad, chatId, amount, today]);
+    await client.query("COMMIT");
+    _bankCache.delete(squad); // бафф мог включиться прямо этим вкладом
+    trackEvent(chatId, "squad_bank", { squad, amount });
+    return { ok: true, donated: amount, bank: await squadBankStatus(squad, chatId), state: buildState(r, cl, 0) };
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally { client.release(); }
+}
+
+// Бафф в tapClicker дёргается на каждый батч тапов → кэш 60с на стаю.
+const _bankCache = new Map<string, { reached: boolean; ts: number }>();
+/** Только для e2e-тестов: сбросить кэш баффа. */
+export function _clearSquadBankCache(): void { _bankCache.clear(); }
+async function squadBankActive(squad: string | null): Promise<boolean> {
+  if (!squad) return false;
+  const hit = _bankCache.get(squad);
+  if (hit && Date.now() - hit.ts < 60_000) return hit.reached;
+  let reached = false;
+  try {
+    const [sum, active] = await Promise.all([
+      squadBankSum(squad),
+      pool.query(`SELECT COUNT(*)::int AS n FROM clicker_state WHERE squad=$1 AND updated_at > NOW() - INTERVAL '7 days'`, [squad]),
+    ]);
+    reached = sum >= squadBankTarget(Number(active.rows[0]?.n || 0));
+  } catch { return false; }
+  _bankCache.set(squad, { reached, ts: Date.now() });
+  return reached;
 }
 
 /** Команды: рейтинг по сумме намолоченного, выбор/смена команды. */

@@ -5,7 +5,7 @@
  * POST /api/clicker/boost {type:turbo|energy} · GET /api/clicker/top
  */
 import { Router } from "express";
-import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements, getRewards, redeemReward, claimBonus, openChest, claimRain, claimGame, getMilestones, claimMilestone, syncPurchaseBonus, migrateGuest, redeemCode, getSquads, joinSquad, prestigeReset, welcomePromoShown, markWelcomePromoShown, getFtue, claimFtue } from "../clicker";
+import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements, getRewards, redeemReward, claimBonus, openChest, claimRain, claimGame, getMilestones, claimMilestone, syncPurchaseBonus, migrateGuest, redeemCode, getSquads, joinSquad, squadBankStatus, donateSquadBank, prestigeReset, welcomePromoShown, markWelcomePromoShown, getFtue, claimFtue } from "../clicker";
 import { rateLimit, requireAdminToken } from "../middleware";
 import { requireTgUser, getTgUser } from "../auth";
 import { getBonusQueue, ackBonusQueue, queueAuthOk } from "../bonus1c";
@@ -138,7 +138,22 @@ router.post("/api/clicker/cipher", requireTgUser, rateLimit(30), async (req, res
 
 router.get("/api/clicker/squads", requireTgUser, rateLimit(60), async (req, res) => {
   const u = getTgUser(req)!;
-  try { res.json(await getSquads(u.id)); } catch (e) { log.error({ err: e, chatId: u.id }, "[squads]"); res.status(500).json({ error: "internal" }); }
+  try {
+    const d = await getSquads(u.id);
+    // Копилка своей стаи — для прогресс-бара в блоке команд
+    const bank = d.mySquad ? await squadBankStatus(d.mySquad, u.id) : null;
+    res.json({ ...d, bank });
+  } catch (e) { log.error({ err: e, chatId: u.id }, "[squads]"); res.status(500).json({ error: "internal" }); }
+});
+
+router.post("/api/clicker/squad-bank", requireTgUser, rateLimit(30), async (req, res) => {
+  const u = getTgUser(req)!;
+  const amount = Number((req.body as { amount?: unknown })?.amount);
+  try {
+    const r = await donateSquadBank(u.id, amount);
+    if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
+    res.json({ donated: r.donated, bank: r.bank, ...r.state });
+  } catch (e) { log.error({ err: e, chatId: u.id }, "[squad-bank]"); res.status(500).json({ error: "internal" }); }
 });
 
 router.post("/api/clicker/squad", requireTgUser, rateLimit(20), async (req, res) => {
