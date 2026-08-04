@@ -588,4 +588,18 @@
   });
   window.catPetOpen = open;
   window.catPetClose = close;
+  // Лёгкий сигнал «Василию нужна забота» для бейджа на кнопке «Дом» (catclick renderAll).
+  // Читает локальный кэш + декей по времени, БЕЗ похода на сервер и без записи (чистая
+  // проверка). Нет кэша (ни разу не открывали Дом) → false: новичка с полным питомцем
+  // не пугаем. Порог 30 = «пора покормить/поиграть/уложить/помыть».
+  window.catPetAlert = function () {
+    try {
+      let s; try { s = JSON.parse(lsGet(LS)); } catch (_) {}
+      if (!s) s = memState;
+      if (!s) return false;
+      const hrs = Math.max(0, (Date.now() - (s._ts || Date.now())) / 3600000);
+      const dec = { hunger: 6, mood: 4, energy: 3, hygiene: 2.5 };
+      return ['hunger', 'mood', 'energy', 'hygiene'].some(k => Math.max(0, Math.round((s[k] == null ? 80 : s[k]) - dec[k] * hrs)) < 30);
+    } catch (_) { return false; }
+  };
 })();

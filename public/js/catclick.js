@@ -1716,6 +1716,15 @@
       const ready = (st.chestAvailable ? 1 : 0) + ((st.combo && st.combo.complete && !st.combo.claimed) ? 1 : 0);
       if (ready > 0) { tb.textContent = String(ready); tb.hidden = false; } else tb.hidden = true;
     }
+    // бейдж «Дом»: Василию нужна забота (голод/сон/настроение/чистота < 30). Cross-module
+    // сигнал из catpet.js (window.catPetAlert) — читает локальный кэш + декей, без сервера.
+    const hb = ov.querySelector('.ck-nav__b[data-tab="home"]');
+    if (hb) {
+      const petAlert = !!(window.catPetAlert && window.catPetAlert());
+      let hbd = hb.querySelector('.ck-badge');
+      if (petAlert) { if (!hbd) { hbd = document.createElement('span'); hbd.className = 'ck-badge'; hb.appendChild(hbd); } hbd.textContent = '!'; hbd.hidden = false; }
+      else if (hbd) hbd.hidden = true;
+    }
     // ивент-баннер (×N монеты)
     const evb = ov.querySelector('#ck-event');
     if (st.event && st.event.active) { evb.hidden = false; evb.innerHTML = `${ICON.bolt(15)} <b>${st.event.name}</b> · до конца ${fmtDur(st.event.endsTs - Date.now())}`; }
