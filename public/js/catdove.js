@@ -79,6 +79,8 @@
   // сделать несколько действий подряд, не закрываясь на каждой — render() пересобирает
   // #cd-scrim/#cd-sheet и убил бы открытый шит, поэтому откладываем его до closeSheet().
   let race = null, recipients = null, tradesCache = null, tradesTab = 'toMe', mailCache = null;
+  // Бейдж входящих обменов на кнопке «Обмены» + флаг «создаю обмен с доски» (для нумерации шагов).
+  let incomingTrades = 0, tradesBadgeInit = false, tradeFromBoard = false;
   let tcState = null, msState = null, needsRerenderOnClose = false;
 
   // ── стили (свой блок, не трогаем catclick-css — переменные --gold-*/--muted/--panel/
@@ -226,6 +228,11 @@
       .cd-subtabs{display:flex;gap:6px;margin-bottom:12px;background:rgba(0,0,0,.22);border-radius:12px;padding:3px}
       .cd-subtab{flex:1;text-align:center;padding:8px 4px;border-radius:10px;font-weight:700;font-size:11.5px;color:var(--muted);cursor:pointer;background:transparent;border:none}
       .cd-subtab.on{background:var(--panel);color:var(--gold-l)}
+      .cd-subcount{display:inline-flex;min-width:15px;height:15px;padding:0 4px;margin-left:4px;border-radius:8px;background:#e5484d;color:#fff;font-size:9px;font-weight:800;align-items:center;justify-content:center;vertical-align:middle}
+      .cd-steps{font-size:10px;color:var(--gold-l);font-weight:800;text-transform:uppercase;letter-spacing:.6px;text-align:center;margin:-2px 0 9px;opacity:.85}
+      .cd-deal{display:flex;align-items:center;justify-content:center;gap:7px;background:rgba(0,0,0,.2);border-radius:11px;padding:7px 10px;margin:-2px 0 11px;font-size:12px;font-weight:700;color:var(--ink)}
+      .cd-deal img{width:26px;height:26px;border-radius:7px;object-fit:contain}
+      .cd-deal__arw{color:var(--gold-l);font-weight:900}
       .cd-traderow{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:9px 10px;margin-bottom:8px}
       .cd-traderow__swap{display:flex;align-items:center;gap:7px;flex:1;min-width:0}
       .cd-traderow__art{width:34px;height:34px;border-radius:9px;background:rgba(238,191,82,.1);display:flex;align-items:center;justify-content:center;overflow:hidden;flex:none}
@@ -376,7 +383,7 @@
     container.innerHTML = `<div class="cd-root">
       <div class="cd-summary">Альбом пород — <b>${ownedCount}/16</b>. Породы <b>выпадают за игру</b>: комбо дня, мини-игры, сундук удачи и покупки; «порода недели» — чаще.</div>
       <div class="cd-navrow">
-        <button class="cd-navbtn" id="cd-nav-trades">${SWAP_ICON(15)} Обмены</button>
+        <button class="cd-navbtn" id="cd-nav-trades">${SWAP_ICON(15)} Обмены${incomingTrades > 0 ? `<span class="cd-navbadge">${incomingTrades > 9 ? '9+' : incomingTrades}</span>` : ''}</button>
         <button class="cd-navbtn" id="cd-nav-mail">${MAILBOX_ICON(15)} Почта${data.unreadMail > 0 ? `<span class="cd-navbadge">${data.unreadMail > 9 ? '9+' : data.unreadMail}</span>` : ''}</button>
       </div>
       ${raceHtml()}
@@ -388,6 +395,25 @@
       <div class="cd-pop-scrim" id="cd-pop-scrim"><div class="cd-pop" id="cd-pop"></div></div>
     </div>`;
     wire();
+    // Бейдж входящих обменов — один фоновый запрос при первом рендере альбома
+    // (после действий с обменами обновляется точечно через refreshTradesBadge).
+    if (authed() && !tradesBadgeInit) { tradesBadgeInit = true; refreshTradesBadge(); }
+  }
+  // Точечно обновляет бейдж «Обмены» (число входящих) без полного ре-рендера альбома.
+  function updateTradesBadgeDom() {
+    const btn = container && container.querySelector('#cd-nav-trades');
+    if (!btn) return;
+    let bd = btn.querySelector('.cd-navbadge');
+    if (incomingTrades > 0) {
+      if (!bd) { bd = document.createElement('span'); bd.className = 'cd-navbadge'; btn.appendChild(bd); }
+      bd.textContent = incomingTrades > 9 ? '9+' : incomingTrades;
+    } else if (bd) { bd.remove(); }
+  }
+  // Тянет доску обменов (и кэширует её, чтобы открытие было мгновенным) + считает входящие.
+  async function refreshTradesBadge() {
+    const d = await apiRef('/api/pigeons/trades').catch(() => null);
+    if (d && Array.isArray(d.toMe)) { tradesCache = d; incomingTrades = d.toMe.length; }
+    updateTradesBadgeDom();
   }
 
   function wire() {
@@ -457,7 +483,7 @@
     const tuneBtn = sh.querySelector('#cd-tune');
     if (tuneBtn) tuneBtn.onclick = () => openTune(breedId);
     const tradeBtn = sh.querySelector('#cd-trade-start');
-    if (tradeBtn) tradeBtn.onclick = () => openTradeWant(breedId);
+    if (tradeBtn) tradeBtn.onclick = () => { tradeFromBoard = false; openTradeWant(breedId); };
   }
 
   // ── Шит закрытой породы: характеристики до получения (имя не раскрываем —
@@ -620,7 +646,37 @@
     return recipients;
   }
 
-  // ── Обмены: создание предложения (из карточки, count>1) ────────────────────
+  // ── Обмены: создание предложения ───────────────────────────────────────────
+  // Мини-чип «отдаёшь X → хочешь Y» для контекста на шагах флоу.
+  function dealChip(giveId, wantId) {
+    const g = BY_ID.get(giveId), w = wantId ? BY_ID.get(wantId) : null;
+    const art = (id) => `<img src="/img/pigeons/${id}.webp?v=2" alt="" onerror="this.style.display='none'">`;
+    return `<div class="cd-deal">${art(giveId)}<span>${g ? g.name : giveId}</span>
+      <span class="cd-deal__arw">→</span>
+      ${w ? `${art(wantId)}<span>${w.name}</span>` : '<span style="color:var(--muted)">выбери</span>'}</div>`;
+  }
+  // Шаг 1 (с доски): выбери свою запасную породу. С карточки породы этот шаг пропущен
+  // (порода уже выбрана тапом по карточке), флоу начинается сразу с «что хочешь взамен».
+  function openTradeGive() {
+    tradeFromBoard = true;
+    tcState = { give: null, want: null };
+    haptic('light');
+    const sh = container.querySelector('#cd-sheet');
+    if (!sh) return;
+    const spares = Object.keys(data.invMap).filter(id => id !== 'champion' && data.invMap[id].count > 1);
+    if (!spares.length) {
+      sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Предложить обмен</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
+        ${emptyState('Нет запасных', 'Меняться можно только запасным дублем породы. Дубль появляется, когда порода выпадает во второй раз.')}`;
+      sh.querySelector('#cd-sheet-x').onclick = openTradesPage;
+      return;
+    }
+    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Что отдаёшь?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
+      <div class="cd-steps">Обмен · шаг 1 из 3</div>
+      <div class="cd-sheet__hint" style="margin-top:0">Только запасного дубля — базовый голубь остаётся у тебя</div>
+      ${pickGridHtml(spares, null)}`;
+    sh.querySelector('#cd-sheet-x').onclick = openTradesPage; // назад к доске
+    sh.querySelectorAll('.cd-pickcard').forEach(el => { el.onclick = () => openTradeWant(el.dataset.breed); });
+  }
   function openTradeWant(giveId) {
     tcState = { give: giveId, want: null };
     haptic('light');
@@ -628,9 +684,10 @@
     if (!sh) return;
     const ids = BREEDS.filter(b => b.id !== 'champion' && b.id !== giveId).map(b => b.id);
     sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Что хочешь взамен?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
-      <div class="cd-sheet__hint">Отдашь: ${BY_ID.get(giveId).name}</div>
+      ${tradeFromBoard ? '<div class="cd-steps">Обмен · шаг 2 из 3</div>' : ''}
+      ${dealChip(giveId, null)}
       ${pickGridHtml(ids, null)}`;
-    sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+    sh.querySelector('#cd-sheet-x').onclick = tradeFromBoard ? openTradeGive : closeSheet;
     sh.querySelectorAll('.cd-pickcard').forEach(el => { el.onclick = () => openTradeRecipient(el.dataset.breed); });
   }
   async function openTradeRecipient(wantId) {
@@ -640,11 +697,12 @@
     const sh = container.querySelector('#cd-sheet');
     if (!sh) return;
     sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Кому предложить?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
-      <div class="cd-sheet__hint">Отдашь ${BY_ID.get(tcState.give).name} → получишь ${BY_ID.get(wantId).name}</div>
+      ${tradeFromBoard ? '<div class="cd-steps">Обмен · шаг 3 из 3</div>' : ''}
+      ${dealChip(tcState.give, wantId)}
       <button class="cd-sheet__act" id="cd-trade-open">Всем на доску (открытый обмен)</button>
       <div class="cd-sect-t">Или выбери адресата</div>
       <div id="cd-trade-recip">${skeletonRows(2)}</div>`;
-    sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+    sh.querySelector('#cd-sheet-x').onclick = () => openTradeWant(tcState.give); // назад к выбору «взамен»
     sh.querySelector('#cd-trade-open').onclick = () => submitTrade(null);
     const rec = await loadRecipients();
     const box = sh.querySelector('#cd-trade-recip');
@@ -666,9 +724,10 @@
       const d = await apiRef('/api/pigeons/trade', { method: 'POST', body: JSON.stringify(body) }).catch(() => null);
       if (d && d.ok) {
         haptic('medium'); flash('Предложение создано');
-        tcState = null; tradesCache = null;
-        closeSheet();
-        await load(); render();
+        tcState = null; tradeFromBoard = false;
+        await load(); render();       // альбом обновился (запасной дубль ушёл в эскроу)
+        tradesTab = 'mine';
+        openTradesPage();             // возвращаемся на доску, вкладка «Мои» — видно новое предложение
       } else {
         flash(TRADE_CREATE_REASON[d && d.error] || 'Не получилось создать предложение');
       }
@@ -681,31 +740,44 @@
     const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
     if (!sc || !sh) return;
     sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Обмены</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
+      <div class="cd-sheet__hint" style="margin-top:2px">Меняйся дублями пород с другими игроками</div>
+      <button class="cd-sheet__act" id="cd-trade-create">${SWAP_ICON(15)} Предложить обмен</button>
       <div class="cd-subtabs" id="cd-trade-tabs">
-        <button class="cd-subtab" data-t="toMe" type="button">Мне</button>
+        <button class="cd-subtab" data-t="toMe" type="button">Входящие<span class="cd-subcount" id="cd-sc-toMe" style="display:none"></span></button>
         <button class="cd-subtab" data-t="open" type="button">Доска</button>
-        <button class="cd-subtab" data-t="mine" type="button">Мои</button>
+        <button class="cd-subtab" data-t="mine" type="button">Мои<span class="cd-subcount" id="cd-sc-mine" style="display:none"></span></button>
       </div>
       <div id="cd-trade-list">${skeletonRows(3)}</div>`;
     sc.classList.add('on');
     requestAnimationFrame(() => sh.classList.add('on'));
     sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+    sh.querySelector('#cd-trade-create').onclick = openTradeGive;
     sh.querySelectorAll('.cd-subtab').forEach(b => { b.onclick = () => { tradesTab = b.dataset.t; renderTradesTab(); }; });
+    // Мгновенный рендер из кэша (refreshTradesBadge мог уже подтянуть доску), затем свежий запрос.
+    if (tradesCache) { if (!tradesCache.toMe.length && tradesTab === 'toMe') tradesTab = tradesCache.open.length ? 'open' : 'toMe'; renderTradesTab(); }
     const d = await apiRef('/api/pigeons/trades').catch(() => null);
-    tradesCache = (d && Array.isArray(d.open)) ? d : { open: [], toMe: [], mine: [] };
+    tradesCache = (d && Array.isArray(d.open)) ? d : (tradesCache || { open: [], toMe: [], mine: [] });
+    incomingTrades = tradesCache.toMe.length; updateTradesBadgeDom();
     if (!container.querySelector('#cd-trade-list')) return; // закрыто, пока грузили
     if (!tradesCache.toMe.length && tradesTab === 'toMe') tradesTab = tradesCache.open.length ? 'open' : 'toMe';
     renderTradesTab();
+  }
+  function updateSubCounts() {
+    const sh = container.querySelector('#cd-sheet'); if (!sh || !tradesCache) return;
+    const set = (id, n) => { const el = sh.querySelector(id); if (!el) return; if (n > 0) { el.textContent = n > 9 ? '9+' : n; el.style.display = ''; } else el.style.display = 'none'; };
+    set('#cd-sc-toMe', (tradesCache.toMe || []).length);
+    set('#cd-sc-mine', (tradesCache.mine || []).length);
   }
   function renderTradesTab() {
     const sh = container.querySelector('#cd-sheet');
     if (!sh || !tradesCache) return;
     sh.querySelectorAll('.cd-subtab').forEach(b => b.classList.toggle('on', b.dataset.t === tradesTab));
+    updateSubCounts();
     const box = sh.querySelector('#cd-trade-list');
     if (!box) return;
     const list = tradesCache[tradesTab] || [];
     if (!list.length) {
-      box.innerHTML = emptyState('Пусто', tradesTab === 'mine' ? 'У тебя нет открытых предложений.' : tradesTab === 'toMe' ? 'Тебе пока никто не предлагал обмен.' : 'На доске пока нет открытых предложений.');
+      box.innerHTML = emptyState('Пусто', tradesTab === 'mine' ? 'У тебя нет активных предложений. Нажми «Предложить обмен» выше.' : tradesTab === 'toMe' ? 'Тебе пока никто не предлагал обмен.' : 'На доске пусто. Нажми «Предложить обмен» — и оно появится тут для всех.');
       return;
     }
     box.innerHTML = list.map(t => tradeRowHtml(t, tradesTab)).join('');
@@ -741,6 +813,7 @@
         await load();
         const list = await apiRef('/api/pigeons/trades').catch(() => null);
         tradesCache = (list && Array.isArray(list.open)) ? list : tradesCache;
+        incomingTrades = (tradesCache.toMe || []).length; updateTradesBadgeDom();
         renderTradesTab();
       } else {
         flash(TRADE_ACCEPT_REASON[d && d.error] || 'Не получилось принять обмен');
@@ -759,6 +832,7 @@
         await load();
         const list = await apiRef('/api/pigeons/trades').catch(() => null);
         tradesCache = (list && Array.isArray(list.open)) ? list : tradesCache;
+        incomingTrades = (tradesCache.toMe || []).length; updateTradesBadgeDom();
         renderTradesTab();
       } else {
         flash(TRADE_CANCEL_REASON[d && d.error] || 'Не получилось отменить');
@@ -862,7 +936,10 @@
       sh.querySelector('#cd-sheet-x').onclick = closeSheet;
       return;
     }
-    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Кого отправишь?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>${pickGridHtml(spares, null)}`;
+    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Кого отправишь?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
+      <div class="cd-steps">Отправка · шаг 1 из 3</div>
+      <div class="cd-sheet__hint" style="margin-top:0">Улетит запасной дубль — базовый голубь остаётся у тебя</div>
+      ${pickGridHtml(spares, null)}`;
     sh.querySelector('#cd-sheet-x').onclick = closeSheet;
     sh.querySelectorAll('.cd-pickcard').forEach(el => { el.onclick = () => openMailSendRecipient(el.dataset.breed); });
   }
@@ -880,7 +957,8 @@
     const sh = container.querySelector('#cd-sheet');
     if (!sh) return;
     sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Кому отправить?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
-      <div class="cd-sheet__hint">Отправишь: ${BY_ID.get(breedId).name}</div>
+      <div class="cd-steps">Отправка · шаг 2 из 3</div>
+      <div class="cd-deal"><img src="/img/pigeons/${breedId}.webp?v=2" alt="" onerror="this.style.display='none'"><span>${BY_ID.get(breedId).name}</span><span class="cd-deal__arw">→</span><span style="color:var(--muted)">кому?</span></div>
       <button class="cd-sheet__act" id="cd-ms-random">Случайному игроку</button>
       <div class="cd-sect-t">Друзья</div>
       <div id="cd-ms-friends">${skeletonRows(1)}</div>
@@ -888,7 +966,7 @@
       <div id="cd-ms-squad">${skeletonRows(2)}</div>
       <div class="cd-sect-t">Рефералы</div>
       <div id="cd-ms-refs">${skeletonRows(2)}</div>`;
-    sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+    sh.querySelector('#cd-sheet-x').onclick = openMailSendBreed; // назад к выбору голубя
     sh.querySelector('#cd-ms-random').onclick = () => openMailSendSticker('random');
     const rec = await loadRecipients();
     const frBox = sh.querySelector('#cd-ms-friends'), sqBox = sh.querySelector('#cd-ms-squad'), rfBox = sh.querySelector('#cd-ms-refs');
@@ -914,8 +992,11 @@
     haptic('light');
     const sh = container.querySelector('#cd-sheet');
     if (!sh) return;
-    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Что напишешь?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>${stickerListHtml()}`;
-    sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Что напишешь?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
+      <div class="cd-steps">Отправка · шаг 3 из 3</div>
+      <div class="cd-sheet__hint" style="margin-top:0">Стикер-подпись Василия к твоему голубю</div>
+      ${stickerListHtml()}`;
+    sh.querySelector('#cd-sheet-x').onclick = () => openMailSendRecipient(msState.breed); // назад к выбору адресата
     sh.querySelectorAll('.cd-reciperow').forEach(el => { el.onclick = () => submitMail(Number(el.dataset.sticker)); });
   }
   const MAIL_SEND_REASON = {
