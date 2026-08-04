@@ -212,6 +212,13 @@
       .cd-drag-grade--good{color:var(--gold-l)}
       .cd-drag-grade--miss{color:#e5847d}
       .cd-drag-false{font-size:13px;font-weight:800;color:#e5847d;background:rgba(0,0,0,.5);border-radius:10px;padding:6px 12px;animation:cdDragPop .3s ease-out}
+      .cd-drag-tapfly{display:flex;flex-direction:column;align-items:center;gap:9px;animation:cdDragPop .3s ease-out}
+      .cd-drag-tapbig{font-family:'Nunito',sans-serif;font-weight:900;font-size:24px;color:var(--gold-l);text-shadow:0 3px 14px rgba(0,0,0,.7)}
+      .cd-drag-tapcount{font-family:'Nunito',sans-serif;font-weight:900;font-size:38px;color:var(--cream);text-shadow:0 3px 12px rgba(0,0,0,.75);line-height:1}
+      .cd-drag-tapcount.pop{animation:cdDragPop .12s ease-out}
+      .cd-drag-tapgauge{width:210px;max-width:70vw;height:16px;border-radius:10px;background:rgba(0,0,0,.45);overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,.55)}
+      .cd-drag-tapgauge__fill{height:100%;width:0;border-radius:10px;background:linear-gradient(90deg,var(--gold),#ffd76a)}
+      .cd-drag-tapring{width:210px;max-width:70vw;height:5px;border-radius:4px;background:linear-gradient(90deg,#9be7a8,var(--gold-l));transition:width .1s linear}
       .cd-drag-launch{font-size:11.5px;color:var(--muted);margin-top:8px}
       .cd-drag-result{position:absolute;left:10px;right:10px;bottom:10px;background:linear-gradient(180deg,rgba(46,17,25,.96),rgba(29,10,17,.97));border:1px solid var(--line);border-radius:18px;padding:14px 18px 18px;text-align:center;box-shadow:0 -10px 30px rgba(0,0,0,.5)}
       .cd-drag-podium{display:flex;align-items:flex-end;justify-content:center;gap:12px;margin:2px 0 10px}
@@ -747,8 +754,14 @@
   ];
   const ZONE_CENTER = 0.65, ZONE_HALF = 0.15; // золотая зона у «красной черты» тахометра
   let launchInput = null, revRaf = 0, revStage = 0, revT0 = 0, revDone = false, falseFlashTs = 0;
+  // v3 «Тап-заезд» (спека 2026-08-04): состояние тап-окна. count/reaction меряет клиент,
+  // исход считает сервер (POST /race c body.tap). durationMs зеркалит TAP_WINDOW src/drag.ts.
+  const TAP_WINDOW_MS_C = 5000;   // = src/drag.ts::TAP_WINDOW_MS
+  const TAP_GAUGE_FULL = 40;      // тапов до полного гейджа (косметика; реальную цель со стаминой считает сервер)
+  let tapCount = 0, tapFirstMs = -1, tapWinT0 = 0, tapRaf = 0;
 
   function stopRevLoop() { if (revRaf) { cancelAnimationFrame(revRaf); revRaf = 0; } }
+  function stopTapLoop() { if (tapRaf) { cancelAnimationFrame(tapRaf); tapRaf = 0; } }
   function setTapHtml(html) { const el = ov && ov.querySelector('#cd-drag-tap'); if (el) el.innerHTML = html; }
 
   function startLaunch() {
@@ -756,7 +769,10 @@
     // дефолты = худший результат этапа; каждый тап перезаписывает свой
     launchInput = { rev1: REV_HALF_MS * 2, reactionMs: 3000 };
     revStage = 0;
-    runRevStage();
+    // Недельная заявка (qualify) — прежний «Идеальный запуск» (крутилка → реакция), её
+    // launchSkill не трогаем. Драг (training/bet) — сразу ёлка, дальше тап-окно.
+    if (mode === 'qualify') { runRevStage(); return; }
+    runCountdown();
   }
   function revFrac(now) {
     const k = ((now - revT0) / REV_STAGES[revStage].half) % 2;
@@ -835,15 +851,19 @@
     }, 1950));
   }
   function armTap() {
-    tapCaptured = false;
-    phase = 'go';
     shakeT0 = performance.now(); // встряска камеры на СТАРТ (в reduced-motion не рисуется)
     t0 = performance.now();
+    phase = 'go';
+    // Драг v3 — открываем тап-окно на весь заезд. Недельная заявка (qualify) — одиночная
+    // реакция (её launchSkill меряется как раньше).
+    if (mode !== 'qualify') { startTapWindow(); return; }
+    tapCaptured = false;
     addTapZone(onTap);
     // Защита от зависания (игрок не тапнул) — сервер всё равно клампит reactionMs до 3000мс,
     // так что авто-тап на таймауте не даёт нечестного преимущества/проигрыша сверх этого.
     countdownTimers.push(setTimeout(() => onTap(), 3000));
   }
+  // qualify: одиночная реакция → заявка недели
   function onTap() {
     if (tapCaptured || phase !== 'go') return; // busy-guard: второй тап/повторный таймер игнорируется
     tapCaptured = true;
@@ -851,6 +871,46 @@
     removeTapZone();
     setTapHtml('<div class="cd-drag-tapline">Финиш считает сервер…</div>');
     phase = 'submitting';
+    submitRace();
+  }
+
+  // ── v3 тап-окно: тапай весь заезд, число тапов решает исход (сервер) ────────────
+  function startTapWindow() {
+    tapCount = 0; tapFirstMs = -1;
+    tapWinT0 = performance.now();
+    setTapHtml(`<div class="cd-drag-tapfly">
+      <div class="cd-drag-tapbig">ЛЕТИ! Тапай!</div>
+      <div class="cd-drag-tapcount" id="cd-tapcount">0</div>
+      <div class="cd-drag-tapgauge"><div class="cd-drag-tapgauge__fill" id="cd-tapfill"></div></div>
+      <div class="cd-drag-tapring" id="cd-tapring"></div>
+    </div>`);
+    addTapZone(onFlyTap);
+    const loop = () => {
+      if (!ov || phase !== 'go') { tapRaf = 0; return; }
+      const left = Math.max(0, TAP_WINDOW_MS_C - (performance.now() - tapWinT0));
+      const ring = ov.querySelector('#cd-tapring');
+      if (ring) ring.style.width = ((left / TAP_WINDOW_MS_C) * 100).toFixed(1) + '%';
+      tapRaf = requestAnimationFrame(loop);
+    };
+    tapRaf = requestAnimationFrame(loop);
+    countdownTimers.push(setTimeout(closeTapWindow, TAP_WINDOW_MS_C));
+  }
+  function onFlyTap() {
+    if (phase !== 'go') return;
+    if (tapFirstMs < 0) tapFirstMs = Math.round(performance.now() - t0); // реакция = первый тап после зелёного
+    tapCount++;
+    haptic('light');
+    const cnt = ov && ov.querySelector('#cd-tapcount');
+    if (cnt) { cnt.textContent = tapCount; cnt.classList.remove('pop'); void cnt.offsetWidth; cnt.classList.add('pop'); }
+    const fill = ov && ov.querySelector('#cd-tapfill');
+    if (fill) fill.style.width = Math.min(100, (tapCount / TAP_GAUGE_FULL) * 100).toFixed(0) + '%';
+  }
+  function closeTapWindow() {
+    if (phase !== 'go') return; // guard: уже закрыто/оверлей сменился
+    phase = 'submitting';
+    stopTapLoop();
+    removeTapZone();
+    setTapHtml('<div class="cd-drag-tapline">Финиш считает сервер…</div>');
     submitRace();
   }
 
@@ -898,9 +958,14 @@
     raceBusy = true;
     const mySession = session;
     if (mode === 'qualify') { submitQualify(mySession); return; }
-    // reactionMs дублируется на верхнем уровне — совместимость со старым сервером,
-    // если клиент доехал до юзера раньше деплоя бэка (тогда просто легаси-формула).
-    const body = { breed: curBreed, mode, skill: launchInput, reactionMs: launchInput.reactionMs };
+    // v3 «Тап-заезд»: шлём число тапов + реакцию (первый тап после зелёного) + длительность
+    // окна. Сервер клампит (clampTapCount) и считает tap-навык со стаминой. reactionMs
+    // дублируем на верхнем уровне — совместимость со старым бэком до деплоя (легаси-формула).
+    const body = {
+      breed: curBreed, mode,
+      tap: { count: tapCount, reactionMs: tapFirstMs < 0 ? 3000 : tapFirstMs, durationMs: TAP_WINDOW_MS_C },
+      reactionMs: tapFirstMs < 0 ? 3000 : tapFirstMs,
+    };
     if (mode === 'bet') body.stake = stake;
     const d = await apiRef('/api/pigeons/drag/race', { method: 'POST', body: JSON.stringify(body) }).catch(() => null);
     const ok = !!(d && d.ok && Array.isArray(d.racers));
@@ -966,7 +1031,9 @@
       ${isBet
         ? `<div class="cd-drag-reward ${reward > 0 ? 'pos' : reward < 0 ? 'neg' : ''}">${reward > 0 ? '+' : ''}${fmt(reward)} ${plu(Math.abs(num(reward)), 'монета', 'монеты', 'монет')}</div>`
         : `<div class="cd-drag-reward">Тренировка — без ставок</div>`}
-      ${raceData.mySkill ? `<div class="cd-drag-launch">Запуск: прогрев ${Math.round(num(raceData.mySkill.rev1) * 100)}% · старт ${(num(raceData.mySkill.reactionMs) / 1000).toFixed(2)} с</div>` : ''}
+      ${raceData.mySkill ? (raceData.mySkill.taps != null
+        ? `<div class="cd-drag-launch">Тапов: ${num(raceData.mySkill.taps)} · темп ${Math.round(num(raceData.mySkill.tapAcc) * 100)}% · старт ${(num(raceData.mySkill.reactionMs) / 1000).toFixed(2)} с</div>`
+        : `<div class="cd-drag-launch">Запуск: прогрев ${Math.round(num(raceData.mySkill.rev1) * 100)}% · старт ${(num(raceData.mySkill.reactionMs) / 1000).toFixed(2)} с</div>`) : ''}
       <div class="cd-drag-resrow">
         <button class="cd-drag-resbtn" id="cd-drag-again">Ещё раз</button>
         <button class="cd-drag-resbtn cd-drag-resbtn--ghost" id="cd-drag-done">Закрыть</button>
@@ -1021,7 +1088,7 @@
   }
 
   function close() {
-    clearTimers(); stopLoop(); stopRevLoop(); removeTapZone();
+    clearTimers(); stopLoop(); stopRevLoop(); stopTapLoop(); removeTapZone();
     if (resizeHandler) { window.removeEventListener('resize', resizeHandler); resizeHandler = null; }
     session++; // инвалидирует зависшие fetch/countdown-колбэки прежнего открытия
     const el = ov; ov = null; canvas = null; ctx = null;

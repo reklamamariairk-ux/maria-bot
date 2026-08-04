@@ -69,6 +69,85 @@ export function dragPower(rarity: Rarity, stars: number, speed: number, stamina:
   return RARITY_BASE[rarity] + (stars - 1) * 4 + 6 * speed + 6 * stamina;
 }
 
+// ── Механика v3 «Тап-заезд» (спека 2026-08-04-drag-tap-race-design) ──────────
+// Исход зависит от числа тапов ВО ВРЕМЯ заезда. Три характеристики разведены:
+// скорость → крейсер (пол результата), выносливость → эффективность тапов (меньше
+// тапов до максимума), удача → сжатие случайного разброса. Тап-навык ∈ [0,1] встаёт
+// в тот же слот, что launch-skill v2 → анти-чит ставок переносится (Монте-Карло).
+export const TAP_WINDOW_MS = 5000;      // окно тап-зоны (клиент по умолчанию)
+export const TAP_TARGET_BASE = 48;      // тапов до максимума при стамине 0
+export const TAP_TARGET_PER = 2;        // −2 тапа к цели за пункт стамины (48 → 28 при 10)
+export const TAP_RATE_CAP = 12;         // потолок тапов/с — анти-скрипт (выше человеческого)
+export const TAP_W = 0.7;               // доля тапов в tap-навыке (реакция = 1−TAP_W)
+export const LUCK_TIGHTEN = 0.5;        // удача 10 → случайный разброс вдвое уже
+const DUR_MIN = 3000, DUR_MAX = 8000;   // клампы длительности тап-окна
+
+// Крейсер: только скорость (в отличие от matchPower/dragPower, куда входит и стамина) —
+// так скорость и выносливость перестают быть взаимозаменяемыми.
+export function cruisePower(rarity: Rarity, stars: number, speed: number): number {
+  return RARITY_BASE[rarity] + (stars - 1) * 4 + 6 * speed;
+}
+// Цель тапов до полного tap-навыка: падает со стаминой (выносливее голубь — меньше тапать).
+export function tapTarget(stamina: number): number {
+  const s = Math.min(TUNE_MAX, Math.max(0, Number(stamina) || 0));
+  return TAP_TARGET_BASE - TAP_TARGET_PER * s;
+}
+export function tapAccuracy(count: number, stamina: number): number {
+  const target = tapTarget(stamina);
+  if (target <= 0) return 1;
+  return clamp01((Number(count) || 0) / target);
+}
+// Анти-скрипт: число тапов зажимается потолком скорости за длительность окна (окно тоже
+// клампится, чтобы нельзя было раздуть его ради тапов). Отрицательное/NaN → 0.
+export function clampTapCount(count: number, durationMs: number): number {
+  const dur = Math.min(DUR_MAX, Math.max(DUR_MIN, Number(durationMs) || DUR_MIN));
+  const cap = Math.floor((TAP_RATE_CAP * dur) / 1000);
+  return Math.min(cap, Math.max(0, Math.floor(Number(count) || 0)));
+}
+export type TapInput = { count: number; reactionMs: number; durationMs: number };
+// Тап-навык: 0.7 тапы + 0.3 реакция. Всё untrusted — клампы внутри.
+export function tapSkill(tap: TapInput, stamina: number): number {
+  const count = clampTapCount(tap.count, tap.durationMs);
+  return TAP_W * tapAccuracy(count, stamina) + (1 - TAP_W) * reactAccuracy(tap.reactionMs);
+}
+// Удача сжимает случайный разброс времени (оживает в драге — раньше не влияла).
+export function luckSpread(luck: number): number {
+  const l = Math.min(TUNE_MAX, Math.max(0, Number(luck) || 0));
+  return LUCK_SPREAD_V2 * (1 - LUCK_TIGHTEN * (l / TUNE_MAX));
+}
+export function dragFinishTimeV3(cruise: number, skill: number, luck: number, r: number): number {
+  const speed = BASE_SPEED + cruise * SPEED_PER_POWER;
+  return TRACK_LEN / speed + (1 - clamp01(skill)) * SKILL_SPREAD + r * luckSpread(luck);
+}
+export function resolveRaceV3(racers: { cruise: number; skill: number; luck: number; r: number }[]): number[] {
+  const times = racers.map((x, i) => ({ i, t: dragFinishTimeV3(x.cruise, x.skill, x.luck, x.r) }));
+  times.sort((a, b) => a.t - b.t || a.i - b.i);
+  const places = new Array(racers.length);
+  times.forEach((x, rank) => { places[x.i] = rank + 1; });
+  return places;
+}
+export type RacerV3 = Racer & { skill: number; cruise: number; luck: number };
+// Поле «Ставки» v3: слабее target−GAP (по matchPower) → бот ≈target; tap-навык всех
+// соперников раздаёт сервер (конкурентный диапазон). Крейсер/удачу соперников сохраняем.
+export function hardenBetFieldV3(opps: (Racer & { cruise?: number; luck?: number })[], target: number, rng: () => number = Math.random): RacerV3[] {
+  return opps.map((o, i) => {
+    const base = o.power < target - BET_POWER_GAP ? makeBot(target, i) : o;
+    return {
+      ...base,
+      cruise: base.cruise ?? base.power,
+      luck: base.luck ?? 0,
+      skill: competitiveSkill(COMP_SKILL_LO, COMP_SKILL_HI, rng),
+    };
+  });
+}
+export function assignFieldSkillV3(opps: (Racer & { cruise?: number; luck?: number })[], mode: "training" | "bet", target: number): RacerV3[] {
+  if (mode === "bet") return hardenBetFieldV3(opps, target);
+  return opps.map(o => ({
+    ...o, cruise: o.cruise ?? o.power, luck: o.luck ?? 0,
+    skill: competitiveSkill(TRAIN_SKILL_LO, TRAIN_SKILL_HI),
+  }));
+}
+
 const clampReact = (ms: number) => Math.min(REACT_MAX, Math.max(REACT_MIN, ms));
 
 export function dragFinishTime(power: number, reactionMs: number, r: number): number {
@@ -88,7 +167,7 @@ export function resolveRace(racers: { power: number; reactionMs: number; r: numb
 
 // ── Подбор соперников ──────────────────────────────────────────────────────
 
-export type Racer = { breed: string; power: number; reactionMs: number; bot: boolean; name?: string };
+export type Racer = { breed: string; power: number; reactionMs: number; bot: boolean; name?: string; cruise?: number; luck?: number };
 
 // Детерминированная «правдоподобная» реакция без Math.random — используется как фолбэк,
 // когда у игрока ещё нет своего race_reaction_ms (новичок) и для базовой реакции бота.
@@ -124,7 +203,9 @@ export function makeBot(target: number, seed: number): Racer {
   const stamina = Math.min(TUNE_MAX, totalPoints - speed);
   const power = dragPower(b.rarity, stars, speed, stamina);
   const reactionMs = clampReact(synthReaction(target) + ((seed % 5) - 2) * 15 + Math.round((Math.random() - 0.5) * 60));
-  return { breed: b.id, power, reactionMs, bot: true, name: "Соперник" };
+  // v3: крейсер бота от его скорости, удача — середина (умеренный разброс) для честного поля.
+  const cruise = cruisePower(b.rarity, stars, speed);
+  return { breed: b.id, power, reactionMs, bot: true, name: "Соперник", cruise, luck: Math.round(TUNE_MAX / 2) };
 }
 
 // v2: то же ужесточение поля «Ставки» по мощности, но вместо реакций сервер раздаёт
@@ -162,14 +243,16 @@ export async function pickOpponents(chatId: number, targetPower: number, n: numb
   // .filter(BREED_BY_ID.has) — не роняем роут 500-й, если в чужом инвентаре осталась
   // переименованная/удалённая порода (как guard в dragTargetPower).
   const rows = (await pool.query(
-    `SELECT pi.breed, pi.stars, pi.tune_speed, pi.tune_stamina, cs.race_reaction_ms
+    `SELECT pi.breed, pi.stars, pi.tune_speed, pi.tune_stamina, pi.tune_luck, cs.race_reaction_ms
        FROM pigeon_inventory pi JOIN clicker_state cs ON cs.chat_id = pi.chat_id
       WHERE pi.chat_id <> $1 AND pi.count > 0
       ORDER BY random() LIMIT 200`, [chatId])).rows;
   const real: Racer[] = rows.filter((r: any) => BREED_BY_ID.has(r.breed)).map((r: any) => {
     const b = BREED_BY_ID.get(r.breed)!;
     const power = dragPower(b.rarity, r.stars, r.tune_speed, r.tune_stamina);
-    return { breed: r.breed, power, reactionMs: r.race_reaction_ms ?? synthReaction(targetPower), bot: false };
+    // v3: крейсер от скорости, удача из тюнинга — для tap-заезда (v1/v2 их игнорируют).
+    const cruise = cruisePower(b.rarity, r.stars, r.tune_speed);
+    return { breed: r.breed, power, reactionMs: r.race_reaction_ms ?? synthReaction(targetPower), bot: false, cruise, luck: r.tune_luck ?? 0 };
   }).filter(x => Math.abs(x.power - targetPower) <= POWER_BAND)
     .sort((a, b) => Math.abs(a.power - targetPower) - Math.abs(b.power - targetPower))
     .slice(0, n);
@@ -194,7 +277,7 @@ export async function dragTargetPower(chatId: number, breed: string): Promise<nu
 // Всё под FOR UPDATE clicker_state (внутри refreshEnergyFor): реген энергии → проверки
 // (владение породой/энергия/ставка) → подбор соперников → резолв мест → списание энергии
 // + расчёт/начисление ставки → фиксация race_reaction_ms (для будущего pickOpponents).
-export async function runRace(chatId: number, breed: string, mode: "training" | "bet", stake: number, reactionMs: number, launch?: LaunchInput | null):
+export async function runRace(chatId: number, breed: string, mode: "training" | "bet", stake: number, reactionMs: number, launch?: LaunchInput | null, tap?: TapInput | null):
   Promise<{ ok: boolean; racers?: any[]; myPlace?: number; reward?: number; newBalance?: number; newEnergy?: number; mySkill?: any; reason?: string }> {
   if (!BREED_BY_ID.has(breed)) return { ok: false, reason: "not_owned" };
   if (mode !== "training" && mode !== "bet") return { ok: false, reason: "bad_mode" };
@@ -206,19 +289,43 @@ export async function runRace(chatId: number, breed: string, mode: "training" | 
     // FOR UPDATE в этой же транзакции, чтобы не словить гонку с параллельным тапом/заездом.
     const { refreshEnergyFor } = await import("./clicker");
     const st = await refreshEnergyFor(client, chatId);
-    const inv = await client.query(`SELECT stars, tune_speed, tune_stamina FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 AND count>0`, [chatId, breed]);
+    const inv = await client.query(`SELECT stars, tune_speed, tune_stamina, tune_luck FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 AND count>0`, [chatId, breed]);
     if (!inv.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "not_owned" }; }
     if (st.energy < DRAG_ENERGY_COST) { await client.query("ROLLBACK"); return { ok: false, reason: "no_energy" }; }
     if (mode === "bet" && st.balance < stake) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
     const b = BREED_BY_ID.get(breed)!;
     const myPower = dragPower(b.rarity, inv.rows[0].stars, inv.rows[0].tune_speed, inv.rows[0].tune_stamina);
     const picked = await pickOpponents(chatId, myPower, 3);
-    const react = Math.min(REACT_MAX, Math.max(REACT_MIN, Math.round(launch ? launch.reactionMs : reactionMs)));
+    const react = clampReact(Math.round(tap ? tap.reactionMs : launch ? launch.reactionMs : reactionMs));
     // Один рандомный «luck»-ролл на гонщика, зафиксированный ДО резолва — места и finishT
     // ниже должны использовать один и тот же r по индексу, иначе места и показанное
     // время анимации разъедутся (клиент анимирует по finishT).
     let racersUnsorted: any[]; let places: number[]; let mySkillOut: any = undefined;
-    if (launch) {
+    if (tap) {
+      // v3 «Тап-заезд»: мой навык из числа тапов (стамина = эффективность), крейсер от
+      // скорости, удача сжимает разброс; соперникам tap-навык раздаёт сервер (bet —
+      // конкурентный диапазон + гард мощности, training — шире и добрее).
+      const opps = assignFieldSkillV3(picked, mode, myPower);
+      const myCruise = cruisePower(b.rarity, inv.rows[0].stars, inv.rows[0].tune_speed);
+      const myLuck = inv.rows[0].tune_luck ?? 0;
+      const mySkill = tapSkill(tap, inv.rows[0].tune_stamina);
+      const field = [
+        { breed, cruise: myCruise, skill: mySkill, luck: myLuck, power: myPower, bot: false, me: true },
+        ...opps.map(o => ({ breed: o.breed, cruise: o.cruise, skill: o.skill, luck: o.luck, power: o.power, bot: o.bot, me: false })),
+      ];
+      const rolls = field.map(() => Math.random());
+      places = resolveRaceV3(field.map((f, i) => ({ cruise: f.cruise, skill: f.skill, luck: f.luck, r: rolls[i] })));
+      racersUnsorted = field.map((f, i) => ({
+        breed: f.breed, power: f.power,
+        finishT: dragFinishTimeV3(f.cruise, f.skill, f.luck, rolls[i]),
+        place: places[i], me: f.me, bot: f.bot,
+      }));
+      const clampedTaps = clampTapCount(tap.count, tap.durationMs);
+      mySkillOut = {
+        taps: clampedTaps, tapAcc: tapAccuracy(clampedTaps, inv.rows[0].tune_stamina),
+        react: reactAccuracy(tap.reactionMs), reactionMs: react, total: mySkill,
+      };
+    } else if (launch) {
       // v2 «Идеальный запуск»: мой skill из трёх инпутов, соперникам skill раздаёт сервер
       // (bet — конкурентный диапазон + гард мощности, training — шире и добрее).
       const opps = assignFieldSkill(picked, mode, myPower);

@@ -4,6 +4,9 @@ import {
   COMP_REACT_LO, COMP_REACT_HI, competitiveReaction, hardenBetField, makeBot,
   revAccuracy, reactAccuracy, launchSkill, dragFinishTimeV2, resolveRaceV2,
   competitiveSkill, hardenBetFieldV2, REV_HALF, COMP_SKILL_LO, COMP_SKILL_HI,
+  cruisePower, tapTarget, tapAccuracy, clampTapCount, tapSkill, luckSpread,
+  dragFinishTimeV3, resolveRaceV3, hardenBetFieldV3,
+  TAP_TARGET_BASE, TAP_TARGET_PER, TAP_RATE_CAP, TAP_W, BET_POWER_GAP,
 } from "../src/drag";
 
 describe("dragPower — мощность голубя для заезда", () => {
@@ -213,5 +216,168 @@ describe("makeBot — бот достижим на всей лестнице м�
       expect(b.power).toBeGreaterThanOrEqual(10);
       expect(b.power).toBeLessThanOrEqual(25);
     }
+  });
+});
+
+// ── Механика v3 «Тап-заезд» (спека 2026-08-04-drag-tap-race-design) ──────────
+
+describe("v3 cruisePower — крейсер зависит от скорости, но НЕ от стамины", () => {
+  it("растёт со скоростью, звёздами, редкостью", () => {
+    expect(cruisePower("common", 1, 5)).toBeGreaterThan(cruisePower("common", 1, 0));
+    expect(cruisePower("common", 3, 0)).toBeGreaterThan(cruisePower("common", 1, 0));
+    expect(cruisePower("legendary", 1, 0)).toBeGreaterThan(cruisePower("common", 1, 0));
+  });
+  it("стамина в крейсер НЕ входит (в отличие от matchPower/dragPower)", () => {
+    // cruisePower не принимает стамину вовсе — два билда с равной скоростью, разной стаминой
+    // имеют равный крейсер, но разный matchPower (dragPower).
+    expect(cruisePower("common", 1, 4)).toBe(dragPower("common", 1, 4, 0)); // при стамине 0 совпадают
+    expect(dragPower("common", 1, 4, 6)).toBeGreaterThan(cruisePower("common", 1, 4)); // стамина растит только matchPower
+  });
+});
+
+describe("v3 tapTarget / tapAccuracy — выносливость = эффективность тапов", () => {
+  it("цель тапов падает со стаминой (больше стамины → меньше тапать до максимума)", () => {
+    expect(tapTarget(0)).toBe(TAP_TARGET_BASE);
+    expect(tapTarget(10)).toBe(TAP_TARGET_BASE - TAP_TARGET_PER * 10);
+    expect(tapTarget(10)).toBeLessThan(tapTarget(0));
+  });
+  it("tapAccuracy = count/target, зажата в [0,1]", () => {
+    expect(tapAccuracy(0, 0)).toBe(0);
+    expect(tapAccuracy(TAP_TARGET_BASE, 0)).toBe(1);
+    expect(tapAccuracy(9999, 0)).toBe(1); // не уходит выше 1
+    expect(tapAccuracy(TAP_TARGET_BASE / 2, 0)).toBeCloseTo(0.5, 5);
+  });
+  it("при равном числе тапов бо́льшая стамина даёт бо́льшую точность", () => {
+    const n = 30;
+    expect(tapAccuracy(n, 10)).toBeGreaterThan(tapAccuracy(n, 0));
+  });
+});
+
+describe("v3 clampTapCount — анти-скрипт: потолок скорости тапа", () => {
+  it("режет по TAP_RATE_CAP·секунды окна", () => {
+    expect(clampTapCount(99999, 5000)).toBe(Math.floor(TAP_RATE_CAP * 5));
+    expect(clampTapCount(20, 5000)).toBe(20); // человеческое проходит
+    expect(clampTapCount(-5, 5000)).toBe(0);  // отрицательное → 0
+  });
+  it("длительность окна зажата в [3000,8000] (нельзя раздуть окно ради тапов)", () => {
+    expect(clampTapCount(99999, 999999)).toBe(Math.floor(TAP_RATE_CAP * 8));
+    expect(clampTapCount(99999, 10)).toBe(Math.floor(TAP_RATE_CAP * 3));
+  });
+});
+
+describe("v3 tapSkill — тапы главнее (0.7), реакция меньшая доля (0.3)", () => {
+  it("макс тапов + идеальная реакция = 1.0", () => {
+    expect(tapSkill({ count: TAP_TARGET_BASE, reactionMs: 200, durationMs: 5000 }, 0)).toBeCloseTo(1, 5);
+  });
+  it("ноль тапов, но идеальная реакция = только реакционная доля (1−TAP_W)", () => {
+    expect(tapSkill({ count: 0, reactionMs: 200, durationMs: 5000 }, 0)).toBeCloseTo(1 - TAP_W, 5);
+  });
+  it("макс тапов, но нулевая реакция = только тап-доля TAP_W", () => {
+    expect(tapSkill({ count: TAP_TARGET_BASE, reactionMs: 3000, durationMs: 5000 }, 0)).toBeCloseTo(TAP_W, 5);
+  });
+});
+
+describe("v3 luckSpread — удача сжимает случайный разброс (оживает в драге)", () => {
+  it("больше удачи → у́же разброс", () => {
+    expect(luckSpread(10)).toBeLessThan(luckSpread(0));
+    expect(luckSpread(0)).toBeGreaterThan(0);
+  });
+});
+
+describe("v3 dragFinishTimeV3 — крейсер/тап-навык/удача", () => {
+  it("быстрее крейсер → раньше финиш", () => {
+    expect(dragFinishTimeV3(120, 0.5, 0, 0.5)).toBeLessThan(dragFinishTimeV3(40, 0.5, 0, 0.5));
+  });
+  it("выше тап-навык → раньше финиш (при равном крейсере/люке)", () => {
+    expect(dragFinishTimeV3(80, 1.0, 0, 0.5)).toBeLessThan(dragFinishTimeV3(80, 0.2, 0, 0.5));
+  });
+  it("при худшем ролле (r=1) бо́льшая удача даёт меньшую потерю времени", () => {
+    expect(dragFinishTimeV3(80, 0.5, 10, 1)).toBeLessThan(dragFinishTimeV3(80, 0.5, 0, 1));
+  });
+});
+
+describe("v3 resolveRaceV3 — крейсер главнее, при равном решает тап-навык", () => {
+  it("при равном крейсере выше tap-навык → первый (без люка)", () => {
+    const places = resolveRaceV3([{ cruise: 80, skill: 0.3, luck: 0, r: 0.5 }, { cruise: 80, skill: 0.9, luck: 0, r: 0.5 }]);
+    expect(places[1]).toBe(1);
+  });
+  it("большой разрыв крейсера не перебивается идеальными тапами", () => {
+    const places = resolveRaceV3([{ cruise: 120, skill: 0, luck: 0, r: 0.5 }, { cruise: 40, skill: 1, luck: 0, r: 0.5 }]);
+    expect(places[0]).toBe(1);
+  });
+  it("места уникальны 1..N", () => {
+    const places = resolveRaceV3([
+      { cruise: 80, skill: 0.5, luck: 0, r: 0.1 },
+      { cruise: 80, skill: 0.5, luck: 0, r: 0.9 },
+      { cruise: 82, skill: 0.5, luck: 0, r: 0.5 },
+    ]);
+    expect([...places].sort()).toEqual([1, 2, 3]);
+  });
+});
+
+// EV ставки v3: поле равного крейсера/удачи, tap-навык соперников раздаёт сервер.
+// Мой tap-навык в слоте skill — структурно идентично betEVv2 → защита переносится.
+function betEVv3(mySkill: number, N: number): number {
+  let sum = 0;
+  for (let k = 0; k < N; k++) {
+    const field = [
+      { cruise: 50, skill: mySkill, luck: 0, r: Math.random() },
+      { cruise: 50, skill: competitiveSkill(), luck: 0, r: Math.random() },
+      { cruise: 50, skill: competitiveSkill(), luck: 0, r: Math.random() },
+      { cruise: 50, skill: competitiveSkill(), luck: 0, r: Math.random() },
+    ];
+    sum += (PAYOUT[resolveRaceV3(field)[0]] ?? 0) - 1;
+  }
+  return sum / N;
+}
+
+describe("v3 экономика ставки — Монте-Карло (автокликер не кормится)", () => {
+  it("идеальный тап-скрипт (skill=1.0) в минусе: казна не кормит читера", () => {
+    expect(betEVv3(1.0, 200_000)).toBeLessThan(-0.01);
+  });
+  it("честный хороший заезд (~0.8) — умеренный минус, не грабёж", () => {
+    const ev = betEVv3(0.8, 200_000);
+    expect(ev).toBeLessThan(-0.05);
+    expect(ev).toBeGreaterThan(-0.45);
+  });
+  it("навык значим: разрыв EV между 0.85 и 0.4 больше 0.3 ставки", () => {
+    expect(betEVv3(0.85, 100_000) - betEVv3(0.4, 100_000)).toBeGreaterThan(0.3);
+  });
+});
+
+describe("v3 hardenBetFieldV3 — серверное поле «Ставки»", () => {
+  const target = 80;
+  const opps = [
+    { breed: "sizar", power: target - 25, cruise: target - 25, luck: 0, reactionMs: 1500, bot: false },
+    { breed: "ryaboy", power: target - 5, cruise: target - 5, luck: 0, reactionMs: 900, bot: false },
+    { breed: "zolotoy", power: target + 10, cruise: target + 10, luck: 0, reactionMs: 120, bot: false },
+  ];
+  it("tap-навык всех соперников — серверный, в конкурентном диапазоне", () => {
+    for (let i = 0; i < 50; i++) {
+      for (const r of hardenBetFieldV3(opps.map(o => ({ ...o })), target)) {
+        expect(r.skill).toBeGreaterThanOrEqual(COMP_SKILL_LO);
+        expect(r.skill).toBeLessThanOrEqual(COMP_SKILL_HI);
+      }
+    }
+  });
+  it("слабее target−GAP (по matchPower) заменяется ботом ≈target", () => {
+    const field = hardenBetFieldV3(opps.map(o => ({ ...o })), target);
+    for (const r of field) expect(r.power).toBeGreaterThanOrEqual(target - BET_POWER_GAP);
+    expect(field.filter(r => r.bot)).toHaveLength(1);
+  });
+});
+
+describe("v3 разведение статов — при равном matchPower билды играют по-разному", () => {
+  it("бо́льшая стамина достигает того же tap-навыка меньшим числом тапов", () => {
+    // matchPower равен (скорость 0/стамина 10 vs скорость 10/стамина 0 — оба dragPower base+60),
+    // но стаминовый доходит до максимума тапов раньше.
+    const need0 = tapTarget(0);   // стаминовый билд (стамина 10) — цель tapTarget(10)
+    const need10 = tapTarget(10);
+    expect(need10).toBeLessThan(need0);
+  });
+  it("бо́льшая скорость быстрее на НУЛЕ тапов (крейсер выше)", () => {
+    const fast = dragFinishTimeV3(cruisePower("common", 1, 10), 0, 0, 0.5);
+    const slow = dragFinishTimeV3(cruisePower("common", 1, 0), 0, 0, 0.5);
+    expect(fast).toBeLessThan(slow);
   });
 });

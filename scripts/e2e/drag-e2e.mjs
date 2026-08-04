@@ -82,6 +82,25 @@ try {
   ok(v2.racers.every(r => typeof r.finishT === "number"), "v2 finishT есть у всех гонщиков");
   const rrV2 = Number((await pool.query(`SELECT race_reaction_ms FROM clicker_state WHERE chat_id=$1`, [A1])).rows[0].race_reaction_ms);
   ok(rrV2 === 300, "v2 реакция записана в race_reaction_ms (=" + rrV2 + ")");
+
+  // v3 «Тап-заезд»: tap-инпут → v3-резолв, брейкдаун с числом тапов, реакция в БД
+  console.log("\n[V3] тап-механика");
+  await upgradeTune(A1, "zolotoy", "stamina"); // разводим статы: стамина = эффективность тапов
+  await upgradeTune(A1, "zolotoy", "luck");    // удача = разброс (в драге была мёртвой)
+  await seed(A1, 1000, 200000);
+  const v3 = await runRace(A1, "zolotoy", "bet", stake, 3000, null, { count: 40, reactionMs: 220, durationMs: 5000 });
+  ok(v3.ok && [1, 2, 3, 4].includes(v3.myPlace), "v3 ставка: заезд прошёл, место " + v3.myPlace);
+  ok(v3.reward === stake * (PAYOUT[v3.myPlace] ?? 0) - stake, "v3 выплата соответствует месту");
+  ok(!!v3.mySkill && v3.mySkill.taps === 40, "v3 брейкдаун: taps=40 (=" + (v3.mySkill ? v3.mySkill.taps : "нет") + ")");
+  ok(!!v3.mySkill && v3.mySkill.tapAcc > 0 && v3.mySkill.total > 0.5 && v3.mySkill.total <= 1, "v3 mySkill разумный (total=" + (v3.mySkill ? v3.mySkill.total.toFixed(2) : "нет") + ")");
+  ok(v3.racers.every(r => typeof r.finishT === "number"), "v3 finishT есть у всех гонщиков");
+  const rrV3 = Number((await pool.query(`SELECT race_reaction_ms FROM clicker_state WHERE chat_id=$1`, [A1])).rows[0].race_reaction_ms);
+  ok(rrV3 === 220, "v3 реакция записана в race_reaction_ms (=" + rrV3 + ")");
+  // античит тапов: заоблачный count зажимается (cap 12/с·5с=60) — навык не бесконечен
+  await seed(A1, 1000, 200000);
+  const v3cap = await runRace(A1, "zolotoy", "bet", stake, 3000, null, { count: 99999, reactionMs: 220, durationMs: 5000 });
+  ok(!!v3cap.mySkill && v3cap.mySkill.taps === 60, "v3 античит: count=99999 → зажат до 60 (=" + (v3cap.mySkill ? v3cap.mySkill.taps : "нет") + ")");
+
   // легаси-вызов (без launch) продолжает работать — кэшированные клиенты v4
   await seed(A1, 1000, 200000);
   const lg = await runRace(A1, "zolotoy", "training", 0, 250);

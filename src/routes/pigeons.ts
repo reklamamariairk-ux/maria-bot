@@ -182,7 +182,7 @@ export function createPigeonsRouter(push: PushService): Router {
   });
 
   router.post("/api/pigeons/drag/race", requireTgUser, rateLimit(20), async (req, res) => {
-    const u = getTgUser(req)!; const b = req.body as { breed?: string; mode?: string; stake?: number; reactionMs?: number; skill?: { rev1?: number; rev2?: number; reactionMs?: number } };
+    const u = getTgUser(req)!; const b = req.body as { breed?: string; mode?: string; stake?: number; reactionMs?: number; skill?: { rev1?: number; rev2?: number; reactionMs?: number }; tap?: { count?: number; reactionMs?: number; durationMs?: number } };
     try {
       const { runRace } = await import("../drag");
       // reactionMs — untrusted: нормализуем на границе. Math.max(0,·) ловит отрицательные
@@ -196,7 +196,16 @@ export function createPigeonsRouter(push: PushService): Router {
         rev2: Number.isFinite(Number(b.skill.rev2)) ? Number(b.skill.rev2) : 9999,
         reactionMs: Math.max(0, Number(b.skill.reactionMs)) || 3000,
       } : null;
-      const r = await runRace(u.id, String(b.breed || ""), b.mode === "bet" ? "bet" : "training", Number(b.stake) || 0, launch ? launch.reactionMs : reactionMs, launch);
+      // v3 «Тап-заезд»: tap-объект untrusted. count/durationMs зажимаются сервером
+      // (clampTapCount режет по TAP_RATE_CAP·окно) — здесь лишь приводим к числам;
+      // reactionMs как выше (−1/0/NaN → 3000 худшая).
+      const tap = b.tap && typeof b.tap === "object" ? {
+        count: Math.max(0, Math.floor(Number(b.tap.count)) || 0),
+        reactionMs: Math.max(0, Number(b.tap.reactionMs)) || 3000,
+        durationMs: Number(b.tap.durationMs) || 5000,
+      } : null;
+      const legacyReact = tap ? tap.reactionMs : launch ? launch.reactionMs : reactionMs;
+      const r = await runRace(u.id, String(b.breed || ""), b.mode === "bet" ? "bet" : "training", Number(b.stake) || 0, legacyReact, launch, tap);
       if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
       res.json(r);
     } catch (e) { log.error({ err: e, chatId: u.id }, "[drag/race]"); res.status(500).json({ error: "internal" }); }
