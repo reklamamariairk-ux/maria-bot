@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="robots" content="noindex, nofollow"/>
+<title>Котик Комбат · Админка</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root{
+    --bg:#160409; --bg2:#241016; --card:#2d1119; --line:#4a2230;
+    --gold:#d4a94e; --gold-soft:#e8cf9a; --cream:#f5e9d9; --dim:#b59a8f;
+    --red:#e0506a; --green:#7fc98a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--cream);font:400 15px/1.5 Nunito,system-ui,sans-serif;min-height:100vh}
+  .wrap{max-width:1080px;margin:0 auto;padding:20px 16px 60px}
+  h1{font-size:22px;font-weight:800;color:var(--gold-soft);display:flex;gap:10px;align-items:center;margin-bottom:4px}
+  .sub{color:var(--dim);font-size:13px;margin-bottom:18px}
+  .tabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
+  .tabs button{background:var(--bg2);border:1px solid var(--line);color:var(--dim);padding:9px 18px;border-radius:12px;font:700 14px Nunito;cursor:pointer}
+  .tabs button.on{background:var(--gold);color:#2a1006;border-color:var(--gold)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+  .kpi b{display:block;font-size:21px;font-weight:600;color:var(--gold-soft);font-family:'JetBrains Mono',monospace}
+  td:nth-child(3),td:nth-child(4),td:nth-child(5){font-family:'JetBrains Mono',monospace;font-size:12.5px}
+  .kpi span{font-size:12px;color:var(--dim)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}
+  .card h3{font-size:15px;font-weight:800;color:var(--gold-soft);margin-bottom:10px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th{color:var(--dim);text-align:left;font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:7px 8px;border-bottom:1px solid rgba(74,34,48,.5);white-space:nowrap}
+  tr:hover td{background:rgba(212,169,78,.05);cursor:pointer}
+  .plat{font-size:11px;font-weight:700;padding:2px 7px;border-radius:8px;background:var(--bg2);border:1px solid var(--line)}
+  .plat.tg{color:#6ab3e8}.plat.vk{color:#8aa3e8}.plat.max{color:#b58ae8}
+  input,textarea,select{width:100%;background:var(--bg2);border:1px solid var(--line);border-radius:11px;color:var(--cream);padding:10px 12px;font:400 14px Nunito}
+  textarea{min-height:110px;resize:vertical}
+  .btn{background:var(--gold);color:#2a1006;border:none;border-radius:12px;padding:11px 20px;font:800 14px Nunito;cursor:pointer}
+  .btn.ghost{background:var(--bg2);color:var(--gold-soft);border:1px solid var(--line)}
+  .btn:disabled{opacity:.5;cursor:default}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .muted{color:var(--dim);font-size:13px}
+  .ok{color:var(--green)}.bad{color:var(--red)}
+  #chart{width:100%;height:150px;margin-top:6px}
+  .bar{fill:var(--gold);opacity:.75}.bar:hover{opacity:1}
+  .barNew{fill:#7fc98a}
+  #userCard pre{background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:10px;font-size:12px;overflow-x:auto;color:var(--gold-soft)}
+  .hidden{display:none}
+  @media(max-width:640px){td:nth-child(5),th:nth-child(5){display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🐱 Котик Комбат · Админка</h1>
+  <div class="sub" id="sub">одна игра · Telegram + VK + МАКС</div>
+
+  <div class="tabs">
+    <button data-t="metrics" class="on">Метрики</button>
+    <button data-t="users">Игроки</button>
+    <button data-t="push">Рассылка</button>
+  </div>
+
+  <!-- Метрики -->
+  <div id="t-metrics">
+    <div class="grid" id="kpis"></div>
+    <div class="card"><h3>Активные и новые по дням (Иркутск)</h3><svg id="chart" preserveAspectRatio="none"></svg>
+      <div class="muted"><span style="color:var(--gold)">■</span> активные · <span style="color:#7fc98a">■</span> новые</div></div>
+    <div class="row" style="align-items:flex-start">
+      <div class="card" style="flex:1;min-width:260px"><h3>События за период</h3><table id="events"></table></div>
+      <div class="card" style="flex:1;min-width:260px"><h3>FTUE «Первый день»</h3><table id="ftue"></table>
+        <div class="muted" style="margin-top:8px">маска шагов: 31 = все 5 забраны</div></div>
+    </div>
+  </div>
+
+  <!-- Игроки -->
+  <div id="t-users" class="hidden">
+    <div class="card"><div class="row">
+      <input id="q" placeholder="Поиск: chat_id, @username, имя или телефон" style="flex:1;min-width:220px"/>
+      <button class="btn" id="qgo">Найти</button>
+    </div></div>
+    <div class="card"><table id="users"><thead><tr>
+      <th>Игрок</th><th>Платформа</th><th>Баланс</th><th>Всего</th><th>Тапы</th><th>Был</th>
+    </tr></thead><tbody></tbody></table></div>
+    <div class="card hidden" id="userCard"></div>
+  </div>
+
+  <!-- Рассылка -->
+  <div id="t-push" class="hidden">
+    <div class="card">
+      <h3>Пуш игрокам</h3>
+      <textarea id="ptext" placeholder="Текст (Markdown). Например: 🎉 Двойные монеты до воскресенья — залетай!"></textarea>
+      <div class="row" style="margin-top:10px">
+        <select id="pseg" style="max-width:230px">
+          <option value="all">Все игроки</option>
+          <option value="active7">Активные 7 дней</option>
+          <option value="active30">Активные 30 дней</option>
+          <option value="tg">Только Telegram</option>
+          <option value="vk">Только VK</option>
+          <option value="max">Только МАКС</option>
+        </select>
+        <button class="btn ghost" id="ptest">Тест себе</button>
+        <button class="btn" id="pgo">Отправить</button>
+      </div>
+      <div class="muted" id="pstatus" style="margin-top:10px"></div>
+    </div>
+    <div class="card muted">Тест уходит только на chat_id из поля ниже (по умолчанию — ваш):
+      <input id="ptestid" value="757179699" style="max-width:200px;margin-top:8px"/></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const fmt = (n) => Number(n || 0).toLocaleString('ru-RU');
+  let TOKEN = localStorage.getItem('ck_admin_token') || '';
+
+  async function api(path, opts = {}) {
+    const r = await fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', 'X-User-Token': TOKEN, ...(opts.headers || {}) } });
+    if (r.status === 403) { askToken(true); throw new Error('403'); }
+    return r.json();
+  }
+  function askToken(force) {
+    if (TOKEN && !force) return;
+    TOKEN = prompt('Админ-токен:') || '';
+    localStorage.setItem('ck_admin_token', TOKEN);
+  }
+
+  // Вкладки
+  document.querySelectorAll('.tabs button').forEach((b) => b.onclick = () => {
+    document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x === b));
+    ['metrics', 'users', 'push'].forEach((t) => $('#t-' + t).classList.toggle('hidden', t !== b.dataset.t));
+    if (b.dataset.t === 'metrics') loadMetrics();
+    if (b.dataset.t === 'users') loadUsers('');
+  });
+
+  // ── Метрики ──
+  async function loadMetrics() {
+    const m = await api('/api/admin/game/metrics?days=14');
+    const t = m.totals;
+    $('#kpis').innerHTML = [
+      ['Игроков', t.players], ['DAU', t.dau], ['WAU', t.wau],
+      ['TG / VK / МАКС', `${t.tg} / ${t.vk} / ${t.max}`],
+      ['Подписчики бота', t.subscribers], ['Телефоны', t.phones],
+      ['Связок платформ', t.links], ['Тапов всего', fmt(t.taps)],
+      ['Обменов призов', t.redemptions], ['Гонка: заявок/нед', m.raceEntrants7d],
+    ].map(([k, v]) => `<div class="kpi"><b>${v}</b><span>${k}</span></div>`).join('');
+
+    const days = m.daily, W = 1000, H = 150, bw = W / Math.max(1, days.length);
+    const mx = Math.max(1, ...days.map((d) => Number(d.active)));
+    $('#chart').setAttribute('viewBox', `0 0 ${W} ${H}`);
+    $('#chart').innerHTML = days.map((d, i) => {
+      const ha = Number(d.active) / mx * (H - 22), hn = Number(d.new_players) / mx * (H - 22);
+      return `<g><title>${d.d}: активных ${d.active}, новых ${d.new_players}</title>
+        <rect class="bar" x="${i * bw + 2}" y="${H - 16 - ha}" width="${Math.max(2, bw * 0.55)}" height="${ha}" rx="2"/>
+        <rect class="barNew" x="${i * bw + 2 + bw * 0.58}" y="${H - 16 - hn}" width="${Math.max(2, bw * 0.3)}" height="${hn}" rx="2"/>
+        ${i % 2 === 0 ? `<text x="${i * bw + bw / 2}" y="${H - 3}" fill="#b59a8f" font-size="9" text-anchor="middle">${d.d.slice(8)}</text>` : ''}</g>`;
+    }).join('');
+
+    $('#events').innerHTML = '<tr><th>Событие</th><th>Раз</th></tr>' +
+      m.events.map((e) => `<tr><td>${e.event}</td><td>${fmt(e.n)}</td></tr>`).join('');
+    $('#ftue').innerHTML = '<tr><th>Маска шагов</th><th>Игроков</th></tr>' +
+      m.ftue.map((f) => `<tr><td>${f.ftue_claimed}</td><td>${f.n}</td></tr>`).join('');
+    if (m.push && (m.push.running || m.push.total)) {
+      $('#sub').textContent = `рассылка: ${m.push.running ? 'идёт' : 'завершена'} ${m.push.sent || 0}/${m.push.total || 0}`;
+    }
+  }
+
+  // ── Игроки ──
+  async function loadUsers(q) {
+    const d = await api('/api/admin/game/users?q=' + encodeURIComponent(q));
+    $('#users tbody').innerHTML = d.users.map((u) => `
+      <tr data-id="${u.chat_id}">
+        <td><b>${u.first_name || u.username || u.platformId}</b> <span class="muted">${u.username ? '@' + u.username : ''}</span></td>
+        <td><span class="plat ${u.platform}">${u.platform.toUpperCase()}</span></td>
+        <td>${fmt(u.balance)}</td><td>${fmt(u.total_earned)}</td><td>${fmt(u.taps)}</td>
+        <td class="muted">${(u.updated_at || '').slice(0, 16).replace('T', ' ')}</td>
+      </tr>`).join('') || '<tr><td colspan="6" class="muted">Никого не нашлось</td></tr>';
+    document.querySelectorAll('#users tbody tr[data-id]').forEach((tr) => tr.onclick = () => openUser(tr.dataset.id));
+  }
+  $('#qgo').onclick = () => loadUsers($('#q').value.trim());
+  $('#q').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadUsers($('#q').value.trim()); });
+
+  async function openUser(id) {
+    const u = await api('/api/admin/game/user/' + id);
+    const s = u.state || {};
+    $('#userCard').classList.remove('hidden');
+    $('#userCard').innerHTML = `
+      <h3>${u.subscriber?.first_name || 'Игрок'} <span class="plat ${u.platform}">${u.platform.toUpperCase()}</span>
+        <span class="muted">· id ${u.platformId}${u.subscriber?.phone ? ' · ' + u.subscriber.phone : ''}</span></h3>
+      <div class="grid">
+        <div class="kpi"><b>${fmt(s.balance)}</b><span>баланс</span></div>
+        <div class="kpi"><b>${fmt(s.total_earned)}</b><span>всего заработано</span></div>
+        <div class="kpi"><b>${fmt(s.taps)}</b><span>тапов</span></div>
+        <div class="kpi"><b>${u.cards?.n || 0} (ур. ${u.cards?.lv || 0})</b><span>бизнесы</span></div>
+        <div class="kpi"><b>${u.pigeons.reduce((a, p) => a + Number(p.count), 0)}</b><span>голубей</span></div>
+        <div class="kpi"><b>${u.links.length}</b><span>связанных платформ</span></div>
+      </div>
+      ${u.links.length ? `<div class="muted">Связки: ${u.links.map((l) => l.platform.toUpperCase() + ' #' + l.alias).join(', ')}</div>` : ''}
+      <div class="row" style="margin-top:10px">
+        <input id="cdelta" placeholder="+5000 или -5000" style="max-width:150px"/>
+        <input id="creason" placeholder="Причина (видна только нам)" style="max-width:260px"/>
+        <button class="btn" id="cgo">Изменить баланс</button>
+        <span id="cres" class="muted"></span>
+      </div>
+      <h3 style="margin-top:14px">Последние события</h3>
+      <pre>${u.events.map((e) => `${(e.created_at || '').slice(0, 16).replace('T', ' ')}  ${e.event}  ${JSON.stringify(e.meta || {})}`).join('\n') || '—'}</pre>`;
+    $('#cgo').onclick = async () => {
+      const delta = parseInt($('#cdelta').value, 10);
+      if (!delta) { $('#cres').textContent = 'введи число'; return; }
+      const r = await api(`/api/admin/game/user/${id}/coins`, { method: 'POST', body: JSON.stringify({ delta, reason: $('#creason').value }) });
+      $('#cres').innerHTML = r.ok ? `<span class="ok">готово, баланс ${fmt(r.balance)}</span>` : `<span class="bad">${r.error}</span>`;
+    };
+    $('#userCard').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  // ── Рассылка ──
+  $('#ptest').onclick = async () => {
+    const r = await api('/api/admin/game/push', { method: 'POST', body: JSON.stringify({ text: $('#ptext').value, testChatId: Number($('#ptestid').value) }) });
+    $('#pstatus').innerHTML = r.ok ? '<span class="ok">Тест отправлен — проверь чат</span>' : `<span class="bad">Ошибка: ${r.error || 'не ушло'}</span>`;
+  };
+  $('#pgo').onclick = async () => {
+    if (!confirm('Отправить рассылку сегменту «' + $('#pseg').selectedOptions[0].textContent + '»?')) return;
+    const r = await api('/api/admin/game/push', { method: 'POST', body: JSON.stringify({ text: $('#ptext').value, segment: $('#pseg').value }) });
+    if (!r.ok) { $('#pstatus').innerHTML = `<span class="bad">Ошибка: ${r.error}</span>`; return; }
+    $('#pstatus').textContent = `В очереди: ${r.queued}. Обновляю статус…`;
+    const t = setInterval(async () => {
+      const s = await api('/api/admin/game/push');
+      $('#pstatus').textContent = `${s.running ? 'Идёт' : 'Готово'}: отправлено ${s.sent || 0}, ошибок ${s.failed || 0} из ${s.total || 0}`;
+      if (!s.running) clearInterval(t);
+    }, 2000);
+  };
+
+  askToken(false);
+  loadMetrics().catch(() => {});
+})();
+</script>
+</body>
+</html>

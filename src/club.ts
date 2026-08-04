@@ -1,6 +1,7 @@
 import { pool } from "./db";
 import { log } from "./logger";
 import { enqueueAccrual, bonusSyncEnabled } from "./bonus1c";
+import { registerAccountLink, type LinkResult } from "./account-link";
 
 // Иркутск = UTC+8. Все «сутки» (daily login, daily star cap) считаем
 // относительно иркутского дня — иначе на границе UTC-полуночи юзер
@@ -381,6 +382,8 @@ export async function isPhoneVerified(chatId: number): Promise<boolean> {
 export interface VerifyResult {
   alreadyVerified: boolean;
   bonusAwarded: number;
+  /** Результат связки аккаунтов платформ по телефону (account-link.ts). */
+  link?: LinkResult;
 }
 
 export async function verifyPhone(chatId: number, phone: string): Promise<VerifyResult> {
@@ -415,10 +418,15 @@ export async function verifyPhone(chatId: number, phone: string): Promise<Verify
     }
   }
 
-  if (!firstTime) return { alreadyVerified: true, bonusAwarded: 0 };
+  // Связка аккаунтов платформ по телефону (см. account-link.ts). Сбой связки
+  // не должен ломать верификацию — она про клубные баллы.
+  let link: LinkResult | undefined;
+  try { link = await registerAccountLink(chatId, cleanPhone); } catch {}
+
+  if (!firstTime) return { alreadyVerified: true, bonusAwarded: 0, link };
 
   await earnPoints(chatId, BONUS_VERIFY_PHONE, "phone_verification", { phone: cleanPhone });
-  return { alreadyVerified: false, bonusAwarded: BONUS_VERIFY_PHONE };
+  return { alreadyVerified: false, bonusAwarded: BONUS_VERIFY_PHONE, link };
 }
 
 // ─── Daily login ─────────────────────────────────────────────────────────────

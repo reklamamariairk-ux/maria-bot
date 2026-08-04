@@ -37,6 +37,8 @@ import userRouter from "./routes/user";
 import gameRouter from "./routes/game";
 import petRouter from "./routes/pet";
 import appAuthRouter, { initAppAuthSchema, attachAppLoginChat, completeAppLogin } from "./routes/app-auth";
+import { initAccountLinkSchema } from "./account-link";
+import adminGameRouter from "./routes/admin-game";
 import { initPetSchema } from "./pet";
 import clickerRouter from "./routes/clicker";
 import { initClickerSchema, registerRef, closeWeeklySeason, pushWeeklyWinners, getRefOrderCandidates, markRefOrderRewarded } from "./clicker";
@@ -639,6 +641,12 @@ bot.on(":contact", async (ctx) => {
   const appLoginDone = await completeAppLogin(ctx.from.id, c.phone_number).catch(() => false);
   try {
     const result = await verifyPhone(ctx.from.id, c.phone_number);
+    // Связка платформ по телефону — сообщаем отдельной строкой
+    if (result.link?.linked) {
+      await ctx.reply(
+        "🔗 Аккаунты связаны! Этот номер уже играл с другой платформы (VK/МАКС) — теперь у тебя один общий профиль и прогресс везде."
+      ).catch(() => {});
+    }
     if (appLoginDone) {
       await ctx.reply(
         `✅ Готово! Вход подтверждён — вернитесь в приложение «Мария».${result.alreadyVerified ? "" : `
@@ -1530,6 +1538,9 @@ app.use("/api/app", appAuthRouter);
 // Кликер «Котик Комбат» → src/routes/clicker.ts
 app.use(clickerRouter);
 
+// Админка игры: метрики/игроки/рассылка (UI: /admin/game.html, гейт ADMIN_TOKEN)
+app.use(adminGameRouter(_pushService));
+
 // GET /api/holidays/upcoming вынесен в src/routes/holidays.ts
 app.use(holidaysRouter);
 
@@ -2149,6 +2160,7 @@ async function main() {
   await initClickerPushSchema();
   await initBonusSchema();
   await initAppAuthSchema();
+  await initAccountLinkSchema();
   startBonusWorker();
 
   // Sentry error handler — после всех routes, до listen

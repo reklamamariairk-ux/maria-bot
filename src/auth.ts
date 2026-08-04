@@ -2,6 +2,7 @@ import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
 import { verifyVkLaunchParams } from "./auth-vk";
 import { verifyMaxInitData } from "./auth-max";
+import { canonicalChatId } from "./account-link";
 import { toInternalId, type Platform } from "./platform";
 
 export interface TgUser {
@@ -116,12 +117,19 @@ function resolveUser(req: Request): AppUser | undefined {
   return user;
 }
 
-// Express middleware: верифицирует юзера любой платформы, кладёт на req
-export function requireUser(req: Request, res: Response, next: NextFunction) {
-  if (!resolveUser(req)) {
+// Express middleware: верифицирует юзера любой платформы, кладёт на req.
+// Если аккаунт связан по телефону (account-link.ts) — id подменяется на
+// канонический: человек играет одним профилем с любой платформы.
+export async function requireUser(req: Request, res: Response, next: NextFunction) {
+  const user = resolveUser(req);
+  if (!user) {
     res.status(401).json({ error: "unauthorized" });
     return;
   }
+  try {
+    const canon = await canonicalChatId(user.id);
+    if (canon !== user.id) user.id = canon;
+  } catch {} // сбой резолва канона не должен ронять авторизацию
   next();
 }
 
