@@ -91,6 +91,14 @@
     s.textContent = `
       .cd-root{padding:2px 2px 4px}
       .cd-summary{text-align:center;color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.5}
+      .cd-hint{display:flex;align-items:center;gap:10px;background:linear-gradient(180deg,rgba(240,194,78,.15),rgba(240,194,78,.05));border:1px solid rgba(240,194,78,.38);border-radius:14px;padding:10px 12px;margin:0 0 12px}
+      .cd-hint__b{flex:1;min-width:0}
+      .cd-hint__tag{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:var(--gold-l);opacity:.9;margin-bottom:2px}
+      .cd-hint__t{font-size:12.5px;font-weight:700;color:var(--ink);line-height:1.35}
+      .cd-hint__cta{flex:none;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;border:none;border-radius:11px;padding:9px 13px;font-weight:800;font-size:12px;cursor:pointer;min-height:38px}
+      .cd-hint__cta:active{transform:scale(.96)}
+      .cd-racenote{font-size:11px;color:var(--muted);line-height:1.45;margin:3px 4px 11px;text-align:center}
+      .cd-racenote b{color:var(--ink)}
       .cd-summary b{color:var(--gold-l)}
       .cd-sect-t{color:var(--muted);font-weight:700;font-size:11px;margin:4px 4px 7px;text-transform:uppercase;letter-spacing:.7px}
       /* ── Гонка стаи: закатный hero (слои драг-трассы), дивизион-чипы, медали ── */
@@ -308,6 +316,28 @@
     return arr;
   }
 
+  // ── «Что дальше»: одна контекстная подсказка сверху вкладки — убирает ступор
+  // «что тут делать». Возвращает {text, ctaLabel}; действие кнопки кладётся в hintCta,
+  // вешается в wire(). Приоритет: деньги на столе → новичок → прокачка → сеты → почта → гонка.
+  let hintCta = null;
+  function nextStepHint() {
+    hintCta = null;
+    const sets = data.sets || [];
+    const ownedCount = BREEDS.filter(b => b.id !== 'champion' && data.invMap[b.id] && data.invMap[b.id].count > 0).length;
+    const mk = (text, ctaLabel, run) => { hintCta = run || null; return { text, ctaLabel: run ? ctaLabel : null }; };
+    const ready = sets.find(s => num(s.owned) >= 4 && !s.claimed);
+    if (ready) { const def = SETS.find(x => x.id === ready.id) || {}; return mk(`Сет «${def.name || ready.id}» собран — забери ${fmt(def.reward || 0)} монет!`, 'Забрать', () => claimSetAct(ready.id)); }
+    if (ownedCount === 0) return mk('Голубей пока нет. Они выпадают за игру — за комбо дня, мини-игры и сундук удачи. Играй — и первый голубь прилетит!', 'Играть', () => { closeSheet(); if (window.ckSetTab) window.ckSetTab('cat'); });
+    const feedable = Object.keys(data.invMap).some(id => { if (id === 'champion') return false; const inv = data.invMap[id]; const st = Math.max(1, Math.min(3, num(inv.stars))); const need = starTarget(st); return need != null && (num(inv.count) - 1) >= need; });
+    if (feedable) return mk('У тебя есть запасные дубли — тапни породу и «скорми» их: голубь получит звезду и станет сильнее в заезде.', null, null);
+    const near = sets.find(s => num(s.owned) === 3 && !s.claimed);
+    if (near) { const def = SETS.find(x => x.id === near.id) || {}; return mk(`До сета «${def.name || near.id}» не хватает одной породы (+${fmt(def.reward || 0)} монет). Лови её в игре!`, null, null); }
+    if (num(data.unreadMail) > 0) return mk('Тебе прилетел голубь — загляни в Почту и поблагодари отправителя.', 'Открыть', openMailPage);
+    if (race && race.enabled && !race.myBreed && ownedCount > 0) return mk('Твой голубь — ещё и гонщик! Прокачай его (⚙ в карточке породы) и гоняй в Драг-заезде или заяви в Гонку стаи.', 'Драг-заезд', () => openDragBreedPicker());
+    if (ownedCount >= 16) return mk('Альбом собран! Тюнингуй гонщиков (⚙ в карточке породы) и побеждай в заездах и Гонке стаи.', null, null);
+    return mk('Тапни любую свою породу: там докорм звёзд, витрина, тюнинг гонщика и обмен с другими игроками.', null, null);
+  }
+
   // ── рендер ────────────────────────────────────────────────────────────────
   function cardHtml(b) {
     const inv = data.invMap[b.id];
@@ -380,8 +410,13 @@
     }
     const ownedCount = BREEDS.filter(b => b.id !== 'champion' && data.invMap[b.id] && data.invMap[b.id].count > 0).length;
     const setBlocks = SETS.map(setBlockHtml).join('');
+    const hint = nextStepHint();
     container.innerHTML = `<div class="cd-root">
-      <div class="cd-summary">Альбом пород — <b>${ownedCount}/16</b>. Породы <b>выпадают за игру</b>: комбо дня, мини-игры, сундук удачи и покупки; «порода недели» — чаще.</div>
+      <div class="cd-summary">Альбом пород — <b>${ownedCount}/16</b>. Породы <b>выпадают за игру</b> (комбо дня, мини-игры, сундук, покупки). <b>Собранный голубь — твой гонщик</b>: прокачивай и выставляй на заезд.</div>
+      <div class="cd-hint">
+        <div class="cd-hint__b"><span class="cd-hint__tag">Что дальше</span><div class="cd-hint__t">${hint.text}</div></div>
+        ${hint.ctaLabel ? `<button class="cd-hint__cta" id="cd-hint-cta" type="button">${hint.ctaLabel}</button>` : ''}
+      </div>
       <div class="cd-navrow">
         <button class="cd-navbtn" id="cd-nav-trades">${SWAP_ICON(15)} Обмены${incomingTrades > 0 ? `<span class="cd-navbadge">${incomingTrades > 9 ? '9+' : incomingTrades}</span>` : ''}</button>
         <button class="cd-navbtn" id="cd-nav-mail">${MAILBOX_ICON(15)} Почта${data.unreadMail > 0 ? `<span class="cd-navbadge">${data.unreadMail > 9 ? '9+' : data.unreadMail}</span>` : ''}</button>
@@ -430,6 +465,7 @@
     });
     const scrim = container.querySelector('#cd-scrim');
     if (scrim) scrim.onclick = closeSheet;
+    const hintBtn = container.querySelector('#cd-hint-cta'); if (hintBtn && hintCta) hintBtn.onclick = hintCta;
     const navT = container.querySelector('#cd-nav-trades'); if (navT) navT.onclick = openTradesPage;
     const navM = container.querySelector('#cd-nav-mail'); if (navM) navM.onclick = openMailPage;
     const raceBtn = container.querySelector('#cd-race-enter'); if (raceBtn) raceBtn.onclick = openRaceBreedPicker;
@@ -467,10 +503,13 @@
     sh.innerHTML = `
       <div class="cd-sheet__hd"><div class="cd-sheet__t">${b.name}</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
       <div class="cd-sheet__stars">${'★'.repeat(stars)}<span style="color:rgba(255,255,255,.18)">${'★'.repeat(3 - stars)}</span></div>
+      <div class="cd-sheet__hint" style="margin:-6px 0 10px">Звёзды усиливают голубя в заезде — расти их, скармливая дубли</div>
       <button class="cd-sheet__act" id="cd-feed" ${feedEnabled ? '' : 'disabled'}>${feedLabel}</button>
       ${need != null && !feedEnabled ? `<div class="cd-sheet__hint">Нужно ${need} запасных (сейчас ${Math.max(0, spare)})</div>` : ''}
       <button class="cd-sheet__act${isShown ? ' cd-sheet__act--on' : ''}" id="cd-show" ${(!isShown && showcaseFull) ? 'disabled' : ''}>${showLabel}</button>
+      <div class="cd-sheet__hint" style="margin:-6px 0 10px">Витрина — каких трёх голубей показываешь в профиле</div>
       <button class="cd-sheet__act" id="cd-tune">${GEAR_ICON(15)} Тюнинг гонщика</button>
+      <div class="cd-sheet__hint" style="margin:-6px 0 10px">Скорость · выносливость · удача — решают исход заезда</div>
       ${canTrade ? `<button class="cd-sheet__act" id="cd-trade-start">${SWAP_ICON(15)} Предложить обмен</button>` : ''}
     `;
     sc.classList.add('on');
@@ -1089,6 +1128,7 @@
           <button class="cd-ctabtn${!mine ? ' cd-ctabtn--ghost' : ''}" id="cd-drag-enter">${FLAG_ICON(14)} Драг-заезд</button>
         </div>
       </div>
+      <div class="cd-racenote"><b>Драг-заезд</b> — гоняй прямо сейчас, тапай на старте · <b>Гонка стаи</b> — заявка раз в неделю (отборочный полёт), итоги в понедельник</div>
       ${weekStandingsHtml()}
       ${teaser}`;
   }
