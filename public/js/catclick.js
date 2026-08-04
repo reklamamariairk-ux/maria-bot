@@ -13,6 +13,7 @@
   // ⚠️ Зеркало CARDS/CARD_CATS из src/clicker.ts — менять синхронно (+ cardIcon по id).
   const CARD_CATS = [{ id: 'prod', name: 'Производство' }, { id: 'mkt', name: 'Маркетинг' }, { id: 'staff', name: 'Персонал' }, { id: 'net', name: 'Сеть' }];
   const SQUADS = [{ id: 'choco', name: 'Шоколадные' }, { id: 'vanilla', name: 'Ванильные' }, { id: 'caramel', name: 'Карамельные' }, { id: 'berry', name: 'Ягодные' }];
+  const SQUAD_CREATE_COST = 25000; // зеркало src/clicker.ts
   const CARDS = [
     { id: 'bakery', name: 'Пекарня', cat: 'prod', basePrice: 300, baseProfit: 30 },
     { id: 'coffee', name: 'Кофемашина', cat: 'prod', basePrice: 900, baseProfit: 85 },
@@ -1798,23 +1799,99 @@
     const d = await api('/api/clicker/squads').catch(() => null);
     if (!d || !d.squads) return { html: '', wire: () => {} };
     const my = d.mySquad;
-    const rows = d.squads.map((s, i) => `<div class="ck-row${s.id === my ? ' me' : ''}"><div class="r">${i < 3 ? ICON.medal(18) : i + 1}</div><div class="n">${s.name} <span style="color:var(--muted);font-size:11px">· ${s.members}</span></div><div class="v">${COIN(13)} ${fmt(s.points)}</div></div>`).join('');
+    // Рейтинг: у своих стай (custom) кнопка «Попроситься» вместо мгновенного входа
+    const rows = d.squads.map((s, i) => {
+      const act = s.id === my ? '' : s.custom
+        ? (d.myPending === s.id ? `<span style="color:var(--muted);font-size:11px">заявка ⏳</span>` : `<button class="ck-cat-chip" data-req="${s.id}" style="padding:3px 9px;font-size:11px">Попроситься</button>`)
+        : '';
+      return `<div class="ck-row${s.id === my ? ' me' : ''}"><div class="r">${i < 3 ? ICON.medal(18) : i + 1}</div><div class="n">${s.name}${s.custom ? ' ⚔️' : ''} <span style="color:var(--muted);font-size:11px">· ${s.members}</span></div><div class="v">${COIN(13)} ${fmt(s.points)} ${act}</div></div>`;
+    }).join('');
     const chips = SQUADS.map(s => `<button class="ck-cat-chip${s.id === my ? ' on' : ''}" data-squad="${s.id}">${s.name}</button>`).join('');
+    // Моя своя стая (владелец): инвайт + заявки. Или кнопка «Создать стаю».
+    let ownHtml = '';
+    if (d.myOwn) {
+      ownHtml = `<div class="ck-bank" id="ck-sq-own"><div class="ck-bank__hd">⚔️ Твоя стая «${d.myOwn.name}»</div><div class="ck-bank__sub">Код приглашения: <b style="letter-spacing:1px">${d.myOwn.inviteCode}</b>${d.myOwn.requests ? ` · заявок: <b>${d.myOwn.requests}</b>` : ''}</div><div class="ck-cats" style="margin-top:6px"><button class="ck-cat-chip" data-sq-invite="1">Пригласить друга</button>${d.myOwn.requests ? `<button class="ck-cat-chip" data-sq-reqs="1">Заявки (${d.myOwn.requests})</button>` : ''}</div><div id="ck-sq-reqlist"></div></div>`;
+    } else {
+      ownHtml = `<div class="ck-cats" style="margin:6px 0 2px"><button class="ck-cat-chip" data-sq-create="1">⚔️ Создать свою стаю · ${fmt(SQUAD_CREATE_COST)} ${COIN(12)}</button><button class="ck-cat-chip" data-sq-code="1">У меня есть код</button></div>`;
+    }
     // Копилка стаи: прогресс к цели недели → ×1.25 к тапам всей команде
     let bankHtml = '';
     if (my && d.bank) {
       const b = d.bank;
       const pct = Math.min(100, Math.round(b.sum / b.target * 100));
-      const myName = (SQUADS.find(s => s.id === my) || {}).name || 'стаи';
+      const myName = ((d.squads || []).find(s => s.id === my) || SQUADS.find(s => s.id === my) || {}).name || 'стаи';
       const presets = [1000, 5000, 25000].map(v => `<button class="ck-cat-chip" data-bank="${v}" ${(st && st.balance < v) ? 'disabled' : ''}>${fmt(v)}</button>`).join('');
       bankHtml = b.reached
         ? `<div class="ck-bank"><div class="ck-bank__hd">🏆 Копилка «${myName}» полна!</div><div class="ck-bank__sub">Вся стая тапает с множителем ×${b.mult} до конца недели</div><div class="ck-bank__bar"><i style="width:100%"></i></div></div>`
         : `<div class="ck-bank"><div class="ck-bank__hd">🏦 Копилка стаи · ${fmt(b.sum)} / ${fmt(b.target)}</div><div class="ck-bank__bar"><i style="width:${pct}%"></i></div><div class="ck-bank__sub">Наполните вместе до вс — вся стая получит ×${b.mult} к тапам${b.myTotal ? ` · твой вклад ${fmt(b.myTotal)}` : ''}</div><div class="ck-cats" style="margin-top:6px">${presets}</div>${b.myToday >= b.dayCap ? `<div class="ck-bank__sub">Дневной лимит вклада исчерпан — продолжишь ${untilNewDay()}</div>` : ''}</div>`;
     }
-    return { html: `<div class="ck-sect">Команды</div><div style="color:var(--muted);font-size:12px;text-align:center;margin:0 0 6px">Монеты всех игроков команды складываются в общий счёт</div>${bankHtml}${rows}<div style="color:var(--muted);font-size:12px;text-align:center;margin:6px 0 4px">${my ? 'Сменить команду:' : 'Выбери команду:'}</div><div class="ck-cats">${chips}</div>`, wire: () => {
+    return { html: `<div class="ck-sect">Команды</div><div style="color:var(--muted);font-size:12px;text-align:center;margin:0 0 6px">Монеты всех игроков команды складываются в общий счёт</div>${ownHtml}${bankHtml}${rows}<div style="color:var(--muted);font-size:12px;text-align:center;margin:6px 0 4px">${my ? 'Сменить команду:' : 'Или выбери открытую команду:'}</div><div class="ck-cats">${chips}</div>`, wire: () => {
       ov.querySelectorAll('[data-squad]').forEach(b => b.onclick = () => joinSquadAct(b.dataset.squad));
       ov.querySelectorAll('[data-bank]').forEach(b => b.onclick = () => donateBank(Number(b.dataset.bank)));
+      ov.querySelectorAll('[data-req]').forEach(b => b.onclick = () => requestJoinAct(b.dataset.req));
+      const c = ov.querySelector('[data-sq-create]'); if (c) c.onclick = createSquadAct;
+      const k = ov.querySelector('[data-sq-code]'); if (k) k.onclick = joinByCodeAct;
+      const inv = ov.querySelector('[data-sq-invite]'); if (inv) inv.onclick = () => inviteToSquad(d.myOwn);
+      const rq = ov.querySelector('[data-sq-reqs]'); if (rq) rq.onclick = loadSquadRequests;
     } };
+  }
+  // ── Свои стаи: действия ──
+  // prompt() в TG WebView заблокирован на части платформ → игровой попап #ck-pop
+  function squadInputPopup(title, sub, placeholder, btnLabel, onSubmit) {
+    const pop = ov && ov.querySelector('#ck-pop'); if (!pop) return;
+    window.haptic && window.haptic('light');
+    pop.innerHTML = `<h3>⚔️ ${title}</h3>
+      <div style="color:var(--muted);font-size:12.5px;margin-bottom:8px">${sub}</div>
+      <div style="display:flex;gap:8px"><input class="ck-cipher-in" id="ck-pop-sq-in" maxlength="20" placeholder="${placeholder}" autocomplete="off" spellcheck="false" enterkeyhint="done"/><button class="ck-card__buy" id="ck-pop-sq-go" style="justify-content:center">${btnLabel}</button></div>
+      <button id="ck-pop-ok" style="background:rgba(255,255,255,.07);color:var(--ink);border-color:var(--line)">Закрыть</button>`;
+    pop.classList.add('on');
+    const inp = pop.querySelector('#ck-pop-sq-in');
+    const submit = () => { const v = inp.value.trim(); if (!v) return; pop.classList.remove('on'); onSubmit(v); };
+    pop.querySelector('#ck-pop-sq-go').onclick = submit;
+    inp.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
+    pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
+    setTimeout(() => { try { inp.focus(); } catch {} }, 60);
+  }
+  function createSquadAct() {
+    if (st && st.balance < SQUAD_CREATE_COST) { flashMsg(`Нужно ${fmt(SQUAD_CREATE_COST)} монет`); return; }
+    squadInputPopup('Своя стая', `Придумай название (3–20 символов) · создание спишет ${fmt(SQUAD_CREATE_COST)} ${COIN(12)}`, 'Название стаи', 'Создать', async (name) => {
+      const d = await api('/api/clicker/squad-create', { method: 'POST', body: JSON.stringify({ name }) }).catch(() => null);
+      if (d && !d.error) { st = d; sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); flashMsg(`⚔️ Стая создана! Код: ${d.inviteCode}`); renderTop(); bumpBalance(); }
+      else flashMsg(!d ? 'Нет связи' : d.error === 'bad_name' ? 'Название не подходит — 3–20 букв/цифр, без грубостей' : d.error === 'name_taken' ? 'Такое название уже занято' : d.error === 'no_coins' ? `Нужно ${fmt(SQUAD_CREATE_COST)} монет` : d.error === 'already_owner' ? 'У тебя уже есть своя стая' : 'Не получилось');
+    });
+  }
+  function joinByCodeAct() {
+    squadInputPopup('Код приглашения', 'Введи код, который прислал владелец стаи', 'Код из 6 символов', 'Вступить', async (code) => {
+      const d = await api('/api/clicker/squad-code', { method: 'POST', body: JSON.stringify({ code }) }).catch(() => null);
+      if (d && !d.error) { st = d; sfxBuy(); window.haptic && window.haptic('success'); flashMsg(`⚔️ Ты в стае «${d.squadName}»!`); renderTop(); }
+      else flashMsg(!d ? 'Нет связи' : d.error === 'full' ? 'Стая заполнена' : 'Код не найден — проверь у владельца');
+    });
+  }
+  async function requestJoinAct(id) {
+    const d = await api('/api/clicker/squad-request', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null);
+    if (d && !d.error) { window.haptic && window.haptic('light'); flashMsg(d.pending ? 'Заявка отправлена — владелец рассмотрит' : 'Готово'); renderTop(); }
+    else flashMsg(!d ? 'Нет связи' : d.error === 'full' ? 'Стая заполнена' : d.error === 'already_in' ? 'Ты уже в этой стае' : 'Не получилось');
+  }
+  function inviteToSquad(own) {
+    if (!own) return;
+    const link = `https://t.me/${BOT}?start=cksq_${own.inviteCode}`;
+    const text = `⚔️ Вступай в мою стаю «${own.name}» в «Котик Комбат»! Тапаем вместе и делим бонусы.`;
+    if (window.App && App.share) App.share(link, text); else { try { navigator.clipboard.writeText(link + '\n' + text); } catch {} flashMsg('Ссылка скопирована'); }
+  }
+  async function loadSquadRequests() {
+    const box = ov.querySelector('#ck-sq-reqlist');
+    if (!box) return;
+    const d = await api('/api/clicker/squad-requests').catch(() => null);
+    if (!d || !d.requests) { box.innerHTML = '<div class="ck-bank__sub">Не удалось загрузить</div>'; return; }
+    if (!d.requests.length) { box.innerHTML = '<div class="ck-bank__sub">Заявок пока нет</div>'; return; }
+    box.innerHTML = d.requests.map(r => `<div class="ck-row"><div class="n">${(r.name || 'Игрок').replace(/[<>]/g, '')} <span style="color:var(--muted);font-size:11px">· ${COIN(11)} ${fmt(r.totalEarned)}</span></div><div class="v"><button class="ck-cat-chip" data-acc="${r.chatId}" style="padding:3px 9px;font-size:11px">Принять</button><button class="ck-cat-chip" data-rej="${r.chatId}" style="padding:3px 9px;font-size:11px">✕</button></div></div>`).join('');
+    box.querySelectorAll('[data-acc]').forEach(b => b.onclick = () => decideReq(Number(b.dataset.acc), true));
+    box.querySelectorAll('[data-rej]').forEach(b => b.onclick = () => decideReq(Number(b.dataset.rej), false));
+  }
+  async function decideReq(chatId, accept) {
+    const d = await api('/api/clicker/squad-decide', { method: 'POST', body: JSON.stringify({ chatId, accept }) }).catch(() => null);
+    if (d && !d.error) { window.haptic && window.haptic(accept ? 'success' : 'light'); flashMsg(accept ? 'Принят в стаю!' : 'Заявка отклонена'); renderTop(); }
+    else flashMsg(!d ? 'Нет связи' : d.error === 'full' ? 'Стая заполнена' : 'Не получилось');
   }
   async function donateBank(amount) {
     const d = await api('/api/clicker/squad-bank', { method: 'POST', body: JSON.stringify({ amount }) }).catch(() => null);

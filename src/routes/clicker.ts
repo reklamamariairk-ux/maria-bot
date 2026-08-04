@@ -5,7 +5,7 @@
  * POST /api/clicker/boost {type:turbo|energy} · GET /api/clicker/top
  */
 import { Router } from "express";
-import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements, getRewards, redeemReward, claimBonus, openChest, claimRain, claimGame, getMilestones, claimMilestone, syncPurchaseBonus, migrateGuest, redeemCode, getSquads, joinSquad, squadBankStatus, donateSquadBank, prestigeReset, welcomePromoShown, markWelcomePromoShown, getFtue, claimFtue } from "../clicker";
+import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements, getRewards, redeemReward, claimBonus, openChest, claimRain, claimGame, getMilestones, claimMilestone, syncPurchaseBonus, migrateGuest, redeemCode, getSquads, joinSquad, squadBankStatus, donateSquadBank, createSquad, joinSquadByCode, requestJoinSquad, listSquadRequests, decideSquadRequest, prestigeReset, welcomePromoShown, markWelcomePromoShown, getFtue, claimFtue } from "../clicker";
 import { rateLimit, requireAdminToken } from "../middleware";
 import { requireTgUser, getTgUser } from "../auth";
 import { getBonusQueue, ackBonusQueue, queueAuthOk } from "../bonus1c";
@@ -144,6 +144,50 @@ router.get("/api/clicker/squads", requireTgUser, rateLimit(60), async (req, res)
     const bank = d.mySquad ? await squadBankStatus(d.mySquad, u.id) : null;
     res.json({ ...d, bank });
   } catch (e) { log.error({ err: e, chatId: u.id }, "[squads]"); res.status(500).json({ error: "internal" }); }
+});
+
+// ── Свои стаи ───────────────────────────────────────────────────────────────
+router.post("/api/clicker/squad-create", requireTgUser, rateLimit(10), async (req, res) => {
+  const u = getTgUser(req)!;
+  try {
+    const r = await createSquad(u.id, String((req.body as { name?: unknown })?.name || ""));
+    if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
+    res.json({ squadId: r.squadId, inviteCode: r.inviteCode, ...r.state });
+  } catch (e) { log.error({ err: e, chatId: u.id }, "[squad-create]"); res.status(500).json({ error: "internal" }); }
+});
+
+router.post("/api/clicker/squad-code", requireTgUser, rateLimit(15), async (req, res) => {
+  const u = getTgUser(req)!;
+  try {
+    const r = await joinSquadByCode(u.id, String((req.body as { code?: unknown })?.code || ""));
+    if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
+    res.json({ squadName: r.squadName, ...r.state });
+  } catch (e) { log.error({ err: e, chatId: u.id }, "[squad-code]"); res.status(500).json({ error: "internal" }); }
+});
+
+router.post("/api/clicker/squad-request", requireTgUser, rateLimit(15), async (req, res) => {
+  const u = getTgUser(req)!;
+  try {
+    const r = await requestJoinSquad(u.id, String((req.body as { id?: unknown })?.id || ""));
+    if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
+    res.json(r.pending ? { pending: true } : (r.state || { ok: true }));
+  } catch (e) { log.error({ err: e, chatId: u.id }, "[squad-request]"); res.status(500).json({ error: "internal" }); }
+});
+
+router.get("/api/clicker/squad-requests", requireTgUser, rateLimit(60), async (req, res) => {
+  const u = getTgUser(req)!;
+  try { res.json(await listSquadRequests(u.id)); }
+  catch (e) { log.error({ err: e, chatId: u.id }, "[squad-requests]"); res.status(500).json({ error: "internal" }); }
+});
+
+router.post("/api/clicker/squad-decide", requireTgUser, rateLimit(30), async (req, res) => {
+  const u = getTgUser(req)!;
+  const b = req.body as { chatId?: unknown; accept?: unknown };
+  try {
+    const r = await decideSquadRequest(u.id, Number(b?.chatId), Boolean(b?.accept));
+    if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
+    res.json({ ok: true });
+  } catch (e) { log.error({ err: e, chatId: u.id }, "[squad-decide]"); res.status(500).json({ error: "internal" }); }
 });
 
 router.post("/api/clicker/squad-bank", requireTgUser, rateLimit(30), async (req, res) => {

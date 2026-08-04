@@ -41,7 +41,7 @@ import { initAccountLinkSchema } from "./account-link";
 import adminGameRouter from "./routes/admin-game";
 import { initPetSchema } from "./pet";
 import clickerRouter from "./routes/clicker";
-import { initClickerSchema, initSquadBankSchema, registerRef, closeWeeklySeason, pushWeeklyWinners, getRefOrderCandidates, markRefOrderRewarded } from "./clicker";
+import { initClickerSchema, initSquadBankSchema, initCustomSquadSchema, joinSquadByCode, registerRef, closeWeeklySeason, pushWeeklyWinners, getRefOrderCandidates, markRefOrderRewarded } from "./clicker";
 import { initPigeonSchema, RACE_ENABLED, closeRaceWeek, expireTrades } from "./pigeons";
 import { initAnalyticsSchema, trackEvent, wasFunnelSent, markFunnelSent, getDormantPlayers } from "./analytics";
 import { initClickerPushSchema, runClickerRetentionPush } from "./clicker-push";
@@ -608,6 +608,19 @@ bot.command("start", async (ctx) => {
         }
         return;
       }
+    }
+    // Инвайт в свою стаю: /start cksq_<INVITE_CODE>. Клик по ссылке владельца =
+    // мгновенное вступление (владелец сам пригласил — заявка не нужна).
+    if (payload && payload.startsWith("cksq_")) {
+      const r = await joinSquadByCode(ctx.from.id, payload.slice(5)).catch(() => null);
+      await ctx.reply(
+        r?.ok
+          ? `⚔️ Ты в стае «${r.squadName}»! Тапайте вместе, наполняйте копилку — и вся стая получит бонус к монетам.`
+          : r?.reason === "full" ? "Стая уже заполнена (20 игроков) — попроси владельца освободить место."
+          : "Код приглашения не сработал — попроси свежую ссылку у владельца стаи.",
+        { reply_markup: webAppButton("", "🎮 Открыть игру") }
+      ).catch(() => {});
+      return;
     }
     if (payload && payload.startsWith("ref_")) {
       const rest = payload.slice(4);
@@ -2162,6 +2175,7 @@ async function main() {
   await initAppAuthSchema();
   await initAccountLinkSchema();
   await initSquadBankSchema();
+  await initCustomSquadSchema();
   startBonusWorker();
 
   // Sentry error handler — после всех routes, до listen

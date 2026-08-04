@@ -4,6 +4,7 @@
  * капает офлайн), бусты (турбо ×5 / полная энергия, 6/день), ежедневная награда
  * (стрик), лидерборд. Антинакрутка: энергия/пассив/турбо считаются на сервере.
  */
+import crypto from "crypto";
 import { pool } from "./db";
 import { clickerReferralLink, miniAppLink } from "./links";
 import { earnPoints, isPhoneVerified, grantRewardByCode } from "./club";
@@ -1057,13 +1058,209 @@ async function squadBankActive(squad: string | null): Promise<boolean> {
   return reached;
 }
 
-/** Команды: рейтинг по сумме намолоченного, выбор/смена команды. */
-export async function getSquads(chatId: number): Promise<{ squads: { id: string; name: string; points: number; members: number }[]; mySquad: string | null }> {
-  const { rows } = await pool.query(`SELECT squad, SUM(total_earned)::bigint AS pts, COUNT(*)::int AS n FROM clicker_state WHERE squad IS NOT NULL GROUP BY squad`);
-  const agg: Record<string, { pts: number; n: number }> = {}; for (const r of rows) agg[r.squad] = { pts: Number(r.pts), n: r.n };
+// ── Свои стаи (08.2026) ─────────────────────────────────────────────────────
+// Игрок может создать СВОЮ стаю (за монеты, sink), назвать её, приглашать по
+// инвайт-коду (мгновенное вступление) и принимать чужие заявки. 4 стандартные
+// стаи остаются открытыми «лигами новичков» (вступление в 1 тап, без заявок).
+// ⚠️ Константы продублированы во фронте catclick.js.
+export const SQUAD_CREATE_COST = 25_000;
+export const SQUAD_MAX_MEMBERS = 20;
+export const SQUAD_NAME_MIN = 3;
+export const SQUAD_NAME_MAX = 20;
+
+// Базовый стоп-фильтр названий: корни мата/оскорблений. Название видят ВСЕ
+// игроки в рейтинге команд — лучше пересолить, чем показать похабщину у бренда.
+const SQUAD_NAME_STOP = /(ху[йеёи]|пизд|[еёи]б[ауеи]|бля|му[дч]ак|сук[аи]|гандон|пидор|пидар|хер|жоп|говн|дерьм|шлюх|дроч|fuck|shit|bitch|cunt|dick|porn)/i;
+
+/**
+ * Нормализация и проверка названия стаи — чистая, для юнит-тестов.
+ * Возвращает нормализованное имя либо null (не прошло).
+ */
+export function sanitizeSquadName(raw: string): string | null {
+  const name = String(raw || "").replace(/\s+/g, " ").trim();
+  if (name.length < SQUAD_NAME_MIN || name.length > SQUAD_NAME_MAX) return null;
+  if (!/^[а-яёА-ЯЁa-zA-Z0-9 \-_!?.«»]+$/.test(name)) return null;
+  if (!/[а-яёА-ЯЁa-zA-Z0-9]/.test(name)) return null;
+  if (SQUAD_NAME_STOP.test(name.toLowerCase().replace(/[^а-яёa-z]/g, ""))) return null;
+  if (SQUADS.some((s) => s.name.toLowerCase() === name.toLowerCase())) return null;
+  return name;
+}
+
+export async function initCustomSquadSchema(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS squads (
+      id            TEXT PRIMARY KEY,
+      name          TEXT NOT NULL,
+      owner_chat_id BIGINT NOT NULL,
+      invite_code   TEXT UNIQUE NOT NULL,
+      created_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS squads_name_lower ON squads (LOWER(name));
+    CREATE TABLE IF NOT EXISTS squad_requests (
+      squad_id   TEXT NOT NULL,
+      chat_id    BIGINT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (squad_id, chat_id)
+    );
+  `);
+}
+
+const genSquadId = () => "c" + crypto.randomBytes(4).toString("hex");
+const genInviteCode = () => crypto.randomBytes(4).toString("base64url").replace(/[-_]/g, "x").slice(0, 6).toUpperCase();
+
+/** Стая существует? (стандартная или своя) */
+async function squadExists(id: string): Promise<boolean> {
+  if (SQUAD_IDS.has(id)) return true;
+  const { rows } = await pool.query(`SELECT 1 FROM squads WHERE id=$1`, [id]);
+  return rows.length > 0;
+}
+
+async function squadMemberCount(id: string): Promise<number> {
+  const { rows } = await pool.query(`SELECT COUNT(*)::int AS n FROM clicker_state WHERE squad=$1`, [id]);
+  return Number(rows[0].n);
+}
+
+export async function createSquad(chatId: number, rawName: string):
+  Promise<{ ok: boolean; reason?: string; squadId?: string; inviteCode?: string; state?: ClickerState }> {
+  const name = sanitizeSquadName(rawName);
+  if (!name) return { ok: false, reason: "bad_name" };
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { r } = await refresh(client, chatId);
+    if (Number(r.balance) < SQUAD_CREATE_COST) { await client.query("ROLLBACK"); return { ok: false, reason: "no_coins" }; }
+    const own = await client.query(`SELECT id FROM squads WHERE owner_chat_id=$1`, [chatId]);
+    if (own.rows.length > 0) { await client.query("ROLLBACK"); return { ok: false, reason: "already_owner" }; }
+    const id = genSquadId(), code = genInviteCode();
+    try {
+      await client.query(`INSERT INTO squads (id, name, owner_chat_id, invite_code) VALUES ($1,$2,$3,$4)`, [id, name, chatId, code]);
+    } catch {
+      await client.query("ROLLBACK");
+      return { ok: false, reason: "name_taken" }; // уникальный индекс LOWER(name)
+    }
+    await client.query(`UPDATE clicker_state SET balance = balance - $2, squad = $3, updated_at = NOW() WHERE chat_id = $1`,
+      [chatId, SQUAD_CREATE_COST, id]);
+    await client.query("COMMIT");
+    trackEvent(chatId, "squad_create", { id, name });
+    return { ok: true, squadId: id, inviteCode: code, state: await getClicker(chatId) };
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally { client.release(); }
+}
+
+export async function joinSquadByCode(chatId: number, rawCode: string):
+  Promise<{ ok: boolean; reason?: string; squadName?: string; state?: ClickerState }> {
+  const code = String(rawCode || "").trim().toUpperCase();
+  if (!/^[A-Z0-9]{4,10}$/.test(code)) return { ok: false, reason: "bad_code" };
+  const { rows } = await pool.query(`SELECT id, name FROM squads WHERE invite_code=$1`, [code]);
+  if (!rows[0]) return { ok: false, reason: "not_found" };
+  if ((await squadMemberCount(rows[0].id)) >= SQUAD_MAX_MEMBERS) return { ok: false, reason: "full" };
+  await pool.query(`INSERT INTO clicker_state (chat_id, squad) VALUES ($1,$2) ON CONFLICT (chat_id) DO UPDATE SET squad=$2`, [chatId, rows[0].id]);
+  await pool.query(`DELETE FROM squad_requests WHERE chat_id=$1`, [chatId]);
+  trackEvent(chatId, "squad_join_code", { id: rows[0].id });
+  return { ok: true, squadName: rows[0].name, state: await getClicker(chatId) };
+}
+
+export async function requestJoinSquad(chatId: number, squadId: string):
+  Promise<{ ok: boolean; reason?: string; pending?: boolean; state?: ClickerState }> {
+  // Стандартные стаи — открытые, вступление сразу
+  if (SQUAD_IDS.has(squadId)) {
+    const r = await joinSquad(chatId, squadId);
+    return { ...r, pending: false };
+  }
+  const { rows } = await pool.query(`SELECT id, owner_chat_id FROM squads WHERE id=$1`, [squadId]);
+  if (!rows[0]) return { ok: false, reason: "not_found" };
   const me = await pool.query(`SELECT squad FROM clicker_state WHERE chat_id=$1`, [chatId]);
-  const squads = SQUADS.map((s) => ({ id: s.id, name: s.name, points: agg[s.id]?.pts || 0, members: agg[s.id]?.n || 0 })).sort((a, b) => b.points - a.points);
-  return { squads, mySquad: (me.rows[0] && me.rows[0].squad) || null };
+  if (me.rows[0]?.squad === squadId) return { ok: false, reason: "already_in" };
+  if ((await squadMemberCount(squadId)) >= SQUAD_MAX_MEMBERS) return { ok: false, reason: "full" };
+  await pool.query(
+    `INSERT INTO squad_requests (squad_id, chat_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [squadId, chatId]);
+  trackEvent(chatId, "squad_request", { id: squadId });
+  return { ok: true, pending: true };
+}
+
+export interface SquadRequestRow { chatId: number; name: string; totalEarned: number; createdAt: string }
+
+/** Заявки в МОЮ стаю (я — владелец). */
+export async function listSquadRequests(ownerId: number): Promise<{ squadId: string | null; requests: SquadRequestRow[] }> {
+  const own = await pool.query(`SELECT id FROM squads WHERE owner_chat_id=$1`, [ownerId]);
+  if (!own.rows[0]) return { squadId: null, requests: [] };
+  const squadId = own.rows[0].id as string;
+  const { rows } = await pool.query(
+    `SELECT r.chat_id, r.created_at, COALESCE(sub.first_name, sub.username, '') AS name,
+            COALESCE(s.total_earned, 0) AS te
+       FROM squad_requests r
+       LEFT JOIN subscribers sub ON sub.chat_id = r.chat_id
+       LEFT JOIN clicker_state s ON s.chat_id = r.chat_id
+      WHERE r.squad_id = $1 ORDER BY r.created_at LIMIT 30`, [squadId]);
+  return {
+    squadId,
+    requests: rows.map((r) => ({
+      chatId: Number(r.chat_id), name: String(r.name || "Игрок"),
+      totalEarned: Number(r.te), createdAt: String(r.created_at),
+    })),
+  };
+}
+
+export async function decideSquadRequest(ownerId: number, applicantId: number, accept: boolean):
+  Promise<{ ok: boolean; reason?: string }> {
+  const own = await pool.query(`SELECT id FROM squads WHERE owner_chat_id=$1`, [ownerId]);
+  if (!own.rows[0]) return { ok: false, reason: "not_owner" };
+  const squadId = own.rows[0].id as string;
+  const del = await pool.query(`DELETE FROM squad_requests WHERE squad_id=$1 AND chat_id=$2 RETURNING chat_id`, [squadId, applicantId]);
+  if (!del.rows[0]) return { ok: false, reason: "no_request" };
+  if (!accept) return { ok: true };
+  if ((await squadMemberCount(squadId)) >= SQUAD_MAX_MEMBERS) return { ok: false, reason: "full" };
+  await pool.query(`INSERT INTO clicker_state (chat_id, squad) VALUES ($1,$2) ON CONFLICT (chat_id) DO UPDATE SET squad=$2`, [applicantId, squadId]);
+  trackEvent(applicantId, "squad_accepted", { id: squadId, by: ownerId });
+  return { ok: true };
+}
+
+/** Команды: рейтинг по сумме намолоченного (стандартные + свои), выбор/смена. */
+export async function getSquads(chatId: number): Promise<{
+  squads: { id: string; name: string; points: number; members: number; custom: boolean; mine: boolean }[];
+  mySquad: string | null;
+  myOwn: { squadId: string; name: string; inviteCode: string; requests: number } | null;
+  myPending: string | null;
+}> {
+  const [agg0, custom, me, own, pending] = await Promise.all([
+    pool.query(`SELECT squad, SUM(total_earned)::bigint AS pts, COUNT(*)::int AS n FROM clicker_state WHERE squad IS NOT NULL GROUP BY squad`),
+    pool.query(`SELECT id, name, owner_chat_id, invite_code FROM squads`),
+    pool.query(`SELECT squad FROM clicker_state WHERE chat_id=$1`, [chatId]),
+    pool.query(`SELECT s.id, s.name, s.invite_code, (SELECT COUNT(*)::int FROM squad_requests r WHERE r.squad_id = s.id) AS req
+                  FROM squads s WHERE s.owner_chat_id=$1`, [chatId]),
+    pool.query(`SELECT squad_id FROM squad_requests WHERE chat_id=$1 LIMIT 1`, [chatId]),
+  ]);
+  const agg: Record<string, { pts: number; n: number }> = {};
+  for (const r of agg0.rows) agg[r.squad] = { pts: Number(r.pts), n: r.n };
+  const mySquad: string | null = (me.rows[0] && me.rows[0].squad) || null;
+
+  const list = [
+    ...SQUADS.map((s) => ({ id: s.id, name: s.name, custom: false })),
+    ...custom.rows.map((s) => ({ id: String(s.id), name: String(s.name), custom: true })),
+  ].map((s) => ({
+    ...s,
+    points: agg[s.id]?.pts || 0,
+    members: agg[s.id]?.n || 0,
+    mine: s.id === mySquad,
+  })).sort((a, b) => b.points - a.points);
+
+  // Топ-10 + своя стая всегда видна (даже если за пределами топа)
+  const top = list.slice(0, 10);
+  if (mySquad && !top.some((s) => s.id === mySquad)) {
+    const mineRow = list.find((s) => s.id === mySquad);
+    if (mineRow) top.push(mineRow);
+  }
+
+  return {
+    squads: top,
+    mySquad,
+    myOwn: own.rows[0]
+      ? { squadId: String(own.rows[0].id), name: String(own.rows[0].name), inviteCode: String(own.rows[0].invite_code), requests: Number(own.rows[0].req) }
+      : null,
+    myPending: pending.rows[0] ? String(pending.rows[0].squad_id) : null,
+  };
 }
 export async function joinSquad(chatId: number, squadId: string): Promise<{ ok: boolean; state?: ClickerState; reason?: string }> {
   if (!SQUAD_IDS.has(squadId)) return { ok: false, reason: "bad_squad" };
