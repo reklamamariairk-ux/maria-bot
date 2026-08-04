@@ -41,7 +41,7 @@ import { initAccountLinkSchema } from "./account-link";
 import adminGameRouter from "./routes/admin-game";
 import { initPetSchema } from "./pet";
 import clickerRouter from "./routes/clicker";
-import { initClickerSchema, initSquadBankSchema, initCustomSquadSchema, joinSquadByCode, registerRef, closeWeeklySeason, pushWeeklyWinners, getRefOrderCandidates, markRefOrderRewarded } from "./clicker";
+import { initClickerSchema, initSquadBankSchema, initCustomSquadSchema, joinSquadByCode, setClickerPushService, registerRef, closeWeeklySeason, pushWeeklyWinners, getRefOrderCandidates, markRefOrderRewarded } from "./clicker";
 import { initPigeonSchema, RACE_ENABLED, closeRaceWeek, expireTrades } from "./pigeons";
 import { initAnalyticsSchema, trackEvent, wasFunnelSent, markFunnelSent, getDormantPlayers } from "./analytics";
 import { initClickerPushSchema, runClickerRetentionPush } from "./clicker-push";
@@ -474,6 +474,7 @@ const vkSender = createVkSender();
 const _pushService = createPushService(bot, vkSender);
 const sendPushSafely = _pushService.sendPushSafely;
 const sendRaw = _pushService.sendRaw;
+setClickerPushService(_pushService); // пуш «копилка стаи полна» из donateSquadBank
 
 function webAppButton(_text: string, label = "🍰 Открыть Mini App") {
   return new InlineKeyboard().webApp(label, MINI_APP_URL || "https://t.me");

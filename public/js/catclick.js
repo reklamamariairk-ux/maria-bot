@@ -1708,7 +1708,9 @@
     ov.querySelector('#ck-bal2').textContent = fmt(st.balance);
     const pBadge = st.prestige > 0 ? ` <span class="ck-pbadge">${ICON.star(12)} Престиж ${st.prestige}</span>` : '';
     ov.querySelector('#ck-lvl').innerHTML = `Уровень ${lg.level} · ${lg.name}${pBadge}`;
-    const prof = `${COIN(13)} +${fmt(st.profitPerHour)} / час`; ov.querySelector('#ck-prof').innerHTML = prof; ov.querySelector('#ck-prof2').innerHTML = prof;
+    // Бафф копилки стаи виден там, где игрок живёт — рядом с доходом
+    const bankChip = (st.bankMult && st.bankMult > 1) ? ` <span style="color:var(--gold,#e8cf9a);font-weight:800">⚔️×${st.bankMult}</span>` : '';
+    const prof = `${COIN(13)} +${fmt(st.profitPerHour * (st.bankMult > 1 ? st.bankMult : 1))} / час${bankChip}`; ov.querySelector('#ck-prof').innerHTML = prof; ov.querySelector('#ck-prof2').innerHTML = prof;
     // бейдж «Призы»: сколько бесплатного ГОТОВО забрать прямо сейчас (сундук, комбо) —
     // дискаверабилити ежедневок с любой вкладки (аудит: вкладка без индикатора)
     const tb = ov.querySelector('#ck-tasks-badge');
@@ -1892,9 +1894,12 @@
       const pct = Math.min(100, Math.round(b.sum / b.target * 100));
       const myName = ((d.squads || []).find(s => s.id === my) || SQUADS.find(s => s.id === my) || {}).name || 'стаи';
       const presets = [1000, 5000, 25000].map(v => `<button class="ck-cat-chip" data-bank="${v}" ${(st && st.balance < v) ? 'disabled' : ''}>${fmt(v)}</button>`).join('');
+      // Топ-3 вкладчиков недели — признание тем, кто вложился
+      const donors = (b.topDonors && b.topDonors.length)
+        ? `<div class="ck-bank__sub" style="margin-top:5px">Герои недели: ${b.topDonors.map((t, i) => `${['🥇', '🥈', '🥉'][i] || ''}${(t.name || 'Игрок').replace(/[<>]/g, '')} ${fmt(t.total)}`).join(' · ')}</div>` : '';
       bankHtml = b.reached
-        ? `<div class="ck-bank"><div class="ck-bank__hd">🏆 Копилка «${myName}» полна!</div><div class="ck-bank__sub">Вся стая тапает с множителем ×${b.mult} до конца недели</div><div class="ck-bank__bar"><i style="width:100%"></i></div></div>`
-        : `<div class="ck-bank"><div class="ck-bank__hd">🏦 Копилка стаи · ${fmt(b.sum)} / ${fmt(b.target)}</div><div class="ck-bank__bar"><i style="width:${pct}%"></i></div><div class="ck-bank__sub">Наполните вместе до вс — вся стая получит ×${b.mult} к тапам${b.myTotal ? ` · твой вклад ${fmt(b.myTotal)}` : ''}</div><div class="ck-cats" style="margin-top:6px">${presets}</div>${b.myToday >= b.dayCap ? `<div class="ck-bank__sub">Дневной лимит вклада исчерпан — продолжишь ${untilNewDay()}</div>` : ''}</div>`;
+        ? `<div class="ck-bank"><div class="ck-bank__hd">🏆 Копилка «${myName}» полна!</div><div class="ck-bank__sub">Весь доход стаи ×${b.mult} до конца недели — тапы и бизнесы</div><div class="ck-bank__bar"><i style="width:100%"></i></div>${donors}</div>`
+        : `<div class="ck-bank"><div class="ck-bank__hd">🏦 Копилка стаи · ${fmt(b.sum)} / ${fmt(b.target)}</div><div class="ck-bank__bar"><i style="width:${pct}%"></i></div><div class="ck-bank__sub">Наполните вместе до воскресенья — весь доход стаи ×${b.mult} (тапы и бизнесы)${b.myTotal ? ` · твой вклад ${fmt(b.myTotal)}` : ''}</div><div class="ck-cats" style="margin-top:6px">${presets}</div>${donors}${b.myToday >= b.dayCap ? `<div class="ck-bank__sub">Дневной лимит вклада исчерпан — продолжишь ${untilNewDay()}</div>` : ''}</div>`;
     }
     return { html: `<div class="ck-sect">Команды</div><div style="color:var(--muted);font-size:12px;text-align:center;margin:0 0 6px">Монеты всех игроков команды складываются в общий счёт</div>${ownHtml}${bankHtml}${rows}<div style="color:var(--muted);font-size:12px;text-align:center;margin:6px 0 4px">${my ? 'Сменить команду:' : 'Или выбери открытую команду:'}</div><div class="ck-cats">${chips}</div>`, wire: () => {
       ov.querySelectorAll('[data-squad]').forEach(b => b.onclick = () => joinSquadAct(b.dataset.squad));
@@ -1968,7 +1973,7 @@
     const d = await api('/api/clicker/squad-bank', { method: 'POST', body: JSON.stringify({ amount }) }).catch(() => null);
     if (d && !d.error) {
       st = d; sfxReward(); window.haptic && window.haptic('success');
-      if (d.bank && d.bank.reached) { confettiBurst(); flashMsg(`🏆 Копилка полна! ×${d.bank.mult} к тапам всей стаи`); }
+      if (d.bank && d.bank.reached) { confettiBurst(); flashMsg(`🏆 Копилка полна! Весь доход стаи ×${d.bank.mult}`); }
       else flashMsg(`В копилку: +${fmt(d.donated)}`);
       renderTop(); bumpBalance();
     } else {
@@ -2274,7 +2279,7 @@
     const dt = renderAcc; renderAcc = 0;
     if (st) {
       if (st.energy < st.energyMax) st.energy = Math.min(st.energyMax, st.energy + REGEN * dt);
-      if (st.profitPerHour > 0) { const inc = st.profitPerHour / 3600 * dt; st.balance += inc; st.totalEarned += inc; }
+      if (st.profitPerHour > 0) { const inc = st.profitPerHour / 3600 * dt * (st.bankMult > 1 ? st.bankMult : 1); st.balance += inc; st.totalEarned += inc; }
       if (combo && performance.now() - comboT > 700) { combo = 0; ov.querySelector('#ck-combo').classList.remove('show'); }
       syncT += dt; if (syncT > 1.6) { syncT = 0; flush(); }
       if (tab === 'cat') renderAll();

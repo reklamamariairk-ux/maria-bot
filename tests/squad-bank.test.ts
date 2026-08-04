@@ -1,22 +1,28 @@
 /**
- * Копилка стаи — чистая арифметика цели и клампа вклада.
+ * Копилка стаи — чистая арифметика адаптивной цели и клампа вклада.
  * Сама транзакция вклада и бафф гоняются e2e в контейнере (bank-e2e.mjs).
  */
 import { describe, it, expect } from "vitest";
 import {
-  squadBankTarget, squadBankClamp,
-  SQUAD_BANK_BASE_TARGET, SQUAD_BANK_PER_MEMBER, SQUAD_BANK_DAY_CAP, SQUAD_BANK_MIN_DONATE,
+  squadBankTargetFrom, squadBankClamp,
+  SQUAD_BANK_TARGET_PCT, SQUAD_BANK_TARGET_FLOOR, SQUAD_BANK_TARGET_CAP,
+  SQUAD_BANK_DAY_CAP, SQUAD_BANK_MIN_DONATE,
 } from "../src/clicker";
 
-describe("squadBankTarget — цель недели от числа активных", () => {
-  it("маленькая стая (≤5 активных) → базовая цель", () => {
-    expect(squadBankTarget(0)).toBe(SQUAD_BANK_BASE_TARGET);
-    expect(squadBankTarget(3)).toBe(SQUAD_BANK_BASE_TARGET);
-    expect(squadBankTarget(5)).toBe(SQUAD_BANK_BASE_TARGET);
+describe("squadBankTargetFrom — адаптивная цель от заработка прошлой недели", () => {
+  it("нет истории (новая стая) → пол, достижимо даже втроём", () => {
+    expect(squadBankTargetFrom(0)).toBe(SQUAD_BANK_TARGET_FLOOR);
+    expect(squadBankTargetFrom(50_000)).toBe(SQUAD_BANK_TARGET_FLOOR); // 15% = 7.5к < пола
   });
-  it("растёт на PER_MEMBER за каждого сверх 5", () => {
-    expect(squadBankTarget(6)).toBe(SQUAD_BANK_BASE_TARGET + SQUAD_BANK_PER_MEMBER);
-    expect(squadBankTarget(25)).toBe(SQUAD_BANK_BASE_TARGET + 20 * SQUAD_BANK_PER_MEMBER);
+  it("середина: ровно процент от заработка", () => {
+    expect(squadBankTargetFrom(1_000_000)).toBe(Math.round(1_000_000 * SQUAD_BANK_TARGET_PCT));
+    expect(squadBankTargetFrom(200_000)).toBe(30_000);
+  });
+  it("потолок: богатая стая не получает недостижимую цель", () => {
+    expect(squadBankTargetFrom(1e9)).toBe(SQUAD_BANK_TARGET_CAP);
+  });
+  it("отрицательный вход не ломает", () => {
+    expect(squadBankTargetFrom(-100)).toBe(SQUAD_BANK_TARGET_FLOOR);
   });
 });
 

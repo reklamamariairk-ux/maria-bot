@@ -251,6 +251,8 @@ export interface ClickerState {
   // усиления
   dailyAvailable: boolean; dailyStreak: number; dailyNext: number;
   chestAvailable: boolean; rainAvailable: boolean; squad: string | null;
+  /** ×1.25 при закрытой копилке стаи, иначе 1 (индикатор на главной). */
+  bankMult: number;
   boostEnergyLeft: number; boostTurboLeft: number; turboMsLeft: number;
   referrals: number; refCode: string; refLink: string;
   combo: { cards: string[]; hits: string[]; complete: boolean; claimed: boolean; reward: number };
@@ -358,6 +360,7 @@ function buildState(r: any, cl: Record<string, number>, passiveEarned: number): 
   return {
     balance: Number(r.balance), totalEarned: Number(r.total_earned), energy: r.energy, energyMax: energyMaxFor(r.energy_limit_level),
     perTap: perTapFor(r.multitap_level), profitPerHour: profitPerHour(cl, r.__albumMult || 1), passiveEarned,
+    bankMult: Number(r.__bankMult || 1),
     level: lg.level, levelName: lg.name, nextNeed: nextNeed(Number(r.total_earned)),
     multitapLevel: r.multitap_level, multitapPrice: priceMultitap(r.multitap_level),
     energyLevel: r.energy_limit_level, energyPrice: priceEnergy(r.energy_limit_level),
@@ -408,7 +411,10 @@ async function refresh(client: any, chatId: number): Promise<{ r: any; cl: Recor
   const { ALBUM_PASSIVE_BONUS } = await import("./pigeons");
   const albumMult = r.album_bonus ? 1 + ALBUM_PASSIVE_BONUS : 1;
   r.__albumMult = albumMult;
-  const passive = Math.floor(profitPerHour(cl, albumMult) * Math.min(secs / 3600, PASSIVE_CAP_HOURS) * gainMult(r.prestige));
+  // Копилка стаи: закрытая цель недели множит ВЕСЬ доход (пассив здесь, тапы в tapClicker)
+  const bankMult = (await squadBankActive(r.squad || null)) ? SQUAD_BANK_MULT : 1;
+  r.__bankMult = bankMult;
+  const passive = Math.floor(profitPerHour(cl, albumMult) * Math.min(secs / 3600, PASSIVE_CAP_HOURS) * gainMult(r.prestige) * bankMult);
   if (passive > 0) { r.balance = Number(r.balance) + passive; r.total_earned = Number(r.total_earned) + passive; }
   // сезон: новая неделя → база = текущий total (очки сезона обнуляются)
   const wk = weekKey();
@@ -468,8 +474,8 @@ export async function tapClicker(chatId: number, taps: number): Promise<ClickerS
     const turbo = r.turbo_until && new Date(r.turbo_until).getTime() > Date.now() ? TURBO_MULT : 1;
     // «Сладкие тапы» в батче: сколько кратных SWEET_TAP_EVERY попало в (oldTaps, oldTaps+can]
     const crits = sweetCritsIn(Number(r.taps || 0), can);
-    // Копилка стаи: цель недели закрыта → ×SQUAD_BANK_MULT к тапам (кэш 60с)
-    const bankMult = (await squadBankActive(r.squad || null)) ? SQUAD_BANK_MULT : 1;
+    // Копилка стаи: цель недели закрыта → ×SQUAD_BANK_MULT (bankMult посчитан в refresh)
+    const bankMult = Number(r.__bankMult || 1);
     const earned = Math.floor((can + crits * (SWEET_TAP_MULT - 1)) * perTapFor(r.multitap_level) * turbo * gainMult(r.prestige) * bankMult);
     r.energy -= can * TAP_COST; r.balance = Number(r.balance) + earned; r.total_earned = Number(r.total_earned) + earned;
     await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, taps=taps+$4, energy=$5, updated_at=NOW() WHERE chat_id=$1`,
@@ -865,6 +871,16 @@ export async function closeWeeklySeason(): Promise<{ week: string; recorded: num
   const endedKey = String(weekMonday() - 7);
   const exist = await pool.query(`SELECT 1 FROM clicker_week_winners WHERE week_key=$1 LIMIT 1`, [endedKey]);
   if (exist.rowCount) { log.info({ endedKey }, "[weekly] already closed"); return { week: endedKey, recorded: 0, awarded: 0 }; }
+  // Снапшот заработка стай за закрытую неделю → адаптивная цель копилки следующей.
+  // Тот же критерий week_key=endedKey, что и у победителей (до refresh'а игроков).
+  await pool.query(
+    `INSERT INTO squad_week_stats (week, squad, earned)
+     SELECT $1, squad, SUM(total_earned - week_base)::bigint
+       FROM clicker_state
+      WHERE week_key = $1 AND squad IS NOT NULL AND (total_earned - week_base) > 0
+      GROUP BY squad
+     ON CONFLICT (week, squad) DO NOTHING`, [endedKey]
+  ).catch((e) => log.warn({ err: e }, "[weekly] squad stats snapshot"));
   const { rows } = await pool.query(
     `SELECT chat_id, (total_earned - week_base) AS pts
        FROM clicker_state
@@ -938,14 +954,19 @@ export async function pushWeeklyWinners(push: PushService): Promise<{ sent: numb
 // Цель достигнута → вся стая тапает с множителем до конца недели (Иркутск).
 // ⚠️ Константы продублированы во фронте catclick.js (squadBlock).
 export const SQUAD_BANK_MULT = 1.25;
-export const SQUAD_BANK_BASE_TARGET = 100_000;
-export const SQUAD_BANK_PER_MEMBER = 20_000;    // за каждого активного (7д) сверх 5
 export const SQUAD_BANK_MIN_DONATE = 100;
 export const SQUAD_BANK_DAY_CAP = 50_000;       // вклад одного игрока в день
+// Адаптивная цель: % от заработка стаи за ПРОШЛУЮ неделю (снапшот пишет
+// closeWeeklySeason в squad_week_stats), с полом и потолком. Новые/пустые
+// стаи без истории получают пол — достижимо даже втроём.
+export const SQUAD_BANK_TARGET_PCT = 0.15;
+export const SQUAD_BANK_TARGET_FLOOR = 20_000;
+export const SQUAD_BANK_TARGET_CAP = 2_000_000;
 
-/** Цель недели по числу активных участников — чистая, для юнит-тестов. */
-export function squadBankTarget(activeMembers: number): number {
-  return SQUAD_BANK_BASE_TARGET + Math.max(0, Math.floor(activeMembers) - 5) * SQUAD_BANK_PER_MEMBER;
+/** Цель недели от заработка стаи за прошлую неделю — чистая, для юнит-тестов. */
+export function squadBankTargetFrom(lastWeekEarned: number): number {
+  const raw = Math.round(Math.max(0, lastWeekEarned) * SQUAD_BANK_TARGET_PCT);
+  return Math.min(SQUAD_BANK_TARGET_CAP, Math.max(SQUAD_BANK_TARGET_FLOOR, raw));
 }
 
 /** Сколько игрок может вложить сейчас — чистая, для юнит-тестов. */
@@ -967,13 +988,26 @@ export async function initSquadBankSchema(): Promise<void> {
       PRIMARY KEY (week, squad, chat_id)
     );
     CREATE INDEX IF NOT EXISTS squad_bank_week_squad ON clicker_squad_bank (week, squad);
+    CREATE TABLE IF NOT EXISTS squad_week_stats (
+      week   TEXT NOT NULL,
+      squad  TEXT NOT NULL,
+      earned BIGINT NOT NULL DEFAULT 0,
+      PRIMARY KEY (week, squad)
+    );
   `);
+}
+
+/** Заработок стаи за прошлую (закрытую) неделю — источник адаптивной цели. */
+async function lastWeekSquadEarned(squad: string): Promise<number> {
+  const prev = String(weekMonday() - 7);
+  const { rows } = await pool.query(`SELECT earned FROM squad_week_stats WHERE week=$1 AND squad=$2`, [prev, squad]);
+  return Number(rows[0]?.earned || 0);
 }
 
 export interface SquadBankStatus {
   target: number; sum: number; reached: boolean; mult: number;
   myTotal: number; myToday: number; dayCap: number; minDonate: number;
-  topDonors: { chatId: number; total: number }[];
+  topDonors: { chatId: number; name: string; total: number }[];
 }
 
 async function squadBankSum(squad: string): Promise<number> {
@@ -985,22 +1019,60 @@ async function squadBankSum(squad: string): Promise<number> {
 
 export async function squadBankStatus(squad: string, chatId?: number): Promise<SquadBankStatus> {
   const wk = weekKey();
-  const [sum, active, mine, top] = await Promise.all([
+  const [sum, lastEarned, mine, top] = await Promise.all([
     squadBankSum(squad),
-    pool.query(`SELECT COUNT(*)::int AS n FROM clicker_state WHERE squad=$1 AND updated_at > NOW() - INTERVAL '7 days'`, [squad]),
+    lastWeekSquadEarned(squad),
     chatId
       ? pool.query(`SELECT total, today, today_key FROM clicker_squad_bank WHERE week=$1 AND squad=$2 AND chat_id=$3`, [wk, squad, chatId])
       : Promise.resolve({ rows: [] as { total: number; today: number; today_key: string }[] }),
-    pool.query(`SELECT chat_id, total FROM clicker_squad_bank WHERE week=$1 AND squad=$2 ORDER BY total DESC LIMIT 3`, [wk, squad]),
+    // Топ-3 вкладчиков с именами — признание в UI (display-only)
+    pool.query(
+      `SELECT b.chat_id, b.total, COALESCE(NULLIF(sub.first_name,''), NULLIF(sub.username,''), 'Игрок') AS name
+         FROM clicker_squad_bank b LEFT JOIN subscribers sub ON sub.chat_id = b.chat_id
+        WHERE b.week=$1 AND b.squad=$2 ORDER BY b.total DESC LIMIT 3`, [wk, squad]),
   ]);
-  const target = squadBankTarget(Number(active.rows[0]?.n || 0));
+  const target = squadBankTargetFrom(lastEarned);
   const my = mine.rows[0];
   const myToday = my && my.today_key === todayIrkutsk() ? Number(my.today) : 0;
   return {
     target, sum, reached: sum >= target, mult: SQUAD_BANK_MULT,
     myTotal: Number(my?.total || 0), myToday, dayCap: SQUAD_BANK_DAY_CAP, minDonate: SQUAD_BANK_MIN_DONATE,
-    topDonors: top.rows.map((r) => ({ chatId: Number(r.chat_id), total: Number(r.total) })),
+    topDonors: top.rows.map((r) => ({
+      chatId: Number(r.chat_id),
+      name: String(r.name || "Игрок").replace(/[<>]/g, "").slice(0, 24),
+      total: Number(r.total),
+    })),
   };
+}
+
+// Пуш стае «копилка полна» — сервис инжектится из index.ts при старте
+// (роуты кликера не имеют доступа к боту напрямую).
+let _clickerPushSvc: PushService | null = null;
+export function setClickerPushService(p: PushService): void { _clickerPushSvc = p; }
+
+async function squadDisplayName(squad: string): Promise<string> {
+  const std = SQUADS.find((s) => s.id === squad);
+  if (std) return std.name;
+  const { rows } = await pool.query(`SELECT name FROM squads WHERE id=$1`, [squad]);
+  return String(rows[0]?.name || "стая");
+}
+
+function notifySquadGoalReached(squad: string, mult: number): void {
+  const push = _clickerPushSvc;
+  if (!push) return;
+  void (async () => {
+    try {
+      const name = await squadDisplayName(squad);
+      const { rows } = await pool.query(`SELECT chat_id FROM clicker_state WHERE squad=$1`, [squad]);
+      for (const row of rows) {
+        await push.sendRaw(Number(row.chat_id),
+          `🏆 Стая «${name}» наполнила копилку!\nВесь доход ×${mult} до конца недели — тапайте на полную 🐱`,
+          { parse_mode: "Markdown" }).catch(() => {});
+        await new Promise((r) => setTimeout(r, 60));
+      }
+      log.info({ squad, members: rows.length }, "[squad-bank] goal push sent");
+    } catch (e) { log.warn({ err: e, squad }, "[squad-bank] goal push"); }
+  })();
 }
 
 export async function donateSquadBank(chatId: number, want: number):
@@ -1031,7 +1103,10 @@ export async function donateSquadBank(chatId: number, want: number):
     await client.query("COMMIT");
     _bankCache.delete(squad); // бафф мог включиться прямо этим вкладом
     trackEvent(chatId, "squad_bank", { squad, amount });
-    return { ok: true, donated: amount, bank: await squadBankStatus(squad, chatId), state: buildState(r, cl, 0) };
+    const bank = await squadBankStatus(squad, chatId);
+    // Именно этот вклад закрыл цель → событие для всей стаи (пуш в фоне)
+    if (bank.reached && bank.sum - amount < bank.target) notifySquadGoalReached(squad, bank.mult);
+    return { ok: true, donated: amount, bank, state: buildState(r, cl, 0) };
   } catch (e) {
     await client.query("ROLLBACK").catch(() => {});
     throw e;
@@ -1048,11 +1123,8 @@ async function squadBankActive(squad: string | null): Promise<boolean> {
   if (hit && Date.now() - hit.ts < 60_000) return hit.reached;
   let reached = false;
   try {
-    const [sum, active] = await Promise.all([
-      squadBankSum(squad),
-      pool.query(`SELECT COUNT(*)::int AS n FROM clicker_state WHERE squad=$1 AND updated_at > NOW() - INTERVAL '7 days'`, [squad]),
-    ]);
-    reached = sum >= squadBankTarget(Number(active.rows[0]?.n || 0));
+    const [sum, lastEarned] = await Promise.all([squadBankSum(squad), lastWeekSquadEarned(squad)]);
+    reached = sum >= squadBankTargetFrom(lastEarned);
   } catch { return false; }
   _bankCache.set(squad, { reached, ts: Date.now() });
   return reached;
