@@ -1128,9 +1128,9 @@ export async function createSquad(chatId: number, rawName: string):
   try {
     await client.query("BEGIN");
     const { r } = await refresh(client, chatId);
-    if (Number(r.balance) < SQUAD_CREATE_COST) { await client.query("ROLLBACK"); return { ok: false, reason: "no_coins" }; }
     const own = await client.query(`SELECT id FROM squads WHERE owner_chat_id=$1`, [chatId]);
     if (own.rows.length > 0) { await client.query("ROLLBACK"); return { ok: false, reason: "already_owner" }; }
+    if (Number(r.balance) < SQUAD_CREATE_COST) { await client.query("ROLLBACK"); return { ok: false, reason: "no_coins" }; }
     const id = genSquadId(), code = genInviteCode();
     try {
       await client.query(`INSERT INTO squads (id, name, owner_chat_id, invite_code) VALUES ($1,$2,$3,$4)`, [id, name, chatId, code]);
