@@ -476,17 +476,14 @@ const sendPushSafely = _pushService.sendPushSafely;
 const sendRaw = _pushService.sendRaw;
 setClickerPushService(_pushService); // пуш «копилка стаи полна» из donateSquadBank
 
-function webAppButton(_text: string, label = "🍰 Открыть Mini App") {
-  return new InlineKeyboard().webApp(label, MINI_APP_URL || "https://t.me");
-}
-
-// Кнопка, открывающая именно ИГРУ (game.html), а не корень мини-аппа (магазин).
-// Игровые сценарии (приглашение в стаю/гонку, код дружбы, реф, промо) должны
-// вести в «Котик Комбат», иначе кнопка «Играть» уводила в магазин.
+// Приложение-магазин отменили (07.2026) — в боте живёт ТОЛЬКО игра «Котик
+// Комбат» (game.html). Все Mini App-кнопки ведут в игру; корень (старый магазин)
+// не открываем нигде. BotFather Main Mini App URL тоже = game.html.
 const GAME_URL = (MINI_APP_URL || "https://bot.145-223-121-47.sslip.io").replace(/\/+$/, "") + "/game.html";
-function gameButton(label = "🎮 Открыть игру") {
+function webAppButton(_text: string, label = "🎮 Открыть игру") {
   return new InlineKeyboard().webApp(label, GAME_URL);
 }
+const gameButton = (label = "🎮 Открыть игру") => webAppButton("", label);
 
 const WELCOME = `
 🐱 Это *«Котик Комбат»* — игра кондитерской *«Мария»*!
