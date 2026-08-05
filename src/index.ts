@@ -480,6 +480,14 @@ function webAppButton(_text: string, label = "🍰 Открыть Mini App") {
   return new InlineKeyboard().webApp(label, MINI_APP_URL || "https://t.me");
 }
 
+// Кнопка, открывающая именно ИГРУ (game.html), а не корень мини-аппа (магазин).
+// Игровые сценарии (приглашение в стаю/гонку, код дружбы, реф, промо) должны
+// вести в «Котик Комбат», иначе кнопка «Играть» уводила в магазин.
+const GAME_URL = (MINI_APP_URL || "https://bot.145-223-121-47.sslip.io").replace(/\/+$/, "") + "/game.html";
+function gameButton(label = "🎮 Открыть игру") {
+  return new InlineKeyboard().webApp(label, GAME_URL);
+}
+
 const WELCOME = `
 🐱 Это *«Котик Комбат»* — игра кондитерской *«Мария»*!
 
@@ -588,7 +596,7 @@ bot.command("start", async (ctx) => {
           const userName = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" ") || "Новый друг";
           await sendRaw(ownerId, `🎉 *${userName}* зашёл в «Котик Комбат» по твоей ссылке — тебе +30000 монет 🪙 Спасибо, что зовёшь друзей!`, { parse_mode: "Markdown" }).catch(() => {});
         }
-        await ctx.reply(`🐱 Добро пожаловать в «Котик Комбат»!\n\nТебе начислено +2500 монет за вход по приглашению. Жми и качай котика 👇`, { reply_markup: webAppButton("", "🎮 Играть") }).catch(() => {});
+        await ctx.reply(`🐱 Добро пожаловать в «Котик Комбат»!\n\nТебе начислено +2500 монет за вход по приглашению. Жми и качай котика 👇`, { reply_markup: gameButton("🎮 Играть") }).catch(() => {});
         return;
       }
     }
@@ -603,9 +611,9 @@ bot.command("start", async (ctx) => {
         if (r?.ok && !r.already) {
           const userName = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" ") || "Новый друг";
           await sendRaw(ownerId, `🕊️ *${userName}* принял твой код дружбы! Теперь вы можете слать друг другу голубей — загляни в Голубятню → Обмены/Почта.`, { parse_mode: "Markdown" }).catch(() => {});
-          await ctx.reply(`🕊️ Вы теперь друзья! Отправляй голубей из Голубятни — вкладка «Голуби» → «Почта».`, { reply_markup: webAppButton("", "🎮 Открыть игру") }).catch(() => {});
+          await ctx.reply(`🕊️ Вы теперь друзья! Отправляй голубей из Голубятни — вкладка «Голуби» → «Почта».`, { reply_markup: gameButton() }).catch(() => {});
         } else {
-          await ctx.reply(r?.already ? `🕊️ Вы уже друзья! Открывай голубятню и шли голубей.` : `Не получилось добавить в друзья — попробуй позже.`, { reply_markup: webAppButton("", "🎮 Открыть игру") }).catch(() => {});
+          await ctx.reply(r?.already ? `🕊️ Вы уже друзья! Открывай голубятню и шли голубей.` : `Не получилось добавить в друзья — попробуй позже.`, { reply_markup: gameButton() }).catch(() => {});
         }
         return;
       }
@@ -619,7 +627,7 @@ bot.command("start", async (ctx) => {
           ? `⚔️ Ты в стае «${r.squadName}»! Тапайте вместе, наполняйте копилку — и вся стая получит бонус к монетам.`
           : r?.reason === "full" ? "Стая уже заполнена (20 игроков) — попроси владельца освободить место."
           : "Код приглашения не сработал — попроси свежую ссылку у владельца стаи.",
-        { reply_markup: webAppButton("", "🎮 Открыть игру") }
+        { reply_markup: gameButton() }
       ).catch(() => {});
       return;
     }
@@ -682,7 +690,7 @@ bot.on(":contact", async (ctx) => {
   }
 });
 
-bot.command("games",  async (ctx) => ctx.reply(GAMES_TEXT,  { parse_mode: "Markdown", reply_markup: webAppButton(GAMES_TEXT, "🎮 Играть") }));
+bot.command("games",  async (ctx) => ctx.reply(GAMES_TEXT,  { parse_mode: "Markdown", reply_markup: gameButton("🎮 Играть") }));
 bot.command("sale",   async (ctx) => { const t = buildSaleText(); await ctx.reply(t, { parse_mode: "Markdown", reply_markup: webAppButton(t, "🛒 Акции") }); });
 bot.command("help",   async (ctx) => ctx.reply(HELP_TEXT,   { parse_mode: "Markdown", reply_markup: webAppButton(HELP_TEXT, "📋 Открыть меню") }));
 
