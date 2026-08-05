@@ -412,16 +412,16 @@
     const setBlocks = SETS.map(setBlockHtml).join('');
     const hint = nextStepHint();
     container.innerHTML = `<div class="cd-root">
-      <div class="cd-summary">Альбом пород — <b>${ownedCount}/16</b>. Породы <b>выпадают за игру</b> (комбо дня, мини-игры, сундук, покупки). <b>Собранный голубь — твой гонщик</b>: прокачивай и выставляй на заезд.</div>
+      <div class="cd-summary">Собери <b>${ownedCount}/16 пород</b> — они выпадают за игру. Твой голубь — ещё и гонщик.</div>
       <div class="cd-hint">
         <div class="cd-hint__b"><span class="cd-hint__tag">Что дальше</span><div class="cd-hint__t">${hint.text}</div></div>
         ${hint.ctaLabel ? `<button class="cd-hint__cta" id="cd-hint-cta" type="button">${hint.ctaLabel}</button>` : ''}
       </div>
       <div class="cd-navrow">
+        ${race && race.enabled ? `<button class="cd-navbtn" id="cd-nav-race">${FLAG_ICON(15)} Гонки</button>` : ''}
         <button class="cd-navbtn" id="cd-nav-trades">${SWAP_ICON(15)} Обмены${incomingTrades > 0 ? `<span class="cd-navbadge">${incomingTrades > 9 ? '9+' : incomingTrades}</span>` : ''}</button>
         <button class="cd-navbtn" id="cd-nav-mail">${MAILBOX_ICON(15)} Почта${data.unreadMail > 0 ? `<span class="cd-navbadge">${data.unreadMail > 9 ? '9+' : data.unreadMail}</span>` : ''}</button>
       </div>
-      ${raceHtml()}
       <div class="cd-sect-t">Альбом · собери сет — забери приз</div>
       ${setBlocks}
       ${championHtml()}
@@ -466,11 +466,9 @@
     const scrim = container.querySelector('#cd-scrim');
     if (scrim) scrim.onclick = closeSheet;
     const hintBtn = container.querySelector('#cd-hint-cta'); if (hintBtn && hintCta) hintBtn.onclick = hintCta;
+    const navR = container.querySelector('#cd-nav-race'); if (navR) navR.onclick = openRacePage;
     const navT = container.querySelector('#cd-nav-trades'); if (navT) navT.onclick = openTradesPage;
     const navM = container.querySelector('#cd-nav-mail'); if (navM) navM.onclick = openMailPage;
-    const raceBtn = container.querySelector('#cd-race-enter'); if (raceBtn) raceBtn.onclick = openRaceBreedPicker;
-    const dragBtn = container.querySelector('#cd-drag-enter'); if (dragBtn) dragBtn.onclick = openDragBreedPicker;
-    const resBtn = container.querySelector('#cd-race-results'); if (resBtn) resBtn.onclick = openRaceResultsSheet;
   }
 
   // ── шит действий (звёзды/витрина/обмены/почта/гонка) — общий #cd-scrim/#cd-sheet,
@@ -1085,6 +1083,22 @@
     const lr = race && race.lastResults && typeof race.lastResults === 'object' && !Array.isArray(race.lastResults) ? race.lastResults : null;
     if (!lr || !['gold', 'silver', 'bronze'].some(d => Array.isArray(lr[d]) && lr[d].length)) return null;
     return lr;
+  }
+  // Экран «Гонки»: весь блок гонок (герой заезда, драг, таблица дивизиона, итоги недели)
+  // вынесен в шит по кнопке — чтобы не хоронить альбом вверху вкладки. Открывается из
+  // навбара голубятни (#cd-nav-race). Кнопки заезда/драга/итогов вешаются здесь.
+  function openRacePage() {
+    if (!race || !race.enabled) return;
+    haptic('light');
+    const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
+    if (!sc || !sh) return;
+    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">${FLAG_ICON(16)} Гонки</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>${raceHtml()}`;
+    sc.classList.add('on');
+    requestAnimationFrame(() => sh.classList.add('on'));
+    sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+    const raceBtn = sh.querySelector('#cd-race-enter'); if (raceBtn) raceBtn.onclick = openRaceBreedPicker;
+    const dragBtn = sh.querySelector('#cd-drag-enter'); if (dragBtn) dragBtn.onclick = openDragBreedPicker;
+    const resBtn = sh.querySelector('#cd-race-results'); if (resBtn) resBtn.onclick = openRaceResultsSheet;
   }
   function raceHtml() {
     if (!race || !race.enabled) return '';
