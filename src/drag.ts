@@ -360,7 +360,11 @@ export async function runRace(chatId: number, breed: string, mode: "training" | 
         place: places[i], me: f.me, bot: f.bot,
       }));
     }
-    const racers = racersUnsorted.sort((a, b) => a.place - b.place);
+    // НЕ сортировать по месту: клиент рисует дорожку по индексу массива — сортировка
+    // пересаживала игрока со стартовой (верхней) линии на «дорожку = финишное место»
+    // и спойлерила исход (победитель всегда сверху). Порядок поля: я — индекс 0,
+    // соперники следом; пьедестал в результатах клиент сортирует сам по r.place.
+    const racers = racersUnsorted;
     const myPlace = places[0];
     // Списания/выплата: энергия списывается всегда (training тоже тратит попытку); ставка —
     // только в режиме bet, и только после проверки balance>=stake выше, так что баланс не
