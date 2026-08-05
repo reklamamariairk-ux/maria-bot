@@ -1864,6 +1864,22 @@
     }
     return head + body + lw;
   }
+  // Состав стаи: тап по своей команде → попап со списком участников (имя + монеты
+  // в общий счёт + вклад в копилку недели). Данные с /api/clicker/squad-members.
+  async function openSquadMembers() {
+    window.haptic && window.haptic('light');
+    const pop = ov.querySelector('#ck-pop'); if (!pop) return;
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    pop.innerHTML = `<h3>${ICON.users(20)} Состав стаи</h3><div id="ck-sqm-body" style="max-height:52vh;overflow:auto;text-align:left;width:100%">${skelRows(4)}</div><button id="ck-pop-ok">Закрыть</button>`;
+    pop.classList.add('on');
+    pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
+    const d = await api('/api/clicker/squad-members').catch(() => null);
+    const body = pop.querySelector('#ck-sqm-body'); if (!body) return; // попап уже закрыли
+    if (!d || !d.inSquad) { body.innerHTML = emptyState(ICON.users(28), 'Ты не в стае', 'Вступи в команду в списке ниже.'); return; }
+    if (!d.members || !d.members.length) { body.innerHTML = emptyState(ICON.users(28), 'Пусто', 'В стае пока никого.'); return; }
+    const h3 = pop.querySelector('h3'); if (h3) h3.innerHTML = `${ICON.users(20)} «${esc(d.name)}» · ${d.members.length}`;
+    body.innerHTML = d.members.map((m, i) => `<div class="ck-row${m.me ? ' me' : ''}"><div class="r">${i + 1}</div><div class="n">${esc(m.name)}${m.me ? ' · ты' : ''}</div><div class="v">${COIN(12)} ${fmt(m.coins)}${m.bank ? ` · <span style="color:var(--gold-l);font-size:11px">🏦 ${fmt(m.bank)}</span>` : ''}</div></div>`).join('');
+  }
   async function squadBlock() {
     if (!authed()) {
       const chips = SQUADS.map(s => `<button class="ck-cat-chip" disabled>${s.name}</button>`).join('');
@@ -1877,7 +1893,10 @@
       const act = s.id === my ? '' : s.custom
         ? (d.myPending === s.id ? `<span style="color:var(--muted);font-size:11px">заявка ⏳</span>` : `<button class="ck-cat-chip" data-req="${s.id}" style="padding:3px 9px;font-size:11px">Попроситься</button>`)
         : '';
-      return `<div class="ck-row${s.id === my ? ' me' : ''}"><div class="r">${i < 3 ? ICON.medal(18) : i + 1}</div><div class="n">${s.name}${s.custom ? ' ⚔️' : ''} <span style="color:var(--muted);font-size:11px">· ${s.members}</span></div><div class="v">${COIN(13)} ${fmt(s.points)} ${act}</div></div>`;
+      const cnt = s.id === my
+        ? `<span style="font-size:11px">· ${s.members} · <span style="color:var(--gold-l)">состав ›</span></span>`
+        : `<span style="color:var(--muted);font-size:11px">· ${s.members}</span>`;
+      return `<div class="ck-row${s.id === my ? ' me' : ''}"${s.id === my ? ' data-sq-members="1" style="cursor:pointer"' : ''}><div class="r">${i < 3 ? ICON.medal(18) : i + 1}</div><div class="n">${s.name}${s.custom ? ' ⚔️' : ''} ${cnt}</div><div class="v">${COIN(13)} ${fmt(s.points)} ${act}</div></div>`;
     }).join('');
     const chips = SQUADS.map(s => `<button class="ck-cat-chip${s.id === my ? ' on' : ''}" data-squad="${s.id}">${s.name}</button>`).join('');
     // Моя своя стая (владелец): инвайт + заявки. Или кнопка «Создать стаю».
@@ -1903,6 +1922,7 @@
     }
     return { html: `<div class="ck-sect">Команды</div><div style="color:var(--muted);font-size:12px;text-align:center;margin:0 0 6px">Монеты всех игроков команды складываются в общий счёт</div>${ownHtml}${bankHtml}${rows}<div style="color:var(--muted);font-size:12px;text-align:center;margin:6px 0 4px">${my ? 'Сменить команду:' : 'Или выбери открытую команду:'}</div><div class="ck-cats">${chips}</div>`, wire: () => {
       ov.querySelectorAll('[data-squad]').forEach(b => b.onclick = () => joinSquadAct(b.dataset.squad));
+      ov.querySelectorAll('[data-sq-members]').forEach(b => b.onclick = () => openSquadMembers());
       ov.querySelectorAll('[data-bank]').forEach(b => b.onclick = () => donateBank(Number(b.dataset.bank)));
       ov.querySelectorAll('[data-req]').forEach(b => b.onclick = () => requestJoinAct(b.dataset.req));
       const c = ov.querySelector('[data-sq-create]'); if (c) c.onclick = createSquadAct;

@@ -1336,6 +1336,36 @@ export async function getSquads(chatId: number): Promise<{
     myPending: pending.rows[0] ? String(pending.rows[0].squad_id) : null,
   };
 }
+/** Состав МОЕЙ стаи: имена + монеты в общий счёт (total_earned) + вклад в копилку
+ *  этой недели. Приватность: только участники своей стаи. Топ-100 по монетам. */
+export async function getSquadMembers(chatId: number): Promise<{
+  inSquad: boolean; name: string; members: { name: string; coins: number; bank: number; me: boolean }[];
+}> {
+  const meRow = await pool.query(`SELECT squad FROM clicker_state WHERE chat_id=$1`, [chatId]);
+  const squad: string | null = (meRow.rows[0] && meRow.rows[0].squad) || null;
+  if (!squad) return { inSquad: false, name: "", members: [] };
+  const wk = weekKey();
+  const preset = SQUADS.find((s) => s.id === squad);
+  let name = preset ? preset.name : squad;
+  if (!preset) {
+    const n = await pool.query(`SELECT name FROM squads WHERE id::text=$1`, [squad]);
+    if (n.rows[0]) name = String(n.rows[0].name);
+  }
+  const rows = await pool.query(
+    `SELECT cs.chat_id, cs.total_earned, s.first_name, s.username, COALESCE(b.total,0) AS bank
+       FROM clicker_state cs
+       LEFT JOIN subscribers s ON s.chat_id = cs.chat_id
+       LEFT JOIN clicker_squad_bank b ON b.week=$2 AND b.squad=$1 AND b.chat_id=cs.chat_id
+      WHERE cs.squad=$1
+      ORDER BY cs.total_earned DESC LIMIT 100`, [squad, wk]);
+  const members = rows.rows.map((r: any) => ({
+    name: (r.first_name || r.username || "Котовод").toString().slice(0, 24),
+    coins: Number(r.total_earned),
+    bank: Number(r.bank),
+    me: Number(r.chat_id) === chatId,
+  }));
+  return { inSquad: true, name, members };
+}
 export async function joinSquad(chatId: number, squadId: string): Promise<{ ok: boolean; state?: ClickerState; reason?: string }> {
   if (!SQUAD_IDS.has(squadId)) return { ok: false, reason: "bad_squad" };
   await pool.query(`INSERT INTO clicker_state (chat_id, squad) VALUES ($1,$2) ON CONFLICT (chat_id) DO UPDATE SET squad=$2`, [chatId, squadId]);
