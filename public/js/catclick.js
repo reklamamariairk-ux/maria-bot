@@ -2452,8 +2452,11 @@
       <button class="ck-tut__go" id="ck-tut-go">Поехали!</button>
       <button class="ck-tut__guide" id="ck-tut-guide" type="button">Полный гайд — как всё устроено</button></div>`;
     ov.appendChild(t);
-    t.querySelector('#ck-tut-go').onclick = () => { try { localStorage.setItem('ck_tut_v1', '1'); } catch (e) {} t.remove(); window.haptic && window.haptic('light'); startTour('cat'); };
-    t.querySelector('#ck-tut-guide').onclick = () => { try { localStorage.setItem('ck_tut_v1', '1'); } catch (e) {} t.remove(); window.haptic && window.haptic('light'); openGuide(); };
+    // markTutSeen: и localStorage (fast-path), и СЕРВЕР (st.onboarded) — чтобы обучение
+    // не повторялось после потери localStorage в webview.
+    const markTutSeen = () => { try { localStorage.setItem('ck_tut_v1', '1'); } catch (e) {} if (authed()) api('/api/clicker/onboarded', { method: 'POST', body: '{}' }).catch(() => {}); if (st) st.onboarded = true; };
+    t.querySelector('#ck-tut-go').onclick = () => { markTutSeen(); t.remove(); window.haptic && window.haptic('light'); startTour('cat'); };
+    t.querySelector('#ck-tut-guide').onclick = () => { markTutSeen(); t.remove(); window.haptic && window.haptic('light'); openGuide(); };
   }
   async function open() {
     if (!ov) build();
@@ -2464,13 +2467,18 @@
     applyCatSize(ov.querySelector('#ck-cat'));
     setTab('cat'); renderAll(); spawnSparks(); applySeason(); scheduleBonus(); loadDoveBadge();
     if (loadNetFail) flashMsg('Нет связи — офлайн-режим, прогресс синхронизируется позже'); // авторизованный получил гостевой фолбэк — не молчать про «пропавший» баланс
-    let _seenTut = true; try { _seenTut = !!localStorage.getItem('ck_tut_v1'); } catch (e) {}
-    // Метки обучения живут в УСТРОЙСТВЕ, а аккаунт — на сервере: девственный аккаунт
-    // (0 монет, 0 тапов) на устройстве со старыми метками = другой человек или сброс —
-    // переигрываем онбординг целиком (welcome + туры + коучи).
-    // «Девственный» = ни одного тапа и ни одного бизнеса; авто-капнувшая награда дня
-    // (до 500) девственности не отменяет — иначе первый же вход «съедал» условие.
-    if (authed() && st && Number(st.taps || 0) === 0 && Number(st.cardsOwned || 0) === 0 && Number(st.totalEarned || 0) <= 500 && _seenTut) {
+    // «Уже видел обучение» теперь помнит СЕРВЕР (st.onboarded) — localStorage в webview
+    // Telegram Mini App часто НЕ переживает закрытие, из-за чего обучение лезло КАЖДЫЙ
+    // вход. Плюс любой игрок с прогрессом (тапы/монеты/бизнес) считается прошедшим — даже
+    // если и сервер, и localStorage «забыли».
+    const onboarded = !!(st && st.onboarded);
+    const hasProgress = !!(st && (Number(st.taps || 0) > 0 || Number(st.totalEarned || 0) > 500 || (Array.isArray(st.cards) && st.cards.some(c => c.level > 0))));
+    let _seenTut = onboarded || hasProgress;
+    try { if (!_seenTut) _seenTut = !!localStorage.getItem('ck_tut_v1'); } catch (e) {}
+    if (onboarded) { try { localStorage.setItem('ck_tut_v1', '1'); } catch (e) {} }
+    // Девственный аккаунт (без прогресса и серверного флага) на устройстве со старыми
+    // метками другого человека → переиграть онбординг для ЭТОГО аккаунта.
+    if (!onboarded && !hasProgress && authed() && st && Number(st.taps || 0) === 0 && Number(st.cardsOwned || 0) === 0 && Number(st.totalEarned || 0) <= 500 && _seenTut) {
       try {
         localStorage.removeItem('ck_tut_v1');
         ['cat', 'up', 'dove', 'col', 'tasks', 'top', 'home'].forEach(k => localStorage.removeItem('ck_tour2_' + k));
@@ -2479,6 +2487,9 @@
       coachSeenMem.clear();
       _seenTut = false;
     }
+    // Бэкофилл серверного флага: кто явно уже прошёл (прогресс/localStorage), но сервер
+    // ещё не помнит — записываем, чтобы будущая потеря localStorage не переигрывала обучение.
+    if (!onboarded && _seenTut && authed()) { api('/api/clicker/onboarded', { method: 'POST', body: '{}' }).catch(() => {}); if (st) st.onboarded = true; }
     if (!_seenTut) showTutorial();
     else if (!tourSeen('cat') && st && Number(st.taps || 0) < 30) {
       // welcome видел, но тур главной не проходил и игрок ещё свежий (пришёл через

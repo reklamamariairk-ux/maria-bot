@@ -5,7 +5,7 @@
  * POST /api/clicker/boost {type:turbo|energy} · GET /api/clicker/top
  */
 import { Router } from "express";
-import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements, getRewards, redeemReward, claimBonus, openChest, claimRain, claimGame, getMilestones, claimMilestone, syncPurchaseBonus, migrateGuest, redeemCode, getSquads, joinSquad, squadBankStatus, donateSquadBank, createSquad, joinSquadByCode, requestJoinSquad, listSquadRequests, decideSquadRequest, prestigeReset, welcomePromoShown, markWelcomePromoShown, getFtue, claimFtue } from "../clicker";
+import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements, getRewards, redeemReward, claimBonus, openChest, claimRain, claimGame, getMilestones, claimMilestone, syncPurchaseBonus, migrateGuest, redeemCode, getSquads, joinSquad, squadBankStatus, donateSquadBank, createSquad, joinSquadByCode, requestJoinSquad, listSquadRequests, decideSquadRequest, prestigeReset, welcomePromoShown, markWelcomePromoShown, markOnboarded, getFtue, claimFtue } from "../clicker";
 import { rateLimit, requireAdminToken } from "../middleware";
 import { requireTgUser, getTgUser } from "../auth";
 import { getBonusQueue, ackBonusQueue, queueAuthOk } from "../bonus1c";
@@ -63,6 +63,13 @@ router.post("/api/clicker/welcome/seen", requireTgUser, rateLimit(30), async (re
     if (first && WELCOME_PROMO) trackEvent(u.id, "welcome_promo", { code: WELCOME_PROMO });
     res.json({ ok: true });
   } catch (e) { log.error({ err: e, chatId: u.id }, "[clicker/welcome/seen]"); res.status(500).json({ error: "internal" }); }
+});
+
+// Онбординг пройден (серверный флаг вместо localStorage — чинит «обучение при каждом входе»).
+router.post("/api/clicker/onboarded", requireTgUser, rateLimit(30), async (req, res) => {
+  const u = getTgUser(req)!;
+  try { await markOnboarded(u.id); res.json({ ok: true }); }
+  catch (e) { log.error({ err: e, chatId: u.id }, "[clicker/onboarded]"); res.status(500).json({ error: "internal" }); }
 });
 
 router.post("/api/clicker/tap", requireTgUser, rateLimit(120), async (req, res) => {

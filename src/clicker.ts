@@ -257,7 +257,7 @@ export interface ClickerState {
   referrals: number; refCode: string; refLink: string;
   combo: { cards: string[]; hits: string[]; complete: boolean; claimed: boolean; reward: number };
   cipher: { morse: string; anagram: string; len: number; claimed: boolean; reward: number };
-  taps: number; cardsOwned: number;
+  taps: number; cardsOwned: number; onboarded: boolean;
   season: { points: number; endsTs: number };
   prestige: number; prestigeMult: number; prestigeReady: boolean;
   event: { active: boolean; name: string; mult: number; endsTs: number } | null;
@@ -277,6 +277,7 @@ export async function initClickerSchema(): Promise<void> {
       updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS multitap_level INT NOT NULL DEFAULT 0;
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS onboarded BOOLEAN NOT NULL DEFAULT FALSE;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS energy_limit_level INT NOT NULL DEFAULT 0;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS daily_streak INT NOT NULL DEFAULT 0;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS daily_date TEXT;
@@ -374,6 +375,7 @@ function buildState(r: any, cl: Record<string, number>, passiveEarned: number): 
     combo: (() => { const cards = todaysCombo(today); const hits = r.combo_date === today ? parseHits(r.combo_hits) : []; return { cards, hits, complete: cards.every((c) => hits.includes(c)), claimed: r.combo_claimed === today, reward: COMBO_REWARD }; })(),
     cipher: { morse: toMorse(todaysCipher(today)), anagram: scrambleWord(todaysCipher(today), today), len: todaysCipher(today).length, claimed: r.cipher_date === today, reward: CIPHER_REWARD },
     taps: Number(r.taps || 0), cardsOwned: CARDS.filter((c) => (cl[c.id] || 0) > 0).length,
+    onboarded: !!r.onboarded,
     season: { points: r.week_key === weekKey() ? Math.max(0, Number(r.total_earned) - Number(r.week_base || 0)) : 0, endsTs: seasonEndsTs() },
     prestige: Number(r.prestige || 0), prestigeMult: prestigeMultOf(Number(r.prestige || 0)), prestigeReady: lg.level >= PRESTIGE_MIN_LEVEL,
     event: (() => { const e = activeEvent(); return e ? { active: true, name: e.name, mult: e.mult, endsTs: e.endsTs } : null; })(),
@@ -1397,6 +1399,12 @@ export async function markWelcomePromoShown(chatId: number): Promise<boolean> {
     [chatId]
   );
   return (rowCount ?? 0) > 0;
+}
+
+/** Онбординг пройден — серверный флаг (переживает потерю localStorage в webview Mini App,
+ *  из-за которой обучение показывалось при КАЖДОМ входе). Идемпотентно. */
+export async function markOnboarded(chatId: number): Promise<void> {
+  await pool.query(`UPDATE clicker_state SET onboarded = TRUE WHERE chat_id = $1 AND onboarded = FALSE`, [chatId]);
 }
 
 /**
