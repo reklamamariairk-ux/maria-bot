@@ -109,6 +109,14 @@ export function pickPurchaseBreed(r1: number, r2: number, eventActive: boolean):
   return pool[Math.floor(r2 * pool.length)].id;
 }
 
+// Случайная порода заданной редкости (для дропа из кейса, где редкость уже разыграна).
+// champion исключён (он не «rarity-дроп», а отдельный приз). Фолбэк на common, если пусто.
+export function pickBreedOfRarity(rarity: Rarity, r: number): string {
+  let pool = PIGEON_BREEDS.filter(b => b.id !== "champion" && b.rarity === rarity);
+  if (!pool.length) pool = PIGEON_BREEDS.filter(b => b.id !== "champion" && b.rarity === "common");
+  return pool[Math.floor(r * pool.length) % pool.length].id;
+}
+
 // Звёзды: сколько дублей скормить до следующей звезды. ★1→★2 = 3, ★2→★3 = 5, ★3 = кап.
 export function starTarget(stars: number): number | null {
   return stars === 1 ? 3 : stars === 2 ? 5 : null;

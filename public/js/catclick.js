@@ -170,6 +170,7 @@
 
   // ── Бонусы дня (зеркало src/clicker.ts — алгоритм/слова/морзе менять синхронно) ──
   const COMBO_REWARD = 12000, CIPHER_REWARD = 3000;
+  const CASE_COST = 50000; // цена открытия платного кейса — зеркало src/lootbox.ts::CASE_COST
   const CIPHER_WORDS = ['МАРИЯ', 'ТОРТ', 'КОТИК', 'КРЕМ', 'ЭКЛЕР', 'МУСС', 'БИСКВИТ', 'ВАНИЛЬ', 'ШОКОЛАД', 'КАРАМЕЛЬ', 'ДЕСЕРТ', 'ПЕКАРНЯ'];
   const MORSE = { А: '.-', Б: '-...', В: '.--', Г: '--.', Д: '-..', Е: '.', Ж: '...-', З: '--..', И: '..', Й: '.---', К: '-.-', Л: '.-..', М: '--', Н: '-.', О: '---', П: '.--.', Р: '.-.', С: '...', Т: '-', У: '..-', Ф: '..-.', Х: '....', Ц: '-.-.', Ч: '---.', Ш: '----', Щ: '--.-', Ь: '-..-', Ы: '-.--', Э: '..-..', Ю: '..--', Я: '.-.-' };
   function dateSeed(day, salt) { let h = 2166136261 >>> 0; const s = day + salt; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h >>> 0; }
@@ -704,6 +705,26 @@
       .ck-conf{position:absolute;z-index:7;pointer-events:none;border-radius:1px;will-change:transform,opacity}
       .ck-greet{display:none;margin-top:8px;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);color:var(--gold-l);padding:4px 13px;border-radius:20px;font-weight:700;font-size:12px}
       .ck-greet.on{display:inline-flex}
+      /* Платный кейс: CS2-рил (горизонтальная лента, стоп на призе) */
+      .ck-case{position:absolute;inset:0;z-index:13;display:none;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(135% 100% at 50% -8%,#1B0F26,#0B0814);touch-action:none}
+      .ck-case.on{display:flex}
+      .ck-case__hd{position:absolute;top:18px;left:0;right:0;text-align:center;font-family:'Nunito',sans-serif;font-weight:900;font-size:16px;color:var(--cream);display:flex;align-items:center;justify-content:center;gap:7px}
+      .ck-case__x{position:absolute;top:13px;right:13px;width:34px;height:34px;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.3);color:var(--cream);font-size:17px;cursor:pointer;z-index:3}
+      .ck-case__reel{position:relative;width:100%;height:132px;overflow:hidden;-webkit-mask:linear-gradient(90deg,transparent,#000 13%,#000 87%,transparent);mask:linear-gradient(90deg,transparent,#000 13%,#000 87%,transparent)}
+      .ck-case__mark{position:absolute;top:-4px;bottom:-4px;left:50%;width:3px;background:linear-gradient(180deg,#D8FF7A,#8DBF20);box-shadow:0 0 14px rgba(192,255,51,.9);transform:translateX(-50%);z-index:2;border-radius:2px}
+      .ck-case__track{position:absolute;top:50%;left:0;display:flex;gap:10px;transform:translateY(-50%);will-change:transform}
+      .ck-caset{width:96px;height:112px;flex:none;border-radius:14px;background:var(--panel);border:2px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;box-sizing:border-box;padding:6px}
+      .ck-caset[data-r="common"]{border-color:rgba(141,146,156,.5)}
+      .ck-caset[data-r="rare"]{border-color:#C0FF33}
+      .ck-caset[data-r="epic"]{border-color:#9B5CFF}
+      .ck-caset[data-r="legendary"]{border-color:#FF2E7E;box-shadow:0 0 13px rgba(255,46,126,.45)}
+      .ck-caset img{width:56px;height:56px;object-fit:contain}
+      .ck-caset__t{font-size:10px;font-weight:800;color:var(--muted);text-align:center;line-height:1.1;font-variant-numeric:tabular-nums}
+      .ck-case__res{position:absolute;bottom:44px;left:0;right:0;text-align:center;opacity:0;transition:opacity .3s}
+      .ck-case__res.on{opacity:1}
+      .ck-case__res .rt{font-family:'Nunito',sans-serif;font-weight:900;font-size:22px;color:var(--gold-l);display:inline-flex;align-items:center;gap:8px}
+      .ck-case__res .rs{color:var(--muted);font-size:13px;margin-top:4px}
+      .ck-case__res button{margin-top:14px;border:1px solid #DFFF8F;border-radius:14px;padding:12px 30px;font-weight:800;background:linear-gradient(180deg,#D4FF6A,#A8F51E 56%,#8DBF20);color:#12210A;cursor:pointer}
       .ck-rain{position:absolute;inset:0;z-index:11;display:none;flex-direction:column;background:radial-gradient(135% 100% at 50% -8%,#1B0F26,#120D1C);touch-action:none}
       .ck-rain.on{display:flex}
       .ck-rain__hud{display:flex;align-items:center;gap:14px;padding:14px 16px;font-weight:800;font-size:15px;color:var(--cream);font-variant-numeric:tabular-nums}
@@ -1607,6 +1628,84 @@
     pop.innerHTML = `<h3>${ICON.chest(20)} Сундук удачи</h3>${body}<button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => { pop.classList.remove('on'); advancePopupQueue(); };
   }
 
+  // ── Платный кейс (CS2-стиль): открытие → рил-анимация → приз ─────────────────
+  async function openCaseAct() {
+    if (!authed()) { flashMsg('Кейс открывается в приложении — войди в игру'); return; }
+    if (st && Number(st.balance) < CASE_COST) { flashMsg('Не хватает монет на кейс'); return; }
+    return withLock('case', async () => {
+      const d = await api('/api/clicker/case', { method: 'POST', body: '{}' }).catch(() => null);
+      if (!d || d.error) { flashMsg(d && d.error === 'not_enough_coins' ? 'Не хватает монет' : 'Нет связи — попробуй ещё раз'); return; }
+      st = d; turboUntil = Date.now() + (st.turboMsLeft || 0);
+      window.haptic && window.haptic('light'); renderAll(); renderTasks(); bumpBalance();
+      runCaseReel(d.prize, d.pigeonDrop);
+    });
+  }
+  // Тайл рила: монеты/буст/голубь(по редкости)/чемпион. p={type,amount?,breed?,rarity?}
+  function caseTileHtml(p) {
+    const rar = p.rarity || (p.type === 'champion' ? 'legendary' : '');
+    let inner;
+    if (p.type === 'coins') inner = `${COIN(38)}<div class="ck-caset__t">${fmt(p.amount || 0)}</div>`;
+    else if (p.type === 'turbo') inner = `${ICON.rocket(38)}<div class="ck-caset__t">Турбо</div>`;
+    else if (p.type === 'energy') inner = `${ICON.bolt(38)}<div class="ck-caset__t">Энергия</div>`;
+    else { const meta = DOVE_META[p.breed] || { name: 'Голубь' }; inner = `<img src="/img/pigeons/${p.breed}.webp?v=2" alt="" onerror="this.style.display='none'"><div class="ck-caset__t">${meta.name}</div>`; }
+    return `<div class="ck-caset" data-r="${rar}">${inner}</div>`;
+  }
+  // Наполнитель рила: в основном дешёвое (монеты/обычные голуби), редко ценное — как в кейсе.
+  const CASE_FILLER_BREEDS = { common: ['sizar', 'belobok', 'ryaboy', 'chubaty'], rare: ['vanil', 'shoko', 'karamel', 'yagodny'], epic: ['pochtar', 'baikal', 'kurier', 'vozhak', 'svadebny', 'imeninny', 'snezhny'], legendary: ['zolotoy'] };
+  function randomFiller() {
+    const r = Math.random();
+    if (r < 0.42) return { type: 'coins', amount: Math.round(8000 + Math.random() * 34000) };
+    if (r < 0.52) return { type: 'turbo' };
+    if (r < 0.62) return { type: 'energy' };
+    const rr = Math.random();
+    const rarity = rr < 0.62 ? 'common' : rr < 0.88 ? 'rare' : rr < 0.98 ? 'epic' : 'legendary';
+    const pool = CASE_FILLER_BREEDS[rarity]; const breed = pool[Math.floor(Math.random() * pool.length)];
+    return { type: 'pigeon', breed, rarity };
+  }
+  function runCaseReel(prize, pigeonDrop) {
+    let el = ov.querySelector('#ck-case');
+    if (!el) {
+      el = document.createElement('div'); el.id = 'ck-case'; el.className = 'ck-case';
+      el.innerHTML = `<div class="ck-case__hd">${ICON.chest(18)} Кейс удачи</div><button class="ck-case__x" id="ck-case-x" type="button" aria-label="Закрыть">×</button><div class="ck-case__reel"><div class="ck-case__mark"></div><div class="ck-case__track" id="ck-case-track"></div></div><div class="ck-case__res" id="ck-case-res"></div>`;
+      ov.appendChild(el);
+    }
+    const track = el.querySelector('#ck-case-track'), res = el.querySelector('#ck-case-res');
+    // Рил сам показывает выпавшего голубя — отдельный dove-drop попап не нужен (не двоим).
+    el.querySelector('#ck-case-x').onclick = () => el.classList.remove('on');
+    res.className = 'ck-case__res'; res.innerHTML = '';
+    const WIN = 45, N = 52; // выигрышный тайл ближе к концу ленты
+    const win = { type: prize.type, amount: prize.amount, breed: prize.breed, rarity: prize.rarity };
+    let html = '';
+    for (let i = 0; i < N; i++) html += (i === WIN) ? caseTileHtml(win) : caseTileHtml(randomFiller());
+    track.innerHTML = html;
+    track.style.transition = 'none'; track.style.transform = 'translateX(0)';
+    el.classList.add('on');
+    requestAnimationFrame(() => {
+      const tileW = 96 + 10;                                   // ширина тайла + gap
+      const reelW = el.querySelector('.ck-case__reel').clientWidth;
+      const jitter = (Math.random() * 2 - 1) * 22;              // лёгкий сдвиг от центра (±22px), тайл всё равно под маркером
+      const target = -(WIN * tileW + 48 - reelW / 2) + jitter;
+      void track.offsetWidth;
+      track.style.transition = 'transform 4.4s cubic-bezier(.10,.62,.14,1)';
+      track.style.transform = 'translateX(' + target.toFixed(1) + 'px)';
+      window.haptic && window.haptic('light');
+      setTimeout(() => revealCase(prize, res, el), 4550);
+    });
+  }
+  function revealCase(prize, res, el) {
+    let title, sub = '';
+    if (prize.type === 'coins') { title = `+${fmt(prize.amount)} ${COIN(22)}`; if (prize.amount >= 150000) sub = 'ДЖЕКПОТ!'; else if (prize.amount < CASE_COST) sub = 'В этот раз немного — крутани ещё'; }
+    else if (prize.type === 'turbo') { title = `${ICON.rocket(22)} Турбо ×5`; sub = '20 секунд множителя за тап'; }
+    else if (prize.type === 'energy') { title = `${ICON.bolt(22)} Полная энергия`; }
+    else { const meta = DOVE_META[prize.breed] || { name: 'Голубь', r: prize.rarity }; const rl = { common: 'обычный', rare: 'редкий', epic: 'эпический', legendary: 'легендарный' }[meta.r || prize.rarity] || ''; title = `${meta.name}`; sub = prize.type === 'champion' ? 'ЧЕМПИОН — 1 раз в год на всех!' : `${rl} голубь${prize.isNew ? ' · новый в альбоме!' : ' — в питомник/гонки'}`; }
+    res.innerHTML = `<div class="rt">${title}</div><div class="rs">${sub}</div><button id="ck-case-ok" type="button">Забрать</button>`;
+    res.classList.add('on');
+    const big = prize.type === 'champion' || prize.type === 'pigeon' && (prize.rarity === 'epic' || prize.rarity === 'legendary') || (prize.type === 'coins' && prize.amount >= 150000);
+    window.haptic && window.haptic(big ? 'success' : 'light');
+    if (big) { sfxLevel(); confettiBurst(); coinShower(); } else sfxReward();
+    res.querySelector('#ck-case-ok').onclick = () => el.classList.remove('on');
+  }
+
   // ── Мини-игра «Золотой дождь» (canvas, 20с лови монеты) ───────────────────────
   function rainAvailable() { return !st || st.rainAvailable; }
   function openRain() {
@@ -2280,13 +2379,18 @@
     const chestCard = `<div class="ck-card ck-bonus" style="background:linear-gradient(90deg,rgba(238,191,82,.16),rgba(238,191,82,.04))">
       <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.chest(26)}</div><div class="ck-card__b"><div class="ck-card__n">Сундук удачи</div><div class="ck-card__s">${chestAvail ? 'Монеты, турбо или джекпот!' : 'Новый сундук ' + untilNewDay()}</div></div>
       ${chestAvail ? `<button class="ck-card__buy" id="ck-chest-open">Открыть</button>` : `<button class="ck-card__buy" disabled>✓ Открыт</button>`}</div>`;
-    // Карточка «Игры» переехала на главную (кнопка в ряду бустов) — решение юзера
-    // 31.07: «Призы» = только призы. Хаб открывается openGamesHub.
-    return '<div class="ck-sect">Бонусы дня</div>' + chestCard + comboCard;
+    // Платный «Кейс удачи» (как кейсы CS2): платишь монетами → голубь/буст/джекпот, чем
+    // реже голубь — тем ценнее. Экономика с домовым эджем (сервер src/lootbox.ts).
+    const canCase = !st || (Number(st.balance) >= CASE_COST);
+    const caseCard = `<div class="ck-card ck-bonus" style="background:linear-gradient(90deg,rgba(155,92,255,.20),rgba(155,92,255,.05));border-color:rgba(155,92,255,.4)">
+      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic" style="background:rgba(155,92,255,.2)">${ICON.chest(26)}</div><div class="ck-card__b"><div class="ck-card__n">Кейс удачи</div><div class="ck-card__s">Голуби, бусты, джекпот — чем реже голубь, тем ценнее</div></div>
+      <button class="ck-card__buy" id="ck-case-open"${canCase ? '' : ' disabled'}>${COIN(13)} ${fmt(CASE_COST)}</button></div>`;
+    return '<div class="ck-sect">Бонусы дня</div>' + chestCard + caseCard + comboCard;
   }
   function wireBonus() {
     const cb = ov.querySelector('#ck-combo-claim'); if (cb) cb.onclick = claimCombo;
     const ch = ov.querySelector('#ck-chest-open'); if (ch) ch.onclick = openChestAct;
+    const co = ov.querySelector('#ck-case-open'); if (co) co.onclick = openCaseAct;
     const gp = ov.querySelector('#ck-games-open'); if (gp) gp.onclick = openGamesHub;
     const go = ov.querySelector('#ck-cipher-go'), inp = ov.querySelector('#ck-cipher-in');
     if (go && inp) { go.onclick = () => claimCipher(inp.value); inp.onkeydown = (e) => { if (e.key === 'Enter') claimCipher(inp.value); }; }

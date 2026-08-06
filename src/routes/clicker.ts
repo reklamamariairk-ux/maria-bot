@@ -5,7 +5,7 @@
  * POST /api/clicker/boost {type:turbo|energy} · GET /api/clicker/top
  */
 import { Router } from "express";
-import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements, getRewards, redeemReward, claimBonus, openChest, claimRain, claimGame, getMilestones, claimMilestone, syncPurchaseBonus, migrateGuest, redeemCode, getSquads, joinSquad, squadBankStatus, donateSquadBank, createSquad, joinSquadByCode, requestJoinSquad, listSquadRequests, decideSquadRequest, prestigeReset, welcomePromoShown, markWelcomePromoShown, markOnboarded, getFtue, claimFtue, getSquadMembers } from "../clicker";
+import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements, getRewards, redeemReward, claimBonus, openChest, openCase, claimRain, claimGame, getMilestones, claimMilestone, syncPurchaseBonus, migrateGuest, redeemCode, getSquads, joinSquad, squadBankStatus, donateSquadBank, createSquad, joinSquadByCode, requestJoinSquad, listSquadRequests, decideSquadRequest, prestigeReset, welcomePromoShown, markWelcomePromoShown, markOnboarded, getFtue, claimFtue, getSquadMembers } from "../clicker";
 import { rateLimit, requireAdminToken } from "../middleware";
 import { requireTgUser, getTgUser } from "../auth";
 import { getBonusQueue, ackBonusQueue, queueAuthOk } from "../bonus1c";
@@ -111,6 +111,13 @@ router.post("/api/clicker/chest", requireTgUser, rateLimit(30), async (req, res)
   const u = getTgUser(req)!;
   try { const r = await openChest(u.id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ prize: r.prize, pigeonDrop: r.pigeonDrop, ...r.state }); trackEvent(u.id, "chest", {}); }
   catch (e) { log.error({ err: e, chatId: u.id }, "[chest]"); res.status(500).json({ error: "internal" }); }
+});
+
+// Платный кейс: платишь монетами → взвешенный приз (казино-эдж, см. lootbox.ts).
+router.post("/api/clicker/case", requireTgUser, rateLimit(30), async (req, res) => {
+  const u = getTgUser(req)!;
+  try { const r = await openCase(u.id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ prize: r.prize, newBalance: r.newBalance, cost: r.cost, pigeonDrop: r.pigeonDrop, ...r.state }); trackEvent(u.id, "case", { prize: r.prize?.type }); }
+  catch (e) { log.error({ err: e, chatId: u.id }, "[case]"); res.status(500).json({ error: "internal" }); }
 });
 
 router.post("/api/clicker/bonus", requireTgUser, rateLimit(60), async (req, res) => {

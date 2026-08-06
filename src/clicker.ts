@@ -300,6 +300,12 @@ export async function initClickerSchema(): Promise<void> {
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS prestige INT NOT NULL DEFAULT 0;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS ftue_claimed INT NOT NULL DEFAULT 0;
     CREATE INDEX IF NOT EXISTS clicker_squad_idx ON clicker_state (squad);
+    -- Платный кейс: суммарно потрачено/выиграно игроком (казино-баланс дом/игрок, пити).
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS case_spent BIGINT NOT NULL DEFAULT 0;
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS case_won BIGINT NOT NULL DEFAULT 0;
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS case_dry INT NOT NULL DEFAULT 0;
+    -- Глобальные значения игры (key→ts): гейт чемпиона «1 раз в год на всех».
+    CREATE TABLE IF NOT EXISTS game_globals (key TEXT PRIMARY KEY, ts TIMESTAMPTZ, val TEXT);
     CREATE TABLE IF NOT EXISTS clicker_cards (
       chat_id BIGINT NOT NULL, card TEXT NOT NULL, level INT NOT NULL DEFAULT 0,
       PRIMARY KEY (chat_id, card)
@@ -768,6 +774,54 @@ export async function openChest(chatId: number): Promise<{ ok: boolean; prize?: 
     const pigeonDrop = await maybeDropPigeon(chatId, 0.35, client);
     await client.query("COMMIT");
     return { ok: true, prize, state: buildState(r, cl, 0), pigeonDrop };
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+}
+
+// ── Платный кейс (казино-экономика, см. src/lootbox.ts) ──────────────────────
+// Пити: после PITY_DRY открытий подряд без голубя — следующий гарантированно даёт
+// голубя (награда за «наигранность»/потраченное; эдж всё равно у дома на дистанции).
+const PITY_DRY = 30;
+export type CasePrizeOut = { type: string; amount?: number; rarity?: string; breed?: string; isNew?: boolean };
+export async function openCase(chatId: number): Promise<{ ok: boolean; prize?: CasePrizeOut; state?: ClickerState; reason?: string; newBalance?: number; cost?: number; pigeonDrop?: { breed: string; isNew: boolean } }> {
+  const { CASE_COST, CHAMPION_COOLDOWN_DAYS, rollCase, prizeValue } = await import("./lootbox");
+  const { grantPigeon, pickBreedOfRarity, pickBreed, BREED_BY_ID } = await import("./pigeons");
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { r, cl } = await refresh(client, chatId);
+    if (Number(r.balance) < CASE_COST) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
+    r.balance = Number(r.balance) - CASE_COST; // цена открытия
+    // Гейт чемпиона: одна глобальная строка под FOR UPDATE — не чаще 1 раза в год на всех.
+    await client.query(`INSERT INTO game_globals(key, ts) VALUES('champion_granted_at', NULL) ON CONFLICT (key) DO NOTHING`);
+    const g = await client.query(`SELECT ts FROM game_globals WHERE key='champion_granted_at' FOR UPDATE`);
+    const lastTs = g.rows[0] && g.rows[0].ts ? new Date(g.rows[0].ts).getTime() : 0;
+    const championAllowed = (Date.now() - lastTs) >= CHAMPION_COOLDOWN_DAYS * 86400000;
+
+    const dry = Number(r.case_dry || 0);
+    let prize = rollCase(Math.random(), Math.random(), championAllowed);
+    // Пити: «сухая серия» дошла до порога, а выпали не-голубь → форсим голубя (по базовым
+    // весам редкости). Чемпион пити НЕ выдаёт (только настоящий гейт-ролл).
+    if (dry + 1 >= PITY_DRY && prize.type !== "pigeon" && prize.type !== "champion") {
+      const b = BREED_BY_ID.get(pickBreed(Math.random(), Math.random(), weekKey(), !!activeEvent()));
+      prize = { type: "pigeon", rarity: b ? b.rarity : "common" };
+    }
+
+    const out: CasePrizeOut = { type: prize.type };
+    let pigeonDrop: { breed: string; isNew: boolean } | undefined;
+    if (prize.type === "coins") { r.balance = Number(r.balance) + prize.amount; r.total_earned = Number(r.total_earned) + prize.amount; out.amount = prize.amount; }
+    else if (prize.type === "turbo") { r.turbo_until = new Date(Date.now() + TURBO_SEC * 1000); }
+    else if (prize.type === "energy") { r.energy = energyMaxFor(r.energy_limit_level); }
+    else if (prize.type === "pigeon") { const breed = pickBreedOfRarity(prize.rarity, Math.random()); pigeonDrop = await grantPigeon(chatId, breed, client); out.rarity = prize.rarity; out.breed = breed; out.isNew = pigeonDrop.isNew; }
+    else if (prize.type === "champion") { pigeonDrop = await grantPigeon(chatId, "champion", client); out.breed = "champion"; out.isNew = pigeonDrop.isNew; await client.query(`UPDATE game_globals SET ts=NOW() WHERE key='champion_granted_at'`); }
+
+    const isPigeon = prize.type === "pigeon" || prize.type === "champion";
+    const won = prizeValue(prize);
+    const newDry = isPigeon ? 0 : dry + 1;
+    await client.query(
+      `UPDATE clicker_state SET balance=$2, total_earned=$3, energy=$4, turbo_until=$5, case_spent=case_spent+$6, case_won=case_won+$7, case_dry=$8, updated_at=NOW() WHERE chat_id=$1`,
+      [chatId, r.balance, r.total_earned, r.energy, r.turbo_until || null, CASE_COST, won, newDry]);
+    await client.query("COMMIT");
+    return { ok: true, prize: out, state: buildState(r, cl, 0), newBalance: Number(r.balance), cost: CASE_COST, pigeonDrop };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
