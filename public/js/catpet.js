@@ -531,15 +531,18 @@
         if (cat.x < 0.12) { cat.x = 0.12; cat.dir = 1; }
         if (cat.x > 0.88) { cat.x = 0.88; cat.dir = -1; }
         // Ходьба: ВСЕ боковые кадры walk1..4 сгенерированы с лишними лапами (AI-артефакт,
-        // жалоба «6 лап»). Поэтому во время движения показываем чистый анфас-кадр idle.png
-        // (2 передние лапы, задние скрыты телом — размножаться нечему) и «оживляем» его
-        // покачиванием: вверх-вниз (bob) + вразвалку влево-вправо (lean) — толстый кот
-        // идёт вперевалку, без боковых спрайтов.
+        // жалоба «6 лап»), а анфас с наклоном вправо-влево выглядел «стрёмно» (метроном).
+        // Решение — ПРЫЖКИ-подскоки чистого анфас-кадра idle.png: толстый кот бодро скачет
+        // через комнату. squash-stretch с origin у лап: сжат при приземлении (hop→0),
+        // растянут в прыжке (hop→1) — живо и естественно, без боковых спрайтов.
         cat.frame += dt;
         setCatFrame(catEl, 'idle.png');
-        const bob = Math.abs(Math.sin(cat.frame * 6)) * 4;
-        const lean = Math.sin(cat.frame * 6) * 4.5;
-        catEl.style.transform = `translateY(${(-bob).toFixed(1)}px) rotate(${lean.toFixed(1)}deg)`;
+        const hop = Math.abs(Math.sin(cat.frame * 5.2)); // 0 = приземление, 1 = верх дуги
+        const y = -hop * 13;                              // подскок вверх
+        const sy = 0.95 + 0.11 * hop;                     // сжат у земли, растянут в прыжке
+        const sx = 1.06 - 0.11 * hop;                     // шире у земли, уже в прыжке
+        catEl.style.transformOrigin = 'bottom center';
+        catEl.style.transform = `translateY(${y.toFixed(1)}px) scaleX(${(cat.dir * sx).toFixed(3)}) scaleY(${sy.toFixed(3)})`;
         if (cat.t > 1.2 + Math.random() * 1.4) { cat.mode = 'idle'; cat.t = 0; setCatFrame(catEl, 'idle.png'); catEl.style.transform = 'none'; }
       } else { // idle — кот в основном стоит анфас (шапка видна, нет дрожания кадров)
         if (cat.t > 4 + Math.random() * 4) { cat.mode = 'walk'; cat.t = 0; cat.dir = Math.random() < 0.5 ? -1 : 1; }
