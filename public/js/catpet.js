@@ -258,7 +258,7 @@
     const s = document.createElement('style'); s.id = 'catpet-css';
     s.textContent = `
       .pet-i{display:inline-block;vertical-align:-.18em}
-      .pet-ov{position:fixed;inset:0;z-index:9999;display:none;flex-direction:column;overflow:hidden;background:#fdfaf3 center/cover no-repeat;touch-action:none;user-select:none;max-width:480px;margin:0 auto;box-shadow:0 0 0 100vmax rgba(20,14,10,.5)}
+      .pet-ov{position:fixed;inset:0;z-index:9999;display:none;flex-direction:column;overflow:hidden;background:#F3F1FB center/cover no-repeat;touch-action:none;user-select:none;max-width:480px;margin:0 auto;box-shadow:0 0 0 100vmax rgba(20,14,10,.5)}
       .pet-ov.on{display:flex}
       .pet-topwrap{position:relative;z-index:3;display:flex;flex-direction:column;background:linear-gradient(180deg,rgba(0,0,0,.28),transparent)}
       .pet-top{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:10px 12px 4px}
@@ -268,46 +268,46 @@
       .pet-need__fill{height:100%;border-radius:6px;transition:width .4s}
       .pet-row2{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:0 12px 8px}
       .pet-lvl{color:#fff;font-weight:800;font-size:13px;text-shadow:0 1px 3px rgba(0,0,0,.5);line-height:1.2}
-      .pet-x{position:absolute;top:8px;right:8px;width:40px;height:40px;border:1px solid rgba(255,255,255,.28);border-radius:50%;background:rgba(20,12,9,.55);color:#fff;font-size:22px;cursor:pointer;z-index:4}
+      .pet-x{position:absolute;top:8px;right:8px;width:40px;height:40px;border:1px solid rgba(255,255,255,.28);border-radius:50%;background:rgba(11,8,20,.55);color:#fff;font-size:22px;cursor:pointer;z-index:4}
       .pet-stage{position:relative;flex:1;overflow:hidden}
       .pet-cat{position:absolute;bottom:23%;height:46%;width:auto;max-height:320px;transform-origin:bottom center;will-change:left,transform} /* тень уже запечена в кадры (rembg); filter:drop-shadow тут заставлял GPU перерастеризовывать кота каждый кадр ходьбы — жалоба «тормозит». height/max-height переопределяет setCatFrame() пер-кадрово */
       .pet-fx{position:absolute;inset:0;pointer-events:none;z-index:4}
       .pet-name{position:absolute;top:10px;left:12px;color:#fff;font-weight:900;font-size:18px;text-shadow:0 2px 5px rgba(0,0,0,.5);z-index:3}
       .pet-action{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);z-index:5}
-      .pet-action__btn{border:none;border-radius:18px;padding:14px 30px;font-size:17px;font-weight:800;color:#fff;background:#ff7a2d;box-shadow:0 8px 20px rgba(255,122,45,.5);cursor:pointer}
+      .pet-action__btn{border:none;border-radius:18px;padding:14px 30px;font-size:17px;font-weight:800;color:#12210A;background:#C0FF33;box-shadow:0 8px 20px rgba(192,255,51,.5);cursor:pointer}
       /* Панель комнат — в языке навигации игры (тёмный шоколад + золотой актив),
          чтобы «Дом» не выглядел другим приложением (аудит 30.07) */
-      .pet-nav{position:relative;z-index:3;display:flex;justify-content:space-around;padding:8px 6px 14px;background:linear-gradient(0deg,rgba(20,12,9,.62),transparent)}
-      .pet-nav__b{flex:1;margin:0 4px;border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:8px 4px;background:rgba(26,18,14,.78);font-size:12px;font-weight:700;color:#eee7dd;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
-      .pet-nav__b.on{background:linear-gradient(180deg,#ffe7a6,#eebf52);border-color:#ffe9b3;color:#5a2028;box-shadow:0 4px 10px rgba(0,0,0,.25)}
+      .pet-nav{position:relative;z-index:3;display:flex;justify-content:space-around;padding:8px 6px 14px;background:linear-gradient(0deg,rgba(11,8,20,.62),transparent)}
+      .pet-nav__b{flex:1;margin:0 4px;border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:8px 4px;background:rgba(20,14,32,.78);font-size:12px;font-weight:700;color:#E9E7F2;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
+      .pet-nav__b.on{background:linear-gradient(180deg,#D4FF6A,#A8F51E);border-color:#DFFF8F;color:#12210A;box-shadow:0 4px 10px rgba(0,0,0,.25)}
       .pet-nav__b .i{font-size:20px}
-      .pet-bubble{position:absolute;z-index:5;background:#fff;border-radius:14px;padding:6px 10px;font-weight:800;color:#7a3b12;box-shadow:0 4px 12px rgba(0,0,0,.2);font-size:14px;transform:translate(-50%,0);opacity:0;transition:opacity .2s}
-      .pet-play{position:absolute;inset:0;z-index:6;display:none;align-items:center;justify-content:center;background:rgba(40,20,8,.5);backdrop-filter:blur(2px)}
+      .pet-bubble{position:absolute;z-index:5;background:#fff;border-radius:14px;padding:6px 10px;font-weight:800;color:#16210A;box-shadow:0 4px 12px rgba(0,0,0,.2);font-size:14px;transform:translate(-50%,0);opacity:0;transition:opacity .2s}
+      .pet-play{position:absolute;inset:0;z-index:6;display:none;align-items:center;justify-content:center;background:rgba(14,10,26,.5);backdrop-filter:blur(2px)}
       .pet-play.on{display:flex}
-      .pet-play__card{background:#fff5ea;border-radius:22px;padding:22px;width:84%;max-width:340px;text-align:center}
-      .pet-play__card h3{margin:0 0 12px;color:#7a3b12}
+      .pet-play__card{background:#F3F1FB;border-radius:22px;padding:22px;width:84%;max-width:340px;text-align:center}
+      .pet-play__card h3{margin:0 0 12px;color:#16210A}
       .pet-play__g{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
-      .pet-play__g button{border:none;border-radius:16px;padding:14px 18px;font-weight:800;cursor:pointer;background:#ff7a2d;color:#fff;font-size:15px}
+      .pet-play__g button{border:none;border-radius:16px;padding:14px 18px;font-weight:800;cursor:pointer;background:#C0FF33;color:#12210A;font-size:15px}
       .pet-shop-btn{position:absolute;top:8px;right:88px;z-index:4;width:34px;height:34px;border:none;border-radius:50%;background:rgba(0,0,0,.3);color:#fff;font-size:17px;cursor:pointer}
-      .pet-shop{position:absolute;inset:0;z-index:7;display:none;flex-direction:column;background:rgba(40,20,8,.55);backdrop-filter:blur(3px)}
+      .pet-shop{position:absolute;inset:0;z-index:7;display:none;flex-direction:column;background:rgba(14,10,26,.55);backdrop-filter:blur(3px)}
       .pet-shop.on{display:flex}
       .pet-shop__h{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;color:#fff;font-weight:900;font-size:18px}
-      .pet-shop__h button{border:none;border-radius:12px;padding:8px 14px;font-weight:800;background:#fff;color:#7a3b12;cursor:pointer}
+      .pet-shop__h button{border:none;border-radius:12px;padding:8px 14px;font-weight:800;background:#fff;color:#16210A;cursor:pointer}
       .pet-shop__grid{flex:1;overflow:auto;display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 14px 18px}
-      .pet-item{background:#fff7ee;border-radius:18px;padding:12px;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+      .pet-item{background:#F3F1FB;border-radius:18px;padding:12px;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,.15)}
       .pet-item img{width:78px;height:78px;object-fit:contain}
-      .pet-item__n{font-weight:800;color:#7a3b12;font-size:13px;margin:4px 0}
+      .pet-item__n{font-weight:800;color:#16210A;font-size:13px;margin:4px 0}
       .pet-item__b{border:none;border-radius:12px;padding:9px 0;width:100%;font-weight:800;cursor:pointer;font-size:13px}
-      .pet-item__b.buy{background:#ffcf3f;color:#7a3b12}
-      .pet-item__b.buy:disabled{background:#e7ddcf;color:#b3a48f;cursor:default}
-      .pet-item__b.equip{background:#ff7a2d;color:#fff}
+      .pet-item__b.buy{background:#C0FF33;color:#16210A}
+      .pet-item__b.buy:disabled{background:#DAD7E6;color:#928DA6;cursor:default}
+      .pet-item__b.equip{background:#C0FF33;color:#12210A}
       .pet-item__b.on{background:#7ed957;color:#fff}
-      .pet-streak{position:static;margin-left:auto;font-weight:800;font-size:13px;color:#c2882a;background:rgba(255,255,255,.7);border-radius:12px;padding:5px 10px;white-space:nowrap}
-      .pet-gift{position:absolute;left:50%;transform:translateX(-50%);bottom:172px;z-index:6;display:flex;align-items:center;gap:7px;border:0;cursor:pointer;font:inherit;font-weight:800;font-size:13px;color:#7a5a13;background:rgba(255,248,231,.92);border-radius:14px;padding:7px 12px;box-shadow:0 2px 10px rgba(0,0,0,.12)}
-      .pet-gift.ready{color:#fff;background:linear-gradient(120deg,#e0a93c,#c2882a);animation:petgift 1.6s ease-in-out infinite}
+      .pet-streak{position:static;margin-left:auto;font-weight:800;font-size:13px;color:#8DBF20;background:rgba(255,255,255,.7);border-radius:12px;padding:5px 10px;white-space:nowrap}
+      .pet-gift{position:absolute;left:50%;transform:translateX(-50%);bottom:172px;z-index:6;display:flex;align-items:center;gap:7px;border:0;cursor:pointer;font:inherit;font-weight:800;font-size:13px;color:#16210A;background:rgba(240,238,250,.92);border-radius:14px;padding:7px 12px;box-shadow:0 2px 10px rgba(0,0,0,.12)}
+      .pet-gift.ready{color:#fff;background:linear-gradient(120deg,#A8F51E,#8DBF20);animation:petgift 1.6s ease-in-out infinite}
       @keyframes petgift{0%,100%{transform:translateX(-50%) scale(1)}50%{transform:translateX(-50%) scale(1.05)}}
       @media (prefers-reduced-motion: reduce){.pet-gift.ready{animation:none}}
-      .pet-toast{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);z-index:8;max-width:88%;text-align:center;background:linear-gradient(180deg,#ffe7a6,#eebf52);color:#5a2028;font-weight:800;font-size:13px;border-radius:14px;padding:9px 14px;opacity:0;transition:opacity .3s;pointer-events:none}
+      .pet-toast{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);z-index:8;max-width:88%;text-align:center;background:linear-gradient(180deg,#D4FF6A,#A8F51E);color:#12210A;font-weight:800;font-size:13px;border-radius:14px;padding:9px 14px;opacity:0;transition:opacity .3s;pointer-events:none}
       .pet-toast.on{opacity:1}
       .pet-x::after,.pet-shop-btn::after{content:'';position:absolute;inset:-7px} /* хит-ареа 34px → 48px */
       #pet-do:active,.pet-nav__b:active,#pet-x:active,#pet-shop-btn:active,.pet-item__b:active:not(:disabled),.pet-play__g button:active,.pet-shop__h button:active{transform:scale(.95);filter:brightness(.93)}
@@ -343,7 +343,7 @@
       <div class="pet-nav" id="pet-nav"></div>
       <div class="pet-play" id="pet-play"><div class="pet-play__card"><h3>Во что поиграем?</h3><div class="pet-play__g">
         <button id="pet-g-feed">Накорми</button><button id="pet-g-catch">Ловилка</button>
-      </div><div style="margin-top:14px"><button id="pet-g-cancel" data-haptic="light" style="background:#eee;color:#7a3b12;border:none;border-radius:14px;padding:10px 18px;font-weight:700;cursor:pointer">Назад</button></div></div></div>
+      </div><div style="margin-top:14px"><button id="pet-g-cancel" data-haptic="light" style="background:#eee;color:#16210A;border:none;border-radius:14px;padding:10px 18px;font-weight:700;cursor:pointer">Назад</button></div></div></div>
     `;
     document.body.appendChild(ov);
     ov.querySelector('#pet-x').onclick = close;
@@ -399,7 +399,7 @@
     NEEDS.forEach(n => {
       const el = ov.querySelector('#need-' + n.k); if (!el) return;
       const v = state[n.k] ?? 0; el.style.width = v + '%';
-      el.style.background = v > 50 ? 'linear-gradient(90deg,#7ed957,#aee571)' : v > 25 ? 'linear-gradient(90deg,#ffb347,#ffd23f)' : 'linear-gradient(90deg,#ff5a5a,#ff8a8a)';
+      el.style.background = v > 50 ? 'linear-gradient(90deg,#7ed957,#aee571)' : v > 25 ? 'linear-gradient(90deg,#D8FF7A,#C0FF33)' : 'linear-gradient(90deg,#ff5a5a,#ff8a8a)';
     });
     ov.querySelector('#pet-lvl').innerHTML = `Ур. ${state.level} · ${state.coins} ${plu(state.coins, 'монета', 'монеты', 'монет')}<br><span style="font-weight:600;opacity:.85">${state.xp}/${state.xpNext} XP</span>`;
     const ps = ov.querySelector('#pet-streak');
