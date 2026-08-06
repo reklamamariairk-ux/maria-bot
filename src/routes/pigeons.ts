@@ -45,11 +45,13 @@ export function createPigeonsRouter(push: PushService): Router {
 
   router.post("/api/pigeons/trade", requireTgUser, rateLimit(20), async (req, res) => {
     const u = getTgUser(req)!;
-    const { give, want, to } = req.body as { give?: string; want?: string; to?: number };
+    const { give, want, to, coinDelta } = req.body as { give?: string; want?: string; to?: number; coinDelta?: number };
     const toNum = to === undefined || to === null ? undefined : Number(to);
     if (toNum !== undefined && !Number.isInteger(toNum)) { res.status(400).json({ error: "bad_input" }); return; }
+    // coinDelta untrusted — createTrade нормализует (normalizeCoinDelta), тут только пробрасываем число
+    const coin = coinDelta === undefined || coinDelta === null ? 0 : Number(coinDelta);
     try {
-      const r = await createTrade(u.id, String(give || ""), String(want || ""), toNum);
+      const r = await createTrade(u.id, String(give || ""), String(want || ""), toNum, coin);
       if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
       res.json(r);
     } catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/trade]"); res.status(500).json({ error: "internal" }); }

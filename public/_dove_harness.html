@@ -57,9 +57,12 @@ const RACE = {
 };
 const TUNE = { owned: true, speed: 4, stamina: 2, luck: 7, division: 'gold', powerRating: 13, balance: 42000, nextCost: { speed: 4176, stamina: 1445, luck: 20125 } };
 const TRADES = {
-  toMe: [{ id: 1, from_chat: 111, fromName: 'Аня', give: 'shoko', want: 'karamel', created_at: '' }],
-  open: [{ id: 2, from_chat: 222, fromName: 'Петя', give: 'ryaboy', want: 'chubaty', created_at: '' }, { id: 3, from_chat: 333, fromName: 'Ким', give: 'sizar', want: 'belobok', created_at: '' }],
-  mine: [{ id: 4, from_chat: 999, fromName: 'ты', give: 'zolotoy', want: 'pochtar', created_at: '' }],
+  toMe: [{ id: 1, from_chat: 111, fromName: 'Аня', give: 'shoko', want: 'karamel', coinDelta: 0, created_at: '' }],
+  open: [
+    { id: 2, from_chat: 222, fromName: 'Петя', give: 'zolotoy', want: 'chubaty', coinDelta: 300000, created_at: '' }, // отдаёт легендарного + доплачивает
+    { id: 3, from_chat: 333, fromName: 'Ким', give: 'sizar', want: 'pochtar', coinDelta: -150000, created_at: '' }, // хочет эпика, просит доплату
+  ],
+  mine: [{ id: 4, from_chat: 999, fromName: 'ты', give: 'zolotoy', want: 'pochtar', coinDelta: 50000, created_at: '' }],
 };
 const RECIP = { friends: [{ chat: 501, name: 'Лена' }], squad: [{ chat: 601, name: 'Сосед по команде' }], refs: [{ chat: 701, name: 'Макс' }], friendLink: 'https://t.me/mariatortik_bot?start=ckfr_123' };
 const MAIL = { mail: [
@@ -71,7 +74,7 @@ window.stubApi = (url, opts) => {
   if (url.startsWith('/api/pigeons/tune')) return Promise.resolve(TUNE);
   if (url.startsWith('/api/pigeons/recipients')) return Promise.resolve(RECIP);
   if (url.startsWith('/api/pigeons/trades')) return Promise.resolve(TRADES);
-  if (url.startsWith('/api/pigeons/trade')) return Promise.resolve({ ok: true }); // create/accept/cancel
+  if (url.startsWith('/api/pigeons/trade')) { const b = JSON.parse((opts || {}).body || '{}'); const cd = Number(b.coinDelta) || 0; if (cd > 0) window.__bal -= cd; return Promise.resolve({ ok: true, newBalance: window.__bal }); } // create/accept/cancel
   if (url.startsWith('/api/pigeons/buy')) { const PRICE = { common: 30000, rare: 120000, epic: 600000, legendary: 2500000 }; const RAR = { sizar:'common',belobok:'common',ryaboy:'common',chubaty:'common',vanil:'rare',shoko:'rare',karamel:'rare',yagodny:'rare',pochtar:'epic',baikal:'epic',kurier:'epic',vozhak:'epic',svadebny:'epic',imeninny:'epic',snezhny:'epic',zolotoy:'legendary' }; const breed = JSON.parse((opts||{}).body||'{}').breed; const price = PRICE[RAR[breed]]; if (window.__bal < price) return Promise.resolve({ error: 'not_enough_coins' }); return Promise.resolve({ ok: true, breed, spent: price, isNew: true, newBalance: window.__bal - price }); }
   if (url.startsWith('/api/pigeons/mail')) return Promise.resolve(url.includes('thanks') ? { ok: true } : MAIL);
   if (url.startsWith('/api/pigeons')) return Promise.resolve({ inventory: INV, sets: [{ id: 'city', owned: 4, claimed: false }, { id: 'sweet', owned: 2, claimed: false }], weekBreed: 'karamel', unreadMail: 2 });

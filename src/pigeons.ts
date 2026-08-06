@@ -227,6 +227,9 @@ export async function initPigeonSchema(): Promise<void> {
   await pool.query(`ALTER TABLE pigeon_inventory ADD COLUMN IF NOT EXISTS tune_stamina SMALLINT NOT NULL DEFAULT 0`);
   await pool.query(`ALTER TABLE pigeon_inventory ADD COLUMN IF NOT EXISTS tune_luck SMALLINT NOT NULL DEFAULT 0`);
   await pool.query(`ALTER TABLE pigeon_race_entries ADD COLUMN IF NOT EXISTS division TEXT NOT NULL DEFAULT 'bronze'`);
+  // Доплата монетами в обмене: coin_delta>0 — создатель доплачивает (монеты в эскроу при
+  // создании), coin_delta<0 — создатель просит доплату (платит принимающий при приёме), 0 — чистый своп.
+  await pool.query(`ALTER TABLE pigeon_trades ADD COLUMN IF NOT EXISTS coin_delta BIGINT NOT NULL DEFAULT 0`);
   // Стартовый голубь: флаг одноразовой выдачи Сизаря новому игроку (см. refresh в clicker.ts).
   await pool.query(`ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS starter_pigeon BOOLEAN NOT NULL DEFAULT FALSE`);
   // Храповик уровня (max_level не откатывается при ужесточении порогов, 15.07). Грандфазер:
@@ -368,14 +371,25 @@ export async function setShowcase(chatId: number, breeds: string[]): Promise<{ o
 // ── Обмены ─────────────────────────────────────────────────────────────────
 export const MAX_OPEN_TRADES = 3;
 const TRADE_TTL_DAYS = 7;
+export const TRADE_COIN_CAP = 100_000_000; // потолок доплаты монетами в обмене (в обе стороны)
 
-export async function createTrade(chatId: number, give: string, want: string, to?: number):
-  Promise<{ ok: boolean; id?: number; reason?: string }> {
+// Нормализуем untrusted-доплату: целое в [−CAP, +CAP]. NaN/дробь/вне диапазона → null (bad).
+export function normalizeCoinDelta(v: unknown): number | null {
+  const n = Number(v);
+  if (!Number.isFinite(n) || !Number.isInteger(n)) return null;
+  if (Math.abs(n) > TRADE_COIN_CAP) return null;
+  return n;
+}
+
+export async function createTrade(chatId: number, give: string, want: string, to?: number, coinDelta: number = 0):
+  Promise<{ ok: boolean; id?: number; reason?: string; newBalance?: number }> {
   if (!BREED_BY_ID.has(give) || !BREED_BY_ID.has(want) || give === want) return { ok: false, reason: "bad_input" };
   // Чемпион — эксклюзивный приз Гонки стаи (не дропается, не продаётся): не торгуем им,
   // иначе теряется смысл «заслуженной» награды. Ни отдать, ни запросить.
   if (give === "champion" || want === "champion") return { ok: false, reason: "not_tradeable" };
   if (to === chatId) return { ok: false, reason: "self" };
+  const coin = normalizeCoinDelta(coinDelta);
+  if (coin == null) return { ok: false, reason: "bad_coins" };
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -393,17 +407,28 @@ export async function createTrade(chatId: number, give: string, want: string, to
       `UPDATE pigeon_inventory SET count = count - 1 WHERE chat_id=$1 AND breed=$2 AND count>1 RETURNING 1`,
       [chatId, give]);
     if (!esc.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "need_duplicate" }; }
+    // Доплата создателя (coin>0) уходит в эскроу сразу — как дубликат: списываем атомарно,
+    // возвращаем при отмене/протухании, отдаём принимающему при приёме. coin<0 (просим доплату)
+    // эскроу не требует — платит принимающий на приёме.
+    let newBalance: number | undefined;
+    if (coin > 0) {
+      const pay = await client.query(
+        `UPDATE clicker_state SET balance = balance - $2 WHERE chat_id=$1 AND balance >= $2 RETURNING balance`,
+        [chatId, coin]);
+      if (!pay.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
+      newBalance = Number(pay.rows[0].balance);
+    }
     const ins = await client.query(
-      `INSERT INTO pigeon_trades (from_chat, to_chat, give, want) VALUES ($1,$2,$3,$4) RETURNING id`,
-      [chatId, to ?? null, give, want]);
+      `INSERT INTO pigeon_trades (from_chat, to_chat, give, want, coin_delta) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+      [chatId, to ?? null, give, want, coin]);
     await client.query("COMMIT");
-    return { ok: true, id: ins.rows[0].id };
+    return { ok: true, id: ins.rows[0].id, newBalance };
   } catch (e) { await client.query("ROLLBACK"); throw e; }
   finally { client.release(); }
 }
 
 export async function acceptTrade(chatId: number, tradeId: number):
-  Promise<{ ok: boolean; got?: string; gave?: string; reason?: string }> {
+  Promise<{ ok: boolean; got?: string; gave?: string; reason?: string; newBalance?: number }> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -424,27 +449,55 @@ export async function acceptTrade(chatId: number, tradeId: number):
       `UPDATE pigeon_inventory SET count = count - 1 WHERE chat_id=$1 AND breed=$2 AND count>1 RETURNING 1`,
       [chatId, tr.want]);
     if (!pay.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "need_duplicate" }; }
+    // Расчёт доплаты. coin>0: создатель доплатил (монеты в эскроу) → отдаём их акцептору.
+    // coin<0: создатель просил доплату → акцептор платит |coin| создателю (проверяем баланс).
+    // Блокируем строки clicker_state обоих в каноническом порядке (chat_id ASC) — против дедлока.
+    const coin = Number(tr.coin_delta) || 0;
+    let newBalance: number | undefined;
+    if (coin !== 0) {
+      await client.query(
+        `SELECT 1 FROM clicker_state WHERE chat_id IN ($1,$2) ORDER BY chat_id FOR UPDATE`,
+        [chatId, Number(tr.from_chat)]);
+      if (coin > 0) {
+        const cr = await client.query(`UPDATE clicker_state SET balance = balance + $2 WHERE chat_id=$1 RETURNING balance`, [chatId, coin]);
+        if (cr.rowCount) newBalance = Number(cr.rows[0].balance);
+      } else {
+        const owe = -coin;
+        const dp = await client.query(
+          `UPDATE clicker_state SET balance = balance - $2 WHERE chat_id=$1 AND balance >= $2 RETURNING balance`,
+          [chatId, owe]);
+        if (!dp.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
+        newBalance = Number(dp.rows[0].balance);
+        await client.query(`UPDATE clicker_state SET balance = balance + $2 WHERE chat_id=$1`, [Number(tr.from_chat), owe]);
+      }
+    }
     await grantPigeon(chatId, tr.give, client);               // акцептору — эскроу-птица
     await grantPigeon(Number(tr.from_chat), tr.want, client); // создателю — want
     await client.query(
       `UPDATE pigeon_trades SET status='done', closed_at=NOW(), closed_by=$2 WHERE id=$1`, [tradeId, chatId]);
     await client.query("COMMIT");
-    return { ok: true, got: tr.give, gave: tr.want };
+    return { ok: true, got: tr.give, gave: tr.want, newBalance };
   } catch (e) { await client.query("ROLLBACK"); throw e; }
   finally { client.release(); }
 }
 
-export async function cancelTrade(chatId: number, tradeId: number): Promise<{ ok: boolean; reason?: string }> {
+export async function cancelTrade(chatId: number, tradeId: number): Promise<{ ok: boolean; reason?: string; newBalance?: number }> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const t = await client.query(
       `SELECT * FROM pigeon_trades WHERE id=$1 AND from_chat=$2 AND status='open' FOR UPDATE`, [tradeId, chatId]);
     if (!t.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "gone" }; }
-    await grantPigeon(chatId, t.rows[0].give, client); // вернуть эскроу
+    await grantPigeon(chatId, t.rows[0].give, client); // вернуть эскроу-птицу
+    const backCoin = Number(t.rows[0].coin_delta) || 0;   // вернуть эскроу-монеты (только coin>0)
+    let newBalance: number | undefined;
+    if (backCoin > 0) {
+      const r = await client.query(`UPDATE clicker_state SET balance = balance + $2 WHERE chat_id=$1 RETURNING balance`, [chatId, backCoin]);
+      if (r.rowCount) newBalance = Number(r.rows[0].balance);
+    }
     await client.query(`UPDATE pigeon_trades SET status='cancelled', closed_at=NOW() WHERE id=$1`, [tradeId]);
     await client.query("COMMIT");
-    return { ok: true };
+    return { ok: true, newBalance };
   } catch (e) { await client.query("ROLLBACK"); throw e; }
   finally { client.release(); }
 }
@@ -455,10 +508,12 @@ export async function expireTrades(): Promise<number> {
   try {
     await client.query("BEGIN");
     const old = await client.query(
-      `SELECT id, from_chat, give FROM pigeon_trades
+      `SELECT id, from_chat, give, coin_delta FROM pigeon_trades
        WHERE status='open' AND created_at < NOW() - INTERVAL '${TRADE_TTL_DAYS} days' FOR UPDATE SKIP LOCKED`);
     for (const r of old.rows) {
       await grantPigeon(Number(r.from_chat), r.give, client);
+      const backCoin = Number(r.coin_delta) || 0; // вернуть эскроу-монеты создателю (coin>0)
+      if (backCoin > 0) await client.query(`UPDATE clicker_state SET balance = balance + $2 WHERE chat_id=$1`, [Number(r.from_chat), backCoin]);
       await client.query(`UPDATE pigeon_trades SET status='expired', closed_at=NOW() WHERE id=$1`, [r.id]);
     }
     await client.query("COMMIT");
@@ -473,6 +528,7 @@ export interface TradeRow {
   fromName: string;
   give: string;
   want: string;
+  coinDelta: number; // >0 создатель доплачивает, <0 создатель просит доплату, 0 чистый своп
   created_at: string;
 }
 
@@ -481,7 +537,7 @@ export async function getTradeBoard(chatId: number):
   await expireTrades();
   const rows = async (where: string, params: any[]): Promise<TradeRow[]> => {
     const result = await pool.query(
-      `SELECT t.id, t.from_chat, t.to_chat, t.give, t.want, t.created_at, s.first_name, s.username
+      `SELECT t.id, t.from_chat, t.to_chat, t.give, t.want, t.coin_delta, t.created_at, s.first_name, s.username
        FROM pigeon_trades t LEFT JOIN subscribers s ON s.chat_id = t.from_chat
        WHERE t.status='open' AND ${where}
        ORDER BY t.created_at DESC LIMIT 50`, params);
@@ -491,6 +547,7 @@ export async function getTradeBoard(chatId: number):
       fromName: (r.first_name || r.username || "Котовод").toString().slice(0, 24),
       give: r.give,
       want: r.want,
+      coinDelta: Number(r.coin_delta) || 0,
       created_at: r.created_at,
     }));
   };

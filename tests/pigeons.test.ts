@@ -13,8 +13,26 @@ import {
   breedOfWeek, pickBreed, pickPurchaseBreed, starTarget, raceScore,
   tuneCost, raceDivision, TUNE_MAX,
   createTrade, sendMail, thankMail, setShowcase, claimSet, enterRace,
-  pigeonPrice, PIGEON_PRICE,
+  pigeonPrice, PIGEON_PRICE, normalizeCoinDelta, TRADE_COIN_CAP,
 } from "../src/pigeons";
+
+describe("normalizeCoinDelta — доплата монетами в обмене (untrusted)", () => {
+  it("целое в [−CAP,+CAP] проходит (знак = кто платит), 0 = чистый своп", () => {
+    expect(normalizeCoinDelta(0)).toBe(0);
+    expect(normalizeCoinDelta(25000)).toBe(25000);   // создатель доплачивает
+    expect(normalizeCoinDelta(-100000)).toBe(-100000); // создатель просит доплату
+    expect(normalizeCoinDelta(TRADE_COIN_CAP)).toBe(TRADE_COIN_CAP);
+  });
+  it("дробь/NaN/Infinity/вне диапазона → null (bad_coins)", () => {
+    expect(normalizeCoinDelta(1.5)).toBeNull();
+    expect(normalizeCoinDelta(NaN)).toBeNull();
+    expect(normalizeCoinDelta(Infinity)).toBeNull();
+    expect(normalizeCoinDelta(TRADE_COIN_CAP + 1)).toBeNull();
+    expect(normalizeCoinDelta(-TRADE_COIN_CAP - 1)).toBeNull();
+    expect(normalizeCoinDelta("50" as unknown as number)).toBe(50); // Number("50")=50, целое — ок
+    expect(normalizeCoinDelta("abc" as unknown as number)).toBeNull();
+  });
+});
 
 const droppable = PIGEON_BREEDS.filter(b => b.id !== "champion");
 

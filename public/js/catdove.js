@@ -255,8 +255,17 @@
       .cd-subtab.on{background:var(--panel);color:var(--gold-l)}
       .cd-subcount{display:inline-flex;min-width:15px;height:15px;padding:0 4px;margin-left:4px;border-radius:8px;background:#e5484d;color:#fff;font-size:9px;font-weight:800;align-items:center;justify-content:center;vertical-align:middle}
       .cd-steps{font-size:10px;color:var(--gold-l);font-weight:800;text-transform:uppercase;letter-spacing:.6px;text-align:center;margin:-2px 0 9px;opacity:.85}
-      .cd-deal{display:flex;align-items:center;justify-content:center;gap:7px;background:rgba(0,0,0,.2);border-radius:11px;padding:7px 10px;margin:-2px 0 11px;font-size:12px;font-weight:700;color:var(--ink)}
+      .cd-deal{display:flex;align-items:center;justify-content:center;gap:7px;background:rgba(0,0,0,.2);border-radius:11px;padding:7px 10px;margin:-2px 0 11px;font-size:12px;font-weight:700;color:var(--ink);flex-wrap:wrap}
       .cd-deal img{width:26px;height:26px;border-radius:7px;object-fit:contain}
+      .cd-deal__coin{display:inline-flex;align-items:center;gap:3px;font-weight:800;color:var(--gold-l);font-variant-numeric:tabular-nums}
+      /* Доплата монетами в обмене */
+      .cd-coinseg{display:flex;gap:6px;margin:2px 0 10px}
+      .cd-coinseg button{flex:1;padding:9px 4px;border-radius:11px;font-weight:800;font-size:11.5px;border:1px solid var(--line);background:var(--panel);color:var(--muted);cursor:pointer}
+      .cd-coinseg button.on{border-color:#DFFF8F;background:linear-gradient(180deg,#D4FF6A,#A8F51E 56%,#8DBF20);color:#12210A}
+      .cd-coinchips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+      .cd-coinchip{padding:8px 12px;border-radius:11px;font-weight:800;font-size:12px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;font-variant-numeric:tabular-nums;display:inline-flex;align-items:center;gap:4px}
+      .cd-coinchip.on{border-color:#DFFF8F;color:var(--gold-l)}
+      .cd-coinchip:disabled{opacity:.4;cursor:default}
       .cd-deal__arw{color:var(--gold-l);font-weight:900}
       .cd-traderow{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:9px 10px;margin-bottom:8px}
       .cd-traderow__swap{display:flex;align-items:center;gap:7px;flex:1;min-width:0}
@@ -710,13 +719,18 @@
 
   // ── Обмены: создание предложения ───────────────────────────────────────────
   // Мини-чип «отдаёшь X → хочешь Y» для контекста на шагах флоу.
-  function dealChip(giveId, wantId) {
+  function dealChip(giveId, wantId, coin) {
     const g = BY_ID.get(giveId), w = wantId ? BY_ID.get(wantId) : null;
     const art = (id) => `<img src="/img/pigeons/${id}.webp?v=2" alt="" onerror="this.style.display='none'">`;
-    return `<div class="cd-deal">${art(giveId)}<span>${g ? g.name : giveId}</span>
-      <span class="cd-deal__arw">→</span>
-      ${w ? `${art(wantId)}<span>${w.name}</span>` : '<span style="color:var(--muted)">выбери</span>'}</div>`;
+    const c = num(coin);
+    // coin>0 — я доплачиваю (монеты на МОЕЙ стороне, give); coin<0 — прошу доплату (на стороне want)
+    const coinChip = (n) => `<span class="cd-deal__coin">+${COIN_ICON(12)} ${fmt(n)}</span>`;
+    const giveSide = `${art(giveId)}<span>${g ? g.name : giveId}</span>${c > 0 ? coinChip(c) : ''}`;
+    const wantSide = w ? `${art(wantId)}<span>${w.name}</span>${c < 0 ? coinChip(-c) : ''}` : '<span style="color:var(--muted)">выбери</span>';
+    return `<div class="cd-deal">${giveSide}<span class="cd-deal__arw">→</span>${wantSide}</div>`;
   }
+  // Пресеты доплаты монетами в обмене (зеркало серверного потолка TRADE_COIN_CAP=100M)
+  const COIN_PRESETS = [5000, 25000, 100000, 500000, 2000000];
   // Шаг 1 (с доски): выбери свою запасную породу. С карточки породы этот шаг пропущен
   // (порода уже выбрана тапом по карточке), флоу начинается сразу с «что хочешь взамен».
   function openTradeGive() {
@@ -740,17 +754,55 @@
     sh.querySelectorAll('.cd-pickcard').forEach(el => { el.onclick = () => openTradeWant(el.dataset.breed); });
   }
   function openTradeWant(giveId) {
-    tcState = { give: giveId, want: null };
+    tcState = { give: giveId, want: null, coin: 0 };
     haptic('light');
     const sh = container.querySelector('#cd-sheet');
     if (!sh) return;
     const ids = BREEDS.filter(b => b.id !== 'champion' && b.id !== giveId).map(b => b.id);
     sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Что хочешь взамен?</div></div>
-      ${tradeFromBoard ? '<div class="cd-steps">Обмен · шаг 2 из 3</div>' : ''}
-      ${dealChip(giveId, null)}
+      ${tradeFromBoard ? '<div class="cd-steps">Обмен · шаг 2 из 4</div>' : ''}
+      ${dealChip(giveId, null, 0)}
       ${pickGridHtml(ids, null)}`;
     sh.querySelector('#cd-sheet-x').onclick = tradeFromBoard ? openTradeGive : closeSheet;
-    sh.querySelectorAll('.cd-pickcard').forEach(el => { el.onclick = () => openTradeRecipient(el.dataset.breed); });
+    sh.querySelectorAll('.cd-pickcard').forEach(el => { el.onclick = () => openTradeCoins(el.dataset.breed); });
+  }
+  // Шаг «Доплата»: по желанию добавь монеты (я доплачу, coin>0) или попроси доплату
+  // за сильного голубя (coin<0). Уравнивает ценность обмена. coin=0 — чистый своп.
+  function openTradeCoins(wantId) {
+    if (!tcState) return;
+    tcState.want = wantId; if (typeof tcState.coin !== 'number') tcState.coin = 0;
+    haptic('light');
+    const sh = container.querySelector('#cd-sheet');
+    if (!sh) return;
+    const bal = typeof window.ckBalance === 'function' ? num(window.ckBalance()) : 0;
+    // Режим и сумма — отдельно (иначе «Я доплачу» при сумме 0 читался бы как «Без доплаты»).
+    let mode = tcState.coin > 0 ? 'pay' : tcState.coin < 0 ? 'ask' : 'none';
+    let amt = Math.abs(tcState.coin);
+    const sync = () => { tcState.coin = mode === 'pay' ? amt : mode === 'ask' ? -amt : 0; };
+    const draw = () => {
+      sync();
+      const chips = (mode === 'none') ? '' : `<div class="cd-coinchips">${COIN_PRESETS.map(v => {
+        const tooMuch = mode === 'pay' && v > bal;
+        return `<button class="cd-coinchip${amt === v ? ' on' : ''}" data-amt="${v}"${tooMuch ? ' disabled' : ''}>${COIN_ICON(12)} ${fmt(v)}</button>`;
+      }).join('')}</div>`;
+      sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Доплата монетами?</div></div>
+        ${tradeFromBoard ? '<div class="cd-steps">Обмен · шаг 3 из 4</div>' : ''}
+        ${dealChip(tcState.give, wantId, tcState.coin)}
+        <div class="cd-sheet__hint" style="margin-top:0">Уравняй ценность: доплати за более крутого голубя — или попроси доплату, отдавая сильного. По желанию.</div>
+        <div class="cd-coinseg">
+          <button data-mode="none"${mode === 'none' ? ' class="on"' : ''}>Без доплаты</button>
+          <button data-mode="pay"${mode === 'pay' ? ' class="on"' : ''}>Я доплачу</button>
+          <button data-mode="ask"${mode === 'ask' ? ' class="on"' : ''}>Прошу доплату</button>
+        </div>
+        ${chips}
+        <div class="cd-sheet__hint">${mode === 'pay' ? `Твой баланс: ${fmt(bal)}. Монеты уйдут в залог и вернутся, если отменишь обмен.` : mode === 'ask' ? 'Принимающий доплатит эту сумму тебе при обмене.' : ''}</div>
+        <button class="cd-sheet__act" id="cd-coin-next"${(mode !== 'none' && amt === 0) ? ' disabled' : ''}>Дальше</button>`;
+      sh.querySelector('#cd-sheet-x').onclick = () => openTradeWant(tcState.give); // назад к «взамен»
+      sh.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { mode = b.dataset.mode; if (mode === 'none') amt = 0; draw(); });
+      sh.querySelectorAll('[data-amt]').forEach(b => { if (!b.disabled) b.onclick = () => { amt = num(b.dataset.amt); draw(); }; });
+      const nx = sh.querySelector('#cd-coin-next'); if (nx && !nx.disabled) nx.onclick = () => { sync(); openTradeRecipient(wantId); };
+    };
+    draw();
   }
   async function openTradeRecipient(wantId) {
     if (!tcState) return;
@@ -759,12 +811,12 @@
     const sh = container.querySelector('#cd-sheet');
     if (!sh) return;
     sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Кому предложить?</div></div>
-      ${tradeFromBoard ? '<div class="cd-steps">Обмен · шаг 3 из 3</div>' : ''}
-      ${dealChip(tcState.give, wantId)}
+      ${tradeFromBoard ? '<div class="cd-steps">Обмен · шаг 4 из 4</div>' : ''}
+      ${dealChip(tcState.give, wantId, num(tcState.coin))}
       <button class="cd-sheet__act" id="cd-trade-open">Всем на доску (открытый обмен)</button>
       <div class="cd-sect-t">Или выбери адресата</div>
       <div id="cd-trade-recip">${skeletonRows(2)}</div>`;
-    sh.querySelector('#cd-sheet-x').onclick = () => openTradeWant(tcState.give); // назад к выбору «взамен»
+    sh.querySelector('#cd-sheet-x').onclick = () => openTradeCoins(tcState.want); // назад к шагу доплаты
     sh.querySelector('#cd-trade-open').onclick = () => submitTrade(null);
     const rec = await loadRecipients();
     const box = sh.querySelector('#cd-trade-recip');
@@ -777,15 +829,16 @@
     box.querySelectorAll('.cd-reciperow').forEach(el => { el.onclick = () => submitTrade(Number(el.dataset.chat)); });
     const addFr = box.querySelector('#cd-tr-addfr'); if (addFr) addFr.onclick = () => shareFriendLink(rec);
   }
-  const TRADE_CREATE_REASON = { bad_input: 'Неверный выбор породы', self: 'Нельзя предложить самому себе', limit: 'Не больше 3 предложений одновременно', need_duplicate: 'Отдать можно только запасного', no_player: 'Игрок не найден' };
+  const TRADE_CREATE_REASON = { bad_input: 'Неверный выбор породы', self: 'Нельзя предложить самому себе', limit: 'Не больше 3 предложений одновременно', need_duplicate: 'Отдать можно только запасного', no_player: 'Игрок не найден', bad_coins: 'Неверная сумма доплаты', not_enough_coins: 'Не хватает монет на доплату' };
   async function submitTrade(to) {
     if (busy || !tcState) return; busy = true;
     try {
-      const body = { give: tcState.give, want: tcState.want };
+      const body = { give: tcState.give, want: tcState.want, coinDelta: num(tcState.coin) };
       if (to != null) body.to = to;
       const d = await apiRef('/api/pigeons/trade', { method: 'POST', body: JSON.stringify(body) }).catch(() => null);
       if (d && d.ok) {
         haptic('medium'); flash('Предложение создано');
+        if (typeof window.ckSyncState === 'function' && typeof d.newBalance === 'number') window.ckSyncState({ balance: d.newBalance }); // доплата ушла в эскроу
         tcState = null; tradeFromBoard = false;
         await load(); render();       // альбом обновился (запасной дубль ушёл в эскроу)
         tradesTab = 'mine';
@@ -905,39 +958,47 @@
   }
   function tradeRowHtml(t, kind) {
     const give = BY_ID.get(t.give), want = BY_ID.get(t.want);
-    // Принять чужой обмен можно, только если есть ЗАПАСНОЙ дубль запрашиваемой породы
-    // (базовый голубь остаётся у тебя) — иначе кнопка ведёт в ошибку. Гасим заранее.
+    const coin = num(t.coinDelta);
+    const bal = typeof window.ckBalance === 'function' ? num(window.ckBalance()) : 0;
+    // Принять чужой обмен можно, если: есть ЗАПАСНОЙ дубль запрашиваемой породы (база остаётся
+    // у тебя) И (если создатель просит доплату, coin<0) хватает монет на доплату. Гасим заранее.
     const wantInv = data.invMap[t.want];
-    const canFulfill = kind === 'mine' || (!!wantInv && num(wantInv.count) > 1);
+    const haveSpare = !!wantInv && num(wantInv.count) > 1;
+    const canPayCoin = coin >= 0 || bal >= -coin;   // coin<0 → принимающий доплачивает -coin
+    const canFulfill = kind === 'mine' || (haveSpare && canPayCoin);
+    // Метка монет: coin>0 создатель доплачивает → принимающий ПОЛУЧИТ; coin<0 → принимающий ДОПЛАТИТ
+    const coinTag = coin > 0 ? `<span class="cd-deal__coin">получишь +${fmt(coin)}</span>`
+      : coin < 0 ? `<span class="cd-deal__coin">+ доплата ${fmt(-coin)}</span>` : '';
     const btn = kind === 'mine'
       ? `<button class="cd-tbtn cd-tbtn--ghost" data-cancel="${t.id}">Отменить</button>`
       : `<button class="cd-tbtn" data-accept="${t.id}"${canFulfill ? '' : ' disabled'}>Принять</button>`;
-    // meta: у обмена «мой» — «от тебя»; на доске — от кого + подсказка про запасного, если нет
+    // meta: почему нельзя принять — приоритет «нет запасного», затем «мало монет»
+    const why = !haveSpare ? `нужен запасной «${want ? want.name : t.want}» — сейчас его нет`
+      : !canPayCoin ? `нужно ещё ${fmt(-coin - bal)} монет на доплату` : '';
     const meta = kind === 'mine'
-      ? 'от тебя'
-      : (canFulfill
-        ? 'от ' + esc(t.fromName) + (wantInv ? ` · отдашь запасного «${want ? want.name : t.want}»` : '')
-        : `нужен запасной «${want ? want.name : t.want}» — сейчас его нет`);
+      ? 'от тебя' + (coin > 0 ? ` · доплачиваешь ${fmt(coin)}` : coin < 0 ? ` · просишь ${fmt(-coin)}` : '')
+      : (canFulfill ? 'от ' + esc(t.fromName) + ` · отдашь запасного «${want ? want.name : t.want}»` : why);
     return `<div class="cd-traderow${canFulfill ? '' : ' cd-traderow--locked'}">
       <div class="cd-traderow__swap">
         <div class="cd-traderow__art" data-r="${give ? give.rarity : 'common'}"><img src="/img/pigeons/${t.give}.webp?v=2" alt="" onerror="this.style.display='none'"></div>
         <span class="cd-traderow__arrow">→</span>
         <div class="cd-traderow__art" data-r="${want ? want.rarity : 'common'}"><img src="/img/pigeons/${t.want}.webp?v=2" alt="" onerror="this.style.display='none'"></div>
         <div style="min-width:0;flex:1">
-          <div style="font-size:11.5px;color:var(--ink);font-weight:700">${give ? give.name : t.give} → ${want ? want.name : t.want}</div>
+          <div style="font-size:11.5px;color:var(--ink);font-weight:700">${give ? give.name : t.give} → ${want ? want.name : t.want}${coinTag ? ' · ' + coinTag : ''}</div>
           <div class="cd-traderow__meta">${meta}</div>
         </div>
       </div>
       <div class="cd-traderow__act">${btn}</div>
     </div>`;
   }
-  const TRADE_ACCEPT_REASON = { gone: 'Предложение уже разобрали', own: 'Это твоё предложение', not_addressed: 'Предложение не для тебя', need_duplicate: 'Отдать можно только запасного' };
+  const TRADE_ACCEPT_REASON = { gone: 'Предложение уже разобрали', own: 'Это твоё предложение', not_addressed: 'Предложение не для тебя', need_duplicate: 'Отдать можно только запасного', not_enough_coins: 'Не хватает монет на доплату' };
   async function acceptTradeAct(id, btn) {
     if (busy) return; busy = true; if (btn) btn.disabled = true;
     try {
       const d = await apiRef('/api/pigeons/trade/accept', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null);
       if (d && d.ok) {
         haptic('medium'); flash('Обмен состоялся!');
+        if (typeof window.ckSyncState === 'function' && typeof d.newBalance === 'number') window.ckSyncState({ balance: d.newBalance }); // доплата зачтена
         needsRerenderOnClose = true;
         await load();
         const list = await apiRef('/api/pigeons/trades').catch(() => null);
@@ -957,6 +1018,7 @@
       const d = await apiRef('/api/pigeons/trade/cancel', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null);
       if (d && d.ok) {
         haptic('light'); flash('Предложение отменено');
+        if (typeof window.ckSyncState === 'function' && typeof d.newBalance === 'number') window.ckSyncState({ balance: d.newBalance }); // эскроу-монеты вернулись
         needsRerenderOnClose = true;
         await load();
         const list = await apiRef('/api/pigeons/trades').catch(() => null);
