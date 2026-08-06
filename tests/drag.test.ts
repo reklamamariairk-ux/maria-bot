@@ -7,7 +7,29 @@ import {
   cruisePower, tapTarget, tapAccuracy, clampTapCount, tapSkill, luckSpread,
   dragFinishTimeV3, resolveRaceV3, hardenBetFieldV3,
   TAP_TARGET_BASE, TAP_TARGET_PER, TAP_RATE_CAP, TAP_W, BET_POWER_GAP,
+  cacheOpponents, takeCachedOpponents,
 } from "../src/drag";
+
+describe("кэш соперников — превью и заезд гоняются с одним набором", () => {
+  const field = [
+    { breed: "shoko", power: 40, reactionMs: 300, bot: false },
+    { breed: "sizar", power: 38, reactionMs: 320, bot: true },
+  ];
+  it("забирается ровно тот набор, что закэшировали (per chatId:breed)", () => {
+    cacheOpponents(101, "zolotoy", field);
+    expect(takeCachedOpponents(101, "zolotoy")).toEqual(field);
+  });
+  it("one-shot: повторный заезд без нового превью не переиспользует старых", () => {
+    cacheOpponents(102, "shoko", field);
+    expect(takeCachedOpponents(102, "shoko")).toEqual(field);
+    expect(takeCachedOpponents(102, "shoko")).toBeNull();
+  });
+  it("ключ учитывает породу: смена породы не отдаёт чужой набор", () => {
+    cacheOpponents(103, "shoko", field);
+    expect(takeCachedOpponents(103, "sizar")).toBeNull();
+    expect(takeCachedOpponents(103, "shoko")).toEqual(field);
+  });
+});
 
 describe("dragPower — мощность голубя для заезда", () => {
   it("растёт со скоростью/выносливостью и редкостью, детерминированна", () => {

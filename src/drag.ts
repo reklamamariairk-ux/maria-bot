@@ -260,6 +260,30 @@ export async function pickOpponents(chatId: number, targetPower: number, n: numb
   return real;
 }
 
+// ── Кэш соперников: превью (/drag/opponents) и сам заезд (runRace) раньше независимо
+// звали pickOpponents с ORDER BY random() → на старте показывались одни голуби, а гонялись
+// другие. Теперь превью кэширует свой набор, а заезд его забирает (one-shot, TTL), так что
+// «кого показали — с тем и гонишься». Ключ (chatId:breed) — смена породы обновляет набор.
+// In-memory: сервис одно-процессный (docker), превью→заезд идут подряд секундами.
+const OPP_CACHE_TTL_MS = 5 * 60_000;
+const oppCache = new Map<string, { racers: Racer[]; ts: number }>();
+function oppKey(chatId: number, breed: string): string { return chatId + ":" + breed; }
+export function cacheOpponents(chatId: number, breed: string, racers: Racer[]): void {
+  oppCache.set(oppKey(chatId, breed), { racers, ts: Date.now() });
+  if (oppCache.size > 5000) { // защита от разрастания: чистим протухшее при переполнении
+    const now = Date.now();
+    for (const [k, v] of oppCache) if (now - v.ts > OPP_CACHE_TTL_MS) oppCache.delete(k);
+  }
+}
+// Забираем и удаляем (one-shot): повторный заезд без нового превью подберёт свежих.
+export function takeCachedOpponents(chatId: number, breed: string): Racer[] | null {
+  const k = oppKey(chatId, breed); const hit = oppCache.get(k);
+  if (!hit) return null;
+  oppCache.delete(k);
+  if (Date.now() - hit.ts > OPP_CACHE_TTL_MS) return null;
+  return hit.racers;
+}
+
 // ── Мощность игрока для породы ─────────────────────────────────────────────
 // Возвращает мощность голубя в инвентаре или null если не владеет.
 export async function dragTargetPower(chatId: number, breed: string): Promise<number | null> {
@@ -295,7 +319,9 @@ export async function runRace(chatId: number, breed: string, mode: "training" | 
     if (mode === "bet" && st.balance < stake) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
     const b = BREED_BY_ID.get(breed)!;
     const myPower = dragPower(b.rarity, inv.rows[0].stars, inv.rows[0].tune_speed, inv.rows[0].tune_stamina);
-    const picked = await pickOpponents(chatId, myPower, 3);
+    // «Кого показали в превью — с тем и гонимся»: берём закэшированный набор старта; если его
+    // нет (заезд без превью / истёк TTL) — подбираем свежий как раньше.
+    const picked = takeCachedOpponents(chatId, breed) ?? await pickOpponents(chatId, myPower, 3);
     const react = clampReact(Math.round(tap ? tap.reactionMs : launch ? launch.reactionMs : reactionMs));
     // Один рандомный «luck»-ролл на гонщика, зафиксированный ДО резолва — места и finishT
     // ниже должны использовать один и тот же r по индексу, иначе места и показанное

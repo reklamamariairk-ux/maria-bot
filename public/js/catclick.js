@@ -919,8 +919,13 @@
       .ck-ov[data-tier="4"] .ck-catwrap::before{background:radial-gradient(circle at 50% 46%,rgba(155,92,255,.52) 0%,rgba(255,46,126,.30) 46%,transparent 71%)}
       .ck-ov[data-tier="5"] .ck-catwrap::before{background:radial-gradient(circle at 50% 46%,rgba(192,255,51,.46) 0%,rgba(255,46,126,.34) 46%,transparent 71%)}
       .ck-ov[data-tier="6"] .ck-catwrap::before{background:radial-gradient(circle at 50% 46%,rgba(192,255,51,.60) 0%,rgba(155,92,255,.46) 46%,transparent 73%)}
-      .ck-catwrap{align-items:flex-end;padding-bottom:10px;isolation:isolate}
+      .ck-catwrap{align-items:flex-end;padding-bottom:16px;isolation:isolate}
       .ck-catwrap::before{top:62%;z-index:1}.ck-catwrap::after{bottom:8%;z-index:1}.ck-cat{z-index:2}
+      /* Ранние спрайты (котёнок stage1 / стажёр stage2) нарисованы мельче в кадре —
+         рендерим их крупнее, чтобы кот был виден в полный рост, а не терялся у бустов */
+      .ck-ov[data-tier="1"] .ck-cat{max-width:90%;max-height:99%}
+      .ck-ov[data-tier="2"] .ck-cat{max-width:76%;max-height:97%}
+      .ck-ov[data-tier="3"] .ck-cat{max-width:66%}
       .ck-scene{position:absolute;inset:0;z-index:0;background-position:center center;background-size:cover;background-repeat:no-repeat;filter:brightness(.62) saturate(.92)}
       .ck-scene::after{content:'';position:absolute;inset:0;background:radial-gradient(70% 42% at 50% 46%,transparent,rgba(0,0,0,.34) 100%),linear-gradient(180deg,rgba(0,0,0,.74),rgba(0,0,0,.34) 16%,transparent 38%,transparent 60%,rgba(0,0,0,.52) 88%,rgba(0,0,0,.66))}
       ${Array.from({ length: 19 }, (_, i) => `.ck-ov[data-tier="${i + 1}"] .ck-scene{background-image:url(/assets/images/scene/career-${i + 1}.webp?v=2)}`).join('')}

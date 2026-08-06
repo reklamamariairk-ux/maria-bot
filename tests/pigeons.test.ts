@@ -13,9 +13,26 @@ import {
   breedOfWeek, pickBreed, pickPurchaseBreed, starTarget, raceScore,
   tuneCost, raceDivision, TUNE_MAX,
   createTrade, sendMail, thankMail, setShowcase, claimSet, enterRace,
+  pigeonPrice, PIGEON_PRICE,
 } from "../src/pigeons";
 
 const droppable = PIGEON_BREEDS.filter(b => b.id !== "champion");
+
+describe("pigeonPrice — цена гонщика в питомнике", () => {
+  it("растёт с редкостью и очень высока для легендарки", () => {
+    expect(PIGEON_PRICE.common).toBeLessThan(PIGEON_PRICE.rare);
+    expect(PIGEON_PRICE.rare).toBeLessThan(PIGEON_PRICE.epic);
+    expect(PIGEON_PRICE.epic).toBeLessThan(PIGEON_PRICE.legendary);
+    expect(PIGEON_PRICE.legendary).toBeGreaterThanOrEqual(1_000_000); // «трудно купить»
+  });
+  it("любая коллекционная порода покупаема по цене своей редкости", () => {
+    for (const b of droppable) expect(pigeonPrice(b.id)).toBe(PIGEON_PRICE[b.rarity]);
+  });
+  it("Чемпион не продаётся (только приз гонки), неизвестная порода — null", () => {
+    expect(pigeonPrice("champion")).toBeNull();
+    expect(pigeonPrice("no-such-breed")).toBeNull();
+  });
+});
 
 describe("breedOfWeek — детерминированная порода недели", () => {
   it("одинаковый ключ недели → одинаковая порода", () => {

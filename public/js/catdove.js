@@ -65,6 +65,7 @@
   const MAILBOX_ICON = (s) => svg('<path d="M4 6.5 12 12l8-5.5"/><rect x="4" y="6.5" width="16" height="11" rx="2"/>', s || 16);
   const GEAR_ICON = (s) => svg('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>', s || 16);
   const FLAG_ICON = (s) => svg('<path d="M5 21V4m0 1h12l-2.5 3.5L17 12H5"/>', s || 14);
+  const NEST_ICON = (s) => svg('<path d="M4 11 12 5l8 6"/><path d="M6 10v9h12v-9"/><circle cx="12" cy="14.2" r="2.2"/>', s || 15);
 
   function authed() { return !!(window.App && App.isAuthed && App.isAuthed()); }
   const PURE = () => document.documentElement.classList.contains('ck-pure');
@@ -231,9 +232,23 @@
       .cd-sk::after{content:'';position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(255,255,255,.10),transparent);animation:cdShim 1.2s ease-in-out infinite}
       @keyframes cdShim{100%{transform:translateX(100%)}}
       .cd-sheet{max-height:82vh;overflow-y:auto}
-      .cd-navrow{display:flex;gap:8px;margin-bottom:14px}
+      .cd-navrow{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
       .cd-navbtn{position:relative;flex:1;display:flex;align-items:center;justify-content:center;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:10px 8px;font-weight:700;font-size:12.5px;color:var(--ink);cursor:pointer;min-height:40px}
       .cd-navbtn:active{transform:scale(.97)}
+      /* Питомник (покупка гонщиков): рамка карточки — цвет редкости, как в альбоме */
+      .cd-shopbal{font-size:12.5px;color:var(--muted);margin:2px 2px 9px;display:flex;align-items:center;gap:5px}
+      .cd-shopbal b{color:var(--cream)}
+      .cd-shoprow{display:flex;align-items:center;gap:11px;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:8px 10px;margin-bottom:7px}
+      .cd-shoprow[data-r="common"]{border-color:rgba(141,146,156,.42)}
+      .cd-shoprow[data-r="rare"]{border-color:rgba(192,255,51,.5)}
+      .cd-shoprow[data-r="epic"]{border-color:rgba(155,92,255,.5)}
+      .cd-shoprow[data-r="legendary"]{border-color:rgba(255,46,126,.55)}
+      .cd-shoprow__art{width:44px;height:44px;flex:none;border-radius:9px;overflow:hidden;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center}
+      .cd-shoprow__art img{width:100%;height:100%;object-fit:contain}
+      .cd-shoprow__b{flex:1;min-width:0}.cd-shoprow__b b{display:block;font-size:13px;font-weight:800;color:var(--cream)}.cd-shoprow__b i{font-style:normal;font-size:10.5px;color:var(--muted)}
+      .cd-shoprow__buy{flex:none;display:inline-flex;align-items:center;gap:4px;border:1px solid #DFFF8F;border-radius:11px;padding:8px 11px;font-weight:800;font-size:12px;background:linear-gradient(180deg,#D4FF6A,#A8F51E 56%,#8DBF20);color:#12210A;cursor:pointer;font-variant-numeric:tabular-nums;white-space:nowrap}
+      .cd-shoprow__buy:active{transform:scale(.96)}
+      .cd-shoprow__buy:disabled{background:rgba(255,255,255,.06);color:var(--muted);border-color:transparent;cursor:default}
       .cd-navbadge{position:absolute;top:-6px;right:6px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:#e5484d;color:#fff;font-size:9.5px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.35)}
       .cd-subtabs{display:flex;gap:6px;margin-bottom:12px;background:rgba(0,0,0,.22);border-radius:12px;padding:3px}
       .cd-subtab{flex:1;text-align:center;padding:8px 4px;border-radius:10px;font-weight:700;font-size:11.5px;color:var(--muted);cursor:pointer;background:transparent;border:none}
@@ -421,6 +436,7 @@
       </div>
       <div class="cd-navrow">
         ${race && race.enabled ? `<button class="cd-navbtn" id="cd-nav-race">${FLAG_ICON(15)} Гонки</button>` : ''}
+        <button class="cd-navbtn" id="cd-nav-nursery">${NEST_ICON(15)} Питомник</button>
         <button class="cd-navbtn" id="cd-nav-trades">${SWAP_ICON(15)} Обмены${incomingTrades > 0 ? `<span class="cd-navbadge">${incomingTrades > 9 ? '9+' : incomingTrades}</span>` : ''}</button>
         <button class="cd-navbtn" id="cd-nav-mail">${MAILBOX_ICON(15)} Почта${data.unreadMail > 0 ? `<span class="cd-navbadge">${data.unreadMail > 9 ? '9+' : data.unreadMail}</span>` : ''}</button>
       </div>
@@ -469,6 +485,7 @@
     if (scrim) scrim.onclick = closeSheet;
     const hintBtn = container.querySelector('#cd-hint-cta'); if (hintBtn && hintCta) hintBtn.onclick = hintCta;
     const navR = container.querySelector('#cd-nav-race'); if (navR) navR.onclick = openRacePage;
+    const navN = container.querySelector('#cd-nav-nursery'); if (navN) navN.onclick = openNursery;
     const navT = container.querySelector('#cd-nav-trades'); if (navT) navT.onclick = openTradesPage;
     const navM = container.querySelector('#cd-nav-mail'); if (navM) navM.onclick = openMailPage;
   }
@@ -531,6 +548,8 @@
   // Базовая сила пород в заезде — зеркало src/drag.ts::RARITY_BASE (менять синхронно).
   const DRAG_RARITY_BASE = { common: 10, rare: 16, epic: 22, legendary: 28 };
   const DRAG_POWER_CAP = (r) => DRAG_RARITY_BASE[r] + 2 * 4 + 6 * 10 + 6 * 10; // ★3 + тюнинг 10/10
+  // Цена покупки гонщика в питомнике — зеркало src/pigeons.ts::PIGEON_PRICE (менять синхронно).
+  const PIGEON_PRICE = { common: 30000, rare: 120000, epic: 600000, legendary: 2500000 };
   function openLockedSheet(breedId) {
     const b = BY_ID.get(breedId);
     if (!b || b.id === 'champion') return;
@@ -771,6 +790,63 @@
         flash(TRADE_CREATE_REASON[d && d.error] || 'Не получилось создать предложение');
       }
     } finally { busy = false; }
+  }
+
+  // ── Питомник: покупка гонщика за монеты кликера (цены — зеркало PIGEON_PRICE) ──
+  let buyBusy = false;
+  function nurseryBalance() { return typeof window.ckBalance === 'function' ? num(window.ckBalance()) : 0; }
+  function nurseryListHtml() {
+    const bal = nurseryBalance();
+    const order = ['common', 'rare', 'epic', 'legendary'];
+    const label = { common: 'Обычные', rare: 'Редкие', epic: 'Эпические', legendary: 'Легендарные' };
+    return order.map(rar => {
+      const breeds = BREEDS.filter(b => b.id !== 'champion' && b.rarity === rar);
+      if (!breeds.length) return '';
+      const rows = breeds.map(b => {
+        const inv = data.invMap[b.id]; const owned = !!inv && num(inv.count) > 0;
+        const price = PIGEON_PRICE[b.rarity]; const afford = bal >= price;
+        return `<div class="cd-shoprow" data-r="${b.rarity}">
+          <div class="cd-shoprow__art"><img src="/img/pigeons/${b.id}.webp?v=2" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;align-items:center;justify-content:center;width:100%;height:100%">${DOVE_ICON(20)}</span></div>
+          <div class="cd-shoprow__b"><b>${b.name}</b><i>сила в заезде ${DRAG_RARITY_BASE[b.rarity]}${owned ? ` · есть ×${num(inv.count)}` : ''}</i></div>
+          <button class="cd-shoprow__buy" data-buy="${b.id}"${afford ? '' : ' disabled'}>${COIN_ICON(13)} ${fmt(price)}</button>
+        </div>`;
+      }).join('');
+      return `<div class="cd-sect" style="margin:10px 4px 6px">${label[rar]}</div>${rows}`;
+    }).join('');
+  }
+  async function openNursery() {
+    haptic('light');
+    const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
+    if (!sc || !sh) return;
+    const draw = () => {
+      sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">${NEST_ICON(16)} Питомник</div></div>
+        <div class="cd-sheet__hint" style="margin-top:2px">Купи гонщика за монеты кликера. Чем реже порода — тем сильнее в заезде и дороже. Дубль имеющейся = запаска под скорм на звёзды.</div>
+        <div class="cd-shopbal">Баланс: ${COIN_ICON(14)} <b>${fmt(nurseryBalance())}</b></div>
+        <div id="cd-shop-list">${nurseryListHtml()}</div>`;
+      sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+      sh.querySelectorAll('[data-buy]').forEach(btn => { btn.onclick = () => buyPigeonAct(btn.dataset.buy, draw); });
+    };
+    sc.classList.add('on');
+    requestAnimationFrame(() => sh.classList.add('on'));
+    draw();
+  }
+  async function buyPigeonAct(breed, redraw) {
+    if (buyBusy) return; buyBusy = true;
+    const b = BY_ID.get(breed);
+    const d = await apiRef('/api/pigeons/buy', { method: 'POST', body: JSON.stringify({ breed }) }).catch(() => null);
+    buyBusy = false;
+    if (!d || d.error) {
+      flash(d && d.error === 'not_enough_coins' ? 'Не хватает монет' : d && d.error === 'not_buyable' ? 'Эту породу не купить' : 'Не получилось купить');
+      return;
+    }
+    haptic('success');
+    // локально обновляем инвентарь + баланс кликера, помечаем альбом к ре-рендеру при закрытии
+    const inv = data.invMap[breed] || { count: 0, stars: 1, showcase: 0 };
+    inv.count = num(inv.count) + 1; data.invMap[breed] = inv;
+    if (typeof window.ckSyncState === 'function' && typeof d.newBalance === 'number') window.ckSyncState({ balance: d.newBalance });
+    needsRerenderOnClose = true;
+    flash((b ? b.name : 'Голубь') + ' теперь твой! Гоняй в Драг-заезде');
+    if (redraw) redraw();
   }
 
   // ── Обмены: доска (Мне/Доска/Мои) ───────────────────────────────────────────

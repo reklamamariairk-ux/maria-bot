@@ -986,7 +986,7 @@
     }
     haptic('medium');
     raceData = d;
-    d.racers.forEach((r) => loadFly(r.breed)); // сервер мог подобрать других соперников
+    d.racers.forEach((r) => loadFly(r.breed)); // те же соперники, что в превью (сервер кэширует набор старта)
     const maxFinishT = d.racers.reduce((m, r) => Math.max(m, num(r.finishT)), 0.5);
     // v2.1: заезд дольше (фидбек «слишком быстрая и не напряжённая») — ~5-7с реального времени
     const displayDur = Math.min(7, Math.max(4.5, maxFinishT * 2.4));

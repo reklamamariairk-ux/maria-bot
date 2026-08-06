@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>dove harness</title>
+<style>
+  body{margin:0;background:#0B0814;font-family:'Nunito',system-ui,sans-serif}
+  .ck-ov{--gold:#C0FF33;--gold-l:#D8FF7A;--grape:#9B5CFF;--magenta:#FF2E7E;--cream:#F3F1FB;--ink:#EFEDF7;--muted:#928DA6;--panel:rgba(255,255,255,.05);--line:rgba(255,255,255,.09);
+    max-width:400px;margin:0 auto;padding:10px;color:var(--ink);
+    background:radial-gradient(95% 60% at 50% -8%,rgba(155,92,255,.30),transparent 58%),linear-gradient(180deg,#0E0A1A,#0B0814)}
+</style></head>
+<body>
+<svg width="0" height="0" style="position:absolute"><symbol id="ckSymCoin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#C0FF33" stroke="#5E7B1E" stroke-width="1.6"/><text x="12" y="16" text-anchor="middle" font-size="11" font-weight="800" fill="#16210A">М</text></symbol></svg>
+<div class="ck-ov"><div id="dove"></div></div>
+<script>
+window.App = { isAuthed: () => true };
+window.ckFlash = (m) => console.log('flash:', m);
+window.haptic = () => {};
+// мок баланса/синка/api кликера для теста Питомника
+window.__bal = 800000;
+window.ckBalance = () => window.__bal;
+window.ckSyncState = (p) => { if (p && typeof p.balance === 'number') window.__bal = p.balance; };
+const INV = [
+  { breed: 'sizar', count: 3, stars: 2, showcase: 1 },
+  { breed: 'belobok', count: 1, stars: 1, showcase: 0 },
+  { breed: 'ryaboy', count: 2, stars: 1, showcase: 0 },
+  { breed: 'chubaty', count: 1, stars: 1, showcase: 0 },
+  { breed: 'shoko', count: 4, stars: 3, showcase: 2 },
+  { breed: 'karamel', count: 1, stars: 1, showcase: 0 },
+  { breed: 'pochtar', count: 1, stars: 1, showcase: 0 },
+  { breed: 'zolotoy', count: 2, stars: 2, showcase: 3 },
+  { breed: 'champion', count: 1, stars: 1, showcase: 0 },
+];
+const RACE = {
+  enabled: true, myBreed: 'zolotoy', myDivision: 'gold', entrants: 7,
+  myScore: 167, myPlace: 1, divisionTotal: 4, weekEndsTs: Date.now() + 2 * 86400000 + 14 * 3600000,
+  standings: [
+    { breed: 'zolotoy', score: 167, me: true },
+    { breed: 'pochtar', score: 158 },
+    { breed: 'shoko', score: 149 },
+    { breed: 'karamel', score: 121 },
+  ],
+  lastResults: {
+    gold: [
+      { place: 1, breed: 'zolotoy', score: 214, prize: 30000 },
+      { place: 2, breed: 'pochtar', score: 198, prize: 12000 },
+      { place: 3, breed: 'shoko', score: 187, prize: 6000 },
+    ],
+    silver: [
+      { place: 1, breed: 'karamel', score: 152, prize: 15000 },
+      { place: 2, breed: 'ryaboy', score: 140, prize: 6000 },
+    ],
+    bronze: [
+      { place: 1, breed: 'sizar', score: 96, prize: 8000 },
+      { place: 2, breed: 'belobok', score: 88, prize: 3000 },
+      { place: 3, breed: 'chubaty', score: 71, prize: 1500 },
+    ],
+  },
+};
+const TUNE = { owned: true, speed: 4, stamina: 2, luck: 7, division: 'gold', powerRating: 13, balance: 42000, nextCost: { speed: 4176, stamina: 1445, luck: 20125 } };
+const TRADES = {
+  toMe: [{ id: 1, from_chat: 111, fromName: 'Аня', give: 'shoko', want: 'karamel', created_at: '' }],
+  open: [{ id: 2, from_chat: 222, fromName: 'Петя', give: 'ryaboy', want: 'chubaty', created_at: '' }, { id: 3, from_chat: 333, fromName: 'Ким', give: 'sizar', want: 'belobok', created_at: '' }],
+  mine: [{ id: 4, from_chat: 999, fromName: 'ты', give: 'zolotoy', want: 'pochtar', created_at: '' }],
+};
+const RECIP = { friends: [{ chat: 501, name: 'Лена' }], squad: [{ chat: 601, name: 'Сосед по команде' }], refs: [{ chat: 701, name: 'Макс' }], friendLink: 'https://t.me/mariatortik_bot?start=ckfr_123' };
+const MAIL = { mail: [
+  { id: 10, from_chat: 111, fromName: 'Аня', breed: 'karamel', sticker: 2, thanksSticker: null, sentAt: '', seenAt: null },
+  { id: 11, from_chat: 222, fromName: 'Петя', breed: 'vanil', sticker: 5, thanksSticker: 8, sentAt: '', seenAt: 'x' },
+] };
+window.stubApi = (url, opts) => {
+  if (url.startsWith('/api/pigeons/race')) return Promise.resolve(RACE);
+  if (url.startsWith('/api/pigeons/tune')) return Promise.resolve(TUNE);
+  if (url.startsWith('/api/pigeons/recipients')) return Promise.resolve(RECIP);
+  if (url.startsWith('/api/pigeons/trades')) return Promise.resolve(TRADES);
+  if (url.startsWith('/api/pigeons/trade')) return Promise.resolve({ ok: true }); // create/accept/cancel
+  if (url.startsWith('/api/pigeons/buy')) { const PRICE = { common: 30000, rare: 120000, epic: 600000, legendary: 2500000 }; const RAR = { sizar:'common',belobok:'common',ryaboy:'common',chubaty:'common',vanil:'rare',shoko:'rare',karamel:'rare',yagodny:'rare',pochtar:'epic',baikal:'epic',kurier:'epic',vozhak:'epic',svadebny:'epic',imeninny:'epic',snezhny:'epic',zolotoy:'legendary' }; const breed = JSON.parse((opts||{}).body||'{}').breed; const price = PRICE[RAR[breed]]; if (window.__bal < price) return Promise.resolve({ error: 'not_enough_coins' }); return Promise.resolve({ ok: true, breed, spent: price, isNew: true, newBalance: window.__bal - price }); }
+  if (url.startsWith('/api/pigeons/mail')) return Promise.resolve(url.includes('thanks') ? { ok: true } : MAIL);
+  if (url.startsWith('/api/pigeons')) return Promise.resolve({ inventory: INV, sets: [{ id: 'city', owned: 4, claimed: false }, { id: 'sweet', owned: 2, claimed: false }], weekBreed: 'karamel', unreadMail: 2 });
+  return Promise.resolve({});
+};
+</script>
+<script src="/js/catdove.js"></script>
+<script>window.addEventListener('load', () => { window.CatDove.mount(document.getElementById('dove'), window.stubApi); });</script>
+</body></html>

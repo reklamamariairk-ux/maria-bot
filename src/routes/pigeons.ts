@@ -174,10 +174,12 @@ export function createPigeonsRouter(push: PushService): Router {
     const u = getTgUser(req)!; const breed = String((req.body as { breed?: string }).breed || "");
     try {
       if (!BREED_BY_ID.has(breed)) { res.status(400).json({ error: "not_owned" }); return; }
-      const { dragTargetPower, pickOpponents } = await import("../drag");
+      const { dragTargetPower, pickOpponents, cacheOpponents } = await import("../drag");
       const targetPower = await dragTargetPower(u.id, breed);
       if (targetPower === null) { res.status(400).json({ error: "not_owned" }); return; }
-      res.json({ myPower: targetPower, opponents: await pickOpponents(u.id, targetPower, 3) });
+      const opponents = await pickOpponents(u.id, targetPower, 3);
+      cacheOpponents(u.id, breed, opponents); // заезд переиспользует ровно этот набор (см. runRace)
+      res.json({ myPower: targetPower, opponents });
     } catch (e) { log.error({ err: e, chatId: u.id }, "[drag/opponents]"); res.status(500).json({ error: "internal" }); }
   });
 
@@ -209,6 +211,17 @@ export function createPigeonsRouter(push: PushService): Router {
       if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
       res.json(r);
     } catch (e) { log.error({ err: e, chatId: u.id }, "[drag/race]"); res.status(500).json({ error: "internal" }); }
+  });
+
+  // Питомник: покупка гонщика за монеты кликера (цены в pigeons.ts::PIGEON_PRICE).
+  router.post("/api/pigeons/buy", requireTgUser, rateLimit(20), async (req, res) => {
+    const u = getTgUser(req)!; const breed = String((req.body as { breed?: string }).breed || "");
+    try {
+      const { buyPigeon } = await import("../pigeons");
+      const r = await buyPigeon(u.id, breed);
+      if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
+      res.json(r);
+    } catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/buy]"); res.status(500).json({ error: "internal" }); }
   });
 
   return router;

@@ -127,6 +127,39 @@ export function tuneCost(level: number): number | null {
   return Math.floor(TUNE_BASE_COST * TUNE_COST_MULT ** level);
 }
 
+// ── Питомник: покупка гонщика за монеты кликера ─────────────────────────────
+// Голуби в основном выпадают за игру; питомник — премиальный шорткат «за деньги».
+// Цены НАРОЧНО высокие (редкое = сильнее в заезде и дороже), чтобы купить было трудно:
+// легендарка ≈ недели заработка. Чемпион не продаётся (только приз Гонки стаи).
+export const PIGEON_PRICE: Record<Rarity, number> = {
+  common: 30_000, rare: 120_000, epic: 600_000, legendary: 2_500_000,
+};
+export function pigeonPrice(breed: string): number | null {
+  const b = BREED_BY_ID.get(breed);
+  if (!b || breed === "champion") return null;
+  return PIGEON_PRICE[b.rarity];
+}
+
+// Покупка: атомарно списываем баланс кликера (условный UPDATE, как в upgradeTune) и в той
+// же транзакции выдаём голубя. Дубль уже имеющейся породы = «запаска» под скорм на звёзды.
+export async function buyPigeon(chatId: number, breed: string):
+  Promise<{ ok: boolean; spent?: number; breed?: string; isNew?: boolean; newBalance?: number; reason?: string }> {
+  const price = pigeonPrice(breed);
+  if (price == null) return { ok: false, reason: "not_buyable" };
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const pay = await client.query(
+      `UPDATE clicker_state SET balance = balance - $2 WHERE chat_id=$1 AND balance >= $2 RETURNING balance`,
+      [chatId, price]);
+    if (!pay.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
+    const g = await grantPigeon(chatId, breed, client);
+    await client.query("COMMIT");
+    return { ok: true, spent: price, breed, isNew: g.isNew, newBalance: Number(pay.rows[0].balance) };
+  } catch (e) { await client.query("ROLLBACK"); throw e; }
+  finally { client.release(); }
+}
+
 // Гонка: почти детерминированные очки. Скорость/выносливость — плоская сила (по +6),
 // удача расширяет случайный «рывок» (0..3 без удачи → 0..23 на удаче 10). Базис редкости
 // второстепенен: прокачанный common может обойти непрокачанного legendary.
