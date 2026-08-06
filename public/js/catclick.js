@@ -1060,7 +1060,6 @@
         <div class="ck-boosts">
           <button class="ck-boost" id="ck-bt-turbo">${ICON.rocket(16)} Турбо <span id="ck-bt-turbo-n"></span></button>
           <button class="ck-boost" id="ck-bt-energy">${ICON.bolt(16)} Энергия <span id="ck-bt-energy-n"></span></button>
-          <button class="ck-boost" id="ck-bt-games">${ICON.game(16)} Игры</button>
         </div>
         <div class="ck-energy"><div class="ck-energy__row" id="ck-enrow"><span id="ck-enpre">${ICON.bolt(15)}</span> <span id="ck-en">0</span> / <span id="ck-enmax">1000</span></div><div class="ck-energy__bar"><div class="ck-energy__fill" id="ck-enfill"></div></div></div>
       </div>
@@ -1102,7 +1101,6 @@
     ov.querySelector('#ck-daily').onclick = dailyBtn;
     ov.querySelector('#ck-bt-turbo').onclick = () => boost('turbo');
     ov.querySelector('#ck-bt-energy').onclick = () => boost('energy');
-    ov.querySelector('#ck-bt-games').onclick = openGamesHub;
     ov.querySelector('#ck-prestige').onclick = prestigeConfirm;
     ov.querySelectorAll('.ck-nav__b').forEach(b => b.onclick = () => setTab(b.dataset.tab));
     ov.querySelector('#ck-guide-btn').onclick = () => { window.haptic && window.haptic('light'); openGuide(); };

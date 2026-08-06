@@ -530,10 +530,14 @@
         cat.x += cat.dir * cat.vx * dt;
         if (cat.x < 0.12) { cat.x = 0.12; cat.dir = 1; }
         if (cat.x > 0.88) { cat.x = 0.88; cat.dir = -1; }
-        // смена кадров ходьбы
-        cat.frame = (cat.frame + dt * 8) % WALK.length;
-        setCatFrame(catEl, WALK[Math.floor(cat.frame)]);
-        catEl.style.transform = `scaleX(${cat.dir})`;
+        // Ходьба: раньше циклили walk1..4, но у части кадров (особенно walk2) арт
+        // сгенерирован с лишними лапами, а быстрая смена 4 поз ног «размножала» их
+        // (жалоба «6 лап»). Берём один чистый кадр (walk1, 4 лапы) + лёгкое покачивание
+        // по вертикали — читается как ходьба, без артефактов.
+        cat.frame += dt;
+        setCatFrame(catEl, 'walk1.png');
+        const bob = Math.abs(Math.sin(cat.frame * 5.2)) * 4;
+        catEl.style.transform = `scaleX(${cat.dir}) translateY(${(-bob).toFixed(1)}px)`;
         if (cat.t > 1.2 + Math.random() * 1.4) { cat.mode = 'idle'; cat.t = 0; setCatFrame(catEl, 'idle.png'); catEl.style.transform = 'scaleX(1)'; }
       } else { // idle — кот в основном стоит анфас (шапка видна, нет дрожания кадров)
         if (cat.t > 4 + Math.random() * 4) { cat.mode = 'walk'; cat.t = 0; cat.dir = Math.random() < 0.5 ? -1 : 1; }
