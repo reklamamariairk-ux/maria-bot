@@ -372,6 +372,9 @@ const TRADE_TTL_DAYS = 7;
 export async function createTrade(chatId: number, give: string, want: string, to?: number):
   Promise<{ ok: boolean; id?: number; reason?: string }> {
   if (!BREED_BY_ID.has(give) || !BREED_BY_ID.has(want) || give === want) return { ok: false, reason: "bad_input" };
+  // Чемпион — эксклюзивный приз Гонки стаи (не дропается, не продаётся): не торгуем им,
+  // иначе теряется смысл «заслуженной» награды. Ни отдать, ни запросить.
+  if (give === "champion" || want === "champion") return { ok: false, reason: "not_tradeable" };
   if (to === chatId) return { ok: false, reason: "self" };
   const client = await pool.connect();
   try {

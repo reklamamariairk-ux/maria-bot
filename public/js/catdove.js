@@ -260,7 +260,11 @@
       .cd-deal__arw{color:var(--gold-l);font-weight:900}
       .cd-traderow{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:9px 10px;margin-bottom:8px}
       .cd-traderow__swap{display:flex;align-items:center;gap:7px;flex:1;min-width:0}
-      .cd-traderow__art{width:34px;height:34px;border-radius:9px;background:rgba(192,255,51,.1);display:flex;align-items:center;justify-content:center;overflow:hidden;flex:none}
+      .cd-traderow__art{width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid rgba(141,146,156,.42);display:flex;align-items:center;justify-content:center;overflow:hidden;flex:none}
+      .cd-traderow__art[data-r="rare"]{border-color:rgba(192,255,51,.55)}
+      .cd-traderow__art[data-r="epic"]{border-color:rgba(155,92,255,.55)}
+      .cd-traderow__art[data-r="legendary"]{border-color:rgba(255,46,126,.6)}
+      .cd-traderow--locked{opacity:.55}
       .cd-traderow__art img{width:80%;height:80%;object-fit:contain}
       .cd-traderow__arrow{color:var(--muted);flex:none;font-size:12px}
       .cd-traderow__meta{font-size:10.5px;color:var(--muted);margin-top:2px}
@@ -901,17 +905,27 @@
   }
   function tradeRowHtml(t, kind) {
     const give = BY_ID.get(t.give), want = BY_ID.get(t.want);
+    // Принять чужой обмен можно, только если есть ЗАПАСНОЙ дубль запрашиваемой породы
+    // (базовый голубь остаётся у тебя) — иначе кнопка ведёт в ошибку. Гасим заранее.
+    const wantInv = data.invMap[t.want];
+    const canFulfill = kind === 'mine' || (!!wantInv && num(wantInv.count) > 1);
     const btn = kind === 'mine'
       ? `<button class="cd-tbtn cd-tbtn--ghost" data-cancel="${t.id}">Отменить</button>`
-      : `<button class="cd-tbtn" data-accept="${t.id}">Принять</button>`;
-    return `<div class="cd-traderow">
+      : `<button class="cd-tbtn" data-accept="${t.id}"${canFulfill ? '' : ' disabled'}>Принять</button>`;
+    // meta: у обмена «мой» — «от тебя»; на доске — от кого + подсказка про запасного, если нет
+    const meta = kind === 'mine'
+      ? 'от тебя'
+      : (canFulfill
+        ? 'от ' + esc(t.fromName) + (wantInv ? ` · отдашь запасного «${want ? want.name : t.want}»` : '')
+        : `нужен запасной «${want ? want.name : t.want}» — сейчас его нет`);
+    return `<div class="cd-traderow${canFulfill ? '' : ' cd-traderow--locked'}">
       <div class="cd-traderow__swap">
-        <div class="cd-traderow__art"><img src="/img/pigeons/${t.give}.webp?v=2" alt="" onerror="this.style.display='none'"></div>
+        <div class="cd-traderow__art" data-r="${give ? give.rarity : 'common'}"><img src="/img/pigeons/${t.give}.webp?v=2" alt="" onerror="this.style.display='none'"></div>
         <span class="cd-traderow__arrow">→</span>
-        <div class="cd-traderow__art"><img src="/img/pigeons/${t.want}.webp?v=2" alt="" onerror="this.style.display='none'"></div>
+        <div class="cd-traderow__art" data-r="${want ? want.rarity : 'common'}"><img src="/img/pigeons/${t.want}.webp?v=2" alt="" onerror="this.style.display='none'"></div>
         <div style="min-width:0;flex:1">
           <div style="font-size:11.5px;color:var(--ink);font-weight:700">${give ? give.name : t.give} → ${want ? want.name : t.want}</div>
-          <div class="cd-traderow__meta">${kind === 'mine' ? 'от тебя' : 'от ' + esc(t.fromName)}</div>
+          <div class="cd-traderow__meta">${meta}</div>
         </div>
       </div>
       <div class="cd-traderow__act">${btn}</div>

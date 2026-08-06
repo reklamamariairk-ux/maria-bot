@@ -210,6 +210,11 @@ describe("guard'ы обменов/почты — отвечают до похо�
     expect((await createTrade(42, "sizar", "vanil", 42)).reason).toBe("self");
   });
 
+  it("createTrade: чемпион не торгуется (ни отдать, ни запросить) → not_tradeable", async () => {
+    expect((await createTrade(1, "champion", "vanil")).reason).toBe("not_tradeable");
+    expect((await createTrade(1, "vanil", "champion")).reason).toBe("not_tradeable");
+  });
+
   it("sendMail: неизвестная порода → bad_breed", async () => {
     expect((await sendMail(1, "kotopyos", 2, 0)).reason).toBe("bad_breed");
   });

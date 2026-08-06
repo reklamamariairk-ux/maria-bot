@@ -657,12 +657,18 @@
     const s = document.createElement('style'); s.id = 'catclick-css';
     s.textContent = `
       .ck-ov{--gold:#C0FF33;--gold-l:#D8FF7A;--gold-d:#8DBF20;--grape:#9B5CFF;--grape-l:#B79BFF;--magenta:#FF2E7E;--cream:#F3F1FB;--ink:#EFEDF7;--muted:#928DA6;--panel:rgba(255,255,255,.05);--line:rgba(255,255,255,.09);
-        position:fixed;inset:0;z-index:9999;display:none;flex-direction:column;
+        position:fixed;inset:0;z-index:9999;display:none;flex-direction:column;align-items:center;
         background:radial-gradient(95% 60% at 50% -8%,rgba(155,92,255,.30),transparent 58%),radial-gradient(75% 45% at 82% 110%,rgba(192,255,51,.12),transparent 58%),linear-gradient(180deg,#0E0A1A,#0B0814);
         overflow:hidden;touch-action:manipulation;user-select:none;-webkit-user-select:none;color:var(--ink);font-family:'Nunito','Inter',system-ui,sans-serif}
       .ck-ov::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:0;background:radial-gradient(125% 75% at 50% 118%,rgba(0,0,0,.5),transparent 60%)}
       .ck-ov.on{display:flex}.ck-ov.turbo{background:radial-gradient(95% 60% at 50% -8%,rgba(192,255,51,.30),transparent 55%),linear-gradient(180deg,#12140A,#0B0C06)}
-      .ck-screen{position:relative;z-index:1;flex:1;display:none;flex-direction:column;align-items:center;overflow:hidden}.ck-screen.on{display:flex}
+      .ck-screen{position:relative;z-index:1;flex:1;display:none;flex-direction:column;align-items:center;overflow:hidden;width:100%;max-width:480px}.ck-screen.on{display:flex}
+      /* Telegram Desktop/широкое окно: игра держится телефонной колонкой по центру, иначе
+         кот (max-width:62% от ширины окна) раздувался и вылезал за экран, бусты уезжали.
+         На телефоне (≤480px) width:100% и так меньше кэпа — layout не меняется. */
+      .ck-nav{width:100%;max-width:480px}
+      .ck-games,.ck-guide{left:50%;right:auto;transform:translateX(-50%);width:100%;max-width:480px}
+      .ck-x{right:max(12px,calc(50% - 228px))}
       .ck-x{position:absolute;top:12px;right:12px;z-index:9;width:34px;height:34px;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.28);color:var(--cream);font-size:17px;cursor:pointer}
       /* Pressed-отклик на все кнопки игры + расширенные хит-зоны мелких крестиков (визуально 34px, тап 48px) */
       .ck-ov button:not(:disabled):active{transform:scale(.96)}
@@ -676,7 +682,7 @@
       .ck-bal{display:flex;align-items:center;justify-content:center;gap:9px;margin-top:4px;font-family:'Nunito',sans-serif;font-weight:700;font-size:40px;font-variant-numeric:tabular-nums;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.45)}
       .ck-prof{margin-top:6px;display:inline-flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);padding:4px 13px;border-radius:20px;font-weight:700;font-size:12px;color:var(--gold);font-variant-numeric:tabular-nums}
       .ck-prog{width:80%;max-width:330px;margin-top:10px}.ck-prog__bar{height:8px;border-radius:6px;background:rgba(0,0,0,.34);box-shadow:inset 0 1px 2px rgba(0,0,0,.45);overflow:hidden}.ck-prog__fill{height:100%;border-radius:6px;background:linear-gradient(90deg,#8DFF2E,#C0FF33);box-shadow:0 0 9px rgba(192,255,51,.6);transition:width .3s}.ck-prog__t{color:var(--muted);font-size:10.5px;text-align:center;margin-top:4px;font-weight:600;font-variant-numeric:tabular-nums}
-      .ck-catwrap{position:relative;flex:1;width:100%;display:flex;align-items:center;justify-content:center}
+      .ck-catwrap{position:relative;flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center}
       .ck-catwrap::before{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(84vw,340px);height:min(84vw,340px);border-radius:50%;background:radial-gradient(circle at 50% 46%,rgba(192,255,51,.42) 0%,rgba(155,92,255,.4) 46%,rgba(155,92,255,0) 71%);box-shadow:inset 0 0 0 2px rgba(192,255,51,.4),0 0 95px rgba(155,92,255,.4);filter:blur(1.5px);pointer-events:none;z-index:0;animation:ckGlowPulse 4.2s ease-in-out infinite}
       .ck-catwrap::after{content:'';position:absolute;left:50%;bottom:5%;transform:translateX(-50%);width:44%;height:22px;border-radius:50%;background:radial-gradient(ellipse at center,rgba(0,0,0,.5),transparent 72%);filter:blur(3px);pointer-events:none;z-index:0;animation:ckShadowPulse 3.6s ease-in-out infinite}
       .ck-cat{position:relative;z-index:1;max-width:62%;max-height:94%;width:auto;height:auto;object-fit:contain;cursor:pointer;transform-origin:bottom center;-webkit-tap-highlight-color:transparent;animation:ckBreathe 3.8s ease-in-out infinite} /* тень уже запечена в vasily-stage*.webp — filter:drop-shadow тут перерастеризовывал кота на мобильном GPU каждый кадр (жалоба «тормозит») */
