@@ -362,7 +362,6 @@
     if (feedable) return mk('У тебя есть запасные дубли — тапни породу и «скорми» их: голубь получит звезду и станет сильнее в заезде.', null, null);
     const near = sets.find(s => num(s.owned) === 3 && !s.claimed);
     if (near) { const def = SETS.find(x => x.id === near.id) || {}; return mk(`До сета «${def.name || near.id}» не хватает одной породы (+${fmt(def.reward || 0)} монет). Лови её в игре!`, null, null); }
-    if (num(data.unreadMail) > 0) return mk('Тебе прилетел голубь — загляни в Почту и поблагодари отправителя.', 'Открыть', openMailPage);
     if (race && race.enabled && !race.myBreed && ownedCount > 0) return mk('Твой голубь — ещё и гонщик! Прокачай его (⚙ в карточке породы) и гоняй в Драг-заезде или заяви в Гонку стаи.', 'Драг-заезд', () => openDragBreedPicker());
     if (ownedCount >= 16) return mk('Альбом собран! Тюнингуй гонщиков (⚙ в карточке породы) и побеждай в заездах и Гонке стаи.', null, null);
     return mk('Тапни любую свою породу: там докорм звёзд, витрина, тюнинг гонщика и обмен с другими игроками.', null, null);
@@ -451,7 +450,6 @@
         ${race && race.enabled ? `<button class="cd-navbtn" id="cd-nav-race">${FLAG_ICON(15)} Гонки</button>` : ''}
         <button class="cd-navbtn" id="cd-nav-nursery">${NEST_ICON(15)} Питомник</button>
         <button class="cd-navbtn" id="cd-nav-trades">${SWAP_ICON(15)} Обмены${incomingTrades > 0 ? `<span class="cd-navbadge">${incomingTrades > 9 ? '9+' : incomingTrades}</span>` : ''}</button>
-        <button class="cd-navbtn" id="cd-nav-mail">${MAILBOX_ICON(15)} Почта${data.unreadMail > 0 ? `<span class="cd-navbadge">${data.unreadMail > 9 ? '9+' : data.unreadMail}</span>` : ''}</button>
       </div>
       <div class="cd-sect-t">Альбом · собери сет — забери приз</div>
       ${setBlocks}
@@ -500,7 +498,6 @@
     const navR = container.querySelector('#cd-nav-race'); if (navR) navR.onclick = openRacePage;
     const navN = container.querySelector('#cd-nav-nursery'); if (navN) navN.onclick = openNursery;
     const navT = container.querySelector('#cd-nav-trades'); if (navT) navT.onclick = openTradesPage;
-    const navM = container.querySelector('#cd-nav-mail'); if (navM) navM.onclick = openMailPage;
   }
 
   // ── шит действий (звёзды/витрина/обмены/почта/гонка) — общий #cd-scrim/#cd-sheet,

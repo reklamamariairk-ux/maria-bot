@@ -530,15 +530,17 @@
         cat.x += cat.dir * cat.vx * dt;
         if (cat.x < 0.12) { cat.x = 0.12; cat.dir = 1; }
         if (cat.x > 0.88) { cat.x = 0.88; cat.dir = -1; }
-        // Ходьба: раньше циклили walk1..4, но у части кадров (особенно walk2) арт
-        // сгенерирован с лишними лапами, а быстрая смена 4 поз ног «размножала» их
-        // (жалоба «6 лап»). Берём один чистый кадр (walk1, 4 лапы) + лёгкое покачивание
-        // по вертикали — читается как ходьба, без артефактов.
+        // Ходьба: ВСЕ боковые кадры walk1..4 сгенерированы с лишними лапами (AI-артефакт,
+        // жалоба «6 лап»). Поэтому во время движения показываем чистый анфас-кадр idle.png
+        // (2 передние лапы, задние скрыты телом — размножаться нечему) и «оживляем» его
+        // покачиванием: вверх-вниз (bob) + вразвалку влево-вправо (lean) — толстый кот
+        // идёт вперевалку, без боковых спрайтов.
         cat.frame += dt;
-        setCatFrame(catEl, 'walk1.png');
-        const bob = Math.abs(Math.sin(cat.frame * 5.2)) * 4;
-        catEl.style.transform = `scaleX(${cat.dir}) translateY(${(-bob).toFixed(1)}px)`;
-        if (cat.t > 1.2 + Math.random() * 1.4) { cat.mode = 'idle'; cat.t = 0; setCatFrame(catEl, 'idle.png'); catEl.style.transform = 'scaleX(1)'; }
+        setCatFrame(catEl, 'idle.png');
+        const bob = Math.abs(Math.sin(cat.frame * 6)) * 4;
+        const lean = Math.sin(cat.frame * 6) * 4.5;
+        catEl.style.transform = `translateY(${(-bob).toFixed(1)}px) rotate(${lean.toFixed(1)}deg)`;
+        if (cat.t > 1.2 + Math.random() * 1.4) { cat.mode = 'idle'; cat.t = 0; setCatFrame(catEl, 'idle.png'); catEl.style.transform = 'none'; }
       } else { // idle — кот в основном стоит анфас (шапка видна, нет дрожания кадров)
         if (cat.t > 4 + Math.random() * 4) { cat.mode = 'walk'; cat.t = 0; cat.dir = Math.random() < 0.5 ? -1 : 1; }
       }

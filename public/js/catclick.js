@@ -1190,9 +1190,10 @@
   }
   async function loadDoveBadge() {
     if (!authed()) return;
-    const d = await api('/api/pigeons').catch(() => null);
+    // Почта убрана — бейдж «Голуби» теперь считает входящие обмены (то, что требует внимания)
+    const d = await api('/api/pigeons/trades').catch(() => null);
     if (!d) return;
-    updateDoveBadge(Number(d.unreadMail) || 0);
+    updateDoveBadge(Array.isArray(d.toMe) ? d.toMe.length : 0);
   }
 
   // ── Прогрессивное открытие вкладок: у новичка активны «Котик»+«Прокачка»,

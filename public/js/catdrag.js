@@ -549,11 +549,16 @@
     const bob = running ? Math.sin(wing) * size * 0.08 : 0;
     const fly = running ? loadFly(breed) : null;
     if (fly && fly.ok) {
-      // покадровый взмах: пинг-понг по отсортированным позам, темп чуть быстрее у быстрых
-      const n = fly.frames, period = 2 * n - 2;
+      // Покадровый взмах: пинг-понг по позам, темп чуть быстрее у быстрых. Кадр 0 у части
+      // полётных листов — поза ПОКОЯ (крылья сложены, напр. zolotoy): прогон через неё в
+      // пинг-понге давал «качание вперёд-назад» у такого голубя. Анимируем только лётные
+      // кадры 1..n-1 (кадр 0 пропускаем — где он лётный, теряем лишь один кадр взмаха).
+      const n = fly.frames;
+      const usable = Math.max(1, n - 1);
+      const period = usable > 1 ? 2 * usable - 2 : 1;
       const stepMs = 52 - 14 * (speedNorm || 0);
-      const idx = Math.floor(ts / stepMs + laneIdx * 2.3) % period;
-      const frame = idx < n ? idx : period - idx;
+      const k = Math.floor(ts / stepMs + laneIdx * 2.3) % period;
+      const frame = 1 + (k < usable ? k : period - k);
       const cell = fly.img.height;
       const drawSize = size * 1.18; // в полётных кадрах тело меньше ячейки (размах крыльев)
       const tilt = 0.04 + 0.06 * (speedNorm || 0);
