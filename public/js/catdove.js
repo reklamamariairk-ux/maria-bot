@@ -206,8 +206,10 @@
       .cd-scrim.on{display:block}
       .cd-sheet{position:fixed;left:0;right:0;bottom:0;z-index:9401;background:linear-gradient(180deg,#1B1526,#120D1C);border-radius:20px 20px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));box-shadow:0 -14px 44px rgba(0,0,0,.5);transform:translateY(100%);transition:transform .22s ease-out}
       .cd-sheet.on{transform:translateY(0)}
-      .cd-sheet__hd{display:flex;align-items:center;justify-content:space-between;gap:10px}
+      .cd-sheet__hd{display:flex;align-items:center;justify-content:flex-start;gap:11px;margin-bottom:2px}
       .cd-sheet__t{font-family:'Nunito',sans-serif;font-weight:800;font-size:17px;color:var(--cream)}
+      .cd-sheet__back{flex:none;display:inline-flex;align-items:center;gap:3px;font-family:'Nunito',sans-serif;font-weight:800;font-size:12px;color:var(--grape-l,#B79BFF);background:var(--panel);border:1px solid rgba(155,92,255,.42);border-radius:11px;padding:7px 11px;cursor:pointer}
+      .cd-sheet__back:active{transform:scale(.95);filter:brightness(1.1)}
       .cd-sheet__x{width:30px;height:30px;flex:none;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.28);color:var(--cream);font-size:15px;cursor:pointer}
       .cd-sheet__stars{font-size:17px;color:var(--gold);letter-spacing:3px;margin:8px 0 14px}
       .cd-sheet__act{width:100%;box-sizing:border-box;display:flex;align-items:center;justify-content:center;gap:7px;border:1px solid #DFFF8F;border-radius:14px;padding:13px;font-weight:800;font-size:14px;background:linear-gradient(180deg,#D4FF6A,#A8F51E 56%,#8DBF20);color:#12210A;cursor:pointer;margin-bottom:10px;min-height:44px}
@@ -499,7 +501,7 @@
     const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
     if (!sc || !sh) return;
     sh.innerHTML = `
-      <div class="cd-sheet__hd"><div class="cd-sheet__t">${b.name}</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
+      <div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">${b.name}</div></div>
       <div class="cd-sheet__stars">${'★'.repeat(stars)}<span style="color:rgba(255,255,255,.18)">${'★'.repeat(3 - stars)}</span></div>
       <div class="cd-sheet__hint" style="margin:-6px 0 10px">Звёзды усиливают голубя в заезде — расти их, скармливая дубли</div>
       <button class="cd-sheet__act" id="cd-feed" ${feedEnabled ? '' : 'disabled'}>${feedLabel}</button>
@@ -541,7 +543,7 @@
       ? 'Порода недели — выпадает чаще! Комбо дня, мини-игры, сундук удачи, покупки.'
       : 'Выпадает за комбо дня, мини-игры, сундук удачи и покупки.';
     sh.innerHTML = `
-      <div class="cd-sheet__hd"><div class="cd-sheet__t">Кто здесь живёт?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
+      <div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Кто здесь живёт?</div></div>
       <div class="cd-lk-art"><img src="/img/pigeons/${b.id}.webp?v=2" alt="" onerror="this.style.display='none'"></div>
       <div class="cd-lk-rows">
         <div class="cd-lk-row"><b>Редкость</b><span class="cd-rarity cd-rarity--${b.rarity}">${RARITY_LABEL[b.rarity]}</span></div>
@@ -566,7 +568,7 @@
     haptic('light');
     const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
     if (!sc || !sh) return;
-    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Тюнинг: ${b.name}</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div><div id="cd-tune-body" style="padding:4px 0"><div style="color:var(--muted);font-size:12.5px;text-align:center;padding:10px 0">Загрузка…</div></div>`;
+    sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Тюнинг: ${b.name}</div></div><div id="cd-tune-body" style="padding:4px 0"><div style="color:var(--muted);font-size:12.5px;text-align:center;padding:10px 0">Загрузка…</div></div>`;
     sc.classList.add('on');
     requestAnimationFrame(() => sh.classList.add('on'));
     sh.querySelector('#cd-sheet-x').onclick = closeSheet;
@@ -702,12 +704,12 @@
     if (!sh) return;
     const spares = Object.keys(data.invMap).filter(id => id !== 'champion' && data.invMap[id].count > 1);
     if (!spares.length) {
-      sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Предложить обмен</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
+      sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Предложить обмен</div></div>
         ${emptyState('Нет запасных', 'Меняться можно только запасным дублем породы. Дубль появляется, когда порода выпадает во второй раз.')}`;
       sh.querySelector('#cd-sheet-x').onclick = openTradesPage;
       return;
     }
-    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Что отдаёшь?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
+    sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Что отдаёшь?</div></div>
       <div class="cd-steps">Обмен · шаг 1 из 3</div>
       <div class="cd-sheet__hint" style="margin-top:0">Только запасного дубля — базовый голубь остаётся у тебя</div>
       ${pickGridHtml(spares, null)}`;
@@ -720,7 +722,7 @@
     const sh = container.querySelector('#cd-sheet');
     if (!sh) return;
     const ids = BREEDS.filter(b => b.id !== 'champion' && b.id !== giveId).map(b => b.id);
-    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Что хочешь взамен?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
+    sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Что хочешь взамен?</div></div>
       ${tradeFromBoard ? '<div class="cd-steps">Обмен · шаг 2 из 3</div>' : ''}
       ${dealChip(giveId, null)}
       ${pickGridHtml(ids, null)}`;
@@ -733,7 +735,7 @@
     haptic('light');
     const sh = container.querySelector('#cd-sheet');
     if (!sh) return;
-    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Кому предложить?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
+    sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Кому предложить?</div></div>
       ${tradeFromBoard ? '<div class="cd-steps">Обмен · шаг 3 из 3</div>' : ''}
       ${dealChip(tcState.give, wantId)}
       <button class="cd-sheet__act" id="cd-trade-open">Всем на доску (открытый обмен)</button>
@@ -776,7 +778,7 @@
     haptic('light');
     const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
     if (!sc || !sh) return;
-    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Обмены</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
+    sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Обмены</div></div>
       <div class="cd-sheet__hint" style="margin-top:2px">Меняйся дублями пород с другими игроками</div>
       <button class="cd-sheet__act" id="cd-trade-create">${SWAP_ICON(15)} Предложить обмен</button>
       <div class="cd-subtabs" id="cd-trade-tabs">
@@ -880,7 +882,7 @@
 
   // ── Почта: входящие + «Поблагодарить» ───────────────────────────────────────
   function mailShellHtml() {
-    return `<div class="cd-sheet__hd"><div class="cd-sheet__t">Почта</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
+    return `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Почта</div></div>
       <button class="cd-sheet__act" id="cd-mail-send">${SWAP_ICON(15)} Отправить голубя</button>
       <div id="cd-mail-list"></div>`;
   }
@@ -942,7 +944,7 @@
   function openThanksPicker(mailId) {
     const sh = container.querySelector('#cd-sheet');
     if (!sh) return;
-    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Выбери стикер</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>${stickerListHtml()}`;
+    sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Выбери стикер</div></div>${stickerListHtml()}`;
     sh.querySelector('#cd-sheet-x').onclick = closeSheet;
     sh.querySelectorAll('.cd-reciperow').forEach(el => { el.onclick = () => thanksAct(mailId, Number(el.dataset.sticker)); });
   }
@@ -969,11 +971,11 @@
     const sh = container.querySelector('#cd-sheet');
     if (!sh) return;
     if (!spares.length) {
-      sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Отправить голубя</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>${emptyState('Нечего отправить', 'Нужен хотя бы один запасной дубликат породы.')}`;
+      sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Отправить голубя</div></div>${emptyState('Нечего отправить', 'Нужен хотя бы один запасной дубликат породы.')}`;
       sh.querySelector('#cd-sheet-x').onclick = closeSheet;
       return;
     }
-    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Кого отправишь?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
+    sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Кого отправишь?</div></div>
       <div class="cd-steps">Отправка · шаг 1 из 3</div>
       <div class="cd-sheet__hint" style="margin-top:0">Улетит запасной дубль — базовый голубь остаётся у тебя</div>
       ${pickGridHtml(spares, null)}`;
@@ -993,7 +995,7 @@
     haptic('light');
     const sh = container.querySelector('#cd-sheet');
     if (!sh) return;
-    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Кому отправить?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
+    sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Кому отправить?</div></div>
       <div class="cd-steps">Отправка · шаг 2 из 3</div>
       <div class="cd-deal"><img src="/img/pigeons/${breedId}.webp?v=2" alt="" onerror="this.style.display='none'"><span>${BY_ID.get(breedId).name}</span><span class="cd-deal__arw">→</span><span style="color:var(--muted)">кому?</span></div>
       <button class="cd-sheet__act" id="cd-ms-random">Случайному игроку</button>
@@ -1029,7 +1031,7 @@
     haptic('light');
     const sh = container.querySelector('#cd-sheet');
     if (!sh) return;
-    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Что напишешь?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
+    sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Что напишешь?</div></div>
       <div class="cd-steps">Отправка · шаг 3 из 3</div>
       <div class="cd-sheet__hint" style="margin-top:0">Стикер-подпись Василия к твоему голубю</div>
       ${stickerListHtml()}`;
@@ -1092,7 +1094,7 @@
     haptic('light');
     const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
     if (!sc || !sh) return;
-    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">${FLAG_ICON(16)} Гонки</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>${raceHtml()}`;
+    sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">${FLAG_ICON(16)} Гонки</div></div>${raceHtml()}`;
     sc.classList.add('on');
     requestAnimationFrame(() => sh.classList.add('on'));
     sh.querySelector('#cd-sheet-x').onclick = closeSheet;
@@ -1182,7 +1184,7 @@
       if (!arr.length) return '';
       return `<div class="cd-divhead">${divChip(d)}<span class="cd-divhead__line"></span></div>${arr.map((r) => raceRow(r, d)).join('')}`;
     }).join('');
-    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Итоги прошлой недели</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>${blocks}`;
+    sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Итоги прошлой недели</div></div>${blocks}`;
     sc.classList.add('on');
     requestAnimationFrame(() => sh.classList.add('on'));
     sh.querySelector('#cd-sheet-x').onclick = closeSheet;
@@ -1196,7 +1198,7 @@
     haptic('light');
     const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
     if (!sc || !sh) return;
-    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Кто едет в драг-заезде?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>${pickGridHtml(owned, null)}`;
+    sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Кто едет в драг-заезде?</div></div>${pickGridHtml(owned, null)}`;
     sc.classList.add('on');
     requestAnimationFrame(() => sh.classList.add('on'));
     sh.querySelector('#cd-sheet-x').onclick = closeSheet;
@@ -1217,7 +1219,7 @@
     haptic('light');
     const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
     if (!sc || !sh) return;
-    sh.innerHTML = `<div class="cd-sheet__hd"><div class="cd-sheet__t">Кто летит за стаю?</div><button class="cd-sheet__x" id="cd-sheet-x">×</button></div>
+    sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Кто летит за стаю?</div></div>
       <div class="cd-sheet__hint">Отборочный полёт — одна попытка в неделю: прогрев и реакция добавляют очков</div>
       ${pickGridHtml(owned, null)}`;
     sc.classList.add('on');

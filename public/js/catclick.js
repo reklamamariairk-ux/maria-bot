@@ -130,6 +130,7 @@
   const COIN = (s) => `<svg class="ck-coin-i" width="${s}" height="${s}" viewBox="0 0 24 24"><use href="#ckSymCoin"/></svg>`;
   const SVG = (p, s) => `<svg class="ck-i" width="${s || 24}" height="${s || 24}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
   const ICON = {
+    home: (s) => SVG('<path d="M4 11.2 12 4.5l8 6.7"/><path d="M6 9.8V19h12V9.8"/><path d="M10 19v-4.6h4V19"/>', s),
     cupcake: (s) => SVG('<path d="M5 11h14l-1.4 8.2a1 1 0 0 1-1 .8H7.4a1 1 0 0 1-1-.8L5 11Z"/><path d="M7.2 11a3 3 0 0 1 .2-5.7A3.2 3.2 0 0 1 12 3.4a3.2 3.2 0 0 1 4.6 1.9 3 3 0 0 1-.2 5.7"/>', s),
     coffee: (s) => SVG('<path d="M4 9h12v4.5a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V9Z"/><path d="M16 10.2h2.2a2.2 2.2 0 0 1 0 4.4H16"/><path d="M7.5 5.2c.5.5.5 1.1 0 1.8M10.5 5.2c.5.5.5 1.1 0 1.8"/>', s),
     scooter: (s) => SVG('<circle cx="6" cy="17" r="2.3"/><circle cx="18" cy="17" r="2.3"/><path d="M8.3 17h7.4M18 14.7V8.5h-2.4M3.5 8h2.7l3.3 7.2"/><path d="M12.5 8H16l1.6 6.2"/>', s),
@@ -771,6 +772,24 @@
       .ck-coin{position:absolute;z-index:7;pointer-events:none}
       .ck-uphd{padding:16px 16px 6px;text-align:center;width:100%;box-sizing:border-box}.ck-uphd .b{font-family:'Nunito',sans-serif;font-weight:700;font-size:24px;display:inline-flex;align-items:center;gap:8px;color:var(--cream)}.ck-uphd .b .ck-i{color:var(--gold)}.ck-uphd .p{color:var(--gold);font-weight:700;font-size:13px;margin-top:3px;display:inline-flex;align-items:center;gap:5px;font-variant-numeric:tabular-nums}
       .ck-uplist{flex:1;overflow:auto;padding:6px 12px 16px;width:100%;box-sizing:border-box}
+      /* ── Главная · обзор (hub) ── */
+      .ck-hub{flex:1;overflow:auto;padding:14px 14px 18px;width:100%;box-sizing:border-box}
+      .ck-hub__hero{text-align:center;padding:2px 0 14px}
+      .ck-hub__av{width:70px;height:70px;margin:0 auto 8px;border-radius:50%;object-fit:cover;box-shadow:0 8px 22px rgba(0,0,0,.4),0 0 26px rgba(155,92,255,.32)}
+      .ck-hub__name{font-family:'Nunito',sans-serif;font-weight:900;font-size:17px;color:var(--cream)}
+      .ck-hub__sub{font-size:11.5px;color:var(--muted);margin-top:2px}
+      .ck-bento{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+      .ck-tile{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+      .ck-tile__l{display:block;font-size:9px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+      .ck-tile__v{font-size:16px;font-weight:900;color:var(--cream);font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:5px;white-space:nowrap}
+      .ck-tile__v.lime{color:var(--gold-l)}.ck-tile__v.grape{color:var(--grape-l,#B79BFF)}
+      .ck-hubrows{display:flex;flex-direction:column;gap:7px}
+      .ck-row2{display:flex;align-items:center;gap:11px;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:10px 11px;cursor:pointer;text-align:left;width:100%;font:inherit;color:inherit}
+      .ck-row2:active{transform:scale(.985);filter:brightness(1.08)}
+      .ck-row2__ic{width:32px;height:32px;flex:none;border-radius:9px;background:rgba(155,92,255,.14);border:1px solid rgba(155,92,255,.36);display:flex;align-items:center;justify-content:center;color:var(--grape-l,#B79BFF)}
+      .ck-row2__b{flex:1;min-width:0}.ck-row2__b b{display:block;font-size:13px;font-weight:800;color:var(--cream)}.ck-row2__b i{font-style:normal;font-size:10.5px;color:var(--muted)}
+      .ck-row2__ch{margin-left:auto;color:var(--muted);font-size:18px;font-weight:700}
+      .ck-row2 .ck-badge{margin-left:6px}
       .ck-sect{color:var(--muted);font-weight:700;font-size:11px;margin:12px 4px 7px;text-transform:uppercase;letter-spacing:.7px}
       .ck-bank{background:linear-gradient(160deg,rgba(212,169,78,.14),rgba(212,169,78,.05));border:1px solid rgba(212,169,78,.35);border-radius:14px;padding:11px 12px;margin:0 0 10px}
       .ck-bank__hd{font-weight:800;font-size:13.5px;color:var(--gold,#D4FF6A)}
@@ -879,10 +898,10 @@
       .ck-ftue-row .t{flex:1;min-width:0;font-size:12.5px;font-weight:700;color:var(--ink);line-height:1.35}
       .ck-ftue-row.dim .t{color:var(--muted)}
       .ck-ftue-row .ck-card__buy{padding:7px 12px;font-size:12px}
-      .ck-nav{display:flex;border-top:1px solid var(--line);background:rgba(18,8,11,.5);backdrop-filter:blur(8px)}
+      .ck-nav{display:flex;border-top:1px solid var(--line);background:rgba(14,10,26,.55);backdrop-filter:blur(8px)}
       .ck-nav__b{flex:1;border:none;background:transparent;color:var(--muted);padding:9px 0 12px;font-weight:600;font-size:11.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px}.ck-nav__b.on{color:var(--gold-l)}
-      .ck-levelup{position:absolute;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;pointer-events:none}.ck-levelup span{font-family:'Nunito',sans-serif;color:var(--gold-l);font-weight:700;font-size:26px;background:linear-gradient(180deg,rgba(46,17,25,.92),rgba(26,10,15,.92));border:1px solid var(--line);padding:14px 24px;border-radius:18px;opacity:0;box-shadow:0 12px 36px rgba(0,0,0,.5)}.ck-levelup span.show{animation:ckLU 1.6s ease-out}@keyframes ckLU{0%{opacity:0;transform:scale(.6)}20%{opacity:1;transform:scale(1.1)}80%{opacity:1}100%{opacity:0}}
-      .ck-scrim{position:absolute;inset:0;z-index:8;background:rgba(10,6,5,.48);display:none}.ck-scrim.on{display:block}
+      .ck-levelup{position:absolute;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;pointer-events:none}.ck-levelup span{font-family:'Nunito',sans-serif;color:var(--gold-l);font-weight:700;font-size:26px;background:linear-gradient(180deg,rgba(27,21,38,.94),rgba(18,13,28,.94));border:1px solid var(--line);padding:14px 24px;border-radius:18px;opacity:0;box-shadow:0 12px 36px rgba(0,0,0,.5)}.ck-levelup span.show{animation:ckLU 1.6s ease-out}@keyframes ckLU{0%{opacity:0;transform:scale(.6)}20%{opacity:1;transform:scale(1.1)}80%{opacity:1}100%{opacity:0}}
+      .ck-scrim{position:absolute;inset:0;z-index:8;background:rgba(6,4,14,.55);display:none}.ck-scrim.on{display:block}
       .ck-pop{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9;background:linear-gradient(180deg,#1B1526,#120D1C);border:1px solid var(--line);border-radius:20px;padding:24px;text-align:center;box-shadow:0 18px 50px rgba(0,0,0,.6);display:none;max-width:80%}.ck-pop.on{display:block}.ck-pop h3{margin:0 0 6px;font-family:'Nunito',sans-serif;font-weight:700;font-size:20px;color:var(--cream)}.ck-pop .v{font-family:'Nunito',sans-serif;font-size:32px;font-weight:700;color:var(--gold-l);margin:10px 0;display:inline-flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums}.ck-pop button{margin-top:10px;border:1px solid #DFFF8F;border-radius:14px;padding:12px 28px;font-weight:800;background:linear-gradient(180deg,#D4FF6A,#A8F51E 56%,#8DBF20);color:#12210A;cursor:pointer}
       /* ===================== ДИЗАЙН-ДОВОДКА (перенос на master) ===================== */
       .ck-ov{--cream:#eee7dd;--ink:#f1ece6;--muted:#9aa0ab;background:radial-gradient(130% 100% at 50% -10%,#1B1526 0%,#120D1C 52%,#0B0814 100%);font-family:'Nunito','Mulish',system-ui,sans-serif}
@@ -1039,6 +1058,7 @@
         <div class="ck-uplist" id="ck-dove-col"></div></div>
       <div class="ck-screen" id="ck-scr-tasks"><div class="ck-uphd"><div class="b">${ICON.gift(22)} Призы</div></div><div class="ck-uplist" id="ck-taskslist"></div></div>
       <div class="ck-screen" id="ck-scr-top"><div class="ck-uphd"><div class="b">${ICON.trophy(22)} Рейтинг</div><div class="p" id="ck-myrank"></div></div><div class="ck-uplist" id="ck-toplist"></div></div>
+      <div class="ck-screen" id="ck-scr-hub"><div class="ck-hub" id="ck-hub-body"></div></div>
       <div class="ck-fx" id="ck-fx"></div>
       <div class="ck-levelup" id="ck-levelup"><span id="ck-levelup-t"></span></div>
       <div class="ck-scrim" id="ck-scrim"></div>
@@ -1052,9 +1072,9 @@
         <div class="ck-guide__body" id="ck-guide-body"></div>
       </div>
       <div class="ck-nav">
+        <button class="ck-nav__b" data-tab="hub">${ICON.home(21)}Главная</button>
         <button class="ck-nav__b on" data-tab="cat">${ICON.paw(21)}Котик</button>
         <button class="ck-nav__b" data-tab="up">${ICON.bolt(21)}Прокачка</button>
-        <button class="ck-nav__b" data-tab="home">${ICON.paw(21)}Дом</button>
         <button class="ck-nav__b" data-tab="dove">${ICON.dove(21)}Голуби<span class="ck-badge" id="ck-dove-badge" hidden></span></button>
         <button class="ck-nav__b" data-tab="tasks">${ICON.gift(21)}Призы<span class="ck-badge" id="ck-tasks-badge" hidden></span></button>
         <button class="ck-nav__b" data-tab="top">${ICON.trophy(21)}Рейтинг</button>
@@ -1219,12 +1239,54 @@
     ov.querySelector('#ck-scr-dove').classList.toggle('on', t === 'dove');
     ov.querySelector('#ck-scr-tasks').classList.toggle('on', t === 'tasks');
     ov.querySelector('#ck-scr-top').classList.toggle('on', t === 'top');
+    ov.querySelector('#ck-scr-hub').classList.toggle('on', t === 'hub');
     ov.querySelectorAll('.ck-nav__b').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+    if (t === 'hub') renderHub();
     if (t === 'up') { renderUpgrades(); coach('up', COACH.up.t, '#ck-uplist', { icon: ICON[COACH.up.icon](18) }); }
     if (t === 'dove') { mountDoveCol(); loadDoveBadge(); }
     if (t === 'tasks') renderTasks();
     if (t === 'top') { renderTop(); coach('top', COACH.top.t, '#ck-toplist', { icon: ICON[COACH.top.icon](18) }); }
     tourOnTab(t);
+  }
+
+  // ── Главная · обзор: «общие значения и смыслы» всей игры одним экраном ──
+  function renderHub() {
+    const body = ov && ov.querySelector('#ck-hub-body'); if (!body || !st) return;
+    const catSrc = (ov.querySelector('#ck-cat') || {}).src || '';
+    const bankMult = (st.bankMult && st.bankMult > 1) ? st.bankMult : 1;
+    const profit = Math.floor((st.profitPerHour || 0) * bankMult);
+    const total = CARDS.length;
+    const tiles = [
+      `<div class="ck-tile"><span class="ck-tile__l">Баланс</span><span class="ck-tile__v lime">${COIN(14)} ${fmt(st.balance)}</span></div>`,
+      `<div class="ck-tile"><span class="ck-tile__l">Доход</span><span class="ck-tile__v lime">${COIN(13)} +${fmt(profit)}/ч</span></div>`,
+      `<div class="ck-tile"><span class="ck-tile__l">Бизнесы</span><span class="ck-tile__v">${st.cardsOwned || 0} / ${total}</span></div>`,
+      `<div class="ck-tile"><span class="ck-tile__l">Стрик</span><span class="ck-tile__v">${st.dailyStreak || 0} дн ${ICON.fire(14)}</span></div>`,
+      `<div class="ck-tile"><span class="ck-tile__l">Топ недели</span><span class="ck-tile__v grape" id="ck-hub-rank">…</span></div>`,
+      `<div class="ck-tile"><span class="ck-tile__l">Копилка стаи</span><span class="ck-tile__v" id="ck-hub-bank">…</span></div>`,
+    ].join('');
+    // Разделы = «смыслы»: что где лежит, одной строкой. Дом живёт здесь (в навбаре его нет)
+    const rows = [
+      { tab: 'up', ic: ICON.bolt(17), t: 'Прокачка', d: 'Бизнесы приносят монеты сами' },
+      { tab: 'home', ic: ICON.paw(17), t: 'Дом', d: 'Питомец Василий — корми и играй', id: 'ck-hubrow-home' },
+      { tab: 'dove', ic: ICON.dove(17), t: 'Голуби', d: 'Коллекция пород и гонки' },
+      { tab: 'tasks', ic: ICON.gift(17), t: 'Призы', d: 'Награда дня, сундук, комбо' },
+      { tab: 'top', ic: ICON.trophy(17), t: 'Рейтинг', d: 'Твоё место среди игроков' },
+    ].map(r => `<button class="ck-row2" data-goto="${r.tab}"${r.id ? ` id="${r.id}"` : ''}><span class="ck-row2__ic">${r.ic}</span><span class="ck-row2__b"><b>${r.t}</b><i>${r.d}</i></span><span class="ck-row2__ch">›</span></button>`).join('');
+    body.innerHTML =
+      `<div class="ck-hub__hero"><img class="ck-hub__av" src="${catSrc}" alt="" draggable="false"/>` +
+      `<div class="ck-hub__name">Василий · Уровень ${st.level}</div>` +
+      `<div class="ck-hub__sub">${st.levelName} · всего заработано ${fmt(st.totalEarned)}</div></div>` +
+      `<div class="ck-bento">${tiles}</div>` +
+      `<div class="ck-sect">Разделы</div><div class="ck-hubrows">${rows}</div>`;
+    body.querySelectorAll('[data-goto]').forEach(b => b.onclick = () => { window.haptic && window.haptic('selection'); setTab(b.dataset.goto); });
+    // Топ недели и копилка стаи — по сети, best-effort; до ответа «…», при неудаче «—»/«нет»
+    if (authed()) {
+      Promise.all([loadTop().catch(() => null), api('/api/clicker/squads').catch(() => null)]).then(([top, sq]) => {
+        const rk = ov.querySelector('#ck-hub-rank'); if (rk) rk.textContent = (top && top.myRank) ? '#' + top.myRank : '—';
+        const bk = ov.querySelector('#ck-hub-bank');
+        if (bk) { if (sq && sq.bank && sq.bank.target) bk.textContent = Math.min(100, Math.round(sq.bank.sum / sq.bank.target * 100)) + '%'; else bk.textContent = 'нет'; }
+      });
+    } else { const rk = ov.querySelector('#ck-hub-rank'); if (rk) rk.textContent = '—'; const bk = ov.querySelector('#ck-hub-bank'); if (bk) bk.textContent = 'нет'; }
   }
 
   const turboOn = () => Date.now() < turboUntil;
@@ -1720,7 +1782,8 @@
     }
     // бейдж «Дом»: Василию нужна забота (голод/сон/настроение/чистота < 30). Cross-module
     // сигнал из catpet.js (window.catPetAlert) — читает локальный кэш + декей, без сервера.
-    const hb = ov.querySelector('.ck-nav__b[data-tab="home"]');
+    // Дом теперь в «Разделах» экрана Главная (не в навбаре) — бейдж вешаем на его строку
+    const hb = ov.querySelector('#ck-hubrow-home .ck-row2__b b');
     if (hb) {
       const petAlert = !!(window.catPetAlert && window.catPetAlert());
       let hbd = hb.querySelector('.ck-badge');

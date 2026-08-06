@@ -46,8 +46,11 @@ function serve() {
   // Первый визит показывает тьюториал поверх оверлея — реальный юзер тапнет «Поехали!»
   const tutGo = pg.locator('#ck-tut-go');
   if (await tutGo.isVisible().catch(() => false)) { await tutGo.click(); await pg.waitForTimeout(300); }
-  // Дом кота: виджет «До подарка» снова виден (game-first: вехи заботы — витрина призов)
-  await pg.locator('.ck-nav__b[data-tab="home"]').click();
+  // Дом кота теперь в «Разделах» экрана Главная (в навбаре его нет): открыть через hub → строку Дома.
+  // Виджет «До подарка» должен быть виден (game-first: вехи заботы — витрина призов)
+  await pg.locator('.ck-nav__b[data-tab="hub"]').click();
+  await pg.waitForTimeout(400);
+  await pg.locator('.ck-row2[data-goto="home"]').click();
   await pg.waitForTimeout(1500);
   ok(await pg.locator('#pet-gift').isVisible().catch(() => false), 'pure: #pet-gift виден');
   await pg.close();
