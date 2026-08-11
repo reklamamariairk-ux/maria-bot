@@ -668,7 +668,6 @@
          кот (max-width:62% от ширины окна) раздувался и вылезал за экран, бусты уезжали.
          На телефоне (≤480px) width:100% и так меньше кэпа — layout не меняется. */
       .ck-nav{width:100%;max-width:480px}
-      .ck-games,.ck-guide{left:50%;right:auto;transform:translateX(-50%);width:100%;max-width:480px}
       .ck-x{right:max(12px,calc(50% - 228px))}
       .ck-x{position:absolute;top:12px;right:12px;z-index:9;width:34px;height:34px;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.28);color:var(--cream);font-size:17px;cursor:pointer}
       /* Pressed-отклик на все кнопки игры + расширенные хит-зоны мелких крестиков (визуально 34px, тап 48px) */
@@ -1036,11 +1035,7 @@
       .ck-coach-glow{outline:2px solid rgba(238,191,82,.85);outline-offset:3px;border-radius:10px}
       /* Гайд «Как играть» — полный справочник по механикам, открывается кнопкой ? и из тьюториала */
       .ck-guide-btn{position:absolute;top:12px;left:12px;z-index:9;width:34px;height:34px;border:1px solid rgba(238,191,82,.55);border-radius:50%;background:rgba(0,0,0,.28);color:var(--gold-l);font-weight:800;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
-      /* Хаб «Игры»: z=7 — НИЖЕ скрима(8)/попапа(9) (попап результата должен лечь поверх) и ниже оверлеев мини-игр (11-12) */
-      .ck-games{position:absolute;inset:0;z-index:7;display:none;flex-direction:column;background:linear-gradient(180deg,#1B1526,#120D1C);animation:ckGuideIn .18s ease-out}
-      .ck-games.on{display:flex}
-      @media (prefers-reduced-motion:reduce){.ck-games{animation:none}}
-      .ck-guide{position:absolute;inset:0;z-index:20000;display:none;flex-direction:column;background:linear-gradient(180deg,#1B1526,#120D1C);animation:ckGuideIn .18s ease-out}
+      .ck-guide{position:absolute;inset:0;z-index:20000;display:none;flex-direction:column;width:100%;max-width:none;transform:none;background:linear-gradient(180deg,#1B1526,#120D1C);animation:ckGuideIn .18s ease-out}
       .ck-guide.on{display:flex}
       @keyframes ckGuideIn{from{opacity:0}to{opacity:1}}
       @media (prefers-reduced-motion:reduce){.ck-guide{animation:none}}
@@ -1094,10 +1089,6 @@
       <div class="ck-levelup" id="ck-levelup"><span id="ck-levelup-t"></span></div>
       <div class="ck-scrim" id="ck-scrim"></div>
       <div class="ck-pop" id="ck-pop"></div>
-      <div class="ck-games" id="ck-games">
-        <div class="ck-guide__hd"><div class="ck-guide__t">${ICON.game(20)} Игры</div><button class="ck-guide__x" id="ck-games-x" type="button" aria-label="Закрыть">×</button></div>
-        <div class="ck-guide__body" id="ck-gameslist"></div>
-      </div>
       <div class="ck-guide" id="ck-guide">
         <div class="ck-guide__hd"><div class="ck-guide__t">${ICON.list(20)} Как играть</div><button class="ck-guide__x" id="ck-guide-x" type="button" aria-label="Закрыть">×</button></div>
         <div class="ck-guide__body" id="ck-guide-body"></div>
@@ -1126,7 +1117,6 @@
     ov.querySelectorAll('.ck-nav__b').forEach(b => b.onclick = () => setTab(b.dataset.tab));
     ov.querySelector('#ck-guide-btn').onclick = () => { window.haptic && window.haptic('light'); openGuide(); };
     ov.querySelector('#ck-guide-x').onclick = closeGuide;
-    ov.querySelector('#ck-games-x').onclick = closeGamesHub;
     ov.querySelector('#ck-guide-body').innerHTML = guideHtml();
     // Скрим под #ck-pop: фон перестаёт быть кликабельным, тап по нему закрывает попап
     // через собственную кнопку попапа (у welcome-попапа на закрытии висит POST /seen).
@@ -1144,15 +1134,15 @@
       { ic: ICON.rocket(20), t: 'Бусты', d: 'Турбо и Энергия — два бесплатных буста на вкладке «Котик». Турбо на 20 секунд даёт монеты за тап ×5, Энергия сразу наполняет шкалу энергии до максимума. Каждый буст доступен до 6 раз в день, а на следующий день лимит обновляется — счётчик рядом с кнопкой показывает, сколько попыток осталось.' },
       { ic: ICON.shop(20), t: 'Прокачка и бизнесы', d: 'В «Прокачке» — четыре направления: Производство, Маркетинг, Персонал и Сеть. Каждый бизнес, который ты завёл, дальше сам приносит монеты в час — доход капает даже когда игра закрыта, а следующий уровень бизнеса поднимает доход ещё выше. Часть бизнесов открывается только с определённого уровня игрока — до этого карточка показана силуэтом с замком. Там же можно докупить Мультитап (больше монет за тап) и Запас энергии (выше потолок энергии).' },
       { ic: ICON.gift(20), t: 'Награда дня', d: 'Каждый день, когда заходишь в игру впервые, тебе доступна награда дня — забери её кнопкой сверху экрана. Награда растёт вместе со стриком: чем больше дней подряд ты заходишь, тем она весомее, а пропущенный день сбрасывает счётчик. Календарь на семь дней вперёд показывает, сколько причитается в каждый из ближайших дней.' },
-      { ic: ICON.gem(20), t: 'Комбо дня и Шифр', d: 'В «Прокачке» каждый день выбираются три случайных бизнеса — прокачай (купи хотя бы один уровень) все три, и получишь бонус +12 000 монет. Забрать бонус и разгадать Шифр дня можно на вкладке «Призы»: шифр — сегодняшнее слово, зашифрованное азбукой Морзе, точками и тире. Переведи морзянку и впиши разгаданное слово в поле рядом — угадаешь верно, получишь +3 000 монет. Оба бонуса обновляются раз в сутки.' },
-      { ic: ICON.chest(20), t: 'Сундук и мини-игры', d: 'Иногда на главном экране пролетает золотая монетка — тронь её, пока не улетела, и получишь бонусные монеты. На вкладке «Призы» раз в день можно открыть Сундук удачи — там монеты, буст или неожиданный джекпот. Там же карточка «Игры» открывает семь мини-игр: Котовикторина, Загадки, Счёт конфет, «Собери торт» (пары на память), «Сладкий ряд» (три конфеты в ряд), «Башня тортов» и «Золотой дождь». В каждую можно сыграть раз в день, и каждая приносит монеты.' },
-      { ic: ICON.paw(20), t: 'Дом Василия', d: 'В Доме Василия — четыре комнаты: Кухня, Спальня, Игровая и Двор. В каждой — своё действие (покормить, уложить спать, поиграть, погладить), которое поднимает нужную шкалу — сытость, энергию или настроение — и приносит коту немного опыта. Если заботиться о Василии каждый день подряд, раз в сутки капают монеты питомца — награда растёт с каждым днём серии и с десятого дня держится на максимуме. В Игровой, кроме заботы, есть две мини-игры — «Накорми» и «Ловилка», рекорды в них сохраняются. Во Дворе — магазин шляп для Василия: покупай их за монеты питомца, накопленные заботой.' },
-      { ic: ICON.dove(20), t: 'Голубятня', d: 'Альбом из шестнадцати пород голубей — они выпадают за игру: комбо дня, мини-игры, сундук и покупки. Породы собраны в четыре сета, за полный сет — приз. Дубли можно скормить голубю и поднять ему звёзды, а любимцев выставить на витрину. Там же «Гонка стаи» раз в неделю и драг-заезды: тюнингуй голубя и тапай на старте, чтобы обойти соперников.' },
+      { ic: ICON.gem(20), t: 'Комбо дня', d: 'В «Прокачке» каждый день выбираются три случайных бизнеса — прокачай (купи хотя бы один уровень) все три, и получишь бонус +12 000 монет. Забрать бонус можно на вкладке «Призы». Комбо обновляется раз в сутки.' },
+      { ic: ICON.chest(20), t: 'Сундук и бонусы', d: 'Иногда на главном экране пролетает золотая монетка — тронь её, пока не улетела, и получишь бонусные монеты. На вкладке «Призы» раз в день можно открыть Сундук удачи — там монеты, буст или неожиданный джекпот.' },
+      { ic: ICON.paw(20), t: 'Дом Василия', d: 'В Доме Василия — четыре комнаты: Кухня, Спальня, Игровая и Двор. В каждой — своё действие (покормить, уложить спать, поиграть, погладить), которое поднимает нужную шкалу — сытость, энергию или настроение — и приносит коту немного опыта. Если заботиться о Василии каждый день подряд, раз в сутки капают монеты питомца — награда растёт с каждым днём серии и с десятого дня держится на максимуме. Во Дворе — магазин шляп для Василия: покупай их за монеты питомца, накопленные заботой.' },
+      { ic: ICON.dove(20), t: 'Голубятня', d: 'Альбом из шестнадцати пород голубей — они выпадают за комбо дня, сундук и питомник. Породы собраны в четыре сета, за полный сет — приз. Дубли можно скормить голубю и поднять ему звёзды, а любимцев выставить на витрину. Гонки, питомник и обмены вынесены в отдельные кнопки над альбомом.' },
       { ic: ICON.trophy(20), t: 'Рейтинг и команды', d: 'Рейтинг недели показывает игроков по количеству монет, заработанных с начала недели — отсчёт идёт с понедельника, а в конце недели сезон обнуляется и начинается заново. Здесь же можно вступить в одну из четырёх команд — Шоколадные, Ванильные, Карамельные или Ягодные — и соревноваться вместе с командой в общем зачёте по сумме очков всех участников.' },
       { ic: ICON.users(20), t: 'Друзья', d: 'Позови друга в игру по своей ссылке — как только он присоединится, тебе начислится 30 000 монет, а другу — 2 500 монет на старт. Ссылку можно скопировать или отправить прямо из игры кнопкой «Позвать».' },
     ];
     s.push({ ic: ICON.list(20), t: 'Призы и задания', d: 'На вкладке «Призы» — простые поручения за монеты: заглянуть на сайт «Марии», оставить отзыв, открыть Telegram-бот, пригласить друга или просто держать серию заходов и баланс. Выполнил условие — жми кнопку с наградой рядом с заданием. Ниже, в Достижениях — более долгие цели вроде количества тапов, уровня, собранных бизнесов или дней подряд, тоже с наградой в монетах.' });
-    s.push({ ic: ICON.medal(20), t: 'Награды за прогресс', d: 'Лестница наград работает по-настоящему: доходишь до нужного уровня, собираешь коллекцию голубей, приглашаешь друзей или заботишься о Василии подряд несколько дней — и получаешь баллы на карту клуба «Мария» или купон.' });
+    s.push({ ic: ICON.medal(20), t: 'Награды за прогресс', d: 'Доходишь до нужного уровня, собираешь коллекцию голубей, приглашаешь друзей или заботишься о Василии подряд несколько дней — и получаешь игровые призы. Баллы на карту клуба «Мария» и купоны доступны в авторизованной игре.' });
     return s;
   }
   function guideHtml() {
@@ -1708,8 +1698,9 @@
 
   // ── Мини-игра «Золотой дождь» (canvas, 20с лови монеты) ───────────────────────
   function rainAvailable() { return !st || st.rainAvailable; }
-  function openRain() {
+  async function openRain() {
     if (!rainAvailable()) { flashMsg('Игра будет снова ' + untilNewDay()); return; }
+    if (!(await beginGameAttempt('rain'))) return;
     let el = ov.querySelector('#ck-rain');
     if (!el) {
       el = document.createElement('div'); el.id = 'ck-rain'; el.className = 'ck-rain';
@@ -1778,7 +1769,7 @@
   }
   async function submitRain(score) {
     let reward = 0, netfail = false;
-    if (authed()) { const d = await api('/api/clicker/rain', { method: 'POST', body: JSON.stringify({ score }) }).catch(() => { netfail = true; return null; }); if (d && !d.error) { st = d; reward = d.reward; } }
+    if (authed()) { const d = await api('/api/clicker/rain', { method: 'POST', body: JSON.stringify({ score, attempt: takeGameAttempt('rain') }) }).catch(() => { netfail = true; return null; }); if (d && !d.error) { st = d; reward = d.reward; } else if (d && d.error) { sfxError(); flashMsg('Результат не засчитан — запусти игру заново'); renderAll(); return; } }
     else { const g = guestClaimRainRaw(score); if (g != null) { reward = g; st = guestDerive(); } }
     if (netfail && !reward) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); return; } // не праздновать «+0» с конфетти
     sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); coinShower(); dailyPopupRaw(ICON.rain(20) + ` Золотой дождь · ${score} ${plu(score, 'монета', 'монеты', 'монет')}`, reward || 0); renderAll(); renderTasks(); bumpBalance();
@@ -1798,7 +1789,7 @@
   }
   async function submitGame(game, score) {
     let reward = 0, pigeonDrop;
-    if (authed()) { const d = await api('/api/clicker/game', { method: 'POST', body: JSON.stringify({ game, score }) }).catch(() => null); if (d && !d.error) { st = d; reward = d.reward || 0; pigeonDrop = d.pigeonDrop; } else if (!d) return null; /* сеть упала — не праздновать «+0» */ }
+    if (authed()) { const d = await api('/api/clicker/game', { method: 'POST', body: JSON.stringify({ game, score, attempt: takeGameAttempt(game) }) }).catch(() => null); if (d && !d.error) { st = d; reward = d.reward || 0; pigeonDrop = d.pigeonDrop; } else return null; /* сеть/попытка упала — не праздновать «+0» */ }
     else { const g = guestClaimGameRaw(game, score); if (g != null) { reward = g; st = guestDerive(); } }
     return { reward, pigeonDrop };
   }
@@ -1887,7 +1878,7 @@
     const tb = ov.querySelector('#ck-tasks-badge');
     if (tb) {
       const ready = (st.chestAvailable ? 1 : 0) + ((st.combo && st.combo.complete && !st.combo.claimed) ? 1 : 0);
-      if (ready > 0) { tb.textContent = String(ready); tb.hidden = false; } else tb.hidden = true;
+      if (ready > 0 && !tabLocked('tasks')) { tb.textContent = String(ready); tb.hidden = false; } else tb.hidden = true;
     }
     // бейдж «Дом»: Василию нужна забота (голод/сон/настроение/чистота < 30). Cross-module
     // сигнал из catpet.js (window.catPetAlert) — читает локальный кэш + декей, без сервера.
@@ -1980,7 +1971,7 @@
   // что ждёт. Подсвечиваем золотым то, что можно забрать/сделать прямо сейчас.
   function todayStatusHtml() {
     if (!st) return '';
-    const cmb = st.combo || {}, cph = st.cipher || {};
+    const cmb = st.combo || {};
     const chip = (label, done, pend) => `<span class="ck-today__i ${done ? 'done' : pend ? 'pend' : ''}">${label}</span>`;
     const comboDone = !!cmb.claimed, comboPend = !!cmb.complete && !cmb.claimed;
     const comboLbl = comboDone ? 'Комбо ✓' : comboPend ? 'Комбо готово!' : 'Комбо ' + ((cmb.hits && cmb.hits.length) || 0) + '/3';
@@ -1988,7 +1979,6 @@
       ${chip(st.dailyAvailable ? 'Награда дня' : 'Награда ✓', !st.dailyAvailable, st.dailyAvailable)}
       ${chip(comboLbl, comboDone, comboPend)}
       ${chip(st.chestAvailable ? 'Сундук готов!' : 'Сундук ✓', !st.chestAvailable, st.chestAvailable)}
-      ${chip(cph.claimed ? 'Слово ✓' : 'Слово дня', cph.claimed, !cph.claimed)}
     </div>`;
   }
   function emptyState(ic, title, sub) { return `<div class="ck-empty"><div class="ck-empty__ic">${ic}</div><div class="ck-empty__t">${title}</div><div class="ck-empty__s">${sub}</div></div>`; }
@@ -2235,6 +2225,7 @@
   async function maybeMigrateGuest() {
     try {
       if (!authed()) return;
+      if (loadNetFail) return;
       if (localStorage.getItem('ck_migrated')) return;
       const g = rawGet();
       if (!g || (g.totalEarned || 0) < 1000) { try { localStorage.setItem('ck_migrated', '1'); } catch (_) {} return; }
@@ -2304,7 +2295,7 @@
     const failCard = tasksFail ? `<div class="ck-card"><div class="ck-card__ic">${ICON.bolt(26)}</div><div class="ck-card__b"><div class="ck-card__n">Не всё загрузилось</div><div class="ck-card__s">Проверь связь</div></div><button class="ck-card__buy" id="ck-tasks-retry">Обновить</button></div>` : '';
     // Промокод убран из вкладки «Призы» по решению юзера (15.07). redeemCodeAct/эндпоинт живы —
     // при возврате секции достаточно вернуть promoCard в innerHTML ниже.
-    list.innerHTML = '<div class="ck-intro">Забирай бесплатное: награда дня, сундук удачи, комбо дня. Ниже — задания и достижения за монеты.</div>' + (authed() ? todayStatusHtml() : '') + failCard + bonusBlock() + (progRows ? `<div class="ck-sect">${ICON.gift(13)} Награды за прогресс</div>` + progRows : '') + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows + '<div class="ck-sect">Достижения</div>' + achRows;
+    list.innerHTML = '<div class="ck-intro">Забирай бесплатное: награда дня, сундук удачи, комбо дня. Ниже — задания и достижения за монеты.</div>' + todayStatusHtml() + failCard + bonusBlock() + (progRows ? `<div class="ck-sect">${ICON.gift(13)} Награды за прогресс</div>` + progRows : '') + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows + '<div class="ck-sect">Достижения</div>' + achRows;
     const rtb = list.querySelector('#ck-tasks-retry'); if (rtb) rtb.onclick = () => renderTasks();
     ov.querySelector('#ck-invite').onclick = shareRef;
     list.querySelectorAll('[data-open]').forEach(b => b.onclick = () => { const id = b.dataset.open, link = b.dataset.link; if (link) { if (window.App && App.openExternal) App.openExternal(link); else window.open(link, '_blank'); } linkOpened[id] = true; setTimeout(renderTasks, 400); });
@@ -2360,10 +2351,9 @@
       else flashMsg(!d ? 'Нет связи — попробуй ещё раз' : d.error === 'used' ? 'Код уже использован' : d.error === 'invalid' ? 'Неверный код' : 'Не получилось');
     });
   }
-  function achDesc(a) { const m = { taps: `${fmt(a.target)} тапов`, balance: `Накопить ${fmt(a.target)}`, level: `Уровень ${a.target}`, cards: `Все ${a.target} бизнеса`, streak: `${a.target} ${plu(a.target, 'день', 'дня', 'дней')} подряд`, ref: `${a.target} ${plu(a.target, 'друг', 'друга', 'друзей')}` }; return m[a.type] || ''; }
+  function achDesc(a) { const m = { taps: `${fmt(a.target)} тапов`, balance: `Накопить ${fmt(a.target)}`, level: `Уровень ${a.target}`, cards: `Открыть ${a.target} ${plu(a.target, 'бизнес', 'бизнеса', 'бизнесов')}`, streak: `${a.target} ${plu(a.target, 'день', 'дня', 'дней')} подряд`, ref: `${a.target} ${plu(a.target, 'друг', 'друга', 'друзей')}` }; return m[a.type] || ''; }
   function bonusBlock() {
     const cmb = (st && st.combo) || { cards: [], hits: [], complete: false, claimed: false, reward: COMBO_REWARD };
-    const cph = (st && st.cipher) || { morse: '', len: 0, claimed: false, reward: CIPHER_REWARD };
     const slots = cmb.cards.map(id => `<div class="ck-cmb ${cmb.hits.includes(id) ? 'on' : ''}">${cardIcon(id)}<span>${cardName(id)}</span></div>`).join('');
     const comboBtn = cmb.claimed
       ? `<button class="ck-card__buy" disabled style="width:100%;justify-content:center">✓ Забрано сегодня</button>`
@@ -2373,8 +2363,6 @@
     const comboCard = `<div class="ck-card ck-bonus">
       <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.star(26)}</div><div class="ck-card__b"><div class="ck-card__n">Комбо дня</div><div class="ck-card__s">Прокачай эти 3 бизнеса сегодня · +${fmt(cmb.reward)} ${COIN(13)}</div></div></div>
       <div class="ck-combo3">${slots}</div>${comboBtn}</div>`;
-    // «Слово дня» переехало в хаб «Игры» (решение юзера 31.07: «Призы» — только
-    // призы, активности — в играх). См. renderGames/openCipherPopup.
     const chestAvail = !st || st.chestAvailable;
     const chestCard = `<div class="ck-card ck-bonus" style="background:linear-gradient(90deg,rgba(238,191,82,.16),rgba(238,191,82,.04))">
       <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.chest(26)}</div><div class="ck-card__b"><div class="ck-card__n">Сундук удачи</div><div class="ck-card__s">${chestAvail ? 'Монеты, турбо или джекпот!' : 'Новый сундук ' + untilNewDay()}</div></div>
@@ -2391,7 +2379,6 @@
     const cb = ov.querySelector('#ck-combo-claim'); if (cb) cb.onclick = claimCombo;
     const ch = ov.querySelector('#ck-chest-open'); if (ch) ch.onclick = openChestAct;
     const co = ov.querySelector('#ck-case-open'); if (co) co.onclick = openCaseAct;
-    const gp = ov.querySelector('#ck-games-open'); if (gp) gp.onclick = openGamesHub;
     const go = ov.querySelector('#ck-cipher-go'), inp = ov.querySelector('#ck-cipher-in');
     if (go && inp) { go.onclick = () => claimCipher(inp.value); inp.onkeydown = (e) => { if (e.key === 'Enter') claimCipher(inp.value); }; }
   }
@@ -2499,7 +2486,7 @@
       { text: 'Тапай по мне — каждый тап приносит монету. Ну-ка, пять тапов!', anchor: '#ck-catwrap', pos: 'top', wait: 'taps' },
       { text: 'Кстати: каждый 40-й тап — «Сладкий», сразу ×8 монет. Лови золотые вспышки!', anchor: '#ck-catwrap', pos: 'top' },
       { text: 'Энергия: тап стоит единичку, сама восстанавливается. Кончилась — загляни в другие вкладки', anchor: '.ck-energy', pos: 'top' },
-      { text: 'Бусты: Турбо ×5 и мгновенная энергия — бесплатные, по кулдауну. А рядом — мини-игры, до 8 партий в день', anchor: '.ck-boosts', pos: 'top' },
+      { text: 'Бусты: Турбо ×5 и мгновенная энергия — бесплатные, по кулдауну. Используй их, когда хочешь быстро добрать монеты до покупки', anchor: '.ck-boosts', pos: 'top' },
       { text: 'Твои монеты и доход в час. Монеты тратим на бизнесы, тюнинг голубей и ставки', anchor: '.ck-bal', pos: 'bottom' },
       { text: 'Полоска карьеры: все заработанные монеты двигают меня по 19 уровням — от стажёра до Императора выпечки', anchor: '.ck-progwrap', pos: 'bottom' },
       { text: '«Награда дня»: заходи каждый день — стрик растёт, награды тоже', anchor: '#ck-daily', anchorFn: function () { return ov.querySelector('#ck-daily:not([style*="none"])') || ov.querySelector('.ck-progwrap'); }, pos: 'bottom' },
@@ -2522,11 +2509,11 @@
       { text: 'Пригласи друга — обоим монеты: тебе +30 000, ему +2 500 на старт', anchor: '#ck-toplist', pos: 'bottom' },
     ],
     col: [
-      { text: 'Альбом пород: собери все 16! Породы выпадают за комбо дня, мини-игры, сундук и покупки', anchor: '#ck-dove-col .cd-summary', pos: 'bottom' },
+      { text: 'Альбом пород: собери все 16! Породы выпадают за комбо дня, сундук и питомник', anchor: '#ck-dove-col .cd-summary', pos: 'bottom' },
       { text: 'Породы собраны в сеты. Собери четвёрку — над ней появится кнопка «Забрать приз»', anchor: '#ck-dove-col .cd-sethead', pos: 'bottom' },
-      { text: '«Гонка стаи»: раз в неделю заяви голубя через отборочный полёт — и следи за таблицей дивизиона', anchor: '#ck-dove-col .cd-racehero', pos: 'bottom' },
-      { text: 'А «Драг-заезд» — гонка прямо сейчас: прогрей мотор, поймай старт. Можно тренироваться или ставить монеты', anchor: '#cd-drag-enter', pos: 'bottom' },
-      { text: 'Обмены и почта: меняйся дублями с другими игроками и отправляй голубей друзьям', anchor: '#ck-dove-col .cd-navrow', pos: 'bottom' },
+      { text: 'Кнопка «Гонки» открывает всё спортивное: гонку стаи, драг-заезды, тренировки и ставки монетами', anchor: '#cd-nav-race', anchorFn: function () { return ov.querySelector('#cd-nav-race') || ov.querySelector('#ck-dove-col .cd-navrow'); }, pos: 'bottom' },
+      { text: 'В «Питомнике» можно докупить нужную породу за монеты, если сет почти собран', anchor: '#cd-nav-nursery', pos: 'bottom' },
+      { text: 'В «Обменах» меняйся дублями с другими игроками. Бейдж покажет входящие предложения', anchor: '#cd-nav-trades', pos: 'bottom' },
     ],
     home: [
       { text: 'Мой дом! Наверху — мои потребности: сытость, настроение и сон. Не запускай их', anchor: '#pet-needs', pos: 'bottom', root: 'doc' },
@@ -2642,10 +2629,10 @@
     t.innerHTML = `<div class="ck-tut__card">
       <div class="ck-tut__ic">${ICON.paw(36)}</div>
       <h3>Котик Комбат</h3>
-      <div class="ck-tut__sub">Помоги котику дорасти от подвала до тронного зала — 19 уровней и реальные награды «Марии».</div>
+      <div class="ck-tut__sub">Помоги котику дорасти от подвала до тронного зала — 19 уровней, коллекции и ежедневные призы.</div>
       <div class="ck-tut__step"><div class="si">${ICON.paw(20)}</div><div><div class="st">Тапай котика</div><div class="sd">Каждый тап — монеты, лови комбо ×N</div></div></div>
       <div class="ck-tut__step"><div class="si">${ICON.shop(20)}</div><div><div class="st">Заводи бизнесы</div><div class="sd">В «Прокачке» — монеты копятся сами, даже офлайн</div></div></div>
-      <div class="ck-tut__step"><div class="si">${ICON.gift(20)}</div><div><div class="st">Заходи каждый день</div><div class="sd">Награды, комбо дня и баллы на карту «Марии»</div></div></div>
+      <div class="ck-tut__step"><div class="si">${ICON.gift(20)}</div><div><div class="st">Заходи каждый день</div><div class="sd">Награды дня, комбо и новые игровые цели</div></div></div>
       <button class="ck-tut__go" id="ck-tut-go">Поехали!</button>
       <button class="ck-tut__guide" id="ck-tut-guide" type="button">Полный гайд — как всё устроено</button></div>`;
     ov.appendChild(t);
@@ -2663,7 +2650,7 @@
     ov.querySelector('#ck-cat').src = A(leagueFor(st.totalEarned).cat || 'idle.png');
     applyCatSize(ov.querySelector('#ck-cat'));
     setTab('cat'); renderAll(); spawnSparks(); applySeason(); scheduleBonus(); loadDoveBadge();
-    if (loadNetFail) flashMsg('Нет связи — офлайн-режим, прогресс синхронизируется позже'); // авторизованный получил гостевой фолбэк — не молчать про «пропавший» баланс
+    if (loadNetFail) flashMsg('Нет связи — серверный прогресс не загрузился, попробуй обновить игру');
     // «Уже видел обучение» теперь помнит СЕРВЕР (st.onboarded) — localStorage в webview
     // Telegram Mini App часто НЕ переживает закрытие, из-за чего обучение лезло КАЖДЫЙ
     // вход. Плюс любой игрок с прогрессом (тапы/монеты/бизнес) считается прошедшим — даже
@@ -2759,7 +2746,20 @@
     inp.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
     pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
   }
-  function startGame(g) { if (g === 'memory') openMemory(); else if (g === 'tower') openTower(); else if (g === 'gems') openGems(); else openQuiz(g); }
+  const gameAttempts = {};
+  async function beginGameAttempt(game) {
+    if (!authed()) return true;
+    if (loadNetFail) return false;
+    const d = await api('/api/clicker/game-attempt', { method: 'POST', body: JSON.stringify({ game }) }).catch(() => null);
+    if (!d || d.error || !d.token) { flashMsg('Нет связи — игру не запустили'); return false; }
+    gameAttempts[game] = d.token;
+    return true;
+  }
+  function takeGameAttempt(game) { const t = gameAttempts[game] || ''; delete gameAttempts[game]; return t; }
+  async function startGame(g) {
+    if (!(await beginGameAttempt(g))) return;
+    if (g === 'memory') openMemory(); else if (g === 'tower') openTower(); else if (g === 'gems') openGems(); else openQuiz(g);
+  }
   function openGamesHub() { if (!ov) return; window.haptic && window.haptic('light'); ov.querySelector('#ck-games').classList.add('on'); renderGames(); }
   function closeGamesHub() { const g = ov && ov.querySelector('#ck-games'); if (g) g.classList.remove('on'); if (tab === 'tasks') renderTasks(); /* обновить счётчик «доступно N из 7» на карточке */ }
   function resultPopup(title, amount, sub) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${title}</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><div style="color:var(--muted);font-size:13px">${sub || ''}</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => { pop.classList.remove('on'); advancePopupQueue(); }; }

@@ -286,10 +286,9 @@ export async function hasFullAlbum(chatId: number, client?: PoolClient): Promise
 }
 
 export async function getPigeonsOverview(chatId: number) {
-  const [inv, claimed, mail] = await Promise.all([
+  const [inv, claimed] = await Promise.all([
     pool.query(`SELECT breed, count, stars, showcase FROM pigeon_inventory WHERE chat_id=$1 AND count>0`, [chatId]),
     pool.query(`SELECT set_id FROM pigeon_sets_claimed WHERE chat_id=$1`, [chatId]),
-    pool.query(`SELECT COUNT(*) AS n FROM pigeon_mail WHERE to_chat=$1 AND seen_at IS NULL`, [chatId]),
   ]);
   const owned = new Set(inv.rows.map((r: any) => r.breed));
   const claimedSet = new Set(claimed.rows.map((r: any) => r.set_id));
@@ -301,7 +300,7 @@ export async function getPigeonsOverview(chatId: number) {
   return {
     inventory: inv.rows, sets,
     albumDone: [...owned].filter(b => b !== "champion").length >= 16,
-    unreadMail: Number(mail.rows[0].n),
+    unreadMail: 0,
     weekBreed: breedOfWeek(await currentWeekKey()),
   };
 }

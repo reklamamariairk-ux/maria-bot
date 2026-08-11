@@ -695,7 +695,46 @@ export async function redeemCode(chatId: number, codeInput: string): Promise<{ o
 
 /** Мини-игра «Золотой дождь»: 1/день. Очки клиента клампятся (анти-чит) → монеты. */
 const RAIN_SCORE_CAP = 120;
-export async function claimRain(chatId: number, score: number): Promise<{ ok: boolean; reward?: number; state?: ClickerState; reason?: string }> {
+type GameAttemptKind = "rain" | keyof typeof GAME_CFG;
+type GameAttempt = { chatId: number; game: GameAttemptKind; token: string; startedAt: number };
+const GAME_ATTEMPT_TTL_MS = 10 * 60 * 1000;
+const GAME_ATTEMPT_MIN_MS: Record<string, number> = {
+  rain: 15_000,
+  quiz_kids: 2_500,
+  quiz_riddle: 2_500,
+  count: 2_000,
+  memory: 4_500,
+  gems: 30_000,
+  tower: 500,
+};
+const gameAttempts = new Map<string, GameAttempt>();
+function attemptKey(chatId: number, game: string, token: string): string { return `${chatId}:${game}:${token}`; }
+function sweepGameAttempts(now = Date.now()): void {
+  for (const [key, a] of gameAttempts) {
+    if (now - a.startedAt > GAME_ATTEMPT_TTL_MS) gameAttempts.delete(key);
+  }
+}
+export function createGameAttempt(chatId: number, game: string): { ok: boolean; token?: string; reason?: string } {
+  if (game !== "rain" && !GAME_CFG[game]) return { ok: false, reason: "bad_game" };
+  sweepGameAttempts();
+  const token = crypto.randomUUID();
+  gameAttempts.set(attemptKey(chatId, game, token), { chatId, game: game as GameAttemptKind, token, startedAt: Date.now() });
+  return { ok: true, token };
+}
+function consumeGameAttempt(chatId: number, game: string, token: string): { ok: boolean; reason?: string } {
+  if (!token || typeof token !== "string") return { ok: false, reason: "missing_attempt" };
+  const key = attemptKey(chatId, game, token);
+  const a = gameAttempts.get(key);
+  gameAttempts.delete(key);
+  if (!a) return { ok: false, reason: "bad_attempt" };
+  const elapsed = Date.now() - a.startedAt;
+  if (elapsed > GAME_ATTEMPT_TTL_MS) return { ok: false, reason: "expired_attempt" };
+  if (elapsed < (GAME_ATTEMPT_MIN_MS[game] || 0)) return { ok: false, reason: "too_fast" };
+  return { ok: true };
+}
+export async function claimRain(chatId: number, score: number, attemptToken = ""): Promise<{ ok: boolean; reward?: number; state?: ClickerState; reason?: string }> {
+  const attempt = consumeGameAttempt(chatId, "rain", attemptToken);
+  if (!attempt.ok) return { ok: false, reason: attempt.reason };
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -723,8 +762,10 @@ const GAME_CFG: Record<string, { cap: number; per: number }> = {
   gems:        { cap: 200, per: 45   }, // «Сладкий ряд» (match-3): собрано конфет
   tower:       { cap: 200, per: 60   }, // «Башня тортов»: коржей в башне
 };
-export async function claimGame(chatId: number, game: string, score: number): Promise<{ ok: boolean; reward?: number; game?: string; state?: ClickerState; reason?: string; pigeonDrop?: { breed: string; isNew: boolean } }> {
+export async function claimGame(chatId: number, game: string, score: number, attemptToken = ""): Promise<{ ok: boolean; reward?: number; game?: string; state?: ClickerState; reason?: string; pigeonDrop?: { breed: string; isNew: boolean } }> {
   const cfg = GAME_CFG[game]; if (!cfg) return { ok: false, reason: "bad_game" };
+  const attempt = consumeGameAttempt(chatId, game, attemptToken);
+  if (!attempt.ok) return { ok: false, reason: attempt.reason };
   const client = await pool.connect();
   try {
     await client.query("BEGIN");

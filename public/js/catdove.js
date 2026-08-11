@@ -357,7 +357,7 @@
     const mk = (text, ctaLabel, run) => { hintCta = run || null; return { text, ctaLabel: run ? ctaLabel : null }; };
     const ready = sets.find(s => num(s.owned) >= 4 && !s.claimed);
     if (ready) { const def = SETS.find(x => x.id === ready.id) || {}; return mk(`Сет «${def.name || ready.id}» собран — забери ${fmt(def.reward || 0)} монет!`, 'Забрать', () => claimSetAct(ready.id)); }
-    if (ownedCount === 0) return mk('Голубей пока нет. Они выпадают за игру — за комбо дня, мини-игры и сундук удачи. Играй — и первый голубь прилетит!', 'Играть', () => { closeSheet(); if (window.ckSetTab) window.ckSetTab('cat'); });
+    if (ownedCount === 0) return mk('Голубей пока нет. Они выпадают за комбо дня, сундук удачи и доступны в питомнике. Играй — и первый голубь прилетит!', 'Играть', () => { closeSheet(); if (window.ckSetTab) window.ckSetTab('cat'); });
     const feedable = Object.keys(data.invMap).some(id => { if (id === 'champion') return false; const inv = data.invMap[id]; const st = Math.max(1, Math.min(3, num(inv.stars))); const need = starTarget(st); return need != null && (num(inv.count) - 1) >= need; });
     if (feedable) return mk('У тебя есть запасные дубли — тапни породу и «скорми» их: голубь получит звезду и станет сильнее в заезде.', null, null);
     const near = sets.find(s => num(s.owned) === 3 && !s.claimed);
@@ -429,7 +429,7 @@
     if (!container) return;
     if (!authed()) {
       container.innerHTML = emptyState('Альбом закрыт', PURE()
-        ? 'Открой игру в Telegram — собирай породы голубей и получай награды за сеты.'
+        ? 'Войди через Telegram — собирай породы голубей и получай награды за сеты.'
         : 'Войди через приложение «Мария» — собирай породы голубей и получай награды за сеты.');
       return;
     }
@@ -569,8 +569,8 @@
     const setDef = SETS.find(s => s.id === b.set);
     const week = data && data.weekBreed === b.id;
     const drop = week
-      ? 'Порода недели — выпадает чаще! Комбо дня, мини-игры, сундук удачи, покупки.'
-      : 'Выпадает за комбо дня, мини-игры, сундук удачи и покупки.';
+      ? 'Порода недели — выпадает чаще! Комбо дня, сундук удачи, питомник.'
+      : 'Выпадает за комбо дня, сундук удачи и доступна в питомнике.';
     sh.innerHTML = `
       <div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Кто здесь живёт?</div></div>
       <div class="cd-lk-art"><img src="/img/pigeons/${b.id}.webp?v=2" alt="" onerror="this.style.display='none'"></div>

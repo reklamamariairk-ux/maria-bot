@@ -1,20 +1,17 @@
 /**
- * Pigeons routes — «Голубятня» (коллекция/сеты/звёзды/обмены/почта).
+ * Pigeons routes — «Голубятня» (коллекция/сеты/звёзды/обмены).
  * GET  /api/pigeons                  · POST /api/pigeons/set-claim {set}
  * GET  /api/pigeons/trades           · POST /api/pigeons/trade {give,want,to?}
  * POST /api/pigeons/trade/accept {id}· POST /api/pigeons/trade/cancel {id}
- * POST /api/pigeons/mail {breed,to,sticker} · POST /api/pigeons/mail/thanks {id,sticker}
- * GET  /api/pigeons/mail             · GET  /api/pigeons/recipients
+ * Почта отключена продуктово: mail endpoints ниже возвращают 410, чтобы старый клиент
+ * не мог продолжать отправлять голубей.
  * POST /api/pigeons/feed {breed}     · POST /api/pigeons/showcase {breeds}
  * POST /api/pigeons/race/enter {breed} · GET /api/pigeons/race — за флагом PIGEON_RACE_ENABLED
- *
- * sendMail нужен PushService для пуша получателю — роутер собирается фабрикой
- * createPigeonsRouter(push), как createWheelStreakRouter/createReferralRouter.
  */
 import { Router } from "express";
 import {
   getPigeonsOverview, claimSet, getTradeBoard, createTrade, acceptTrade, cancelTrade,
-  sendMail, getInbox, thankMail, getMailRecipients, feedPigeon, setShowcase,
+  feedPigeon, setShowcase,
   enterRace, getRace, getTuning, upgradeTune, BREED_BY_ID,
 } from "../pigeons";
 import type { PushService } from "../push";
@@ -24,6 +21,7 @@ import { log } from "../logger";
 
 export function createPigeonsRouter(push: PushService): Router {
   const router = Router();
+  void push;
 
   router.get("/api/pigeons", requireTgUser, rateLimit(60), async (req, res) => {
     const u = getTgUser(req)!;
@@ -72,47 +70,19 @@ export function createPigeonsRouter(push: PushService): Router {
   });
 
   router.post("/api/pigeons/mail", requireTgUser, rateLimit(10), async (req, res) => {
-    const u = getTgUser(req)!;
-    const { breed, to, sticker } = req.body as { breed?: string; to?: unknown; sticker?: number };
-    // to принимает только 'random' | 'squad' | 'ref' | числовой chatId — всё остальное отсекаем
-    // здесь, до вызова sendMail (squad резолвится на сервере из своего же squad отправителя).
-    let toVal: number | "random" | "squad" | "ref";
-    if (to === "random" || to === "squad" || to === "ref") {
-      toVal = to;
-    } else {
-      const n = Number(to);
-      if (!Number.isInteger(n)) { res.status(400).json({ error: "bad_input" }); return; }
-      toVal = n;
-    }
-    try {
-      const r = await sendMail(u.id, String(breed || ""), toVal, Number(sticker), push);
-      if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
-      res.json(r);
-    } catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/mail]"); res.status(500).json({ error: "internal" }); }
+    res.status(410).json({ error: "disabled" });
   });
 
   router.post("/api/pigeons/mail/thanks", requireTgUser, rateLimit(20), async (req, res) => {
-    const u = getTgUser(req)!;
-    const { id, sticker } = req.body as { id?: number; sticker?: number };
-    const idNum = Number(id);
-    if (!Number.isInteger(idNum)) { res.status(400).json({ error: "bad_input" }); return; }
-    try {
-      const r = await thankMail(u.id, idNum, Number(sticker));
-      if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
-      res.json(r);
-    } catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/mail/thanks]"); res.status(500).json({ error: "internal" }); }
+    res.status(410).json({ error: "disabled" });
   });
 
   router.get("/api/pigeons/mail", requireTgUser, rateLimit(60), async (req, res) => {
-    const u = getTgUser(req)!;
-    try { res.json(await getInbox(u.id)); }
-    catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/mail get]"); res.status(500).json({ error: "internal" }); }
+    res.status(410).json({ error: "disabled", mail: [] });
   });
 
   router.get("/api/pigeons/recipients", requireTgUser, rateLimit(60), async (req, res) => {
-    const u = getTgUser(req)!;
-    try { res.json(await getMailRecipients(u.id)); }
-    catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/recipients]"); res.status(500).json({ error: "internal" }); }
+    res.status(410).json({ error: "disabled", friends: [], squad: [], refs: [] });
   });
 
   router.post("/api/pigeons/feed", requireTgUser, rateLimit(20), async (req, res) => {

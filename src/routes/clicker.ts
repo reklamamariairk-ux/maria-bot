@@ -5,7 +5,7 @@
  * POST /api/clicker/boost {type:turbo|energy} · GET /api/clicker/top
  */
 import { Router } from "express";
-import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements, getRewards, redeemReward, claimBonus, openChest, openCase, claimRain, claimGame, getMilestones, claimMilestone, syncPurchaseBonus, migrateGuest, redeemCode, getSquads, joinSquad, squadBankStatus, donateSquadBank, createSquad, joinSquadByCode, requestJoinSquad, listSquadRequests, decideSquadRequest, prestigeReset, welcomePromoShown, markWelcomePromoShown, markOnboarded, getFtue, claimFtue, getSquadMembers } from "../clicker";
+import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements, getRewards, redeemReward, claimBonus, openChest, openCase, claimRain, claimGame, createGameAttempt, getMilestones, claimMilestone, syncPurchaseBonus, migrateGuest, redeemCode, getSquads, joinSquad, squadBankStatus, donateSquadBank, createSquad, joinSquadByCode, requestJoinSquad, listSquadRequests, decideSquadRequest, prestigeReset, welcomePromoShown, markWelcomePromoShown, markOnboarded, getFtue, claimFtue, getSquadMembers } from "../clicker";
 import { rateLimit, requireAdminToken } from "../middleware";
 import { requireTgUser, getTgUser } from "../auth";
 import { getBonusQueue, ackBonusQueue, queueAuthOk } from "../bonus1c";
@@ -95,15 +95,21 @@ router.post("/api/clicker/code", requireTgUser, rateLimit(20), async (req, res) 
   catch (e) { log.error({ err: e, chatId: u.id }, "[code]"); res.status(500).json({ error: "internal" }); }
 });
 
+router.post("/api/clicker/game-attempt", requireTgUser, rateLimit(80), async (req, res) => {
+  const u = getTgUser(req)!; const game = String((req.body as { game?: string }).game || "");
+  try { const r = createGameAttempt(u.id, game); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ token: r.token }); }
+  catch (e) { log.error({ err: e, chatId: u.id }, "[game-attempt]"); res.status(500).json({ error: "internal" }); }
+});
+
 router.post("/api/clicker/rain", requireTgUser, rateLimit(30), async (req, res) => {
-  const u = getTgUser(req)!; const score = Number((req.body as { score?: number }).score) || 0;
-  try { const r = await claimRain(u.id, score); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ reward: r.reward, ...r.state }); trackEvent(u.id, "rain", { score, reward: r.reward }); }
+  const u = getTgUser(req)!; const { score, attempt } = req.body as { score?: number; attempt?: string };
+  try { const r = await claimRain(u.id, Number(score) || 0, String(attempt || "")); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ reward: r.reward, ...r.state }); trackEvent(u.id, "rain", { score: Number(score) || 0, reward: r.reward }); }
   catch (e) { log.error({ err: e, chatId: u.id }, "[rain]"); res.status(500).json({ error: "internal" }); }
 });
 
 router.post("/api/clicker/game", requireTgUser, rateLimit(40), async (req, res) => {
-  const u = getTgUser(req)!; const { game, score } = req.body as { game?: string; score?: number };
-  try { const r = await claimGame(u.id, String(game || ""), Number(score) || 0); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ reward: r.reward, game: r.game, pigeonDrop: r.pigeonDrop, ...r.state }); trackEvent(u.id, "game", { game: String(game || ""), score: Number(score) || 0, reward: r.reward }); }
+  const u = getTgUser(req)!; const { game, score, attempt } = req.body as { game?: string; score?: number; attempt?: string };
+  try { const r = await claimGame(u.id, String(game || ""), Number(score) || 0, String(attempt || "")); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ reward: r.reward, game: r.game, pigeonDrop: r.pigeonDrop, ...r.state }); trackEvent(u.id, "game", { game: String(game || ""), score: Number(score) || 0, reward: r.reward }); }
   catch (e) { log.error({ err: e, chatId: u.id }, "[game]"); res.status(500).json({ error: "internal" }); }
 });
 
