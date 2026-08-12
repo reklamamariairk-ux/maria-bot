@@ -1144,8 +1144,20 @@
   function shareFriendLink(rec) {
     if (!rec || !rec.friendLink) { flash('Ссылка дружбы недоступна'); return; }
     haptic('light');
-    const txt = `🕊️ Добавь меня в друзья в «Котик Комбат» — будем слать друг другу голубей и меняться породами! ${rec.friendLink}`;
-    if (window.ckShare) window.ckShare(txt); else flash(rec.friendLink);
+    const text = '🕊️ Добавь меня в друзья в «Котик Комбат» — будем слать друг другу голубей и меняться породами!';
+    const full = `${text} ${rec.friendLink}`;
+    if (window.App && App.share) { App.share(rec.friendLink, text); return; }
+    if (navigator.share) { navigator.share({ url: rec.friendLink, text }).catch(() => copyFriendLink(full)); return; }
+    copyFriendLink(full);
+  }
+  function copyFriendLink(text) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => flash('Ссылка скопирована'), () => flash(text));
+        return;
+      }
+    } catch (_) {}
+    flash(text);
   }
   async function openMailSendRecipient(breedId) {
     if (!msState) return;
