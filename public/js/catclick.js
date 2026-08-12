@@ -349,7 +349,7 @@
   // не обещать неработающее). Бэк (/api/clicker/redeem, CLICKER_REWARDS_ENABLED) жив —
   // при включении Машей вернуть витрину из git-истории (catclick v122).
 
-  let ov, audio, raf, lastTs = 0, pending = 0, tapsInflight = 0, syncT = 0, curLevel = 1, tab = 'cat';
+  let ov, audio, raf, lastTs = 0, pending = 0, pendingComboBonus = 0, tapsInflight = 0, syncT = 0, curLevel = 1, tab = 'cat';
   const MAX_TAP_POINTERS = 4;
   const activeTapPointers = new Set();
   // «Сладкий тап» — зеркало src/clicker.ts::SWEET_TAP_* (менять синхронно)
@@ -367,13 +367,13 @@
   // localStorage; если storage сломан — держим показанные в памяти на сессию. Не
   // больше одного бабла разом; очередь не нужна — следующий покажется при своём триггере.
   const COACH = {
-    tap:    { icon: 'tap',     t: 'Тапай Василия — каждый тап приносит монеты. Быстрая серия — комбо ×2 и больше' },
+    tap:    { icon: 'tap',     t: 'Тапай Василия — каждый тап приносит монеты. Быстрая серия даёт комбо-бонус' },
     level:  { icon: 'star',    t: 'Копи монеты — на новом уровне Василий сменит образ, а сцена — интерьер' },
     up:     { icon: 'bolt',    t: 'Бусты усиливают тап, а бизнесы приносят монеты сами — даже когда игра закрыта' },
     dove:   { icon: 'dove',    t: 'Голуби-помощники открываются, когда заводишь бизнесы в Прокачке' },
     top:    { icon: 'trophy',  t: 'Рейтинг недели: очки копятся с понедельника. Зови друзей — вместе веселее' },
     energy: { icon: 'battery', t: 'Энергия кончилась? Она восстанавливается сама — возвращайся чуть позже' },
-    combo:    { icon: 'fire',   t: 'Это комбо: тапай без пауз — множитель растёт' },
+    combo:    { icon: 'fire',   t: 'Это комбо: тапай без пауз — каждые 10 тапов дают бонус' },
     bizFirst: { icon: 'shop',   t: 'Бизнес работает сам — монеты капают даже офлайн. Смотри строку +N/час' },
     boosts:   { icon: 'rocket', t: 'Турбо и Энергия — бесплатные бусты, обновляются каждый день' },
   };
@@ -565,7 +565,19 @@
       pop.querySelector('#ck-pop-ok').onclick = done;
     } catch (_) {}
   }
-  async function flush() { if (pending <= 0 || !authed()) return; const n = pending; pending = 0; tapsInflight += n; try { const d = await api('/api/clicker/tap', { method: 'POST', body: JSON.stringify({ taps: n }) }); st = d; } catch (_) { pending += n; } finally { tapsInflight -= n; } }
+  async function flush() {
+    if (pending <= 0 || !authed()) return;
+    const n = pending, comboBonus = pendingComboBonus;
+    pending = 0; pendingComboBonus = 0; tapsInflight += n;
+    try {
+      const d = await api('/api/clicker/tap', { method: 'POST', body: JSON.stringify({ taps: n, comboBonus }) });
+      st = d;
+    } catch (_) {
+      pending += n; pendingComboBonus += comboBonus;
+    } finally {
+      tapsInflight -= n;
+    }
+  }
 
   async function buy(type, id) {
     return withLock('buy', async () => {
@@ -1331,6 +1343,7 @@
     if (st.energy < 1) { energyEmpty(); return; }
     const mult = turboOn() ? TURBO_MULT : 1;
     const eMult = (st.event && st.event.active) ? st.event.mult : 1; // ивент ×N (зеркало сервера)
+    const bankMult = (st.bankMult && st.bankMult > 1) ? st.bankMult : 1;
     // «Сладкий тап»: номер ЭТОГО тапа в lifetime-счётчике (st.taps с последнего синка
     // + улетевшие inflight + несинканные pending + текущий). Кратен SWEET_TAP_EVERY →
     // крит ×SWEET_TAP_MULT — сервер начислит ровно столько же в батче (детерминизм).
@@ -1338,7 +1351,8 @@
     // локально прямо тут (pending у гостя не флашится и в счёт не входит)
     const lifetime = (authed() ? Number(st.taps || 0) + tapsInflight + pending : Number(st.taps || 0)) + 1;
     const sweet = lifetime % SWEET_TAP_EVERY === 0;
-    const gain = Math.floor(st.perTap * mult * (st.prestigeMult || 1) * eMult) * (sweet ? SWEET_TAP_MULT : 1);
+    const baseTapGain = Math.floor(st.perTap * mult * (st.prestigeMult || 1) * eMult * bankMult);
+    const gain = baseTapGain * (sweet ? SWEET_TAP_MULT : 1);
     st.energy -= 1; st.balance += gain; st.totalEarned += gain; pending++;
     if (!authed()) { const s = rawGet(); s.energy -= 1; s.balance += gain; s.totalEarned += gain; s.taps = (s.taps || 0) + 1; rawSave(s); st.taps = s.taps; }
     if (sweet) sweetTapFx(e.clientX, e.clientY, gain);
@@ -1348,6 +1362,12 @@
     const cat = ov.querySelector('#ck-cat'); cat.classList.remove('tap'); void cat.offsetWidth; cat.classList.add('tap'); setTimeout(() => cat.classList.remove('tap'), 80);
     sfxTap(combo); window.haptic && window.haptic('light');
     flyUp(e.clientX, e.clientY, '+' + gain, Math.min(40, 22 + combo));
+    const comboBonus = comboBonusFor(baseTapGain);
+    if (comboBonus > 0) {
+      st.balance += comboBonus; st.totalEarned += comboBonus; pendingComboBonus += comboBonus;
+      if (!authed()) { const s = rawGet(); s.balance += comboBonus; s.totalEarned += comboBonus; rawSave(s); }
+      flyUp(e.clientX, e.clientY - 22, `комбо +${fmt(comboBonus)}`, 34);
+    }
     ripple(e.clientX, e.clientY); flyCoin(e.clientX, e.clientY);
     if (combo >= 5) showCombo();
     if (combo >= 12 && combo % 3 === 0) coinShower();
@@ -1367,6 +1387,11 @@
     clearTimeout(comboHideT); comboHideT = setTimeout(() => el.classList.remove('show'), 950);
     coach('combo', COACH.combo.t, '#ck-combo', { icon: ICON[COACH.combo.icon](18) });
     if (combo >= 10 && combo % 10 === 0) comboMilestone(tier);
+  }
+  function comboBonusFor(baseTapGain) {
+    if (combo < 10 || combo % 10 !== 0) return 0;
+    const tier = Math.min(5, Math.floor(combo / 10));
+    return Math.max(1, Math.floor(baseTapGain * tier));
   }
   function comboMilestone(tier) {
     window.haptic && window.haptic('medium');

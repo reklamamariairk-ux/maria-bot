@@ -73,8 +73,9 @@ router.post("/api/clicker/onboarded", requireTgUser, rateLimit(30), async (req, 
 });
 
 router.post("/api/clicker/tap", requireTgUser, rateLimit(120), async (req, res) => {
-  const u = getTgUser(req)!; const taps = Number((req.body as { taps?: number }).taps) || 0;
-  try { res.json(await tapClicker(u.id, taps)); if (taps > 0) trackActivity(u.id, { taps }); } catch (e) { log.error({ err: e, chatId: u.id }, "[tap]"); res.status(500).json({ error: "internal" }); }
+  const u = getTgUser(req)!; const body = req.body as { taps?: number; comboBonus?: number };
+  const taps = Number(body.taps) || 0; const comboBonus = Number(body.comboBonus) || 0;
+  try { res.json(await tapClicker(u.id, taps, comboBonus)); if (taps > 0) trackActivity(u.id, { taps }); } catch (e) { log.error({ err: e, chatId: u.id }, "[tap]"); res.status(500).json({ error: "internal" }); }
 });
 
 router.post("/api/clicker/buy", requireTgUser, rateLimit(60), async (req, res) => {

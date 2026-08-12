@@ -33,6 +33,7 @@ export const SWEET_TAP_MULT = 8;
 export function sweetCritsIn(oldTaps: number, can: number): number {
   return Math.floor((oldTaps + can) / SWEET_TAP_EVERY) - Math.floor(oldTaps / SWEET_TAP_EVERY);
 }
+const MAX_COMBO_BONUS_SHARE = 0.6;
 const MAX_TAPS_PER_REQ = 600;
 const MAX_TAP_FINGERS = 4;
 const MAX_TAPS_PER_FINGER_PER_SEC = 10;
@@ -492,7 +493,7 @@ export async function getClicker(chatId: number): Promise<ClickerState> {
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
-export async function tapClicker(chatId: number, taps: number): Promise<ClickerState> {
+export async function tapClicker(chatId: number, taps: number, comboBonus = 0): Promise<ClickerState> {
   const want = Math.max(0, Math.min(MAX_TAPS_PER_REQ, Math.floor(taps)));
   const client = await pool.connect();
   try {
@@ -505,8 +506,12 @@ export async function tapClicker(chatId: number, taps: number): Promise<ClickerS
     const crits = sweetCritsIn(Number(r.taps || 0), can);
     // Копилка стаи: цель недели закрыта → ×SQUAD_BANK_MULT (bankMult посчитан в refresh)
     const bankMult = Number(r.__bankMult || 1);
-    const earned = Math.floor((can + crits * (SWEET_TAP_MULT - 1)) * perTapFor(r.multitap_level) * turbo * gainMult(r.prestige) * bankMult);
-    r.energy -= can * TAP_COST; r.balance = Number(r.balance) + earned; r.total_earned = Number(r.total_earned) + earned;
+    const baseTapGain = perTapFor(r.multitap_level) * turbo * gainMult(r.prestige) * bankMult;
+    const earned = Math.floor((can + crits * (SWEET_TAP_MULT - 1)) * baseTapGain);
+    const requestedComboBonus = Math.max(0, Math.floor(Number(comboBonus) || 0));
+    const comboCap = Math.floor(can * baseTapGain * MAX_COMBO_BONUS_SHARE);
+    const earnedCombo = Math.min(requestedComboBonus, comboCap);
+    r.energy -= can * TAP_COST; r.balance = Number(r.balance) + earned + earnedCombo; r.total_earned = Number(r.total_earned) + earned + earnedCombo;
     await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, taps=taps+$4, energy=$5, updated_at=NOW() WHERE chat_id=$1`,
       [chatId, r.balance, r.total_earned, can, r.energy]);
     await client.query("COMMIT");
