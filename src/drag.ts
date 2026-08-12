@@ -70,15 +70,16 @@ export function dragPower(rarity: Rarity, stars: number, speed: number, stamina:
 }
 
 // ── Механика v3 «Тап-заезд» (спека 2026-08-04-drag-tap-race-design) ──────────
-// Исход зависит от числа тапов ВО ВРЕМЯ заезда. Три характеристики разведены:
+// Исход зависит от числа тапов ПЕРЕД стартом. Три характеристики разведены:
 // скорость → крейсер (пол результата), выносливость → эффективность тапов (меньше
 // тапов до максимума), удача → сжатие случайного разброса. Тап-навык ∈ [0,1] встаёт
-// в тот же слот, что launch-skill v2 → анти-чит ставок переносится (Монте-Карло).
+// в тот же слот, что launch-skill v2, и дополнительно даёт стартовый буст к скорости.
 export const TAP_WINDOW_MS = 5000;      // окно тап-зоны (клиент по умолчанию)
 export const TAP_TARGET_BASE = 48;      // тапов до максимума при стамине 0
 export const TAP_TARGET_PER = 2;        // −2 тапа к цели за пункт стамины (48 → 28 при 10)
 export const TAP_RATE_CAP = 12;         // потолок тапов/с — анти-скрипт (выше человеческого)
 export const TAP_W = 0.7;               // доля тапов в tap-навыке (реакция = 1−TAP_W)
+export const TAP_SPEED_BOOST = 2;        // полный разгон перед стартом добавляет крейсер
 export const LUCK_TIGHTEN = 0.5;        // удача 10 → случайный разброс вдвое уже
 const DUR_MIN = 3000, DUR_MAX = 8000;   // клампы длительности тап-окна
 
@@ -118,12 +119,13 @@ export function luckSpread(luck: number): number {
   const l = Math.min(TUNE_MAX, Math.max(0, Number(luck) || 0));
   return LUCK_SPREAD_V2 * (1 - LUCK_TIGHTEN * (l / TUNE_MAX));
 }
-export function dragFinishTimeV3(cruise: number, skill: number, luck: number, r: number): number {
-  const speed = BASE_SPEED + cruise * SPEED_PER_POWER;
+export function dragFinishTimeV3(cruise: number, skill: number, luck: number, r: number, tapSpeedBoost = 0): number {
+  const effectiveCruise = cruise + clamp01(skill) * Math.max(0, Number(tapSpeedBoost) || 0);
+  const speed = BASE_SPEED + effectiveCruise * SPEED_PER_POWER;
   return TRACK_LEN / speed + (1 - clamp01(skill)) * SKILL_SPREAD + r * luckSpread(luck);
 }
-export function resolveRaceV3(racers: { cruise: number; skill: number; luck: number; r: number }[]): number[] {
-  const times = racers.map((x, i) => ({ i, t: dragFinishTimeV3(x.cruise, x.skill, x.luck, x.r) }));
+export function resolveRaceV3(racers: { cruise: number; skill: number; luck: number; r: number; tapSpeedBoost?: number }[]): number[] {
+  const times = racers.map((x, i) => ({ i, t: dragFinishTimeV3(x.cruise, x.skill, x.luck, x.r, x.tapSpeedBoost) }));
   times.sort((a, b) => a.t - b.t || a.i - b.i);
   const places = new Array(racers.length);
   times.forEach((x, rank) => { places[x.i] = rank + 1; });
@@ -392,15 +394,16 @@ export async function runRace(chatId: number, breed: string, mode: "training" | 
       const myCruise = cruisePower(b.rarity, inv.rows[0].stars, inv.rows[0].tune_speed);
       const myLuck = inv.rows[0].tune_luck ?? 0;
       const mySkill = tapSkill(tap, inv.rows[0].tune_stamina);
+      const tapSpeedBoost = mode === "training" ? TAP_SPEED_BOOST : 0;
       const field = [
-        { breed, cruise: myCruise, skill: mySkill, luck: myLuck, power: myPower, bot: false, me: true },
-        ...opps.map(o => ({ breed: o.breed, cruise: o.cruise, skill: o.skill, luck: o.luck, power: o.power, bot: o.bot, me: false })),
+        { breed, cruise: myCruise, skill: mySkill, luck: myLuck, power: myPower, bot: false, me: true, tapSpeedBoost },
+        ...opps.map(o => ({ breed: o.breed, cruise: o.cruise, skill: o.skill, luck: o.luck, power: o.power, bot: o.bot, me: false, tapSpeedBoost })),
       ];
       const rolls = field.map(() => Math.random());
-      places = resolveRaceV3(field.map((f, i) => ({ cruise: f.cruise, skill: f.skill, luck: f.luck, r: rolls[i] })));
+      places = resolveRaceV3(field.map((f, i) => ({ cruise: f.cruise, skill: f.skill, luck: f.luck, r: rolls[i], tapSpeedBoost: f.tapSpeedBoost })));
       racersUnsorted = field.map((f, i) => ({
         breed: f.breed, power: f.power,
-        finishT: dragFinishTimeV3(f.cruise, f.skill, f.luck, rolls[i]),
+        finishT: dragFinishTimeV3(f.cruise, f.skill, f.luck, rolls[i], f.tapSpeedBoost),
         place: places[i], me: f.me, bot: f.bot,
       }));
       const clampedTaps = clampTapCount(tap.count, tap.durationMs);

@@ -6,7 +6,7 @@ import {
   competitiveSkill, hardenBetFieldV2, REV_HALF, COMP_SKILL_LO, COMP_SKILL_HI,
   cruisePower, tapTarget, tapAccuracy, clampTapCount, tapSkill, luckSpread,
   dragFinishTimeV3, resolveRaceV3, hardenBetFieldV3, dragMatchPowerV3, makeBotForCruise,
-  TAP_TARGET_BASE, TAP_TARGET_PER, TAP_RATE_CAP, TAP_W, BET_POWER_GAP,
+  TAP_TARGET_BASE, TAP_TARGET_PER, TAP_RATE_CAP, TAP_W, TAP_SPEED_BOOST, BET_POWER_GAP,
   cacheOpponents, takeCachedOpponents,
 } from "../src/drag";
 
@@ -312,6 +312,12 @@ describe("v3 dragFinishTimeV3 — крейсер/тап-навык/удача", 
   });
   it("выше тап-навык → раньше финиш (при равном крейсере/люке)", () => {
     expect(dragFinishTimeV3(80, 1.0, 0, 0.5)).toBeLessThan(dragFinishTimeV3(80, 0.2, 0, 0.5));
+  });
+  it("тап-навык добавляет предстартовый буст к скорости", () => {
+    expect(TAP_SPEED_BOOST).toBeGreaterThan(0);
+    const noBoost = dragFinishTimeV3(80, 0, 0, 0, TAP_SPEED_BOOST);
+    const fullBoost = dragFinishTimeV3(80, 1, 0, 0, TAP_SPEED_BOOST);
+    expect(fullBoost).toBeLessThan(noBoost);
   });
   it("при худшем ролле (r=1) бо́льшая удача даёт меньшую потерю времени", () => {
     expect(dragFinishTimeV3(80, 0.5, 10, 1)).toBeLessThan(dragFinishTimeV3(80, 0.5, 0, 1));
