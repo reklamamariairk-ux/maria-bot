@@ -13,6 +13,7 @@ import {
   getPigeonsOverview, claimSet, getTradeBoard, createTrade, acceptTrade, cancelTrade,
   feedPigeon, setShowcase,
   enterRace, getRace, getTuning, upgradeTune, BREED_BY_ID,
+  getMailRecipients,
 } from "../pigeons";
 import type { PushService } from "../push";
 import { requireTgUser, getTgUser } from "../auth";
@@ -82,7 +83,9 @@ export function createPigeonsRouter(push: PushService): Router {
   });
 
   router.get("/api/pigeons/recipients", requireTgUser, rateLimit(60), async (req, res) => {
-    res.status(410).json({ error: "disabled", friends: [], squad: [], refs: [] });
+    const u = getTgUser(req)!;
+    try { res.json(await getMailRecipients(u.id)); }
+    catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/recipients]"); res.status(500).json({ error: "internal" }); }
   });
 
   router.post("/api/pigeons/feed", requireTgUser, rateLimit(20), async (req, res) => {

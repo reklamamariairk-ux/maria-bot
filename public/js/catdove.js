@@ -719,7 +719,9 @@
   async function loadRecipients() {
     if (recipients) return recipients;
     const d = await apiRef('/api/pigeons/recipients').catch(() => null);
-    recipients = (d && Array.isArray(d.squad) && Array.isArray(d.refs)) ? d : { squad: [], refs: [] };
+    recipients = (d && Array.isArray(d.squad) && Array.isArray(d.refs))
+      ? { friends: Array.isArray(d.friends) ? d.friends : [], squad: d.squad, refs: d.refs, friendLink: d.friendLink || '' }
+      : { friends: [], squad: [], refs: [], friendLink: '' };
     return recipients;
   }
 
