@@ -236,7 +236,7 @@
       .cd-navrow{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
       .cd-navbtn{position:relative;flex:1;display:flex;align-items:center;justify-content:center;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:10px 8px;font-weight:700;font-size:12.5px;color:var(--ink);cursor:pointer;min-height:40px}
       .cd-navbtn:active{transform:scale(.97)}
-      /* Питомник (покупка гонщиков): рамка карточки — цвет редкости, как в альбоме */
+      /* Покупка закрытой породы: рамка карточки — цвет редкости, как в альбоме */
       .cd-shopbal{font-size:12.5px;color:var(--muted);margin:2px 2px 9px;display:flex;align-items:center;gap:5px}
       .cd-shopbal b{color:var(--cream)}
       .cd-shoprow{display:flex;align-items:center;gap:11px;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:8px 10px;margin-bottom:7px}
@@ -360,11 +360,11 @@
     const mk = (text, ctaLabel, run) => { hintCta = run || null; return { text, ctaLabel: run ? ctaLabel : null }; };
     const ready = sets.find(s => num(s.owned) >= 4 && !s.claimed);
     if (ready) { const def = SETS.find(x => x.id === ready.id) || {}; return mk(`Сет «${def.name || ready.id}» собран — забери ${fmt(def.reward || 0)} монет!`, 'Забрать', () => claimSetAct(ready.id)); }
-    if (ownedCount === 0) return mk('Голубей пока нет. Они выпадают за комбо дня, сундук удачи и доступны в питомнике. Играй — и первый голубь прилетит!', 'Играть', () => { closeSheet(); if (window.ckSetTab) window.ckSetTab('cat'); });
+    if (ownedCount === 0) return mk('Голубей пока нет. Они выпадают за комбо дня и сундук удачи. Ещё можно тапнуть закрытую породу в альбоме и купить её за монеты.', 'Играть', () => { closeSheet(); if (window.ckSetTab) window.ckSetTab('cat'); });
     const feedable = Object.keys(data.invMap).some(id => { if (id === 'champion') return false; const inv = data.invMap[id]; const st = Math.max(1, Math.min(3, num(inv.stars))); const need = starTarget(st); return need != null && (num(inv.count) - 1) >= need; });
     if (feedable) return mk('У тебя есть запасные дубли — тапни породу и «скорми» их: голубь получит звезду и станет сильнее в заезде.', null, null);
     const near = sets.find(s => num(s.owned) === 3 && !s.claimed);
-    if (near) { const def = SETS.find(x => x.id === near.id) || {}; return mk(`До сета «${def.name || near.id}» не хватает одной породы (+${fmt(def.reward || 0)} монет). Лови её в игре!`, null, null); }
+    if (near) { const def = SETS.find(x => x.id === near.id) || {}; return mk(`До сета «${def.name || near.id}» не хватает одной породы (+${fmt(def.reward || 0)} монет). Тапни закрытую карточку: там характеристики и покупка.`, null, null); }
     if (ownedCount > 0 && (!race || !race.myBreed)) return mk(race && race.enabled
       ? 'Твой голубь — ещё и гонщик! Прокачай его (⚙ в карточке породы) и гоняй в Драг-заезде или заяви в Гонку стаи.'
       : 'Твой голубь — ещё и гонщик! Прокачай его (⚙ в карточке породы) и гоняй в Драг-заезде.',
@@ -456,7 +456,6 @@
       </div>
       <div class="cd-navrow">
         ${ownedCount > 0 ? `<button class="cd-navbtn" id="cd-nav-race">${FLAG_ICON(15)} Гонки</button>` : ''}
-        <button class="cd-navbtn" id="cd-nav-nursery">${NEST_ICON(15)} Питомник</button>
         <button class="cd-navbtn" id="cd-nav-trades">${SWAP_ICON(15)} Обмены${incomingTrades > 0 ? `<span class="cd-navbadge">${incomingTrades > 9 ? '9+' : incomingTrades}</span>` : ''}</button>
         <button class="cd-navbtn" id="cd-nav-friends">${USERS_ICON(15)} Друзья</button>
       </div>
@@ -505,7 +504,6 @@
     if (scrim) scrim.onclick = closeSheet;
     const hintBtn = container.querySelector('#cd-hint-cta'); if (hintBtn && hintCta) hintBtn.onclick = hintCta;
     const navR = container.querySelector('#cd-nav-race'); if (navR) navR.onclick = openRacePage;
-    const navN = container.querySelector('#cd-nav-nursery'); if (navN) navN.onclick = openNursery;
     const navT = container.querySelector('#cd-nav-trades'); if (navT) navT.onclick = openTradesPage;
     const navF = container.querySelector('#cd-nav-friends'); if (navF) navF.onclick = openFriendsPage;
   }
@@ -572,7 +570,7 @@
   // Базовая сила пород в заезде — зеркало src/drag.ts::RARITY_BASE (менять синхронно).
   const DRAG_RARITY_BASE = { common: 10, rare: 16, epic: 22, legendary: 28 };
   const DRAG_POWER_CAP = (r) => DRAG_RARITY_BASE[r] + 2 * 4 + 6 * 10 + 6 * 10; // ★3 + тюнинг 10/10
-  // Цена покупки гонщика в питомнике — зеркало src/pigeons.ts::PIGEON_PRICE (менять синхронно).
+  // Цена покупки закрытой породы — зеркало src/pigeons.ts::PIGEON_PRICE (менять синхронно).
   const PIGEON_PRICE = { common: 30000, rare: 120000, epic: 600000, legendary: 2500000 };
   function openLockedSheet(breedId) {
     const b = BY_ID.get(breedId);
@@ -582,9 +580,12 @@
     if (!sc || !sh) return;
     const setDef = SETS.find(s => s.id === b.set);
     const week = data && data.weekBreed === b.id;
+    const price = PIGEON_PRICE[b.rarity];
+    const bal = pigeonBuyBalance();
+    const afford = bal >= price;
     const drop = week
-      ? 'Порода недели — выпадает чаще! Комбо дня, сундук удачи, питомник.'
-      : 'Выпадает за комбо дня, сундук удачи и доступна в питомнике.';
+      ? 'Порода недели — выпадает чаще! Её можно выбить за комбо дня и сундук удачи или купить прямо здесь.'
+      : 'Можно выбить за комбо дня и сундук удачи или купить прямо здесь.';
     sh.innerHTML = `
       <div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Кто здесь живёт?</div></div>
       <div class="cd-lk-art"><img src="/img/pigeons/${b.id}.webp?v=2" alt="" onerror="this.style.display='none'"></div>
@@ -593,11 +594,15 @@
         <div class="cd-lk-row"><b>Сила в заезде</b><span>${DRAG_RARITY_BASE[b.rarity]} база · до ${DRAG_POWER_CAP(b.rarity)} с прокачкой</span></div>
         ${setDef ? `<div class="cd-lk-row"><b>Сет</b><span>«${setDef.name}» · приз ${fmt(setDef.reward)} монет</span></div>` : ''}
       </div>
+      <button class="cd-sheet__act" id="cd-buy-locked" ${afford ? '' : 'disabled'}>${COIN_ICON(13)} Купить за ${fmt(price)}</button>
+      <div class="cd-sheet__hint" style="margin:-6px 0 10px">Баланс: ${fmt(bal)} монет${afford ? '' : ` · не хватает ${fmt(price - bal)}`}</div>
       <div class="cd-sheet__hint" style="margin:0">${drop}</div>
     `;
     sc.classList.add('on');
     requestAnimationFrame(() => sh.classList.add('on'));
     sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+    const buyBtn = sh.querySelector('#cd-buy-locked');
+    if (buyBtn && !buyBtn.disabled) buyBtn.onclick = () => buyPigeonAct(breedId, closeSheet);
   }
 
   // ── Тюнинг гонщика: 3 характеристики за монеты, дивизион по сумме уровней ──
@@ -889,44 +894,9 @@
     } finally { busy = false; }
   }
 
-  // ── Питомник: покупка гонщика за монеты кликера (цены — зеркало PIGEON_PRICE) ──
+  // ── Покупка закрытой породы за монеты кликера (цены — зеркало PIGEON_PRICE) ──
   let buyBusy = false;
-  function nurseryBalance() { return typeof window.ckBalance === 'function' ? num(window.ckBalance()) : 0; }
-  function nurseryListHtml() {
-    const bal = nurseryBalance();
-    const order = ['common', 'rare', 'epic', 'legendary'];
-    const label = { common: 'Обычные', rare: 'Редкие', epic: 'Эпические', legendary: 'Легендарные' };
-    return order.map(rar => {
-      const breeds = BREEDS.filter(b => b.id !== 'champion' && b.rarity === rar);
-      if (!breeds.length) return '';
-      const rows = breeds.map(b => {
-        const inv = data.invMap[b.id]; const owned = !!inv && num(inv.count) > 0;
-        const price = PIGEON_PRICE[b.rarity]; const afford = bal >= price;
-        return `<div class="cd-shoprow" data-r="${b.rarity}">
-          <div class="cd-shoprow__art"><img src="/img/pigeons/${b.id}.webp?v=2" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;align-items:center;justify-content:center;width:100%;height:100%">${DOVE_ICON(20)}</span></div>
-          <div class="cd-shoprow__b"><b>${b.name}</b><i>сила в заезде ${DRAG_RARITY_BASE[b.rarity]}${owned ? ` · есть ×${num(inv.count)}` : ''}</i></div>
-          <button class="cd-shoprow__buy" data-buy="${b.id}"${afford ? '' : ' disabled'}>${COIN_ICON(13)} ${fmt(price)}</button>
-        </div>`;
-      }).join('');
-      return `<div class="cd-sect" style="margin:10px 4px 6px">${label[rar]}</div>${rows}`;
-    }).join('');
-  }
-  async function openNursery() {
-    haptic('light');
-    const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
-    if (!sc || !sh) return;
-    const draw = () => {
-      sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">${NEST_ICON(16)} Питомник</div></div>
-        <div class="cd-sheet__hint" style="margin-top:2px">Купи гонщика за монеты кликера. Чем реже порода — тем сильнее в заезде и дороже. Дубль имеющейся = запаска под скорм на звёзды.</div>
-        <div class="cd-shopbal">Баланс: ${COIN_ICON(14)} <b>${fmt(nurseryBalance())}</b></div>
-        <div id="cd-shop-list">${nurseryListHtml()}</div>`;
-      sh.querySelector('#cd-sheet-x').onclick = closeSheet;
-      sh.querySelectorAll('[data-buy]').forEach(btn => { btn.onclick = () => buyPigeonAct(btn.dataset.buy, draw); });
-    };
-    sc.classList.add('on');
-    requestAnimationFrame(() => sh.classList.add('on'));
-    draw();
-  }
+  function pigeonBuyBalance() { return typeof window.ckBalance === 'function' ? num(window.ckBalance()) : 0; }
   async function buyPigeonAct(breed, redraw) {
     if (buyBusy) return; buyBusy = true;
     const b = BY_ID.get(breed);
