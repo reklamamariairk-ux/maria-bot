@@ -1143,13 +1143,23 @@
     sh.querySelectorAll('.cd-pickcard').forEach(el => { el.onclick = () => openMailSendRecipient(el.dataset.breed); });
   }
   // Шаринг «кода дружбы»: получатель кликает ссылку — бот связывает вас взаимно.
+  function fallbackFriendLink() {
+    try {
+      const u = window.App && App.user && App.user();
+      const id = u && Number(u.id);
+      if (!Number.isFinite(id) || id <= 0) return '';
+      const internal = App.platform === 'vk' ? 2000000000000 + id : App.platform === 'max' ? 4000000000000 + id : id;
+      return `https://t.me/mariatortik_bot?start=ckfr_${Math.floor(internal)}`;
+    } catch (_) { return ''; }
+  }
   function shareFriendLink(rec) {
-    if (!rec || !rec.friendLink) { flash('Ссылка дружбы недоступна'); return; }
+    const link = (rec && rec.friendLink) || fallbackFriendLink();
+    if (!link) { flash('Ссылка дружбы недоступна'); return; }
     haptic('light');
     const text = '🕊️ Добавь меня в друзья в «Котик Комбат» — будем слать друг другу голубей и меняться породами!';
-    const full = `${text} ${rec.friendLink}`;
-    if (window.App && App.share) { App.share(rec.friendLink, text); return; }
-    if (navigator.share) { navigator.share({ url: rec.friendLink, text }).catch(() => copyFriendLink(full)); return; }
+    const full = `${text} ${link}`;
+    if (window.App && App.share) { App.share(link, text); return; }
+    if (navigator.share) { navigator.share({ url: link, text }).catch(() => copyFriendLink(full)); return; }
     copyFriendLink(full);
   }
   function copyFriendLink(text) {
