@@ -77,11 +77,11 @@ export function dragPower(rarity: Rarity, stars: number, speed: number, stamina:
 export const TAP_WINDOW_MS = 5000;      // окно тап-зоны (клиент по умолчанию)
 export const TAP_TARGET_BASE = 48;      // тапов до максимума при стамине 0
 export const TAP_TARGET_PER = 2;        // −2 тапа к цели за пункт стамины (48 → 28 при 10)
-export const TAP_RATE_CAP = 12;         // потолок тапов/с — анти-скрипт (выше человеческого)
+
 export const TAP_W = 0.7;               // доля тапов в tap-навыке (реакция = 1−TAP_W)
 export const TAP_SPEED_BOOST = 18;       // полный разгон перед стартом заметно добавляет крейсер
 export const LUCK_TIGHTEN = 0.5;        // удача 10 → случайный разброс вдвое уже
-const DUR_MIN = 3000, DUR_MAX = 8000;   // клампы длительности тап-окна
+
 
 // Крейсер: только скорость (в отличие от matchPower/dragPower, куда входит и стамина) —
 // так скорость и выносливость перестают быть взаимозаменяемыми.
@@ -101,12 +101,11 @@ export function tapAccuracy(count: number, stamina: number): number {
   if (target <= 0) return 1;
   return clamp01((Number(count) || 0) / target);
 }
-// Анти-скрипт: число тапов зажимается потолком скорости за длительность окна (окно тоже
-// клампится, чтобы нельзя было раздуть его ради тапов). Отрицательное/NaN → 0.
+// Клиент ограничивает разгон тремя одновременными пальцами; сервер здесь только
+// нормализует untrusted count. Отрицательное/NaN → 0.
 export function clampTapCount(count: number, durationMs: number): number {
-  const dur = Math.min(DUR_MAX, Math.max(DUR_MIN, Number(durationMs) || DUR_MIN));
-  const cap = Math.floor((TAP_RATE_CAP * dur) / 1000);
-  return Math.min(cap, Math.max(0, Math.floor(Number(count) || 0)));
+  void durationMs;
+  return Math.max(0, Math.floor(Number(count) || 0));
 }
 export type TapInput = { count: number; reactionMs: number; durationMs: number };
 // Тап-навык: 0.7 тапы + 0.3 реакция. Всё untrusted — клампы внутри.
@@ -145,11 +144,15 @@ export function hardenBetFieldV3(opps: (Racer & { cruise?: number; luck?: number
     };
   });
 }
-export function assignFieldSkillV3(opps: (Racer & { cruise?: number; luck?: number })[], mode: "training" | "bet", target: number): RacerV3[] {
-  if (mode === "bet") return hardenBetFieldV3(opps, target);
+export function trainingOpponentSkill(playerSkill: number, rng: () => number = Math.random): number {
+  const s = clamp01(playerSkill);
+  return clamp01(s * (0.78 + rng() * 0.22));
+}
+export function assignFieldSkillV3(opps: (Racer & { cruise?: number; luck?: number })[], mode: "training" | "bet", target: number, playerSkill = 0, rng: () => number = Math.random): RacerV3[] {
+  if (mode === "bet") return hardenBetFieldV3(opps, target, rng);
   return opps.map(o => ({
     ...o, cruise: o.cruise ?? o.power, luck: o.luck ?? 0,
-    skill: competitiveSkill(TRAIN_SKILL_LO, TRAIN_SKILL_HI),
+    skill: trainingOpponentSkill(playerSkill, rng),
   }));
 }
 
@@ -307,21 +310,21 @@ export async function pickOpponentsV3(chatId: number, targetCruise: number, n: n
 // ── Кэш соперников: превью (/drag/opponents) и сам заезд (runRace) раньше независимо
 // звали pickOpponents с ORDER BY random() → на старте показывались одни голуби, а гонялись
 // другие. Теперь превью кэширует свой набор, а заезд его забирает (one-shot, TTL), так что
-// «кого показали — с тем и гонишься». Ключ (chatId:breed) — смена породы обновляет набор.
+// «кого показали — с тем и гонишься». Ключ (chatId:breed:mode) — режимы не делят поле.
 // In-memory: сервис одно-процессный (docker), превью→заезд идут подряд секундами.
 const OPP_CACHE_TTL_MS = 5 * 60_000;
 const oppCache = new Map<string, { racers: Racer[]; ts: number }>();
-function oppKey(chatId: number, breed: string): string { return chatId + ":" + breed; }
-export function cacheOpponents(chatId: number, breed: string, racers: Racer[]): void {
-  oppCache.set(oppKey(chatId, breed), { racers, ts: Date.now() });
+function oppKey(chatId: number, breed: string, mode: "training" | "bet"): string { return chatId + ":" + breed + ":" + mode; }
+export function cacheOpponents(chatId: number, breed: string, mode: "training" | "bet", racers: Racer[]): void {
+  oppCache.set(oppKey(chatId, breed, mode), { racers, ts: Date.now() });
   if (oppCache.size > 5000) { // защита от разрастания: чистим протухшее при переполнении
     const now = Date.now();
     for (const [k, v] of oppCache) if (now - v.ts > OPP_CACHE_TTL_MS) oppCache.delete(k);
   }
 }
 // Забираем и удаляем (one-shot): повторный заезд без нового превью подберёт свежих.
-export function takeCachedOpponents(chatId: number, breed: string): Racer[] | null {
-  const k = oppKey(chatId, breed); const hit = oppCache.get(k);
+export function takeCachedOpponents(chatId: number, breed: string, mode: "training" | "bet"): Racer[] | null {
+  const k = oppKey(chatId, breed, mode); const hit = oppCache.get(k);
   if (!hit) return null;
   oppCache.delete(k);
   if (Date.now() - hit.ts > OPP_CACHE_TTL_MS) return null;
@@ -380,7 +383,7 @@ export async function runRace(chatId: number, breed: string, mode: "training" | 
     const myMatch = dragMatchPowerV3(b.rarity, inv.rows[0].stars, inv.rows[0].tune_speed);
     // «Кого показали в превью — с тем и гонимся»: берём закэшированный набор старта; если его
     // нет (заезд без превью / истёк TTL) — подбираем свежий как раньше.
-    const picked = takeCachedOpponents(chatId, breed) ?? await (tap ? pickOpponentsV3(chatId, myMatch, 3) : pickOpponents(chatId, myPower, 3));
+    const picked = takeCachedOpponents(chatId, breed, mode) ?? await (tap ? pickOpponentsV3(chatId, myMatch, 3) : pickOpponents(chatId, myPower, 3));
     const react = clampReact(Math.round(tap ? tap.reactionMs : launch ? launch.reactionMs : reactionMs));
     // Один рандомный «luck»-ролл на гонщика, зафиксированный ДО резолва — места и finishT
     // ниже должны использовать один и тот же r по индексу, иначе места и показанное
@@ -390,10 +393,10 @@ export async function runRace(chatId: number, breed: string, mode: "training" | 
       // v3 «Тап-заезд»: мой навык из числа тапов (стамина = эффективность), крейсер от
       // скорости, удача сжимает разброс; соперникам tap-навык раздаёт сервер (bet —
       // конкурентный диапазон + гард мощности, training — шире и добрее).
-      const opps = assignFieldSkillV3(picked, mode, myMatch);
       const myCruise = cruisePower(b.rarity, inv.rows[0].stars, inv.rows[0].tune_speed);
       const myLuck = inv.rows[0].tune_luck ?? 0;
       const mySkill = tapSkill(tap, inv.rows[0].tune_stamina);
+      const opps = assignFieldSkillV3(picked, mode, myMatch, mySkill);
       const tapSpeedBoost = TAP_SPEED_BOOST;
       const field = [
         { breed, cruise: myCruise, skill: mySkill, luck: myLuck, power: myPower, bot: false, me: true, tapSpeedBoost },

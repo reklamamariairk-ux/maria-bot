@@ -6,7 +6,8 @@ import {
   competitiveSkill, hardenBetFieldV2, REV_HALF, COMP_SKILL_LO, COMP_SKILL_HI,
   cruisePower, tapTarget, tapAccuracy, clampTapCount, tapSkill, luckSpread,
   dragFinishTimeV3, resolveRaceV3, hardenBetFieldV3, dragMatchPowerV3, makeBotForCruise,
-  TAP_TARGET_BASE, TAP_TARGET_PER, TAP_RATE_CAP, TAP_W, TAP_SPEED_BOOST, BET_POWER_GAP, TRAIN_SKILL_HI,
+  assignFieldSkillV3, trainingOpponentSkill,
+  TAP_TARGET_BASE, TAP_TARGET_PER, TAP_W, TAP_SPEED_BOOST, BET_POWER_GAP,
   cacheOpponents, takeCachedOpponents,
 } from "../src/drag";
 
@@ -16,18 +17,19 @@ describe("кэш соперников — превью и заезд гоняю�
     { breed: "sizar", power: 38, reactionMs: 320, bot: true },
   ];
   it("забирается ровно тот набор, что закэшировали (per chatId:breed)", () => {
-    cacheOpponents(101, "zolotoy", field);
-    expect(takeCachedOpponents(101, "zolotoy")).toEqual(field);
+    cacheOpponents(101, "zolotoy", "training", field);
+    expect(takeCachedOpponents(101, "zolotoy", "training")).toEqual(field);
   });
   it("one-shot: повторный заезд без нового превью не переиспользует старых", () => {
-    cacheOpponents(102, "shoko", field);
-    expect(takeCachedOpponents(102, "shoko")).toEqual(field);
-    expect(takeCachedOpponents(102, "shoko")).toBeNull();
+    cacheOpponents(102, "shoko", "training", field);
+    expect(takeCachedOpponents(102, "shoko", "training")).toEqual(field);
+    expect(takeCachedOpponents(102, "shoko", "training")).toBeNull();
   });
   it("ключ учитывает породу: смена породы не отдаёт чужой набор", () => {
-    cacheOpponents(103, "shoko", field);
-    expect(takeCachedOpponents(103, "sizar")).toBeNull();
-    expect(takeCachedOpponents(103, "shoko")).toEqual(field);
+    cacheOpponents(103, "shoko", "training", field);
+    expect(takeCachedOpponents(103, "sizar", "training")).toBeNull();
+    expect(takeCachedOpponents(103, "shoko", "bet")).toBeNull();
+    expect(takeCachedOpponents(103, "shoko", "training")).toEqual(field);
   });
 });
 
@@ -275,15 +277,16 @@ describe("v3 tapTarget / tapAccuracy — выносливость = эффект
   });
 });
 
-describe("v3 clampTapCount — анти-скрипт: потолок скорости тапа", () => {
-  it("режет по TAP_RATE_CAP·секунды окна", () => {
-    expect(clampTapCount(99999, 5000)).toBe(Math.floor(TAP_RATE_CAP * 5));
-    expect(clampTapCount(20, 5000)).toBe(20); // человеческое проходит
-    expect(clampTapCount(-5, 5000)).toBe(0);  // отрицательное → 0
+describe("v3 clampTapCount — сервер больше не режет тапов на 60", () => {
+  it("только нормализует count, верхний лимит задаёт клиентский ввод", () => {
+    expect(clampTapCount(99999, 5000)).toBe(99999);
+    expect(clampTapCount(20, 5000)).toBe(20);
+    expect(clampTapCount(12.9, 5000)).toBe(12);
+    expect(clampTapCount(-5, 5000)).toBe(0);
   });
-  it("длительность окна зажата в [3000,8000] (нельзя раздуть окно ради тапов)", () => {
-    expect(clampTapCount(99999, 999999)).toBe(Math.floor(TAP_RATE_CAP * 8));
-    expect(clampTapCount(99999, 10)).toBe(Math.floor(TAP_RATE_CAP * 3));
+  it("durationMs не раздувает и не урезает число тапов", () => {
+    expect(clampTapCount(99999, 999999)).toBe(99999);
+    expect(clampTapCount(99999, 10)).toBe(99999);
   });
 });
 
@@ -408,10 +411,20 @@ describe("v3 разведение статов — при равном matchPowe
     const slow = dragFinishTimeV3(cruisePower("common", 1, 0), 0, 0, 0.5);
     expect(fast).toBeLessThan(slow);
   });
-  it("тренировочные соперники не получают скрытый идеальный разгон", () => {
-    expect(TRAIN_SKILL_HI).toBeLessThanOrEqual(0.75);
+  it("тренировочные соперники масштабируются от моего tap-навыка", () => {
+    const low = trainingOpponentSkill(0.2, () => 0.5);
+    const high = trainingOpponentSkill(0.9, () => 0.5);
+    expect(high).toBeGreaterThan(low);
+    expect(low).toBeCloseTo(0.178, 5);
+    expect(high).toBeCloseTo(0.801, 5);
   });
-
+  it("assignFieldSkillV3 в тренировке использует мой skill, а ставка остаётся конкурентной", () => {
+    const opps = [{ breed: "sizar", power: 80, cruise: 80, luck: 0, reactionMs: 300, bot: false }];
+    const training = assignFieldSkillV3(opps, "training", 80, 0.5, () => 0.5)[0];
+    const bet = assignFieldSkillV3(opps, "bet", 80, 0.5, () => 0)[0];
+    expect(training.skill).toBeCloseTo(0.445, 5);
+    expect(bet.skill).toBe(COMP_SKILL_LO);
+  });
   it("матчинг v3 смотрит на гоночный темп, а не на стамину", () => {
     const staminaHeavyMatch = dragMatchPowerV3("common", 1, 0);
     expect(staminaHeavyMatch).toBe(cruisePower("common", 1, 0));

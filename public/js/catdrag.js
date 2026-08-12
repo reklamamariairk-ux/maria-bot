@@ -128,15 +128,29 @@
   function clearTimers() { countdownTimers.forEach((t) => clearTimeout(t)); countdownTimers = []; }
   function stopLoop() { if (raf) { cancelAnimationFrame(raf); raf = 0; } }
   // Тап-зона с переключаемым обработчиком: у v2-запуска их три (свипы/фальстарт/реакция).
-  let tapHandler = null;
+  let tapHandler = null, tapReleaseHandler = null;
   function addTapZone(handler) {
     removeTapZone();
     tapZoneEl = ov && ov.querySelector('#cd-drag-race');
     tapHandler = handler;
     if (tapZoneEl) tapZoneEl.addEventListener('pointerdown', handler, { passive: true });
   }
-  function removeTapZone() { if (tapZoneEl && tapHandler) tapZoneEl.removeEventListener('pointerdown', tapHandler); tapZoneEl = null; tapHandler = null; }
-
+  function addTapReleaseZone(handler) {
+    tapReleaseHandler = handler;
+    if (!tapZoneEl || !handler) return;
+    tapZoneEl.addEventListener('pointerup', handler, { passive: true });
+    tapZoneEl.addEventListener('pointercancel', handler, { passive: true });
+    tapZoneEl.addEventListener('pointerleave', handler, { passive: true });
+  }
+  function removeTapZone() {
+    if (tapZoneEl && tapHandler) tapZoneEl.removeEventListener('pointerdown', tapHandler);
+    if (tapZoneEl && tapReleaseHandler) {
+      tapZoneEl.removeEventListener('pointerup', tapReleaseHandler);
+      tapZoneEl.removeEventListener('pointercancel', tapReleaseHandler);
+      tapZoneEl.removeEventListener('pointerleave', tapReleaseHandler);
+    }
+    tapZoneEl = null; tapHandler = null; tapReleaseHandler = null;
+  }
   // ── стили (свой неймспейс, собственные CSS-переменные — оверлей висит в body,
   // не внутри .ck-ov, поэтому переменные бренда объявлены заново на своём корне) ──
   function styles() {
@@ -297,13 +311,13 @@
   }
   function wireSetup() {
     const x = ov.querySelector('#cd-drag-x'); if (x) x.onclick = close;
-    ov.querySelectorAll('[data-mode]').forEach((el) => { el.onclick = () => { mode = el.dataset.mode === 'bet' ? 'bet' : 'training'; renderSetup(); }; });
+    ov.querySelectorAll('[data-mode]').forEach((el) => { el.onclick = () => { const nextMode = el.dataset.mode === 'bet' ? 'bet' : 'training'; if (nextMode === mode) return; mode = nextMode; opponentsPreview = null; renderSetup(); loadOpponents(session); }; });
     ov.querySelectorAll('[data-stake]').forEach((el) => { el.onclick = () => { stake = num(el.dataset.stake); renderSetup(); }; });
     const startBtn = ov.querySelector('#cd-drag-start'); if (startBtn) startBtn.onclick = onStart;
   }
 
   async function loadOpponents(mySession) {
-    const d = await apiRef('/api/pigeons/drag/opponents', { method: 'POST', body: JSON.stringify({ breed: curBreed }) }).catch(() => null);
+    const d = await apiRef('/api/pigeons/drag/opponents', { method: 'POST', body: JSON.stringify({ breed: curBreed, mode }) }).catch(() => null);
     if (mySession !== session || !ov) return; // оверлей закрыт/переоткрыт — не трогаем DOM
     opponentsPreview = (d && Array.isArray(d.opponents)) ? d.opponents : [];
     myPower = (d && typeof d.myPower === 'number') ? d.myPower : myPower;
@@ -766,10 +780,14 @@
   // исход считает сервер (POST /race c body.tap). durationMs зеркалит TAP_WINDOW src/drag.ts.
   const TAP_WINDOW_MS_C = 5000;   // = src/drag.ts::TAP_WINDOW_MS
   const TAP_GAUGE_FULL = 40;      // тапов до полного гейджа (косметика; реальную цель со стаминой считает сервер)
+  const MAX_DRAG_TAP_POINTERS = 3;
+  const dragTapPointers = new Set();
   let tapCount = 0, tapFirstMs = -1, tapWinT0 = 0, tapRaf = 0;
 
   function stopRevLoop() { if (revRaf) { cancelAnimationFrame(revRaf); revRaf = 0; } }
   function stopTapLoop() { if (tapRaf) { cancelAnimationFrame(tapRaf); tapRaf = 0; } }
+  function clearDragTapPointers() { dragTapPointers.clear(); }
+  function releaseFlyTapPointer(e) { if (e && e.pointerId != null) dragTapPointers.delete(e.pointerId); }
   function setTapHtml(html) { const el = ov && ov.querySelector('#cd-drag-tap'); if (el) el.innerHTML = html; }
 
   function startLaunch() {
@@ -892,6 +910,7 @@
       <div class="cd-drag-tapring" id="cd-tapring"></div>
     </div>`);
     addTapZone(onFlyTap);
+    addTapReleaseZone(releaseFlyTapPointer);
     const loop = () => {
       if (!ov || (phase !== 'prestart' && phase !== 'go')) { tapRaf = 0; return; }
       const left = Math.max(0, TAP_WINDOW_MS_C - (performance.now() - tapWinT0));
@@ -902,8 +921,12 @@
     tapRaf = requestAnimationFrame(loop);
     countdownTimers.push(setTimeout(closeTapWindow, TAP_WINDOW_MS_C));
   }
-  function onFlyTap() {
+  function onFlyTap(e) {
     if (phase !== 'prestart' && phase !== 'go') return;
+    if (e && e.pointerId != null) {
+      if (!dragTapPointers.has(e.pointerId) && dragTapPointers.size >= MAX_DRAG_TAP_POINTERS) return;
+      dragTapPointers.add(e.pointerId);
+    }
     if (tapFirstMs < 0) tapFirstMs = Math.round(performance.now() - t0); // первый тап разгона
     tapCount++;
     haptic('light');
@@ -916,6 +939,7 @@
     if (phase !== 'prestart' && phase !== 'go') return; // guard: уже закрыто/оверлей сменился
     phase = 'submitting';
     stopTapLoop();
+    clearDragTapPointers();
     removeTapZone();
     setTapHtml('<div class="cd-drag-tapline">Финиш считает сервер…</div>');
     submitRace();
@@ -1119,7 +1143,7 @@
   }
 
   function close() {
-    clearTimers(); stopLoop(); stopRevLoop(); stopTapLoop(); removeTapZone();
+    clearTimers(); stopLoop(); stopRevLoop(); stopTapLoop(); clearDragTapPointers(); removeTapZone();
     if (resizeHandler) { window.removeEventListener('resize', resizeHandler); resizeHandler = null; }
     session++; // инвалидирует зависшие fetch/countdown-колбэки прежнего открытия
     const el = ov; ov = null; canvas = null; ctx = null;

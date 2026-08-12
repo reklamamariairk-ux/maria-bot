@@ -146,14 +146,15 @@ export function createPigeonsRouter(push: PushService): Router {
   });
 
   router.post("/api/pigeons/drag/opponents", requireTgUser, rateLimit(30), async (req, res) => {
-    const u = getTgUser(req)!; const breed = String((req.body as { breed?: string }).breed || "");
+    const u = getTgUser(req)!; const body = req.body as { breed?: string; mode?: string }; const breed = String(body.breed || "");
     try {
       if (!BREED_BY_ID.has(breed)) { res.status(400).json({ error: "not_owned" }); return; }
       const { dragTargetProfile, pickOpponentsV3, cacheOpponents } = await import("../drag");
       const profile = await dragTargetProfile(u.id, breed);
       if (profile === null) { res.status(400).json({ error: "not_owned" }); return; }
+      const mode = body.mode === "bet" ? "bet" : "training";
       const opponents = await pickOpponentsV3(u.id, profile.match, 3);
-      cacheOpponents(u.id, breed, opponents); // заезд переиспользует ровно этот набор (см. runRace)
+      cacheOpponents(u.id, breed, mode, opponents); // заезд переиспользует ровно этот набор режима (см. runRace)
       res.json({ myPower: profile.match, opponents });
     } catch (e) { log.error({ err: e, chatId: u.id }, "[drag/opponents]"); res.status(500).json({ error: "internal" }); }
   });
@@ -173,8 +174,8 @@ export function createPigeonsRouter(push: PushService): Router {
         rev2: Number.isFinite(Number(b.skill.rev2)) ? Number(b.skill.rev2) : 9999,
         reactionMs: Math.max(0, Number(b.skill.reactionMs)) || 3000,
       } : null;
-      // v3 «Тап-заезд»: tap-объект untrusted. count/durationMs зажимаются сервером
-      // (clampTapCount режет по TAP_RATE_CAP·окно) — здесь лишь приводим к числам;
+      // v3 «Тап-заезд»: tap-объект untrusted. count нормализуется сервером;
+      // клиент ограничивает ввод тремя одновременными пальцами — здесь лишь приводим к числам;
       // reactionMs как выше (−1/0/NaN → 3000 худшая).
       const tap = b.tap && typeof b.tap === "object" ? {
         count: Math.max(0, Math.floor(Number(b.tap.count)) || 0),
