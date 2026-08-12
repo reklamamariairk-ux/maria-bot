@@ -362,8 +362,13 @@
     if (feedable) return mk('У тебя есть запасные дубли — тапни породу и «скорми» их: голубь получит звезду и станет сильнее в заезде.', null, null);
     const near = sets.find(s => num(s.owned) === 3 && !s.claimed);
     if (near) { const def = SETS.find(x => x.id === near.id) || {}; return mk(`До сета «${def.name || near.id}» не хватает одной породы (+${fmt(def.reward || 0)} монет). Лови её в игре!`, null, null); }
-    if (race && race.enabled && !race.myBreed && ownedCount > 0) return mk('Твой голубь — ещё и гонщик! Прокачай его (⚙ в карточке породы) и гоняй в Драг-заезде или заяви в Гонку стаи.', 'Драг-заезд', () => openDragBreedPicker());
-    if (ownedCount >= 16) return mk('Альбом собран! Тюнингуй гонщиков (⚙ в карточке породы) и побеждай в заездах и Гонке стаи.', null, null);
+    if (ownedCount > 0 && (!race || !race.myBreed)) return mk(race && race.enabled
+      ? 'Твой голубь — ещё и гонщик! Прокачай его (⚙ в карточке породы) и гоняй в Драг-заезде или заяви в Гонку стаи.'
+      : 'Твой голубь — ещё и гонщик! Прокачай его (⚙ в карточке породы) и гоняй в Драг-заезде.',
+      'Драг-заезд', () => openDragBreedPicker());
+    if (ownedCount >= 16) return mk(race && race.enabled
+      ? 'Альбом собран! Тюнингуй гонщиков (⚙ в карточке породы) и побеждай в заездах и Гонке стаи.'
+      : 'Альбом собран! Тюнингуй гонщиков (⚙ в карточке породы) и побеждай в Драг-заезде.', null, null);
     return mk('Тапни любую свою породу: там докорм звёзд, витрина, тюнинг гонщика и обмен с другими игроками.', null, null);
   }
 
@@ -447,7 +452,7 @@
         ${hint.ctaLabel ? `<button class="cd-hint__cta" id="cd-hint-cta" type="button">${hint.ctaLabel}</button>` : ''}
       </div>
       <div class="cd-navrow">
-        ${race && race.enabled ? `<button class="cd-navbtn" id="cd-nav-race">${FLAG_ICON(15)} Гонки</button>` : ''}
+        ${ownedCount > 0 ? `<button class="cd-navbtn" id="cd-nav-race">${FLAG_ICON(15)} Гонки</button>` : ''}
         <button class="cd-navbtn" id="cd-nav-nursery">${NEST_ICON(15)} Питомник</button>
         <button class="cd-navbtn" id="cd-nav-trades">${SWAP_ICON(15)} Обмены${incomingTrades > 0 ? `<span class="cd-navbadge">${incomingTrades > 9 ? '9+' : incomingTrades}</span>` : ''}</button>
       </div>
@@ -537,6 +542,8 @@
       <div class="cd-sheet__hint" style="margin:-6px 0 10px">Витрина — каких трёх голубей показываешь в профиле</div>
       <button class="cd-sheet__act" id="cd-tune">${GEAR_ICON(15)} Тюнинг гонщика</button>
       <div class="cd-sheet__hint" style="margin:-6px 0 10px">Скорость · выносливость · удача — решают исход заезда</div>
+      <button class="cd-sheet__act" id="cd-drag-one">${FLAG_ICON(15)} Драг-заезд</button>
+      <div class="cd-sheet__hint" style="margin:-6px 0 10px">Быстрый заезд именно на этом голубе — тренировка или ставка</div>
       ${canTrade ? `<button class="cd-sheet__act" id="cd-trade-start">${SWAP_ICON(15)} Предложить обмен</button>` : ''}
     `;
     sc.classList.add('on');
@@ -548,6 +555,8 @@
     if (showBtn && !showBtn.disabled) showBtn.onclick = () => showcaseAct(breedId, isShown, showBtn);
     const tuneBtn = sh.querySelector('#cd-tune');
     if (tuneBtn) tuneBtn.onclick = () => openTune(breedId);
+    const dragBtn = sh.querySelector('#cd-drag-one');
+    if (dragBtn) dragBtn.onclick = () => { closeSheet(); if (window.CatDrag) window.CatDrag.open(apiRef, breedId); };
     const tradeBtn = sh.querySelector('#cd-trade-start');
     if (tradeBtn) tradeBtn.onclick = () => { tradeFromBoard = false; openTradeWant(breedId); };
   }
@@ -588,7 +597,7 @@
 
   // ── Тюнинг гонщика: 3 характеристики за монеты, дивизион по сумме уровней ──
   const STAT_LABEL = { speed: 'Скорость', stamina: 'Выносливость', luck: 'Удача' };
-  const STAT_HINT = { speed: 'плоская сила', stamina: 'плоская сила', luck: 'шире случайный рывок' };
+  const STAT_HINT = { speed: 'базовый темп', stamina: 'тапы сильнее', luck: 'меньше случайности' };
   const TUNE_MAX = 10;
   const TUNE_REASON = { not_owned: 'Птица не найдена', bad_stat: 'Неизвестная характеристика', max_level: 'Максимальный уровень', not_enough_coins: 'Не хватает монет' };
 
@@ -1239,7 +1248,7 @@
   // вынесен в шит по кнопке — чтобы не хоронить альбом вверху вкладки. Открывается из
   // навбара голубятни (#cd-nav-race). Кнопки заезда/драга/итогов вешаются здесь.
   function openRacePage() {
-    if (!race || !race.enabled) return;
+    if (!data) return;
     haptic('light');
     const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
     if (!sc || !sh) return;
@@ -1252,7 +1261,23 @@
     const resBtn = sh.querySelector('#cd-race-results'); if (resBtn) resBtn.onclick = openRaceResultsSheet;
   }
   function raceHtml() {
-    if (!race || !race.enabled) return '';
+    if (!race || !race.enabled) {
+      return `<div class="cd-sect-t">Драг-заезд</div>
+        <div class="cd-racehero">
+          <div class="cd-racehero__bg"></div>
+          <div class="cd-racehero__scrim"></div>
+          <div class="cd-racehero__in">
+            <div class="cd-racehero__b">
+              <div class="cd-racehero__t">Быстрый заезд</div>
+              <div class="cd-racehero__s">выбери голубя, тапай на старте и соревнуйся прямо сейчас</div>
+            </div>
+          </div>
+          <div class="cd-racehero__acts">
+            <button class="cd-ctabtn" id="cd-drag-enter">${FLAG_ICON(14)} Драг-заезд</button>
+          </div>
+        </div>
+        <div class="cd-racenote"><b>Драг-заезд</b> — быстрый режим: тренировка без ставок или ставка монетами. Недельная Гонка стаи сейчас недоступна.</div>`;
+    }
     const mine = race.myBreed ? BY_ID.get(race.myBreed) : null;
     const lr = raceResults();
     // Полные таблицы трёх дивизионов НЕ в ленте (стена из 9 строк хоронила альбом) —
