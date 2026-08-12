@@ -907,12 +907,14 @@
       return;
     }
     haptic('success');
-    // локально обновляем инвентарь + баланс кликера, помечаем альбом к ре-рендеру при закрытии
+    // Обновляем инвентарь с сервера: покупка может закрыть сет, а sets.owned/claimed живут в /api/pigeons.
     const inv = data.invMap[breed] || { count: 0, stars: 1, showcase: 0 };
     inv.count = num(inv.count) + 1; data.invMap[breed] = inv;
     if (typeof window.ckSyncState === 'function' && typeof d.newBalance === 'number') window.ckSyncState({ balance: d.newBalance });
+    await load();
     needsRerenderOnClose = true;
-    flash((b ? b.name : 'Голубь') + ' теперь твой! Гоняй в Драг-заезде');
+    const ready = (data.sets || []).find(s => num(s.owned) >= 4 && !s.claimed);
+    flash(ready ? 'Сет собран — забери награду!' : (b ? b.name : 'Голубь') + ' теперь твой! Гоняй в Драг-заезде');
     if (redraw) redraw();
   }
 
@@ -1453,6 +1455,7 @@
       const d = await apiRef('/api/pigeons/set-claim', { method: 'POST', body: JSON.stringify({ set: setId }) }).catch(() => null);
       if (d && d.ok) {
         const s = data.sets.find(x => x.id === setId); if (s) s.claimed = true;
+        if (typeof window.ckSyncState === 'function' && typeof d.newBalance === 'number') window.ckSyncState({ balance: d.newBalance });
         haptic('medium');
         render();
         rewardPopup(d.reward);

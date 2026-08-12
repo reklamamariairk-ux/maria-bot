@@ -307,7 +307,7 @@ export async function getPigeonsOverview(chatId: number) {
 
 // claimSet: строка-мьютекс + монеты в одной транзакции (паттерн clicker_gifts).
 export async function claimSet(chatId: number, setId: string):
-  Promise<{ ok: boolean; reward?: number; reason?: string }> {
+  Promise<{ ok: boolean; reward?: number; newBalance?: number; reason?: string }> {
   const set = PIGEON_SETS.find(s => s.id === setId);
   if (!set) return { ok: false, reason: "unknown_set" };
   const client = await pool.connect();
@@ -328,8 +328,9 @@ export async function claimSet(chatId: number, setId: string):
     // полностью инициализированы, цикла нет в принципе.
     const { addClickerBalance } = await import("./clicker");
     await addClickerBalance(chatId, set.reward, client);
+    const bal = await client.query(`SELECT balance FROM clicker_state WHERE chat_id=$1`, [chatId]);
     await client.query("COMMIT");
-    return { ok: true, reward: set.reward };
+    return { ok: true, reward: set.reward, newBalance: Number(bal.rows[0]?.balance ?? 0) };
   } catch (e) { await client.query("ROLLBACK"); throw e; }
   finally { client.release(); }
 }
