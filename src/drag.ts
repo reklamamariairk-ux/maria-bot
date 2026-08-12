@@ -176,7 +176,7 @@ export function resolveRace(racers: { power: number; reactionMs: number; r: numb
 
 // ── Подбор соперников ──────────────────────────────────────────────────────
 
-export type Racer = { breed: string; power: number; reactionMs: number; bot: boolean; name?: string; cruise?: number; luck?: number };
+export type Racer = { breed: string; power: number; reactionMs: number; bot: boolean; name?: string; friend?: boolean; cruise?: number; luck?: number };
 
 // Детерминированная «правдоподобная» реакция без Math.random — используется как фолбэк,
 // когда у игрока ещё нет своего race_reaction_ms (новичок) и для базовой реакции бота.
@@ -320,17 +320,21 @@ export async function pickFriendOpponents(chatId: number, friendChat: number, ta
   const rel = await pool.query(`SELECT 1 FROM pigeon_friends WHERE chat_a=$1 AND chat_b=$2 LIMIT 1`, [a, b]);
   if (!rel.rowCount) return null;
   const rows = (await pool.query(
-    `SELECT pi.breed, pi.stars, pi.tune_speed, pi.tune_stamina, pi.tune_luck, cs.race_reaction_ms
-       FROM pigeon_inventory pi JOIN clicker_state cs ON cs.chat_id = pi.chat_id
+    `SELECT pi.breed, pi.stars, pi.tune_speed, pi.tune_stamina, pi.tune_luck, cs.race_reaction_ms, s.first_name, s.username
+       FROM pigeon_inventory pi
+       JOIN clicker_state cs ON cs.chat_id = pi.chat_id
+       LEFT JOIN subscribers s ON s.chat_id = pi.chat_id
       WHERE pi.chat_id=$1 AND pi.count > 0 AND pi.breed <> 'champion'
       ORDER BY random() LIMIT 100`, [friendChat])).rows;
   const friendRacers: Racer[] = rows.filter((r: any) => BREED_BY_ID.has(r.breed)).map((r: any) => {
     const breed = BREED_BY_ID.get(r.breed)!;
     const power = dragPower(breed.rarity, r.stars, r.tune_speed, r.tune_stamina);
     const cruise = cruisePower(breed.rarity, r.stars, r.tune_speed);
-    return { breed: r.breed, power, reactionMs: r.race_reaction_ms ?? synthReaction(targetCruise), bot: false, cruise, luck: r.tune_luck ?? 0 };
+    const name = (r.first_name || r.username || "Друг").toString().slice(0, 24);
+    return { breed: r.breed, power, reactionMs: r.race_reaction_ms ?? synthReaction(targetCruise), bot: false, name, friend: true, cruise, luck: r.tune_luck ?? 0 };
   }).sort((x, y) => Math.abs((x.cruise ?? x.power) - targetCruise) - Math.abs((y.cruise ?? y.power) - targetCruise));
-  const field = friendRacers.length ? [friendRacers[0]] : [];
+  if (!friendRacers.length) return null;
+  const field = [friendRacers[0]];
   while (field.length < n) field.push(makeBotForCruise(targetCruise, field.length));
   return field.slice(0, n);
 }
@@ -426,15 +430,15 @@ export async function runRace(chatId: number, breed: string, mode: "training" | 
       const opps = assignFieldSkillV3(picked, mode, myMatch, mySkill);
       const tapSpeedBoost = TAP_SPEED_BOOST;
       const field = [
-        { breed, cruise: myCruise, skill: mySkill, luck: myLuck, power: myPower, bot: false, me: true, tapSpeedBoost },
-        ...opps.map(o => ({ breed: o.breed, cruise: o.cruise, skill: o.skill, luck: o.luck, power: o.power, bot: o.bot, me: false, tapSpeedBoost })),
+        { breed, cruise: myCruise, skill: mySkill, luck: myLuck, power: myPower, bot: false, name: undefined, friend: false, me: true, tapSpeedBoost },
+        ...opps.map(o => ({ breed: o.breed, cruise: o.cruise, skill: o.skill, luck: o.luck, power: o.power, bot: o.bot, name: o.name, friend: o.friend, me: false, tapSpeedBoost })),
       ];
       const rolls = field.map(() => Math.random());
       places = resolveRaceV3(field.map((f, i) => ({ cruise: f.cruise, skill: f.skill, luck: f.luck, r: rolls[i], tapSpeedBoost: f.tapSpeedBoost })));
       racersUnsorted = field.map((f, i) => ({
         breed: f.breed, power: f.power,
         finishT: dragFinishTimeV3(f.cruise, f.skill, f.luck, rolls[i], f.tapSpeedBoost),
-        place: places[i], me: f.me, bot: f.bot,
+        place: places[i], me: f.me, bot: f.bot, name: f.name, friend: f.friend,
       }));
       const clampedTaps = clampTapCount(tap.count, tap.durationMs);
       mySkillOut = {
@@ -447,15 +451,15 @@ export async function runRace(chatId: number, breed: string, mode: "training" | 
       const opps = assignFieldSkill(picked, mode, myPower);
       const mySkill = launchSkill(launch);
       const field = [
-        { breed, power: myPower, skill: mySkill, bot: false, me: true },
-        ...opps.map(o => ({ breed: o.breed, power: o.power, skill: o.skill, bot: o.bot, me: false })),
+        { breed, power: myPower, skill: mySkill, bot: false, name: undefined, friend: false, me: true },
+        ...opps.map(o => ({ breed: o.breed, power: o.power, skill: o.skill, bot: o.bot, name: o.name, friend: o.friend, me: false })),
       ];
       const rolls = field.map(() => Math.random());
       places = resolveRaceV2(field.map((f, i) => ({ power: f.power, skill: f.skill, r: rolls[i] })));
       racersUnsorted = field.map((f, i) => ({
         breed: f.breed, power: f.power,
         finishT: dragFinishTimeV2(f.power, f.skill, rolls[i]),
-        place: places[i], me: f.me, bot: f.bot,
+        place: places[i], me: f.me, bot: f.bot, name: f.name, friend: f.friend,
       }));
       mySkillOut = {
         rev1: revAccuracy(launch.rev1),
@@ -465,15 +469,15 @@ export async function runRace(chatId: number, breed: string, mode: "training" | 
       // Легаси-путь v1 (кэшированные клиенты catdrag ≤4 шлют только reactionMs).
       const opps = mode === "bet" ? hardenBetField(picked, myPower) : picked;
       const field = [
-        { breed, power: myPower, reactionMs: react, bot: false, me: true },
-        ...opps.map(o => ({ breed: o.breed, power: o.power, reactionMs: o.reactionMs, bot: o.bot, me: false })),
+        { breed, power: myPower, reactionMs: react, bot: false, name: undefined, friend: false, me: true },
+        ...opps.map(o => ({ breed: o.breed, power: o.power, reactionMs: o.reactionMs, bot: o.bot, name: o.name, friend: o.friend, me: false })),
       ];
       const rolls = field.map(() => Math.random());
       places = resolveRace(field.map((f, i) => ({ power: f.power, reactionMs: f.reactionMs, r: rolls[i] })));
       racersUnsorted = field.map((f, i) => ({
         breed: f.breed, power: f.power,
         finishT: dragFinishTime(f.power, f.reactionMs, rolls[i]),
-        place: places[i], me: f.me, bot: f.bot,
+        place: places[i], me: f.me, bot: f.bot, name: f.name, friend: f.friend,
       }));
     }
     // НЕ сортировать по месту: клиент рисует дорожку по индексу массива — сортировка

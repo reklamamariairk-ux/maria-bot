@@ -53,6 +53,7 @@
   const ERR_REASON = {
     no_energy: 'Не хватает энергии — подожди восстановления',
     not_enough_coins: 'Не хватает монет на ставку',
+    not_friend: 'Друг не найден — обнови список друзей',
     not_owned: 'Птица не найдена',
     bad_stake: 'Такая ставка не годится',
     bad_mode: 'Такой режим не годится',
@@ -259,12 +260,14 @@
   }
 
   // ── превью-карточка соперника/своей птицы (сет-грид на экране настройки) ────────
-  function cardHtml(breed, power, bot) {
+  function cardHtml(r) {
+    const breed = r && r.breed;
     const m = meta(breed);
-    return `<div class="cd-drag-card" data-r="${esc(m.rarity)}">
+    const label = r && r.friend ? `${esc(r.name || 'Друг')} · друг` : r && r.bot ? 'Соперник' : esc(m.name);
+    return `<div class="cd-drag-card${r && r.friend ? ' cd-drag-card--friend' : ''}" data-r="${esc(m.rarity)}">
       <div class="cd-drag-card__art">${artTag(breed)}</div>
-      <div class="cd-drag-card__n">${bot ? 'Соперник' : esc(m.name)}</div>
-      <div class="cd-drag-card__p">🏁 ${Math.round(num(power))}</div>
+      <div class="cd-drag-card__n">${label}</div>
+      <div class="cd-drag-card__p">🏁 ${Math.round(num(r && (r.cruise ?? r.power)))}</div>
     </div>`;
   }
 
@@ -277,7 +280,7 @@
     const oppHtml = opponentsPreview === null
       ? `<div class="cd-drag-oppgrid">${[0, 1, 2].map(() => `<div class="cd-drag-card"><div class="cd-drag-card__art"></div><div class="cd-drag-card__n">…</div></div>`).join('')}</div>`
       : (opponentsPreview.length
-        ? `<div class="cd-drag-oppgrid">${opponentsPreview.map((o) => cardHtml(o.breed, o.cruise ?? o.power, !!o.bot)).join('')}</div>`
+        ? `<div class="cd-drag-oppgrid">${opponentsPreview.map((o) => cardHtml(o)).join('')}</div>`
         : `<div class="cd-drag-hint">Соперников подберём прямо на старте.</div>`);
     const modeHtml = friendRace
       ? `<div class="cd-drag-hint">Гонка с другом: <b>${esc(friendRace.name || 'Друг')}</b> · без ставки</div>`
@@ -289,7 +292,8 @@
     const stakesHtml = !friendRace && mode === 'bet'
       ? `<div class="cd-drag-stakes">${STAKE_PRESETS.map((v) => `<button class="cd-drag-stake${v === stake ? ' on' : ''}" data-stake="${v}" ${balance !== null && v > balance ? 'disabled' : ''}>${fmt(v)}</button>`).join('')}</div>`
       : '';
-    const canStart = opponentsPreview !== null && !lowEnergy;
+    const friendReady = !friendRace || (Array.isArray(opponentsPreview) && opponentsPreview.some((o) => o && o.friend));
+    const canStart = opponentsPreview !== null && !lowEnergy && friendReady;
     return `<div class="cd-drag-hd"><div class="cd-drag-t">🏁 Драг-заезд</div><button class="cd-drag-x" id="cd-drag-x">×</button></div>
       <div class="cd-drag-body">
         <div class="cd-drag-my">
@@ -374,7 +378,7 @@
 
   function previewRacers() {
     const mine = { breed: curBreed, me: true };
-    const opps = (opponentsPreview || []).map((o) => ({ breed: o.breed, me: false }));
+    const opps = (opponentsPreview || []).map((o) => ({ breed: o.breed, me: false, friend: !!o.friend, name: o.name || '' }));
     return [mine, ...opps];
   }
 
@@ -523,6 +527,7 @@
     drawDust();
     pos.forEach((p) => {
       drawPigeon(p.r.breed, p.x, p.y, p.size, !!p.r.me, ts, p.running, p.sp, p.i);
+      if (p.r.friend) drawFriendBadge(p.x, p.y - p.size * 0.7, p.r.name || 'Друг');
       const place = raceData && raceData.racers && raceData.racers[p.i] ? num(raceData.racers[p.i].place) : 0;
       if (p.frac >= 1 && place) drawPlaceBadge(p.x, p.y - p.size * 0.78, place, !!p.r.me);
     });
@@ -611,6 +616,30 @@
       ctx.fillStyle = '#ffe39c'; ctx.font = '700 10px Nunito, sans-serif'; ctx.textAlign = 'center';
       ctx.fillText('ты', x, y + bob - size / 2 - 5);
     }
+  }
+  function drawFriendBadge(x, y, name) {
+    const text = String(name || 'Друг').slice(0, 14);
+    ctx.save();
+    ctx.font = '800 10px Nunito, sans-serif';
+    const w = Math.min(82, Math.max(40, ctx.measureText(text).width + 16));
+    ctx.fillStyle = 'rgba(80,42,58,.92)';
+    ctx.strokeStyle = 'rgba(255,233,179,.75)';
+    ctx.lineWidth = 1;
+    const h = 18, r = 7;
+    ctx.beginPath();
+    ctx.moveTo(x - w / 2 + r, y - h / 2);
+    ctx.lineTo(x + w / 2 - r, y - h / 2);
+    ctx.quadraticCurveTo(x + w / 2, y - h / 2, x + w / 2, y - h / 2 + r);
+    ctx.lineTo(x + w / 2, y + h / 2 - r);
+    ctx.quadraticCurveTo(x + w / 2, y + h / 2, x + w / 2 - r, y + h / 2);
+    ctx.lineTo(x - w / 2 + r, y + h / 2);
+    ctx.quadraticCurveTo(x - w / 2, y + h / 2, x - w / 2, y + h / 2 - r);
+    ctx.lineTo(x - w / 2, y - h / 2 + r);
+    ctx.quadraticCurveTo(x - w / 2, y - h / 2, x - w / 2 + r, y - h / 2);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#ffe9b3'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, x, y + 0.5);
+    ctx.restore();
   }
   function drawPlaceBadge(x, y, place, isMe) {
     ctx.save();
@@ -1074,7 +1103,7 @@
     const podHtml = podOrder.map((r) => `<div class="cd-drag-pod cd-drag-pod--${num(r.place)}${r.me ? ' me' : ''}">
         <img src="${artSrc(r.breed)}" alt="" onerror="this.style.display='none'">
         <div class="cd-drag-pod__base">${num(r.place)}</div>
-        <div class="cd-drag-pod__n">${r.me ? 'Ты' : esc(meta(r.breed).name)}</div>
+        <div class="cd-drag-pod__n">${r.me ? 'Ты' : r.friend ? esc(r.name || 'Друг') : esc(meta(r.breed).name)}</div>
       </div>`).join('');
     const isQ = mode === 'qualify' && qualifyData;
     const panel = document.createElement('div');
