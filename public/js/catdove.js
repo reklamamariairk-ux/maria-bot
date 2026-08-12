@@ -41,6 +41,7 @@
   // Звёзды: сколько дублей скормить до следующей. ★1→★2 = 3, ★2→★3 = 5, ★3 = кап. Зеркало src/pigeons.ts::starTarget
   const starTarget = (stars) => stars === 1 ? 3 : stars === 2 ? 5 : null;
   const MAX_SHOWCASE = 3;
+  const DUEL_STAKES = [0, 500, 2000, 10000];
   // Стикер-фразы Василия — зеркало src/pigeons.ts::STICKERS (id = индекс, менять синхронно).
   const STICKERS = [
     "Держи, пригодится!", "Сладкого дня!", "От Василия с любовью 🐾", "Такой красавец искал тебя!",
@@ -1400,23 +1401,45 @@
     haptic('light');
     const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
     if (!sc || !sh) return;
-    sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">С кем гоняться?</div></div><div id="cd-friend-race-list">${skeletonRows(2)}</div>`;
+    sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Дуэли с друзьями</div></div><div id="cd-friend-race-list">${skeletonRows(3)}</div>`;
     sc.classList.add('on'); requestAnimationFrame(() => sh.classList.add('on'));
     sh.querySelector('#cd-sheet-x').onclick = openRacePage;
     const rec = await loadRecipients();
+    const duels = await apiRef('/api/pigeons/drag/duels').catch(() => ({ incoming: [], outgoing: [], done: [] }));
     const friends = Array.isArray(rec.friends) ? rec.friends : [];
+    const incoming = Array.isArray(duels.incoming) ? duels.incoming : [];
+    const outgoing = Array.isArray(duels.outgoing) ? duels.outgoing : [];
     const box = sh.querySelector('#cd-friend-race-list'); if (!box) return;
-    if (!friends.length) {
-      box.innerHTML = `<div class="cd-sheet__hint">Сначала добавь друга по ссылке — после этого сможете гоняться друг с другом.</div>
+    const incomingHtml = incoming.length
+      ? `<div class="cd-sect-t">Тебя вызвали</div>${incoming.map(d => `<div class="cd-reciperow cd-duel-in" data-id="${num(d.id)}"><span>${esc(d.fromName || 'Друг')} · ${fmt(d.stake || 0)}</span><small>принять: выбери голубя и сделай разгон</small></div>`).join('')}`
+      : '';
+    const outgoingHtml = outgoing.length
+      ? `<div class="cd-sect-t">Ждут ответа</div>${outgoing.map(d => `<div class="cd-reciperow"><span>${esc(d.fromName || d.toName || 'Друг')} · ${fmt(d.stake || 0)}</span><small>друг ещё не выбрал голубя</small></div>`).join('')}`
+      : '';
+    const friendsHtml = friends.length
+      ? `<div class="cd-sect-t">Создать дуэль</div>${friends.map(r => `<div class="cd-reciperow cd-duel-new" data-chat="${num(r.chat)}" data-name="${esc(r.name)}"><span>${esc(r.name)}</span><small>только вы вдвоём · можно со ставкой</small></div>`).join('')}`
+      : `<div class="cd-sheet__hint">Сначала добавь друга по ссылке — после этого сможете вызывать друг друга на дуэль.</div>
         <button class="cd-sheet__act" id="cd-friend-race-link">${USERS_ICON(15)} Позвать друга</button>`;
-      const btn = box.querySelector('#cd-friend-race-link'); if (btn) btn.onclick = shareFriendLink;
-      return;
-    }
-    box.innerHTML = friends.map(r => `<div class="cd-reciperow" data-chat="${num(r.chat)}" data-name="${esc(r.name)}"><span>${esc(r.name)}</span><small>быстрый драг-заезд без ставки</small></div>`).join('');
-    box.querySelectorAll('.cd-reciperow').forEach(el => { el.onclick = () => openFriendRaceBreedPicker({ chat: num(el.dataset.chat), name: el.dataset.name || 'Друг' }); });
+    box.innerHTML = incomingHtml + outgoingHtml + friendsHtml;
+    const byId = new Map(incoming.map(d => [num(d.id), d]));
+    box.querySelectorAll('.cd-duel-in').forEach(el => { el.onclick = () => openFriendRaceAcceptBreedPicker(byId.get(num(el.dataset.id))); });
+    box.querySelectorAll('.cd-duel-new').forEach(el => { el.onclick = () => openFriendRaceStakePicker({ chat: num(el.dataset.chat), name: el.dataset.name || 'Друг' }); });
+    const btn = box.querySelector('#cd-friend-race-link'); if (btn) btn.onclick = shareFriendLink;
   }
 
-  function openFriendRaceBreedPicker(friend) {
+  function openFriendRaceStakePicker(friend) {
+    if (!data || !friend || !friend.chat) return;
+    const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
+    if (!sc || !sh) return;
+    sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Ставка с ${esc(friend.name)}</div></div>
+      <div class="cd-sheet__hint">Оба ставят одинаково. Победитель забирает банк.</div>
+      ${DUEL_STAKES.map(v => `<div class="cd-reciperow cd-duel-stake" data-stake="${v}"><span>${v ? `${fmt(v)} монет` : 'Без ставки'}</span><small>следующий шаг — выбрать голубя</small></div>`).join('')}`;
+    sc.classList.add('on'); requestAnimationFrame(() => sh.classList.add('on'));
+    sh.querySelector('#cd-sheet-x').onclick = openFriendRaceFriendPicker;
+    sh.querySelectorAll('.cd-duel-stake').forEach(el => { el.onclick = () => openFriendRaceBreedPicker(friend, num(el.dataset.stake)); });
+  }
+
+  function openFriendRaceBreedPicker(friend, stake) {
     if (!data || !friend || !friend.chat) return;
     const owned = Object.keys(data.invMap).filter(id => data.invMap[id].count > 0 && id !== 'champion');
     if (!owned.length) { flash('Нет птицы для заезда'); return; }
@@ -1424,12 +1447,30 @@
     if (!sc || !sh) return;
     sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Кто гонится с ${esc(friend.name)}?</div></div>${pickGridHtml(owned, null)}`;
     sc.classList.add('on'); requestAnimationFrame(() => sh.classList.add('on'));
+    sh.querySelector('#cd-sheet-x').onclick = () => openFriendRaceStakePicker(friend);
+    sh.querySelectorAll('.cd-pickcard').forEach(el => {
+      el.onclick = () => {
+        const breedId = el.dataset.breed;
+        closeSheet();
+        if (window.CatDrag && window.CatDrag.openDuelCreate) window.CatDrag.openDuelCreate(apiRef, breedId, friend.chat, friend.name, stake);
+      };
+    });
+  }
+
+  function openFriendRaceAcceptBreedPicker(duel) {
+    if (!data || !duel || !duel.id) return;
+    const owned = Object.keys(data.invMap).filter(id => data.invMap[id].count > 0 && id !== 'champion');
+    if (!owned.length) { flash('Нет птицы для заезда'); return; }
+    const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
+    if (!sc || !sh) return;
+    sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Ответить ${esc(duel.fromName || 'другу')}</div></div>${pickGridHtml(owned, null)}`;
+    sc.classList.add('on'); requestAnimationFrame(() => sh.classList.add('on'));
     sh.querySelector('#cd-sheet-x').onclick = openFriendRaceFriendPicker;
     sh.querySelectorAll('.cd-pickcard').forEach(el => {
       el.onclick = () => {
         const breedId = el.dataset.breed;
         closeSheet();
-        if (window.CatDrag && window.CatDrag.openFriend) window.CatDrag.openFriend(apiRef, breedId, friend.chat, friend.name);
+        if (window.CatDrag && window.CatDrag.openDuelAccept) window.CatDrag.openDuelAccept(apiRef, breedId, duel.id, duel.fromName || 'Друг', duel.stake || 0);
       };
     });
   }

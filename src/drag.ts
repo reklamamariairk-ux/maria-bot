@@ -338,6 +338,165 @@ export async function pickFriendOpponents(chatId: number, friendChat: number, ta
   while (field.length < n) field.push(makeBotForCruise(targetCruise, field.length));
   return field.slice(0, n);
 }
+
+type DuelTapInput = { count: number; reactionMs: number; durationMs: number };
+type DuelStats = { breed: string; rarity: Rarity; stars: number; speed: number; stamina: number; luck: number; power: number; cruise: number };
+const DUEL_OPEN_LIMIT = 10;
+
+function normalizeDuelStake(stake: number): number {
+  const n = Math.max(0, Math.floor(Number(stake) || 0));
+  return STAKE_PRESETS.includes(n) ? n : 0;
+}
+function normalizeDuelTap(tap: any): DuelTapInput {
+  return {
+    count: Math.max(0, Math.floor(Number(tap?.count)) || 0),
+    reactionMs: Math.max(0, Number(tap?.reactionMs)) || 3000,
+    durationMs: Number(tap?.durationMs) || TAP_WINDOW_MS,
+  };
+}
+async function assertDuelFriend(client: any, chatId: number, friendChat: number): Promise<boolean> {
+  if (!Number.isInteger(friendChat) || friendChat <= 0 || friendChat === chatId) return false;
+  const a = Math.min(chatId, friendChat), b = Math.max(chatId, friendChat);
+  const rel = await client.query(`SELECT 1 FROM pigeon_friends WHERE chat_a=$1 AND chat_b=$2 LIMIT 1`, [a, b]);
+  return !!rel.rowCount;
+}
+async function getDuelStats(client: any, chatId: number, breed: string): Promise<DuelStats | null> {
+  const r = await client.query(`SELECT stars, tune_speed, tune_stamina, tune_luck FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 AND count>0`, [chatId, breed]);
+  if (!r.rowCount) return null;
+  const b = BREED_BY_ID.get(breed);
+  if (!b) return null;
+  const stars = Number(r.rows[0].stars) || 1;
+  const speed = Number(r.rows[0].tune_speed) || 0;
+  const stamina = Number(r.rows[0].tune_stamina) || 0;
+  const luck = Number(r.rows[0].tune_luck) || 0;
+  return { breed, rarity: b.rarity, stars, speed, stamina, luck, power: dragPower(b.rarity, stars, speed, stamina), cruise: cruisePower(b.rarity, stars, speed) };
+}
+function duelName(row: any, fallback: string): string {
+  return (row?.first_name || row?.username || fallback).toString().slice(0, 24);
+}
+function resolveDuel(fromChat: number, toChat: number, fromName: string, toName: string, fromStats: DuelStats, toStats: DuelStats, fromTapRaw: any, toTapRaw: any) {
+  const fromTap = normalizeDuelTap(fromTapRaw);
+  const toTap = normalizeDuelTap(toTapRaw);
+  const fromSkill = tapSkill(fromTap, fromStats.stamina);
+  const toSkill = tapSkill(toTap, toStats.stamina);
+  const rolls = [Math.random(), Math.random()];
+  const racersBase = [
+    { chat: fromChat, breed: fromStats.breed, name: fromName, cruise: fromStats.cruise, power: fromStats.power, luck: fromStats.luck, skill: fromSkill, tap: fromTap, r: rolls[0] },
+    { chat: toChat, breed: toStats.breed, name: toName, cruise: toStats.cruise, power: toStats.power, luck: toStats.luck, skill: toSkill, tap: toTap, r: rolls[1] },
+  ];
+  const places = resolveRaceV3(racersBase.map(r => ({ cruise: r.cruise, skill: r.skill, luck: r.luck, r: r.r, tapSpeedBoost: TAP_SPEED_BOOST })));
+  const racers = racersBase.map((r, i) => ({
+    chat: r.chat, breed: r.breed, name: r.name, power: r.power,
+    finishT: dragFinishTimeV3(r.cruise, r.skill, r.luck, r.r, TAP_SPEED_BOOST),
+    place: places[i], bot: false, friend: true,
+    mySkill: {
+      taps: clampTapCount(r.tap.count, r.tap.durationMs),
+      tapAcc: tapAccuracy(clampTapCount(r.tap.count, r.tap.durationMs), i === 0 ? fromStats.stamina : toStats.stamina),
+      reactionMs: clampReact(r.tap.reactionMs), total: r.skill,
+    },
+  }));
+  return { racers, winnerChat: places[0] === 1 ? fromChat : toChat };
+}
+function duelResultFor(result: any, viewerChat: number, stake: number, winnerChat: number, balance?: number) {
+  const racers = (result?.racers || []).map((r: any) => ({ ...r, me: Number(r.chat) === viewerChat, friend: Number(r.chat) !== viewerChat }));
+  racers.sort((a: any, b: any) => (a.me === b.me ? 0 : a.me ? -1 : 1));
+  const mine = racers.find((r: any) => r.me);
+  return {
+    ok: true,
+    duel: true,
+    racers,
+    myPlace: mine ? Number(mine.place) : 0,
+    reward: winnerChat === viewerChat ? stake : -stake,
+    newBalance: balance,
+    mySkill: mine?.mySkill,
+  };
+}
+
+export async function listFriendDuels(chatId: number): Promise<{ incoming: any[]; outgoing: any[]; done: any[] }> {
+  const mapRows = (rows: any[]) => rows.map(r => ({
+    id: Number(r.id), fromChat: Number(r.from_chat), toChat: Number(r.to_chat), stake: Number(r.stake),
+    fromBreed: r.from_breed, toBreed: r.to_breed || null, status: r.status,
+    fromName: duelName(r, "Друг"), createdAt: r.created_at,
+    result: r.result || null, winnerChat: r.winner_chat ? Number(r.winner_chat) : null,
+  }));
+  const incoming = await pool.query(
+    `SELECT d.*, s.first_name, s.username FROM pigeon_duels d LEFT JOIN subscribers s ON s.chat_id=d.from_chat
+      WHERE d.to_chat=$1 AND d.status='open' ORDER BY d.created_at DESC LIMIT 20`, [chatId]);
+  const outgoing = await pool.query(
+    `SELECT d.*, s.first_name, s.username FROM pigeon_duels d LEFT JOIN subscribers s ON s.chat_id=d.to_chat
+      WHERE d.from_chat=$1 AND d.status='open' ORDER BY d.created_at DESC LIMIT 20`, [chatId]);
+  const done = await pool.query(
+    `SELECT d.*, s.first_name, s.username FROM pigeon_duels d LEFT JOIN subscribers s ON s.chat_id=CASE WHEN d.from_chat=$1 THEN d.to_chat ELSE d.from_chat END
+      WHERE (d.from_chat=$1 OR d.to_chat=$1) AND d.status='done' ORDER BY d.closed_at DESC LIMIT 10`, [chatId]);
+  return { incoming: mapRows(incoming.rows), outgoing: mapRows(outgoing.rows), done: mapRows(done.rows) };
+}
+
+export async function createFriendDuel(chatId: number, friendChat: number, breed: string, stakeRaw: number, tapRaw: any): Promise<{ ok: boolean; id?: number; newBalance?: number; newEnergy?: number; reason?: string }> {
+  const stake = normalizeDuelStake(stakeRaw);
+  if (!BREED_BY_ID.has(breed)) return { ok: false, reason: "not_owned" };
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    if (!(await assertDuelFriend(client, chatId, friendChat))) { await client.query("ROLLBACK"); return { ok: false, reason: "not_friend" }; }
+    const open = await client.query(`SELECT COUNT(*)::int AS n FROM pigeon_duels WHERE from_chat=$1 AND status='open'`, [chatId]);
+    if (Number(open.rows[0].n) >= DUEL_OPEN_LIMIT) { await client.query("ROLLBACK"); return { ok: false, reason: "limit" }; }
+    const stats = await getDuelStats(client, chatId, breed);
+    if (!stats) { await client.query("ROLLBACK"); return { ok: false, reason: "not_owned" }; }
+    const { refreshEnergyFor } = await import("./clicker");
+    const st = await refreshEnergyFor(client, chatId);
+    if (st.energy < DRAG_ENERGY_COST) { await client.query("ROLLBACK"); return { ok: false, reason: "no_energy" }; }
+    if (st.balance < stake) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
+    const energyLeft = st.energy - DRAG_ENERGY_COST;
+    const balance = st.balance - stake;
+    const tap = normalizeDuelTap(tapRaw);
+    await client.query(`UPDATE clicker_state SET energy=$2, balance=$3, race_reaction_ms=$4, updated_at=NOW() WHERE chat_id=$1`, [chatId, energyLeft, balance, clampReact(tap.reactionMs)]);
+    const ins = await client.query(
+      `INSERT INTO pigeon_duels (from_chat,to_chat,stake,from_breed,from_tap,from_stats) VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb) RETURNING id`,
+      [chatId, friendChat, stake, breed, JSON.stringify(tap), JSON.stringify(stats)]);
+    await client.query("COMMIT");
+    return { ok: true, id: Number(ins.rows[0].id), newBalance: balance, newEnergy: energyLeft };
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally { client.release(); }
+}
+
+export async function acceptFriendDuel(chatId: number, duelId: number, breed: string, tapRaw: any): Promise<any> {
+  if (!BREED_BY_ID.has(breed)) return { ok: false, reason: "not_owned" };
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const d = await client.query(`SELECT * FROM pigeon_duels WHERE id=$1 AND to_chat=$2 AND status='open' FOR UPDATE`, [duelId, chatId]);
+    if (!d.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "not_found" }; }
+    const duel = d.rows[0];
+    const stats = await getDuelStats(client, chatId, breed);
+    if (!stats) { await client.query("ROLLBACK"); return { ok: false, reason: "not_owned" }; }
+    const { refreshEnergyFor } = await import("./clicker");
+    const st = await refreshEnergyFor(client, chatId);
+    const stake = Number(duel.stake) || 0;
+    if (st.energy < DRAG_ENERGY_COST) { await client.query("ROLLBACK"); return { ok: false, reason: "no_energy" }; }
+    if (st.balance < stake) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
+    const names = await client.query(
+      `SELECT chat_id, first_name, username FROM subscribers WHERE chat_id IN ($1,$2)`, [Number(duel.from_chat), chatId]);
+    const nameFor = (id: number, fallback: string) => duelName(names.rows.find((r: any) => Number(r.chat_id) === id), fallback);
+    const tap = normalizeDuelTap(tapRaw);
+    const resolved = resolveDuel(Number(duel.from_chat), chatId, nameFor(Number(duel.from_chat), "Друг"), nameFor(chatId, "Друг"), duel.from_stats, stats, duel.from_tap, tap);
+    const energyLeft = st.energy - DRAG_ENERGY_COST;
+    let balance = st.balance - stake;
+    const bank = stake * 2;
+    if (resolved.winnerChat === chatId) balance += bank;
+    await client.query(`UPDATE clicker_state SET energy=$2, balance=$3, race_reaction_ms=$4, updated_at=NOW() WHERE chat_id=$1`, [chatId, energyLeft, balance, clampReact(tap.reactionMs)]);
+    if (resolved.winnerChat !== chatId && bank > 0) await client.query(`UPDATE clicker_state SET balance=balance+$2 WHERE chat_id=$1`, [Number(duel.from_chat), bank]);
+    await client.query(
+      `UPDATE pigeon_duels SET status='done', to_breed=$2, to_tap=$3::jsonb, to_stats=$4::jsonb, winner_chat=$5, result=$6::jsonb, closed_at=NOW() WHERE id=$1`,
+      [duelId, breed, JSON.stringify(tap), JSON.stringify(stats), resolved.winnerChat, JSON.stringify(resolved)]);
+    await client.query("COMMIT");
+    return { ...duelResultFor(resolved, chatId, stake, resolved.winnerChat, balance), newEnergy: energyLeft };
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally { client.release(); }
+}
 // ── Кэш соперников: превью (/drag/opponents) и сам заезд (runRace) раньше независимо
 // звали pickOpponents с ORDER BY random() → на старте показывались одни голуби, а гонялись
 // другие. Теперь превью кэширует свой набор, а заезд его забирает (one-shot, TTL), так что

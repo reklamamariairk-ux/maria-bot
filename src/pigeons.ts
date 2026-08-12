@@ -218,6 +218,17 @@ export async function initPigeonSchema(): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (chat_a, chat_b));
     CREATE INDEX IF NOT EXISTS pigeon_friends_b ON pigeon_friends (chat_b);
+    CREATE TABLE IF NOT EXISTS pigeon_duels (
+      id BIGSERIAL PRIMARY KEY,
+      from_chat BIGINT NOT NULL, to_chat BIGINT NOT NULL,
+      stake BIGINT NOT NULL DEFAULT 0,
+      from_breed TEXT NOT NULL, from_tap JSONB NOT NULL, from_stats JSONB NOT NULL,
+      to_breed TEXT, to_tap JSONB, to_stats JSONB,
+      status TEXT NOT NULL DEFAULT 'open',
+      winner_chat BIGINT, result JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), closed_at TIMESTAMPTZ);
+    CREATE INDEX IF NOT EXISTS pigeon_duels_to_open ON pigeon_duels (to_chat, status, created_at DESC);
+    CREATE INDEX IF NOT EXISTS pigeon_duels_from_open ON pigeon_duels (from_chat, status, created_at DESC);
     CREATE TABLE IF NOT EXISTS pigeon_race_entries (
       week TEXT NOT NULL, chat_id BIGINT NOT NULL, breed TEXT NOT NULL,
       score INT, entered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

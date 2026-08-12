@@ -145,6 +145,37 @@ export function createPigeonsRouter(push: PushService): Router {
     } catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/tune/post]"); res.status(500).json({ error: "internal" }); }
   });
 
+
+  router.get("/api/pigeons/drag/duels", requireTgUser, rateLimit(60), async (req, res) => {
+    const u = getTgUser(req)!;
+    try {
+      const { listFriendDuels } = await import("../drag");
+      res.json(await listFriendDuels(u.id));
+    } catch (e) { log.error({ err: e, chatId: u.id }, "[drag/duels]"); res.status(500).json({ error: "internal" }); }
+  });
+
+  router.post("/api/pigeons/drag/duel", requireTgUser, rateLimit(20), async (req, res) => {
+    const u = getTgUser(req)!;
+    const b = req.body as { friendChat?: number; breed?: string; stake?: number; tap?: { count?: number; reactionMs?: number; durationMs?: number } };
+    try {
+      const { createFriendDuel } = await import("../drag");
+      const r = await createFriendDuel(u.id, Math.floor(Number(b.friendChat) || 0), String(b.breed || ""), Number(b.stake) || 0, b.tap || null);
+      if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
+      res.json(r);
+    } catch (e) { log.error({ err: e, chatId: u.id }, "[drag/duel]"); res.status(500).json({ error: "internal" }); }
+  });
+
+  router.post("/api/pigeons/drag/duel/accept", requireTgUser, rateLimit(20), async (req, res) => {
+    const u = getTgUser(req)!;
+    const b = req.body as { id?: number; breed?: string; tap?: { count?: number; reactionMs?: number; durationMs?: number } };
+    try {
+      const { acceptFriendDuel } = await import("../drag");
+      const r = await acceptFriendDuel(u.id, Math.floor(Number(b.id) || 0), String(b.breed || ""), b.tap || null);
+      if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
+      res.json(r);
+    } catch (e) { log.error({ err: e, chatId: u.id }, "[drag/duel/accept]"); res.status(500).json({ error: "internal" }); }
+  });
+
   router.post("/api/pigeons/drag/opponents", requireTgUser, rateLimit(30), async (req, res) => {
     const u = getTgUser(req)!; const body = req.body as { breed?: string; mode?: string }; const breed = String(body.breed || "");
     try {
