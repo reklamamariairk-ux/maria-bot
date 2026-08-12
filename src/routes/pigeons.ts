@@ -183,7 +183,7 @@ export function createPigeonsRouter(push: PushService): Router {
       } : null;
       const legacyReact = tap ? tap.reactionMs : launch ? launch.reactionMs : reactionMs;
       const r = await runRace(u.id, String(b.breed || ""), b.mode === "bet" ? "bet" : "training", Number(b.stake) || 0, legacyReact, launch, tap);
-      if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
+      if (!r.ok) { log.warn({ chatId: u.id, reason: r.reason, breed: String(b.breed || ""), mode: b.mode, stake: b.stake }, "[drag/race rejected]"); res.status(400).json({ error: r.reason }); return; }
       res.json(r);
     } catch (e) { log.error({ err: e, chatId: u.id }, "[drag/race]"); res.status(500).json({ error: "internal" }); }
   });

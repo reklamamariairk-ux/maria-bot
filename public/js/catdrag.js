@@ -234,6 +234,7 @@
       .cd-drag-reward{font-size:16px;font-weight:800;margin-top:6px;color:var(--muted)}
       .cd-drag-reward.pos{color:#9be7a8}
       .cd-drag-reward.neg{color:#e5847d}
+      .cd-drag-error{font-size:14px;font-weight:800;color:#e5847d;line-height:1.35;margin:6px 0 2px}
       .cd-drag-resrow{display:flex;gap:8px;margin-top:14px}
       .cd-drag-resbtn{flex:1;border:1px solid #ffe9b3;border-radius:12px;padding:11px;font-weight:800;font-size:13px;background:linear-gradient(180deg,#ffe7a6,#eebf52 56%,#cf9a36);color:#5a2028;cursor:pointer}
       .cd-drag-resbtn--ghost{background:rgba(255,255,255,.07);color:var(--ink);border-color:var(--line)}
@@ -985,9 +986,7 @@
     // списаны на сервере; актуальность проверена выше (это ответ текущего открытия).
     if (ok && typeof window.ckSyncState === 'function') window.ckSyncState({ balance: d.newBalance, energy: d.newEnergy });
     if (!ok) {
-      flash(ERR_REASON[d && d.error] || 'Не получилось запустить заезд');
-      if (d && d.error === 'not_owned') { close(); return; }
-      renderSetup();
+      renderRaceError(d && d.error);
       return;
     }
     haptic('medium');
@@ -1003,6 +1002,32 @@
     const el = ov.querySelector('#cd-drag-tap'); if (el) el.innerHTML = '';
   }
 
+  // ── ошибка старта без резкого возврата в настройки ──────────────────────────────
+  function renderRaceError(reason) {
+    phase = 'error';
+    stopLoop(); stopTapLoop(); removeTapZone(); clearTimers();
+    const race = ov && ov.querySelector('#cd-drag-race');
+    const msg = ERR_REASON[reason] || 'Не получилось запустить заезд';
+    flash(msg);
+    if (!race) { renderSetup(); return; }
+    const tap = ov.querySelector('#cd-drag-tap'); if (tap) tap.innerHTML = '';
+    race.querySelectorAll('.cd-drag-result').forEach((el) => el.remove());
+    const panel = document.createElement('div');
+    panel.className = 'cd-drag-result';
+    panel.innerHTML = `
+      <div class="cd-drag-place">Заезд не стартовал</div>
+      <div class="cd-drag-error">${esc(msg)}</div>
+      <div class="cd-drag-launch">Проверь энергию и попробуй снова.</div>
+      <div class="cd-drag-resrow">
+        <button class="cd-drag-resbtn" id="cd-drag-back">К настройкам</button>
+        <button class="cd-drag-resbtn cd-drag-resbtn--ghost" id="cd-drag-done">Закрыть</button>
+      </div>`;
+    race.appendChild(panel);
+    const back = panel.querySelector('#cd-drag-back');
+    if (back) back.onclick = () => { opponentsPreview = null; renderSetup(); loadOpponents(session); };
+    const done = panel.querySelector('#cd-drag-done');
+    if (done) done.onclick = close;
+  }
   // ── итоговая плашка (место + выигрыш/потеря для ставки) ─────────────────────────
   function renderResult() {
     step = 'result';
