@@ -394,7 +394,7 @@ export async function runRace(chatId: number, breed: string, mode: "training" | 
       const myCruise = cruisePower(b.rarity, inv.rows[0].stars, inv.rows[0].tune_speed);
       const myLuck = inv.rows[0].tune_luck ?? 0;
       const mySkill = tapSkill(tap, inv.rows[0].tune_stamina);
-      const tapSpeedBoost = mode === "training" ? TAP_SPEED_BOOST : 0;
+      const tapSpeedBoost = TAP_SPEED_BOOST;
       const field = [
         { breed, cruise: myCruise, skill: mySkill, luck: myLuck, power: myPower, bot: false, me: true, tapSpeedBoost },
         ...opps.map(o => ({ breed: o.breed, cruise: o.cruise, skill: o.skill, luck: o.luck, power: o.power, bot: o.bot, me: false, tapSpeedBoost })),

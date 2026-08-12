@@ -609,7 +609,7 @@
   const STAT_LABEL = { speed: 'Скорость', stamina: 'Выносливость', luck: 'Удача' };
   const STAT_HINT = { speed: 'базовый темп', stamina: 'тапы сильнее', luck: 'меньше случайности' };
   const TUNE_MAX = 10;
-  const TUNE_REASON = { not_owned: 'Птица не найдена', bad_stat: 'Неизвестная характеристика', max_level: 'Максимальный уровень', not_enough_coins: 'Не хватает монет' };
+  const TUNE_REASON = { not_owned: 'Птица не найдена', bad_stat: 'Неизвестная характеристика', max_level: 'Максимальный уровень', not_enough_coins: 'Не хватает монет', rate_limited: 'Слишком быстро — подожди пару секунд' };
 
   async function openTune(breedId) {
     const b = BY_ID.get(breedId); if (!b) return;

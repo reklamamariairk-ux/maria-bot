@@ -136,7 +136,7 @@ export function createPigeonsRouter(push: PushService): Router {
     catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/tune]"); res.status(500).json({ error: "internal" }); }
   });
 
-  router.post("/api/pigeons/tune", requireTgUser, rateLimit(20), async (req, res) => {
+  router.post("/api/pigeons/tune", requireTgUser, rateLimit(120), async (req, res) => {
     const u = getTgUser(req)!; const b = req.body as { breed?: string; stat?: string };
     try {
       const r = await upgradeTune(u.id, String(b.breed || ""), String(b.stat || ""));
