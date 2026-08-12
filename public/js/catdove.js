@@ -74,10 +74,10 @@
   function haptic(k) { window.haptic && window.haptic(k); }
 
   let container = null, apiRef = null, data = null, busy = false;
-  // ── доп. состояние: гонка (грузится вместе с альбомом), обмены/почта/рецепиенты
+  // ── доп. состояние: гонка (грузится вместе с альбомом), обмены/рецепиенты
   // (лениво, при первом открытии соответствующей страницы), мастера создания
   // предложения/письма (шаг за шагом переиспользуют #cd-sheet). needsRerenderOnClose —
-  // отложенный полный render() после закрытия шита: страницы «Обмены»/«Почта» позволяют
+  // отложенный полный render() после закрытия шита: страница «Обмены» позволяет
   // сделать несколько действий подряд, не закрываясь на каждой — render() пересобирает
   // #cd-scrim/#cd-sheet и убил бы открытый шит, поэтому откладываем его до closeSheet().
   let race = null, recipients = null, tradesCache = null, tradesTab = 'toMe', mailCache = null;
@@ -351,7 +351,7 @@
 
   // ── «Что дальше»: одна контекстная подсказка сверху вкладки — убирает ступор
   // «что тут делать». Возвращает {text, ctaLabel}; действие кнопки кладётся в hintCta,
-  // вешается в wire(). Приоритет: деньги на столе → новичок → прокачка → сеты → почта → гонка.
+  // вешается в wire(). Приоритет: деньги на столе → новичок → прокачка → сеты → гонка.
   let hintCta = null;
   function nextStepHint() {
     hintCta = null;
@@ -458,7 +458,6 @@
         ${ownedCount > 0 ? `<button class="cd-navbtn" id="cd-nav-race">${FLAG_ICON(15)} Гонки</button>` : ''}
         <button class="cd-navbtn" id="cd-nav-nursery">${NEST_ICON(15)} Питомник</button>
         <button class="cd-navbtn" id="cd-nav-trades">${SWAP_ICON(15)} Обмены${incomingTrades > 0 ? `<span class="cd-navbadge">${incomingTrades > 9 ? '9+' : incomingTrades}</span>` : ''}</button>
-        <button class="cd-navbtn" id="cd-nav-mail">${MAILBOX_ICON(15)} Почта</button>
         <button class="cd-navbtn" id="cd-nav-friends">${USERS_ICON(15)} Друзья</button>
       </div>
       <div class="cd-sect-t">Альбом · собери сет — забери приз</div>
@@ -508,12 +507,11 @@
     const navR = container.querySelector('#cd-nav-race'); if (navR) navR.onclick = openRacePage;
     const navN = container.querySelector('#cd-nav-nursery'); if (navN) navN.onclick = openNursery;
     const navT = container.querySelector('#cd-nav-trades'); if (navT) navT.onclick = openTradesPage;
-    const navM = container.querySelector('#cd-nav-mail'); if (navM) navM.onclick = openMailPage;
     const navF = container.querySelector('#cd-nav-friends'); if (navF) navF.onclick = openFriendsPage;
   }
 
-  // ── шит действий (звёзды/витрина/обмены/почта/гонка) — общий #cd-scrim/#cd-sheet,
-  // переиспользуется всеми под-экранами (см. openTradesPage/openMailPage/openSheet).
+  // ── шит действий (звёзды/витрина/обмены/гонка) — общий #cd-scrim/#cd-sheet,
+  // переиспользуется всеми под-экранами (см. openTradesPage/openFriendsPage/openSheet).
   function closeSheet() {
     const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
     if (sc) sc.classList.remove('on');
@@ -536,7 +534,7 @@
     const curShowcase = showcaseOrder();
     const showcaseFull = curShowcase.length >= MAX_SHOWCASE && !isShown;
     const showLabel = isShown ? 'Убрать с витрины' : (showcaseFull ? `На витрине уже ${MAX_SHOWCASE}/${MAX_SHOWCASE}` : 'На витрину');
-    const canTrade = inv.count > 1; // обмен/почта отдают только дубликат — как feed
+    const canTrade = inv.count > 1; // обмен отдаёт только дубликат — как feed
     const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
     if (!sc || !sh) return;
     sh.innerHTML = `
@@ -701,7 +699,7 @@
     } finally { busy = false; }
   }
 
-  // ── общие хелперы для под-экранов (обмены/почта/гонка) ─────────────────────
+  // ── общие хелперы для под-экранов (обмены/друзья/гонка) ────────────────────
   function skeletonRows(n) {
     let rows = '';
     for (let i = 0; i < n; i++) rows += `<div class="cd-skrow"><span class="cd-sk" style="width:24px;height:24px;border-radius:50%;flex:none"></span><span class="cd-sk" style="height:12px;flex:1"></span></div>`;

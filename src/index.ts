@@ -599,7 +599,7 @@ bot.command("start", async (ctx) => {
     }
     // «Код дружбы» голубятни: /start ckfr_<internalId владельца ссылки>. Клик =
     // взаимное согласие — связываем пару в pigeon_friends, оба видят друг друга
-    // в адресатах голубиной почты.
+    // в адресатах голубиных обменов.
     if (payload && payload.startsWith("ckfr_")) {
       const ownerId = Number(payload.slice(5));
       if (Number.isFinite(ownerId) && ownerId !== ctx.from.id) {
@@ -607,8 +607,8 @@ bot.command("start", async (ctx) => {
         const r = await addFriend(ctx.from.id, ownerId).catch(() => null);
         if (r?.ok && !r.already) {
           const userName = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" ") || "Новый друг";
-          await sendRaw(ownerId, `🕊️ *${userName}* принял твой код дружбы! Теперь вы можете слать друг другу голубей — загляни в Голубятню → Обмены/Почта.`, { parse_mode: "Markdown" }).catch(() => {});
-          await ctx.reply(`🕊️ Вы теперь друзья! Отправляй голубей из Голубятни — вкладка «Голуби» → «Почта».`, { reply_markup: gameButton() }).catch(() => {});
+          await sendRaw(ownerId, `🕊️ *${userName}* принял твой код дружбы! Теперь он появится в Голубятне → Друзья, и ему можно предлагать обмены.`, { parse_mode: "Markdown" }).catch(() => {});
+          await ctx.reply(`🕊️ Вы теперь друзья! Открывай Голубятню → Друзья или предлагай обмен во вкладке «Голуби» → «Обмены».`, { reply_markup: gameButton() }).catch(() => {});
         } else {
           await ctx.reply(r?.already ? `🕊️ Вы уже друзья! Открывай голубятню и шли голубей.` : `Не получилось добавить в друзья — попробуй позже.`, { reply_markup: gameButton() }).catch(() => {});
         }
@@ -1674,7 +1674,7 @@ app.use(notifyPrefsRouter);
 app.use(createReferralRouter(_pushService, _dbPoolForRouters));
 // Wheel + streak → src/routes/wheel-streak.ts
 app.use(createWheelStreakRouter(_pushService));
-// Голубятня (коллекция/обмены/почта) → src/routes/pigeons.ts
+// Голубятня (коллекция/обмены/друзья) → src/routes/pigeons.ts
 app.use(createPigeonsRouter(_pushService));
 // VK Callback API (входящие события сообщества) → src/vk/callback.ts
 // Без VK_CALLBACK_SECRET/VK_CONFIRMATION_CODE отвечает 404 (TG-only режим)
