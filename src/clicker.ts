@@ -34,6 +34,26 @@ export function sweetCritsIn(oldTaps: number, can: number): number {
   return Math.floor((oldTaps + can) / SWEET_TAP_EVERY) - Math.floor(oldTaps / SWEET_TAP_EVERY);
 }
 const MAX_TAPS_PER_REQ = 600;
+const MAX_TAP_FINGERS = 4;
+const MAX_TAPS_PER_FINGER_PER_SEC = 10;
+const MAX_TAPS_PER_SEC = MAX_TAP_FINGERS * MAX_TAPS_PER_FINGER_PER_SEC;
+const TAP_BUCKET_BURST_SEC = 2;
+const tapBuckets = new Map<number, { tokens: number; ts: number }>();
+function takeTapAllowance(chatId: number, requested: number): number {
+  const want = Math.max(0, Math.min(MAX_TAPS_PER_REQ, Math.floor(requested)));
+  if (want <= 0) return 0;
+  const now = Date.now();
+  const cap = MAX_TAPS_PER_SEC * TAP_BUCKET_BURST_SEC;
+  const prev = tapBuckets.get(chatId) || { tokens: cap, ts: now };
+  const elapsed = Math.max(0, (now - prev.ts) / 1000);
+  const tokens = Math.min(cap, prev.tokens + elapsed * MAX_TAPS_PER_SEC);
+  const take = Math.min(want, Math.floor(tokens));
+  tapBuckets.set(chatId, { tokens: tokens - take, ts: now });
+  if (tapBuckets.size > 10000) {
+    for (const [id, b] of tapBuckets) if (now - b.ts > 10 * 60_000) tapBuckets.delete(id);
+  }
+  return take;
+}
 const PASSIVE_CAP_HOURS = 3;
 const TURBO_MULT = 5;
 const TURBO_SEC = 20;
@@ -478,7 +498,8 @@ export async function tapClicker(chatId: number, taps: number): Promise<ClickerS
   try {
     await client.query("BEGIN");
     const { r, cl } = await refresh(client, chatId);
-    const can = Math.min(want, Math.floor(r.energy / TAP_COST));
+    const energyCan = Math.floor(r.energy / TAP_COST);
+    const can = takeTapAllowance(chatId, Math.min(want, energyCan));
     const turbo = r.turbo_until && new Date(r.turbo_until).getTime() > Date.now() ? TURBO_MULT : 1;
     // «Сладкие тапы» в батче: сколько кратных SWEET_TAP_EVERY попало в (oldTaps, oldTaps+can]
     const crits = sweetCritsIn(Number(r.taps || 0), can);

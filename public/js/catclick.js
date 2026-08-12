@@ -350,6 +350,8 @@
   // при включении Машей вернуть витрину из git-истории (catclick v122).
 
   let ov, audio, raf, lastTs = 0, pending = 0, tapsInflight = 0, syncT = 0, curLevel = 1, tab = 'cat';
+  const MAX_TAP_POINTERS = 4;
+  const activeTapPointers = new Set();
   // «Сладкий тап» — зеркало src/clicker.ts::SWEET_TAP_* (менять синхронно)
   const SWEET_TAP_EVERY = 40, SWEET_TAP_MULT = 8;
   let renderAcc = 0; // копилка dt для 30fps-капа главного цикла (тап-обработка вне цикла — не влияет)
@@ -1108,7 +1110,11 @@
       if (window.App && App.platform !== 'guest') xBtn.onclick = () => { try { App.close(); } catch (_) {} };
       else xBtn.style.display = 'none';
     } else xBtn.onclick = close;
-    ov.querySelector('#ck-catwrap').addEventListener('pointerdown', onTap); // тап-зона = вся арена с глоу, не только спрайт кота
+    const catWrap = ov.querySelector('#ck-catwrap');
+    catWrap.addEventListener('pointerdown', onTap); // тап-зона = вся арена с глоу, не только спрайт кота
+    catWrap.addEventListener('pointerup', releaseTapPointer);
+    catWrap.addEventListener('pointercancel', releaseTapPointer);
+    catWrap.addEventListener('pointerleave', releaseTapPointer);
     attachCatRetry(ov.querySelector('#ck-cat'));
     ov.querySelector('#ck-daily').onclick = dailyBtn;
     ov.querySelector('#ck-bt-turbo').onclick = () => boost('turbo');
@@ -1311,8 +1317,16 @@
   }
 
   const turboOn = () => Date.now() < turboUntil;
+  function releaseTapPointer(e) {
+    if (!e || e.pointerId == null) return;
+    activeTapPointers.delete(e.pointerId);
+  }
   function onTap(e) {
     e.preventDefault(); ac();
+    if (e.pointerId != null) {
+      if (!activeTapPointers.has(e.pointerId) && activeTapPointers.size >= MAX_TAP_POINTERS) return;
+      activeTapPointers.add(e.pointerId);
+    }
     if (!st) return; // тап до завершения load() на медленной сети — не ронять TypeError'ом
     if (st.energy < 1) { energyEmpty(); return; }
     const mult = turboOn() ? TURBO_MULT : 1;
@@ -2644,6 +2658,7 @@
   }
   async function open() {
     if (!ov) build();
+    activeTapPointers.clear();
     ov.classList.add('on'); document.documentElement.classList.remove('ck-gamefirst'); window.scrollLock && window.scrollLock(); ac();
     await load(); await maybeMigrateGuest(); await ensureRefRegistered(); await maybePurchaseBonus(); curLevel = leagueFor(st.totalEarned).level;
     loadFtue(); // не await — чип «Первый день» догрузится сам, старт не тормозим
@@ -2978,7 +2993,7 @@
   }
   function closeGems() { if (gemsState) clearTimeout(gemsState.raf); const el = ov.querySelector('#ck-gems'); if (el) el.classList.remove('on'); gemsState = null; }
 
-  function close() { cancelAnimationFrame(raf); clearTimeout(bonusTimer); closeActiveCoach(); if (rainState) endRain(true); if (quizState) closeQuiz(); if (memState) closeMemory(); if (towerState) closeTower(); if (gemsState) closeGems(); const gh = ov && ov.querySelector('#ck-games'); if (gh) gh.classList.remove('on'); flush(); if (ov) ov.classList.remove('on'); window.scrollUnlock && window.scrollUnlock(); }
+  function close() { activeTapPointers.clear(); cancelAnimationFrame(raf); clearTimeout(bonusTimer); closeActiveCoach(); if (rainState) endRain(true); if (quizState) closeQuiz(); if (memState) closeMemory(); if (towerState) closeTower(); if (gemsState) closeGems(); const gh = ov && ov.querySelector('#ck-games'); if (gh) gh.classList.remove('on'); flush(); if (ov) ov.classList.remove('on'); window.scrollUnlock && window.scrollUnlock(); }
   window.catClickOpen = open; window.catClickClose = close; window.catClickBonusNow = () => { if (ov && ov.classList.contains('on')) showFlyingBonus(); }; // превью/тест золотого бонуса
   // Вкладка ушла в фон — останавливаем главный rAF-цикл (жалоба «тормозит», лишние тики впустую);
   // вернулись — перезапускаем, только если игра всё ещё открыта.
