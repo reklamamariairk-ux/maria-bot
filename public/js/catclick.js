@@ -7,7 +7,7 @@
   // Диагностика (startapp=debug / 7 тапов по бейджу уровня) — копим последние ошибки страницы.
   const ckDiagErrors = [];
   window.addEventListener('error', (e) => { if (ckDiagErrors.length < 5) ckDiagErrors.push(String((e && e.message) || e)); });
-  const A = (s) => `/assets/images/cat/${s}?v=26`;  // v26: заменён «Мастер круассанов» — аккуратный силуэт, нормальная мимика
+  const A = (s) => `/assets/images/cat/${s}?v=25`;  // v25: анатомия — 4 лапы у всех (реген 2/6/8/10/14/15/17/18), кулон вместо «М»-медальона
   const LS = 'maria_click_v2';
   const REGEN = 1.5, PASSIVE_CAP_H = 3, TURBO_MULT = 5, TURBO_SEC = 20, DAILY_BOOSTS = 6;
   // ⚠️ Зеркало CARDS/CARD_CATS из src/clicker.ts — менять синхронно (+ cardIcon по id).
@@ -81,9 +81,9 @@
   // слишком резко). Кот всегда крупный, эволюция — обликом (19 образов) и фоном
   // (тиры). Жёсткая высота вместо contain-бокса: широкие кадры (шар/дон) не проседают.
   function applyCatSize(catEl) {
-    catEl.style.height = '94%';
+    catEl.style.height = '102%';
     catEl.style.width = 'auto';
-    catEl.style.maxWidth = '96%';  // страховка для очень широких кадров на узких экранах
+    catEl.style.maxWidth = '100%';  // страховка для очень широких кадров на узких экранах
     catEl.style.maxHeight = 'none';
   }
   // ── Ретрай при сетевом сбое («кот не прогружается») — до 2 повторов с бэкофом 1с/3с ──
