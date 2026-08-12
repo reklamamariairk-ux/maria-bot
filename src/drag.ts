@@ -29,7 +29,7 @@ export const REACT_SPAN = 600;          // реакция 200мс → 1.0, ≥80
 export const SKILL_SPREAD = 0.14;       // сек штрафа между запуском 1.0 и 0.0
 export const LUCK_SPREAD_V2 = 0.15;     // сек случайного разброса (правит близкие дуэли)
 export const COMP_SKILL_LO = 0.75, COMP_SKILL_HI = 1.0;   // поле «Ставки»
-export const TRAIN_SKILL_LO = 0.45, TRAIN_SKILL_HI = 0.95; // поле «Тренировки»
+export const TRAIN_SKILL_LO = 0.25, TRAIN_SKILL_HI = 0.70; // поле «Тренировки»: соперники не получают скрытый идеальный разгон
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 
@@ -79,7 +79,7 @@ export const TAP_TARGET_BASE = 48;      // тапов до максимума п
 export const TAP_TARGET_PER = 2;        // −2 тапа к цели за пункт стамины (48 → 28 при 10)
 export const TAP_RATE_CAP = 12;         // потолок тапов/с — анти-скрипт (выше человеческого)
 export const TAP_W = 0.7;               // доля тапов в tap-навыке (реакция = 1−TAP_W)
-export const TAP_SPEED_BOOST = 2;        // полный разгон перед стартом добавляет крейсер
+export const TAP_SPEED_BOOST = 18;       // полный разгон перед стартом заметно добавляет крейсер
 export const LUCK_TIGHTEN = 0.5;        // удача 10 → случайный разброс вдвое уже
 const DUR_MIN = 3000, DUR_MAX = 8000;   // клампы длительности тап-окна
 

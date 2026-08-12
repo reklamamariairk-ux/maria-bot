@@ -6,7 +6,7 @@ import {
   competitiveSkill, hardenBetFieldV2, REV_HALF, COMP_SKILL_LO, COMP_SKILL_HI,
   cruisePower, tapTarget, tapAccuracy, clampTapCount, tapSkill, luckSpread,
   dragFinishTimeV3, resolveRaceV3, hardenBetFieldV3, dragMatchPowerV3, makeBotForCruise,
-  TAP_TARGET_BASE, TAP_TARGET_PER, TAP_RATE_CAP, TAP_W, TAP_SPEED_BOOST, BET_POWER_GAP,
+  TAP_TARGET_BASE, TAP_TARGET_PER, TAP_RATE_CAP, TAP_W, TAP_SPEED_BOOST, BET_POWER_GAP, TRAIN_SKILL_HI,
   cacheOpponents, takeCachedOpponents,
 } from "../src/drag";
 
@@ -408,6 +408,10 @@ describe("v3 разведение статов — при равном matchPowe
     const slow = dragFinishTimeV3(cruisePower("common", 1, 0), 0, 0, 0.5);
     expect(fast).toBeLessThan(slow);
   });
+  it("тренировочные соперники не получают скрытый идеальный разгон", () => {
+    expect(TRAIN_SKILL_HI).toBeLessThanOrEqual(0.75);
+  });
+
   it("матчинг v3 смотрит на гоночный темп, а не на стамину", () => {
     const staminaHeavyMatch = dragMatchPowerV3("common", 1, 0);
     expect(staminaHeavyMatch).toBe(cruisePower("common", 1, 0));
