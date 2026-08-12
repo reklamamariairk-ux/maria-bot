@@ -63,6 +63,7 @@
   const COIN_ICON = (s) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24"><use href="#ckSymCoin"/></svg>`;
   const SWAP_ICON = (s) => svg('<path d="M4 7h13m0 0-3.5-3.5M17 7l-3.5 3.5M20 17H7m0 0 3.5-3.5M7 17l3.5 3.5"/>', s || 16);
   const MAILBOX_ICON = (s) => svg('<path d="M4 6.5 12 12l8-5.5"/><rect x="4" y="6.5" width="16" height="11" rx="2"/>', s || 16);
+  const USERS_ICON = (s) => svg('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>', s || 16);
   const GEAR_ICON = (s) => svg('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>', s || 16);
   const FLAG_ICON = (s) => svg('<path d="M5 21V4m0 1h12l-2.5 3.5L17 12H5"/>', s || 14);
   const NEST_ICON = (s) => svg('<path d="M4 11 12 5l8 6"/><path d="M6 10v9h12v-9"/><circle cx="12" cy="14.2" r="2.2"/>', s || 15);
@@ -291,6 +292,8 @@
       .cd-mailcard__from{font-size:10.5px;color:var(--muted);margin-top:3px;overflow-wrap:break-word}
       .cd-mailcard__thanks{margin-top:9px;width:100%;box-sizing:border-box;text-align:center}
       .cd-reciperow{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:7px;cursor:pointer;overflow-wrap:break-word}
+      .cd-reciperow span{min-width:0}
+      .cd-reciperow small{display:block;color:var(--muted);font-size:10.5px;line-height:1.25;text-align:right}
       .cd-reciperow:active{transform:scale(.98)}
       .cd-pickgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:10px}
       .cd-pickcard{background:var(--panel);border:2px solid var(--line);border-radius:13px;padding:6px 4px 8px;text-align:center;cursor:pointer;box-sizing:border-box}
@@ -455,6 +458,8 @@
         ${ownedCount > 0 ? `<button class="cd-navbtn" id="cd-nav-race">${FLAG_ICON(15)} Гонки</button>` : ''}
         <button class="cd-navbtn" id="cd-nav-nursery">${NEST_ICON(15)} Питомник</button>
         <button class="cd-navbtn" id="cd-nav-trades">${SWAP_ICON(15)} Обмены${incomingTrades > 0 ? `<span class="cd-navbadge">${incomingTrades > 9 ? '9+' : incomingTrades}</span>` : ''}</button>
+        <button class="cd-navbtn" id="cd-nav-mail">${MAILBOX_ICON(15)} Почта</button>
+        <button class="cd-navbtn" id="cd-nav-friends">${USERS_ICON(15)} Друзья</button>
       </div>
       <div class="cd-sect-t">Альбом · собери сет — забери приз</div>
       ${setBlocks}
@@ -503,6 +508,8 @@
     const navR = container.querySelector('#cd-nav-race'); if (navR) navR.onclick = openRacePage;
     const navN = container.querySelector('#cd-nav-nursery'); if (navN) navN.onclick = openNursery;
     const navT = container.querySelector('#cd-nav-trades'); if (navT) navT.onclick = openTradesPage;
+    const navM = container.querySelector('#cd-nav-mail'); if (navM) navM.onclick = openMailPage;
+    const navF = container.querySelector('#cd-nav-friends'); if (navF) navF.onclick = openFriendsPage;
   }
 
   // ── шит действий (звёзды/витрина/обмены/почта/гонка) — общий #cd-scrim/#cd-sheet,
@@ -723,6 +730,33 @@
       ? { friends: Array.isArray(d.friends) ? d.friends : [], squad: d.squad, refs: d.refs, friendLink: d.friendLink || '' }
       : { friends: [], squad: [], refs: [], friendLink: '' };
     return recipients;
+  }
+  function refreshRecipients() {
+    recipients = null;
+    return loadRecipients();
+  }
+  async function openFriendsPage() {
+    haptic('light');
+    const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
+    if (!sc || !sh) return;
+    sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Друзья</div></div>
+      <div class="cd-sheet__hint" style="margin-top:2px">Друг появится здесь после того, как откроет твою ссылку в Telegram-боте. Это отдельная дружба для голубей, не рейтинг и не команда.</div>
+      <button class="cd-sheet__act" id="cd-fr-invite">${USERS_ICON(15)} Позвать друга по ссылке</button>
+      <div class="cd-sect-t">Друзья для голубей</div>
+      <div id="cd-fr-list">${skeletonRows(2)}</div>`;
+    sc.classList.add('on');
+    requestAnimationFrame(() => sh.classList.add('on'));
+    sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+    const inviteBtn = sh.querySelector('#cd-fr-invite');
+    if (inviteBtn) inviteBtn.onclick = () => shareFriendLink(recipients);
+    const rec = await refreshRecipients();
+    const list = sh.querySelector('#cd-fr-list');
+    if (!list) return;
+    const friends = Array.isArray(rec.friends) ? rec.friends : [];
+    list.innerHTML = friends.length
+      ? friends.map(r => `<div class="cd-reciperow" data-chat="${r.chat}"><span>${esc(r.name)}</span><small>можно слать голубей и предлагать обмен</small></div>`).join('')
+      : emptyState('Пока нет друзей', 'Нажми «Позвать друга по ссылке». Когда друг откроет ссылку в боте, он появится в этом списке.');
+    const inv = sh.querySelector('#cd-fr-invite'); if (inv) inv.onclick = () => shareFriendLink(rec);
   }
 
   // ── Обмены: создание предложения ───────────────────────────────────────────
@@ -1202,7 +1236,7 @@
       : `<button class="cd-tbtn cd-tbtn--ghost" id="cd-ms-jointeam" style="width:100%;box-sizing:border-box;margin-bottom:7px">Вступить в команду — в «Рейтинге»</button>`;
     rfBox.innerHTML = rec.refs.length
       ? rec.refs.map(r => `<div class="cd-reciperow" data-chat="${r.chat}"><span>${esc(r.name)}</span></div>`).join('')
-      : `<div style="color:var(--muted);font-size:12px;padding:4px 2px 10px">Пригласи друга в игру — он появится тут («Рейтинг» → «Пригласи друзей»)</div>`;
+      : `<div style="color:var(--muted);font-size:12px;padding:4px 2px 10px">Рефералы из общей игры появятся тут отдельно. Для голубиной дружбы используй кнопку «Позвать друга по ссылке» выше.</div>`;
     const addFr = sh.querySelector('#cd-ms-addfr'); if (addFr) addFr.onclick = () => shareFriendLink(rec);
     const joinT = sh.querySelector('#cd-ms-jointeam'); if (joinT) joinT.onclick = () => { closeSheet(); if (window.ckSetTab) window.ckSetTab('top'); };
     [frBox, sqBox, rfBox].forEach(box => box.querySelectorAll('.cd-reciperow').forEach(el => { el.onclick = () => openMailSendSticker(Number(el.dataset.chat)); }));
