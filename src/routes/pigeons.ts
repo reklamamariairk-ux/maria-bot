@@ -146,12 +146,12 @@ export function createPigeonsRouter(push: PushService): Router {
     const u = getTgUser(req)!; const breed = String((req.body as { breed?: string }).breed || "");
     try {
       if (!BREED_BY_ID.has(breed)) { res.status(400).json({ error: "not_owned" }); return; }
-      const { dragTargetPower, pickOpponents, cacheOpponents } = await import("../drag");
-      const targetPower = await dragTargetPower(u.id, breed);
-      if (targetPower === null) { res.status(400).json({ error: "not_owned" }); return; }
-      const opponents = await pickOpponents(u.id, targetPower, 3);
+      const { dragTargetProfile, pickOpponentsV3, cacheOpponents } = await import("../drag");
+      const profile = await dragTargetProfile(u.id, breed);
+      if (profile === null) { res.status(400).json({ error: "not_owned" }); return; }
+      const opponents = await pickOpponentsV3(u.id, profile.match, 3);
       cacheOpponents(u.id, breed, opponents); // заезд переиспользует ровно этот набор (см. runRace)
-      res.json({ myPower: targetPower, opponents });
+      res.json({ myPower: profile.match, opponents });
     } catch (e) { log.error({ err: e, chatId: u.id }, "[drag/opponents]"); res.status(500).json({ error: "internal" }); }
   });
 

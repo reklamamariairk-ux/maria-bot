@@ -248,7 +248,7 @@
     return `<div class="cd-drag-card" data-r="${esc(m.rarity)}">
       <div class="cd-drag-card__art">${artTag(breed)}</div>
       <div class="cd-drag-card__n">${bot ? 'Соперник' : esc(m.name)}</div>
-      <div class="cd-drag-card__p">⚡ ${Math.round(num(power))}</div>
+      <div class="cd-drag-card__p">🏁 ${Math.round(num(power))}</div>
     </div>`;
   }
 
@@ -261,7 +261,7 @@
     const oppHtml = opponentsPreview === null
       ? `<div class="cd-drag-oppgrid">${[0, 1, 2].map(() => `<div class="cd-drag-card"><div class="cd-drag-card__art"></div><div class="cd-drag-card__n">…</div></div>`).join('')}</div>`
       : (opponentsPreview.length
-        ? `<div class="cd-drag-oppgrid">${opponentsPreview.map((o) => cardHtml(o.breed, o.power, !!o.bot)).join('')}</div>`
+        ? `<div class="cd-drag-oppgrid">${opponentsPreview.map((o) => cardHtml(o.breed, o.cruise ?? o.power, !!o.bot)).join('')}</div>`
         : `<div class="cd-drag-hint">Соперников подберём прямо на старте.</div>`);
     const stakesHtml = mode === 'bet'
       ? `<div class="cd-drag-stakes">${STAKE_PRESETS.map((v) => `<button class="cd-drag-stake${v === stake ? ' on' : ''}" data-stake="${v}" ${balance !== null && v > balance ? 'disabled' : ''}>${fmt(v)}</button>`).join('')}</div>`
@@ -271,7 +271,7 @@
       <div class="cd-drag-body">
         <div class="cd-drag-my">
           <div class="cd-drag-my__art" data-r="${esc(m.rarity)}">${artTag(curBreed)}</div>
-          <div class="cd-drag-my__b"><div class="cd-drag-my__n">${esc(m.name)}</div><div class="cd-drag-my__p">${myPower !== null ? `Мощность: ⚡ ${Math.round(myPower)}` : 'Твой боец на старте'}</div></div>
+          <div class="cd-drag-my__b"><div class="cd-drag-my__n">${esc(m.name)}</div><div class="cd-drag-my__p">${myPower !== null ? `Гоночный темп: 🏁 ${Math.round(myPower)}` : 'Твой боец на старте'}</div></div>
         </div>
         <div class="cd-drag-sect">Режим</div>
         <div class="cd-drag-seg">

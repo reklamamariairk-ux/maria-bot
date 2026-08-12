@@ -87,6 +87,9 @@ const DUR_MIN = 3000, DUR_MAX = 8000;   // клампы длительности
 export function cruisePower(rarity: Rarity, stars: number, speed: number): number {
   return RARITY_BASE[rarity] + (stars - 1) * 4 + 6 * speed;
 }
+export function dragMatchPowerV3(rarity: Rarity, stars: number, speed: number): number {
+  return cruisePower(rarity, stars, speed);
+}
 // Цель тапов до полного tap-навыка: падает со стаминой (выносливее голубь — меньше тапать).
 export function tapTarget(stamina: number): number {
   const s = Math.min(TUNE_MAX, Math.max(0, Number(stamina) || 0));
@@ -131,7 +134,7 @@ export type RacerV3 = Racer & { skill: number; cruise: number; luck: number };
 // соперников раздаёт сервер (конкурентный диапазон). Крейсер/удачу соперников сохраняем.
 export function hardenBetFieldV3(opps: (Racer & { cruise?: number; luck?: number })[], target: number, rng: () => number = Math.random): RacerV3[] {
   return opps.map((o, i) => {
-    const base = o.power < target - BET_POWER_GAP ? makeBot(target, i) : o;
+    const base = (o.cruise ?? o.power) < target - BET_POWER_GAP ? makeBotForCruise(target, i) : o;
     return {
       ...base,
       cruise: base.cruise ?? base.power,
@@ -208,6 +211,27 @@ export function makeBot(target: number, seed: number): Racer {
   return { breed: b.id, power, reactionMs, bot: true, name: "Соперник", cruise, luck: Math.round(TUNE_MAX / 2) };
 }
 
+// v3 tap-race bot matched by cruise, not by total power. Otherwise a stamina-heavy
+// player sees "equal" opponents whose speed is much higher and cannot catch them by taps.
+export function makeBotForCruise(targetCruise: number, seed: number): Racer {
+  const combos: { breed: (typeof PIGEON_BREEDS)[number]; stars: number; speed: number; cruise: number }[] = [];
+  for (const b of PIGEON_BREEDS) {
+    if (b.id === "champion") continue;
+    for (let stars = 1; stars <= 3; stars++) {
+      for (let speed = 0; speed <= TUNE_MAX; speed++) {
+        combos.push({ breed: b, stars, speed, cruise: cruisePower(b.rarity, stars, speed) });
+      }
+    }
+  }
+  combos.sort((a, b) => Math.abs(a.cruise - targetCruise) - Math.abs(b.cruise - targetCruise));
+  const top = combos.slice(0, Math.min(8, combos.length));
+  const pick = top[Math.abs(seed + Math.floor(Math.random() * top.length)) % top.length] ?? combos[0];
+  const stamina = Math.min(TUNE_MAX, Math.max(0, Math.round(pick.speed / 2)));
+  const power = dragPower(pick.breed.rarity, pick.stars, pick.speed, stamina);
+  const reactionMs = clampReact(synthReaction(targetCruise) + ((seed % 5) - 2) * 15 + Math.round((Math.random() - 0.5) * 60));
+  return { breed: pick.breed.id, power, reactionMs, bot: true, name: "Соперник", cruise: pick.cruise, luck: Math.round(TUNE_MAX / 2) };
+}
+
 // v2: то же ужесточение поля «Ставки» по мощности, но вместо реакций сервер раздаёт
 // сопернику launch-skill из конкурентного диапазона. Для «Тренировки» — диапазон шире
 // и добрее (казуальное поле), см. assignFieldSkill.
@@ -260,6 +284,24 @@ export async function pickOpponents(chatId: number, targetPower: number, n: numb
   return real;
 }
 
+export async function pickOpponentsV3(chatId: number, targetCruise: number, n: number): Promise<Racer[]> {
+  const rows = (await pool.query(
+    `SELECT pi.breed, pi.stars, pi.tune_speed, pi.tune_stamina, pi.tune_luck, cs.race_reaction_ms
+       FROM pigeon_inventory pi JOIN clicker_state cs ON cs.chat_id = pi.chat_id
+      WHERE pi.chat_id <> $1 AND pi.count > 0
+      ORDER BY random() LIMIT 200`, [chatId])).rows;
+  const real: Racer[] = rows.filter((r: any) => BREED_BY_ID.has(r.breed)).map((r: any) => {
+    const b = BREED_BY_ID.get(r.breed)!;
+    const power = dragPower(b.rarity, r.stars, r.tune_speed, r.tune_stamina);
+    const cruise = cruisePower(b.rarity, r.stars, r.tune_speed);
+    return { breed: r.breed, power, reactionMs: r.race_reaction_ms ?? synthReaction(targetCruise), bot: false, cruise, luck: r.tune_luck ?? 0 };
+  }).filter(x => Math.abs((x.cruise ?? x.power) - targetCruise) <= POWER_BAND)
+    .sort((a, b) => Math.abs((a.cruise ?? a.power) - targetCruise) - Math.abs((b.cruise ?? b.power) - targetCruise))
+    .slice(0, n);
+  while (real.length < n) real.push(makeBotForCruise(targetCruise, real.length));
+  return real;
+}
+
 // ── Кэш соперников: превью (/drag/opponents) и сам заезд (runRace) раньше независимо
 // звали pickOpponents с ORDER BY random() → на старте показывались одни голуби, а гонялись
 // другие. Теперь превью кэширует свой набор, а заезд его забирает (one-shot, TTL), так что
@@ -297,6 +339,20 @@ export async function dragTargetPower(chatId: number, breed: string): Promise<nu
   return dragPower(b.rarity, row.stars, row.tune_speed, row.tune_stamina);
 }
 
+export async function dragTargetProfile(chatId: number, breed: string): Promise<{ power: number; match: number } | null> {
+  const row = (await pool.query(
+    `SELECT stars, tune_speed, tune_stamina FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 AND count>0`,
+    [chatId, breed]
+  )).rows[0];
+  if (!row) return null;
+  const b = BREED_BY_ID.get(breed);
+  if (!b) return null;
+  return {
+    power: dragPower(b.rarity, row.stars, row.tune_speed, row.tune_stamina),
+    match: dragMatchPowerV3(b.rarity, row.stars, row.tune_speed),
+  };
+}
+
 // ── Резолв заезда в транзакции ──────────────────────────────────────────────
 // Всё под FOR UPDATE clicker_state (внутри refreshEnergyFor): реген энергии → проверки
 // (владение породой/энергия/ставка) → подбор соперников → резолв мест → списание энергии
@@ -319,9 +375,10 @@ export async function runRace(chatId: number, breed: string, mode: "training" | 
     if (mode === "bet" && st.balance < stake) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
     const b = BREED_BY_ID.get(breed)!;
     const myPower = dragPower(b.rarity, inv.rows[0].stars, inv.rows[0].tune_speed, inv.rows[0].tune_stamina);
+    const myMatch = dragMatchPowerV3(b.rarity, inv.rows[0].stars, inv.rows[0].tune_speed);
     // «Кого показали в превью — с тем и гонимся»: берём закэшированный набор старта; если его
     // нет (заезд без превью / истёк TTL) — подбираем свежий как раньше.
-    const picked = takeCachedOpponents(chatId, breed) ?? await pickOpponents(chatId, myPower, 3);
+    const picked = takeCachedOpponents(chatId, breed) ?? await (tap ? pickOpponentsV3(chatId, myMatch, 3) : pickOpponents(chatId, myPower, 3));
     const react = clampReact(Math.round(tap ? tap.reactionMs : launch ? launch.reactionMs : reactionMs));
     // Один рандомный «luck»-ролл на гонщика, зафиксированный ДО резолва — места и finishT
     // ниже должны использовать один и тот же r по индексу, иначе места и показанное
@@ -331,7 +388,7 @@ export async function runRace(chatId: number, breed: string, mode: "training" | 
       // v3 «Тап-заезд»: мой навык из числа тапов (стамина = эффективность), крейсер от
       // скорости, удача сжимает разброс; соперникам tap-навык раздаёт сервер (bet —
       // конкурентный диапазон + гард мощности, training — шире и добрее).
-      const opps = assignFieldSkillV3(picked, mode, myPower);
+      const opps = assignFieldSkillV3(picked, mode, myMatch);
       const myCruise = cruisePower(b.rarity, inv.rows[0].stars, inv.rows[0].tune_speed);
       const myLuck = inv.rows[0].tune_luck ?? 0;
       const mySkill = tapSkill(tap, inv.rows[0].tune_stamina);

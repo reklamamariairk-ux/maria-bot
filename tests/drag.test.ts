@@ -5,7 +5,7 @@ import {
   revAccuracy, reactAccuracy, launchSkill, dragFinishTimeV2, resolveRaceV2,
   competitiveSkill, hardenBetFieldV2, REV_HALF, COMP_SKILL_LO, COMP_SKILL_HI,
   cruisePower, tapTarget, tapAccuracy, clampTapCount, tapSkill, luckSpread,
-  dragFinishTimeV3, resolveRaceV3, hardenBetFieldV3,
+  dragFinishTimeV3, resolveRaceV3, hardenBetFieldV3, dragMatchPowerV3, makeBotForCruise,
   TAP_TARGET_BASE, TAP_TARGET_PER, TAP_RATE_CAP, TAP_W, BET_POWER_GAP,
   cacheOpponents, takeCachedOpponents,
 } from "../src/drag";
@@ -370,7 +370,7 @@ describe("v3 экономика ставки — Монте-Карло (авто
 describe("v3 hardenBetFieldV3 — серверное поле «Ставки»", () => {
   const target = 80;
   const opps = [
-    { breed: "sizar", power: target - 25, cruise: target - 25, luck: 0, reactionMs: 1500, bot: false },
+    { breed: "sizar", power: target + 20, cruise: target - 25, luck: 0, reactionMs: 1500, bot: false },
     { breed: "ryaboy", power: target - 5, cruise: target - 5, luck: 0, reactionMs: 900, bot: false },
     { breed: "zolotoy", power: target + 10, cruise: target + 10, luck: 0, reactionMs: 120, bot: false },
   ];
@@ -382,9 +382,9 @@ describe("v3 hardenBetFieldV3 — серверное поле «Ставки»",
       }
     }
   });
-  it("слабее target−GAP (по matchPower) заменяется ботом ≈target", () => {
+  it("слабее target−GAP (по гоночному темпу) заменяется ботом ≈target", () => {
     const field = hardenBetFieldV3(opps.map(o => ({ ...o })), target);
-    for (const r of field) expect(r.power).toBeGreaterThanOrEqual(target - BET_POWER_GAP);
+    for (const r of field) expect(r.cruise).toBeGreaterThanOrEqual(target - BET_POWER_GAP);
     expect(field.filter(r => r.bot)).toHaveLength(1);
   });
 });
@@ -401,5 +401,14 @@ describe("v3 разведение статов — при равном matchPowe
     const fast = dragFinishTimeV3(cruisePower("common", 1, 10), 0, 0, 0.5);
     const slow = dragFinishTimeV3(cruisePower("common", 1, 0), 0, 0, 0.5);
     expect(fast).toBeLessThan(slow);
+  });
+  it("матчинг v3 смотрит на гоночный темп, а не на стамину", () => {
+    const staminaHeavyMatch = dragMatchPowerV3("common", 1, 0);
+    expect(staminaHeavyMatch).toBe(cruisePower("common", 1, 0));
+    expect(staminaHeavyMatch).toBeLessThan(dragPower("common", 1, 0, 10));
+    for (let i = 0; i < 20; i++) {
+      const bot = makeBotForCruise(staminaHeavyMatch, i);
+      expect(Math.abs((bot.cruise ?? bot.power) - staminaHeavyMatch)).toBeLessThanOrEqual(6);
+    }
   });
 });
