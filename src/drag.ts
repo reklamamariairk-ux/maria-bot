@@ -135,7 +135,8 @@ export type RacerV3 = Racer & { skill: number; cruise: number; luck: number };
 // соперников раздаёт сервер (конкурентный диапазон). Крейсер/удачу соперников сохраняем.
 export function hardenBetFieldV3(opps: (Racer & { cruise?: number; luck?: number })[], target: number, rng: () => number = Math.random): RacerV3[] {
   return opps.map((o, i) => {
-    const base = (o.cruise ?? o.power) < target - BET_POWER_GAP ? makeBotForCruise(target, i) : o;
+    const tempo = o.cruise ?? o.power;
+    const base = tempo < target - BET_POWER_GAP || tempo > target ? makeBotForCruise(target, i) : o;
     return {
       ...base,
       cruise: base.cruise ?? base.power,
@@ -228,8 +229,10 @@ export function makeBotForCruise(targetCruise: number, seed: number): Racer {
       }
     }
   }
-  combos.sort((a, b) => Math.abs(a.cruise - targetCruise) - Math.abs(b.cruise - targetCruise));
-  const top = combos.slice(0, Math.min(8, combos.length));
+  const fairCombos = combos.filter(c => c.cruise <= targetCruise);
+  const pool = fairCombos.length ? fairCombos : combos;
+  pool.sort((a, b) => Math.abs(a.cruise - targetCruise) - Math.abs(b.cruise - targetCruise));
+  const top = pool.slice(0, Math.min(8, pool.length));
   const pick = top[Math.abs(seed + Math.floor(Math.random() * top.length)) % top.length] ?? combos[0];
   const stamina = Math.min(TUNE_MAX, Math.max(0, Math.round(pick.speed / 2)));
   const power = dragPower(pick.breed.rarity, pick.stars, pick.speed, stamina);
@@ -300,13 +303,37 @@ export async function pickOpponentsV3(chatId: number, targetCruise: number, n: n
     const power = dragPower(b.rarity, r.stars, r.tune_speed, r.tune_stamina);
     const cruise = cruisePower(b.rarity, r.stars, r.tune_speed);
     return { breed: r.breed, power, reactionMs: r.race_reaction_ms ?? synthReaction(targetCruise), bot: false, cruise, luck: r.tune_luck ?? 0 };
-  }).filter(x => Math.abs((x.cruise ?? x.power) - targetCruise) <= POWER_BAND)
+  }).filter(x => {
+    const tempo = x.cruise ?? x.power;
+    return tempo <= targetCruise && Math.abs(tempo - targetCruise) <= POWER_BAND;
+  })
     .sort((a, b) => Math.abs((a.cruise ?? a.power) - targetCruise) - Math.abs((b.cruise ?? b.power) - targetCruise))
     .slice(0, n);
   while (real.length < n) real.push(makeBotForCruise(targetCruise, real.length));
   return real;
 }
 
+export async function pickFriendOpponents(chatId: number, friendChat: number, targetCruise: number, n: number): Promise<Racer[] | null> {
+  if (!Number.isInteger(friendChat) || friendChat <= 0 || friendChat === chatId) return null;
+  const a = Math.min(chatId, friendChat);
+  const b = Math.max(chatId, friendChat);
+  const rel = await pool.query(`SELECT 1 FROM pigeon_friends WHERE chat_a=$1 AND chat_b=$2 LIMIT 1`, [a, b]);
+  if (!rel.rowCount) return null;
+  const rows = (await pool.query(
+    `SELECT pi.breed, pi.stars, pi.tune_speed, pi.tune_stamina, pi.tune_luck, cs.race_reaction_ms
+       FROM pigeon_inventory pi JOIN clicker_state cs ON cs.chat_id = pi.chat_id
+      WHERE pi.chat_id=$1 AND pi.count > 0 AND pi.breed <> 'champion'
+      ORDER BY random() LIMIT 100`, [friendChat])).rows;
+  const friendRacers: Racer[] = rows.filter((r: any) => BREED_BY_ID.has(r.breed)).map((r: any) => {
+    const breed = BREED_BY_ID.get(r.breed)!;
+    const power = dragPower(breed.rarity, r.stars, r.tune_speed, r.tune_stamina);
+    const cruise = cruisePower(breed.rarity, r.stars, r.tune_speed);
+    return { breed: r.breed, power, reactionMs: r.race_reaction_ms ?? synthReaction(targetCruise), bot: false, cruise, luck: r.tune_luck ?? 0 };
+  }).sort((x, y) => Math.abs((x.cruise ?? x.power) - targetCruise) - Math.abs((y.cruise ?? y.power) - targetCruise));
+  const field = friendRacers.length ? [friendRacers[0]] : [];
+  while (field.length < n) field.push(makeBotForCruise(targetCruise, field.length));
+  return field.slice(0, n);
+}
 // ── Кэш соперников: превью (/drag/opponents) и сам заезд (runRace) раньше независимо
 // звали pickOpponents с ORDER BY random() → на старте показывались одни голуби, а гонялись
 // другие. Теперь превью кэширует свой набор, а заезд его забирает (one-shot, TTL), так что

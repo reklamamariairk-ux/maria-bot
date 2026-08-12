@@ -1286,6 +1286,7 @@
     sh.querySelector('#cd-sheet-x').onclick = closeSheet;
     const raceBtn = sh.querySelector('#cd-race-enter'); if (raceBtn) raceBtn.onclick = openRaceBreedPicker;
     const dragBtn = sh.querySelector('#cd-drag-enter'); if (dragBtn) dragBtn.onclick = openDragBreedPicker;
+    const friendRaceBtn = sh.querySelector('#cd-friend-race-enter'); if (friendRaceBtn) friendRaceBtn.onclick = openFriendRaceFriendPicker;
     const resBtn = sh.querySelector('#cd-race-results'); if (resBtn) resBtn.onclick = openRaceResultsSheet;
   }
   function raceHtml() {
@@ -1302,6 +1303,7 @@
           </div>
           <div class="cd-racehero__acts">
             <button class="cd-ctabtn" id="cd-drag-enter">${FLAG_ICON(14)} Драг-заезд</button>
+            <button class="cd-ctabtn cd-ctabtn--ghost" id="cd-friend-race-enter">${USERS_ICON(14)} Гонка с другом</button>
           </div>
         </div>
         <div class="cd-racenote"><b>Драг-заезд</b> — быстрый режим: тренировка без ставок или ставка монетами. Недельная Гонка стаи сейчас недоступна.</div>`;
@@ -1344,6 +1346,7 @@
         <div class="cd-racehero__acts">
           ${!mine ? `<button class="cd-ctabtn" id="cd-race-enter">Отборочный полёт</button>` : ''}
           <button class="cd-ctabtn${!mine ? ' cd-ctabtn--ghost' : ''}" id="cd-drag-enter">${FLAG_ICON(14)} Драг-заезд</button>
+          <button class="cd-ctabtn cd-ctabtn--ghost" id="cd-friend-race-enter">${USERS_ICON(14)} Гонка с другом</button>
         </div>
       </div>
       <div class="cd-racenote"><b>Драг-заезд</b> — гоняй прямо сейчас, тапай на старте · <b>Гонка стаи</b> — заявка раз в неделю (отборочный полёт), итоги в понедельник</div>
@@ -1390,6 +1393,45 @@
     sc.classList.add('on');
     requestAnimationFrame(() => sh.classList.add('on'));
     sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+  }
+
+  async function openFriendRaceFriendPicker() {
+    if (!data) return;
+    haptic('light');
+    const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
+    if (!sc || !sh) return;
+    sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">С кем гоняться?</div></div><div id="cd-friend-race-list">${skeletonRows(2)}</div>`;
+    sc.classList.add('on'); requestAnimationFrame(() => sh.classList.add('on'));
+    sh.querySelector('#cd-sheet-x').onclick = openRacePage;
+    const rec = await loadRecipients();
+    const friends = Array.isArray(rec.friends) ? rec.friends : [];
+    const box = sh.querySelector('#cd-friend-race-list'); if (!box) return;
+    if (!friends.length) {
+      box.innerHTML = `<div class="cd-sheet__hint">Сначала добавь друга по ссылке — после этого сможете гоняться друг с другом.</div>
+        <button class="cd-sheet__act" id="cd-friend-race-link">${USERS_ICON(15)} Позвать друга</button>`;
+      const btn = box.querySelector('#cd-friend-race-link'); if (btn) btn.onclick = shareFriendLink;
+      return;
+    }
+    box.innerHTML = friends.map(r => `<div class="cd-reciperow" data-chat="${num(r.chat)}" data-name="${esc(r.name)}"><span>${esc(r.name)}</span><small>быстрый драг-заезд без ставки</small></div>`).join('');
+    box.querySelectorAll('.cd-reciperow').forEach(el => { el.onclick = () => openFriendRaceBreedPicker({ chat: num(el.dataset.chat), name: el.dataset.name || 'Друг' }); });
+  }
+
+  function openFriendRaceBreedPicker(friend) {
+    if (!data || !friend || !friend.chat) return;
+    const owned = Object.keys(data.invMap).filter(id => data.invMap[id].count > 0 && id !== 'champion');
+    if (!owned.length) { flash('Нет птицы для заезда'); return; }
+    const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
+    if (!sc || !sh) return;
+    sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Кто гонится с ${esc(friend.name)}?</div></div>${pickGridHtml(owned, null)}`;
+    sc.classList.add('on'); requestAnimationFrame(() => sh.classList.add('on'));
+    sh.querySelector('#cd-sheet-x').onclick = openFriendRaceFriendPicker;
+    sh.querySelectorAll('.cd-pickcard').forEach(el => {
+      el.onclick = () => {
+        const breedId = el.dataset.breed;
+        closeSheet();
+        if (window.CatDrag && window.CatDrag.openFriend) window.CatDrag.openFriend(apiRef, breedId, friend.chat, friend.name);
+      };
+    });
   }
   // Драг-заезд (отдельный always-on режим поверх недельной гонки, catdrag.js) — выбор
   // владеемой породы через тот же пикер-шит, что и заявка на недельную гонку.

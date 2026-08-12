@@ -159,6 +159,21 @@ export function createPigeonsRouter(push: PushService): Router {
     } catch (e) { log.error({ err: e, chatId: u.id }, "[drag/opponents]"); res.status(500).json({ error: "internal" }); }
   });
 
+  router.post("/api/pigeons/drag/friend-opponents", requireTgUser, rateLimit(30), async (req, res) => {
+    const u = getTgUser(req)!; const body = req.body as { breed?: string; friendChat?: number }; const breed = String(body.breed || "");
+    try {
+      if (!BREED_BY_ID.has(breed)) { res.status(400).json({ error: "not_owned" }); return; }
+      const friendChat = Math.floor(Number(body.friendChat) || 0);
+      const { dragTargetProfile, pickFriendOpponents, cacheOpponents } = await import("../drag");
+      const profile = await dragTargetProfile(u.id, breed);
+      if (profile === null) { res.status(400).json({ error: "not_owned" }); return; }
+      const opponents = await pickFriendOpponents(u.id, friendChat, profile.match, 3);
+      if (!opponents) { res.status(400).json({ error: "not_friend" }); return; }
+      cacheOpponents(u.id, breed, "training", opponents);
+      res.json({ myPower: profile.match, opponents });
+    } catch (e) { log.error({ err: e, chatId: u.id }, "[drag/friend-opponents]"); res.status(500).json({ error: "internal" }); }
+  });
+
   router.post("/api/pigeons/drag/race", requireTgUser, rateLimit(20), async (req, res) => {
     const u = getTgUser(req)!; const b = req.body as { breed?: string; mode?: string; stake?: number; reactionMs?: number; skill?: { rev1?: number; rev2?: number; reactionMs?: number }; tap?: { count?: number; reactionMs?: number; durationMs?: number } };
     try {

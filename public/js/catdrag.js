@@ -61,6 +61,7 @@
   // ── состояние оверлея (модульный синглтон — открыт максимум один заезд разом) ───
   let ov = null, apiRef = null, session = 0, resizeHandler = null;
   let curBreed = null, mode = 'training', stake = STAKE_PRESETS[0]; // mode: training | bet | qualify
+  let friendRace = null;
   let qualifyData = null, qualifyDone = null, qualifySucceeded = false; // отборочный полёт недельной гонки
   let myPower = null;          // мощность моего голубя из ответа /opponents (null=ещё не знаем)
   let opponentsPreview = null; // null=грузится, []=подобрать не удалось (не блокирует старт — сервер подберёт сам)
@@ -278,7 +279,14 @@
       : (opponentsPreview.length
         ? `<div class="cd-drag-oppgrid">${opponentsPreview.map((o) => cardHtml(o.breed, o.cruise ?? o.power, !!o.bot)).join('')}</div>`
         : `<div class="cd-drag-hint">Соперников подберём прямо на старте.</div>`);
-    const stakesHtml = mode === 'bet'
+    const modeHtml = friendRace
+      ? `<div class="cd-drag-hint">Гонка с другом: <b>${esc(friendRace.name || 'Друг')}</b> · без ставки</div>`
+      : `<div class="cd-drag-sect">Режим</div>
+        <div class="cd-drag-seg">
+          <button class="cd-drag-seg__b${mode === 'training' ? ' on' : ''}" data-mode="training">Тренировка</button>
+          <button class="cd-drag-seg__b${mode === 'bet' ? ' on' : ''}" data-mode="bet">💰 Ставка</button>
+        </div>`;
+    const stakesHtml = !friendRace && mode === 'bet'
       ? `<div class="cd-drag-stakes">${STAKE_PRESETS.map((v) => `<button class="cd-drag-stake${v === stake ? ' on' : ''}" data-stake="${v}" ${balance !== null && v > balance ? 'disabled' : ''}>${fmt(v)}</button>`).join('')}</div>`
       : '';
     const canStart = opponentsPreview !== null && !lowEnergy;
@@ -288,11 +296,7 @@
           <div class="cd-drag-my__art" data-r="${esc(m.rarity)}">${artTag(curBreed)}</div>
           <div class="cd-drag-my__b"><div class="cd-drag-my__n">${esc(m.name)}</div><div class="cd-drag-my__p">${myPower !== null ? `Гоночный темп: 🏁 ${Math.round(myPower)}` : 'Твой боец на старте'}</div></div>
         </div>
-        <div class="cd-drag-sect">Режим</div>
-        <div class="cd-drag-seg">
-          <button class="cd-drag-seg__b${mode === 'training' ? ' on' : ''}" data-mode="training">Тренировка</button>
-          <button class="cd-drag-seg__b${mode === 'bet' ? ' on' : ''}" data-mode="bet">💰 Ставка</button>
-        </div>
+        ${modeHtml}
         ${stakesHtml}
         <div class="cd-drag-sect">Соперники</div>
         ${oppHtml}
@@ -317,7 +321,9 @@
   }
 
   async function loadOpponents(mySession) {
-    const d = await apiRef('/api/pigeons/drag/opponents', { method: 'POST', body: JSON.stringify({ breed: curBreed, mode }) }).catch(() => null);
+    const oppUrl = friendRace ? '/api/pigeons/drag/friend-opponents' : '/api/pigeons/drag/opponents';
+    const oppBody = friendRace ? { breed: curBreed, friendChat: friendRace.chat } : { breed: curBreed, mode };
+    const d = await apiRef(oppUrl, { method: 'POST', body: JSON.stringify(oppBody) }).catch(() => null);
     if (mySession !== session || !ov) return; // оверлей закрыт/переоткрыт — не трогаем DOM
     opponentsPreview = (d && Array.isArray(d.opponents)) ? d.opponents : [];
     myPower = (d && typeof d.myPower === 'number') ? d.myPower : myPower;
@@ -993,11 +999,11 @@
     // Сервер клампит (clampTapCount) и считает tap-навык со стаминой. reactionMs
     // дублируем на верхнем уровне — совместимость со старым бэком до деплоя (легаси-формула).
     const body = {
-      breed: curBreed, mode,
+      breed: curBreed, mode: friendRace ? 'training' : mode,
       tap: { count: tapCount, reactionMs: tapFirstMs < 0 ? 3000 : tapFirstMs, durationMs: TAP_WINDOW_MS_C },
       reactionMs: tapFirstMs < 0 ? 3000 : tapFirstMs,
     };
-    if (mode === 'bet') body.stake = stake;
+    if (!friendRace && mode === 'bet') body.stake = stake;
     const d = await apiRef('/api/pigeons/drag/race', { method: 'POST', body: JSON.stringify(body) }).catch(() => null);
     const ok = !!(d && d.ok && Array.isArray(d.racers));
     // ВАЖНО: стейл-ответ прошлого открытия НЕ должен трогать состояние нового. Если оверлей
@@ -1103,7 +1109,7 @@
   // ── публичный API ────────────────────────────────────────────────────────────
   function open(api, breed) {
     if (!api || !breed) return;
-    apiRef = api; curBreed = breed; mode = 'training'; stake = STAKE_PRESETS[0];
+    apiRef = api; curBreed = breed; mode = 'training'; stake = STAKE_PRESETS[0]; friendRace = null;
     opponentsPreview = null; myPower = null; raceBusy = false; phase = 'idle'; raceData = null;
     qualifyData = null; qualifyDone = null; qualifySucceeded = false;
     session++;
@@ -1120,12 +1126,32 @@
     loadOpponents(mySession);
   }
 
+
+  function openFriend(api, breed, friendChat, friendName) {
+    if (!api || !breed || !friendChat) return;
+    apiRef = api; curBreed = breed; mode = 'training'; stake = STAKE_PRESETS[0];
+    friendRace = { chat: Number(friendChat), name: friendName || 'Друг' };
+    opponentsPreview = null; myPower = null; raceBusy = false; phase = 'idle'; raceData = null;
+    qualifyData = null; qualifyDone = null; qualifySucceeded = false;
+    session++;
+    const mySession = session;
+    loadFly(curBreed);
+    styles();
+    if (!ov) { ov = document.createElement('div'); ov.className = 'cd-drag-ov'; document.body.appendChild(ov); }
+    renderSetup();
+    requestAnimationFrame(() => { if (ov) ov.classList.add('on'); });
+    haptic('light');
+    if (resizeHandler) window.removeEventListener('resize', resizeHandler);
+    resizeHandler = () => { if (canvas && document.body.contains(canvas)) setupCanvasSize(); };
+    window.addEventListener('resize', resizeHandler);
+    loadOpponents(mySession);
+  }
   // Отборочный полёт недельной гонки: без сеттапа (режим/ставка не нужны) — сразу
   // сцена + запуск. onDone дёргается после закрытия, если заявка прошла (обновить
   // голубятню). Ошибка «already»/«disabled» — flash и закрытие.
   function openQualify(api, breed, onDone) {
     if (!api || !breed) return;
-    apiRef = api; curBreed = breed; mode = 'qualify'; stake = STAKE_PRESETS[0];
+    apiRef = api; curBreed = breed; mode = 'qualify'; stake = STAKE_PRESETS[0]; friendRace = null;
     opponentsPreview = []; myPower = null; raceBusy = false; phase = 'idle'; raceData = null;
     qualifyData = null; qualifyDone = typeof onDone === 'function' ? onDone : null; qualifySucceeded = false;
     session++;
@@ -1150,9 +1176,9 @@
     if (el) { el.classList.remove('on'); setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 240); }
     raceBusy = false; phase = 'idle'; step = 'setup'; raceData = null;
     const cb = qualifySucceeded ? qualifyDone : null;
-    qualifyData = null; qualifyDone = null; qualifySucceeded = false; mode = 'training';
+    qualifyData = null; qualifyDone = null; qualifySucceeded = false; mode = 'training'; friendRace = null;
     if (cb) setTimeout(cb, 0);
   }
 
-  window.CatDrag = { open, openQualify };
+  window.CatDrag = { open, openFriend, openQualify };
 })();

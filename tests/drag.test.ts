@@ -391,10 +391,13 @@ describe("v3 hardenBetFieldV3 — серверное поле «Ставки»",
       }
     }
   });
-  it("слабее target−GAP (по гоночному темпу) заменяется ботом ≈target", () => {
+  it("слабее target−GAP и сильнее target заменяются ботом около моего темпа", () => {
     const field = hardenBetFieldV3(opps.map(o => ({ ...o })), target);
-    for (const r of field) expect(r.cruise).toBeGreaterThanOrEqual(target - BET_POWER_GAP);
-    expect(field.filter(r => r.bot)).toHaveLength(1);
+    for (const r of field) {
+      expect(r.cruise).toBeGreaterThanOrEqual(target - BET_POWER_GAP);
+      expect(r.cruise).toBeLessThanOrEqual(target);
+    }
+    expect(field.filter(r => r.bot)).toHaveLength(2);
   });
 });
 
@@ -431,6 +434,7 @@ describe("v3 разведение статов — при равном matchPowe
     expect(staminaHeavyMatch).toBeLessThan(dragPower("common", 1, 0, 10));
     for (let i = 0; i < 20; i++) {
       const bot = makeBotForCruise(staminaHeavyMatch, i);
+      expect(bot.cruise ?? bot.power).toBeLessThanOrEqual(staminaHeavyMatch);
       expect(Math.abs((bot.cruise ?? bot.power) - staminaHeavyMatch)).toBeLessThanOrEqual(6);
     }
   });
