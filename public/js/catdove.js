@@ -373,7 +373,7 @@
     if (ownedCount >= 16) return mk(race && race.enabled
       ? 'Альбом собран! Тюнингуй гонщиков (⚙ в карточке породы) и побеждай в заездах и Гонке стаи.'
       : 'Альбом собран! Тюнингуй гонщиков (⚙ в карточке породы) и побеждай в Драг-заезде.', null, null);
-    return mk('Тапни любую свою породу: там докорм звёзд, витрина, тюнинг гонщика и обмен с другими игроками.', null, null);
+    return mk('Тапни любую свою породу: там докорм звёзд, тюнинг, выбор любимца для рейтинга и обмен с другими игроками.', null, null);
   }
 
   // ── рендер ────────────────────────────────────────────────────────────────
@@ -398,7 +398,7 @@
       <div class="cd-art">${art}</div>
       <div class="cd-n">${b.name}</div>
       <div class="cd-stars">${starHtml}</div>
-      ${inv.showcase > 0 ? '<span class="cd-showtag">витрина</span>' : ''}
+      ${inv.showcase > 0 ? '<span class="cd-showtag">в рейтинге</span>' : ''}
     </div>`;
   }
 
@@ -412,7 +412,7 @@
       <div class="cd-champ__art">${art}</div>
       <div class="cd-champ__b">
         <div class="cd-champ__n">${b.name} ${'★'.repeat(Math.max(1, Math.min(3, num(inv.stars))))}</div>
-        <div class="cd-champ__s">Приз гонки стаи · ×${num(inv.count)}${inv.showcase > 0 ? ' · на витрине' : ''}</div>
+        <div class="cd-champ__s">Приз гонки стаи · ×${num(inv.count)}${inv.showcase > 0 ? ' · показывается в рейтинге' : ''}</div>
       </div>
     </div>`;
   }
@@ -535,7 +535,7 @@
     const isShown = inv.showcase > 0;
     const curShowcase = showcaseOrder();
     const showcaseFull = curShowcase.length >= MAX_SHOWCASE && !isShown;
-    const showLabel = isShown ? 'Убрать с витрины' : (showcaseFull ? `На витрине уже ${MAX_SHOWCASE}/${MAX_SHOWCASE}` : 'На витрину');
+    const showLabel = isShown ? 'Не показывать в рейтинге' : (showcaseFull ? `Уже выбрано ${MAX_SHOWCASE}/${MAX_SHOWCASE}` : 'Показывать в рейтинге');
     const canTrade = inv.count > 1; // обмен отдаёт только дубликат — как feed
     const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
     if (!sc || !sh) return;
@@ -547,7 +547,7 @@
       <button class="cd-sheet__act" id="cd-feed" ${feedEnabled ? '' : 'disabled'}>${feedLabel}</button>
       ${need != null && !feedEnabled ? `<div class="cd-sheet__hint">Нужно ${need} запасных (сейчас ${Math.max(0, spare)})</div>` : ''}
       <button class="cd-sheet__act${isShown ? ' cd-sheet__act--on' : ''}" id="cd-show" ${(!isShown && showcaseFull) ? 'disabled' : ''}>${showLabel}</button>
-      <div class="cd-sheet__hint" style="margin:-6px 0 10px">Витрина — каких трёх голубей показываешь в профиле</div>
+      <div class="cd-sheet__hint" style="margin:-6px 0 10px">Можно выбрать до трёх любимых голубей. Их мини-картинки увидят другие игроки рядом с твоим именем в рейтинге. На доход и силу это не влияет.</div>
       <button class="cd-sheet__act" id="cd-tune">${GEAR_ICON(15)} Тюнинг гонщика</button>
       <div class="cd-sheet__hint" style="margin:-6px 0 10px">Скорость · выносливость · удача — решают исход заезда</div>
       <button class="cd-sheet__act" id="cd-drag-one">${FLAG_ICON(15)} Драг-заезд</button>
@@ -627,6 +627,8 @@
     sc.classList.add('on'); requestAnimationFrame(() => sh.classList.add('on'));
     sh.querySelector('#cd-sheet-x').onclick = closeSheet;
     await renderMissions();
+    let introSeen = false; try { introSeen = localStorage.getItem('cd_missions_tutorial_v1') === '1'; } catch (_) {}
+    if (!introSeen) missionHelpPopup(true);
     if (missionTimer) clearInterval(missionTimer);
     missionTimer = setInterval(updateMissionTimers, 1000);
   }
@@ -656,10 +658,26 @@
       const opts = (d.missions || []).map(m => `<option value="${m.id}">${m.name} · ${durationText(m.durationSec)} · ${fmt(m.reward)}</option>`).join('');
       return `<div class="cd-setrow" style="display:block;margin-bottom:9px"><div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:7px"><b>${b.name}</b><span style="color:var(--gold-l);font-size:11px">+${fmt(p.passivePerHour)}/час</span></div><div style="font-size:11px;color:var(--muted);margin-bottom:7px">★${p.stars} · тюнинг ${p.speed}/${p.stamina}/${p.luck}</div><select data-mission-select="${p.breed}" style="width:100%;box-sizing:border-box;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:7px">${opts}</select><button class="cd-sheet__act" style="margin:0" data-start-mission="${p.breed}">Отправить</button></div>`;
     }).join('');
-    body.innerHTML = `<div class="cd-sheet__hint" style="margin-bottom:10px">Тюнинг и звёзды повышают шанс успеха. При провале голубь всё равно привезёт 20% награды. Доход в час во время полёта сохраняется.</div>${cards}`;
+    body.innerHTML = `<button class="cd-navbtn" id="cd-mission-help" style="width:100%;margin-bottom:9px" type="button">? Как работают задания</button><div class="cd-sheet__hint" style="margin-bottom:10px">Тюнинг и звёзды повышают шанс успеха. При провале голубь всё равно привезёт 20% награды. Доход в час во время полёта сохраняется.</div>${cards}`;
+    body.querySelector('#cd-mission-help').onclick = () => missionHelpPopup(false);
     body.querySelectorAll('[data-start-mission]').forEach(btn => { btn.onclick = () => startMissionAct(btn.dataset.startMission, btn); });
     body.querySelectorAll('[data-claim-mission]').forEach(btn => { btn.onclick = () => claimMissionAct(num(btn.dataset.claimMission), btn); });
     updateMissionTimers();
+  }
+
+  function missionHelpPopup(firstTime) {
+    const s = container.querySelector('#cd-pop-scrim'), p = container.querySelector('#cd-pop'); if (!s || !p) return;
+    p.innerHTML = `<h3>${DOVE_ICON(21)} ${firstTime ? 'Новое: задания голубей' : 'Как работают задания'}</h3>
+      <div style="font-size:13px;line-height:1.5;color:var(--cream);text-align:left;margin:8px 0 14px">
+        <p><b>1.</b> Выбери свободного голубя и маршрут. Длинные маршруты идут дольше, но приносят больше монет.</p>
+        <p><b>2.</b> Звёзды, редкость и тюнинг повышают показанный шанс успеха.</p>
+        <p><b>3.</b> После таймера забери награду: 100% за успех или 20% при провале.</p>
+        <p><b>Важно:</b> голубь продолжает увеличивать доход в час, пока находится в полёте.</p>
+      </div><button id="cd-mission-help-ok">Понятно, отправляем!</button>`;
+    s.classList.add('on');
+    const close = () => { try { localStorage.setItem('cd_missions_tutorial_v1', '1'); } catch (_) {} s.classList.remove('on'); };
+    s.onclick = (e) => { if (e.target === s) close(); };
+    p.querySelector('#cd-mission-help-ok').onclick = close;
   }
 
   async function startMissionAct(breed, btn) {
@@ -768,13 +786,13 @@
     } finally { busy = false; }
   }
 
-  const SHOW_REASON = { bad_input: 'Можно не больше трёх на витрине', unknown_breed: 'Неизвестная порода', not_owned: 'Птица не найдена' };
+  const SHOW_REASON = { bad_input: 'Можно выбрать не больше трёх голубей', unknown_breed: 'Неизвестная порода', not_owned: 'Птица не найдена' };
   async function showcaseAct(breedId, wasShown, btn) {
     if (busy) return; busy = true; if (btn) btn.disabled = true;
     try {
       let breeds = showcaseOrder();
       if (wasShown) breeds = breeds.filter(id => id !== breedId);
-      else { if (breeds.length >= MAX_SHOWCASE) { flash(`На витрине уже ${MAX_SHOWCASE}/${MAX_SHOWCASE}`); return; } breeds = breeds.concat([breedId]); }
+      else { if (breeds.length >= MAX_SHOWCASE) { flash(`Для рейтинга уже выбрано ${MAX_SHOWCASE}/${MAX_SHOWCASE}`); return; } breeds = breeds.concat([breedId]); }
       const d = await apiRef('/api/pigeons/showcase', { method: 'POST', body: JSON.stringify({ breeds }) }).catch(() => null);
       if (d && d.ok) {
         Object.keys(data.invMap).forEach(id => { data.invMap[id].showcase = 0; });
@@ -783,7 +801,7 @@
         closeSheet();
         render();
       } else {
-        flash(SHOW_REASON[d && d.error] || 'Не получилось обновить витрину');
+        flash(SHOW_REASON[d && d.error] || 'Не получилось обновить выбор');
         if (btn) btn.disabled = false;
       }
     } finally { busy = false; }

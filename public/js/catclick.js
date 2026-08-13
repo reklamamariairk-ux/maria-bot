@@ -9,7 +9,7 @@
   window.addEventListener('error', (e) => { if (ckDiagErrors.length < 5) ckDiagErrors.push(String((e && e.message) || e)); });
   const A = (s) => `/assets/images/cat/${s}?v=25`;  // v25: анатомия — 4 лапы у всех (реген 2/6/8/10/14/15/17/18), кулон вместо «М»-медальона
   const LS = 'maria_click_v2';
-  const REGEN = 1.5, PASSIVE_CAP_H = 3, TURBO_MULT = 5, TURBO_SEC = 20, DAILY_BOOSTS = 6;
+  const REGEN = 0.25, TAP_COST = 2, PASSIVE_CAP_H = 3, TURBO_MULT = 5, TURBO_SEC = 20, DAILY_BOOSTS = 6;
   // ⚠️ Зеркало CARDS/CARD_CATS из src/clicker.ts — менять синхронно (+ cardIcon по id).
   const CARD_CATS = [{ id: 'prod', name: 'Производство' }, { id: 'mkt', name: 'Маркетинг' }, { id: 'staff', name: 'Персонал' }, { id: 'net', name: 'Сеть' }];
   const SQUADS = [{ id: 'choco', name: 'Шоколадные' }, { id: 'vanilla', name: 'Ванильные' }, { id: 'caramel', name: 'Карамельные' }, { id: 'berry', name: 'Ягодные' }];
@@ -674,7 +674,7 @@
       .ck-ov{--gold:#C0FF33;--gold-l:#D8FF7A;--gold-d:#8DBF20;--grape:#9B5CFF;--grape-l:#B79BFF;--magenta:#FF2E7E;--cream:#F3F1FB;--ink:#EFEDF7;--muted:#928DA6;--panel:rgba(255,255,255,.05);--line:rgba(255,255,255,.09);
         position:fixed;inset:0;z-index:9999;display:none;flex-direction:column;align-items:center;
         background:radial-gradient(95% 60% at 50% -8%,rgba(155,92,255,.30),transparent 58%),radial-gradient(75% 45% at 82% 110%,rgba(192,255,51,.12),transparent 58%),linear-gradient(180deg,#0E0A1A,#0B0814);
-        overflow:hidden;touch-action:manipulation;user-select:none;-webkit-user-select:none;color:var(--ink);font-family:'Nunito','Inter',system-ui,sans-serif}
+        overflow:hidden;overscroll-behavior:none;touch-action:manipulation;user-select:none;-webkit-user-select:none;color:var(--ink);font-family:'Nunito','Inter',system-ui,sans-serif}
       .ck-ov::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:0;background:radial-gradient(125% 75% at 50% 118%,rgba(0,0,0,.5),transparent 60%)}
       .ck-ov.on{display:flex}.ck-ov.turbo{background:radial-gradient(95% 60% at 50% -8%,rgba(192,255,51,.30),transparent 55%),linear-gradient(180deg,#12140A,#0B0C06)}
       .ck-screen{position:relative;z-index:1;flex:1;display:none;flex-direction:column;align-items:center;overflow:hidden;width:100%;max-width:480px}.ck-screen.on{display:flex}
@@ -682,6 +682,7 @@
          кот (max-width:62% от ширины окна) раздувался и вылезал за экран, бусты уезжали.
          На телефоне (≤480px) width:100% и так меньше кэпа — layout не меняется. */
       .ck-nav{width:100%;max-width:480px}
+      #ck-catwrap{touch-action:none;overscroll-behavior:none}
       .ck-x{right:max(12px,calc(50% - 228px))}
       .ck-x{position:absolute;top:12px;right:12px;z-index:9;width:34px;height:34px;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.28);color:var(--cream);font-size:17px;cursor:pointer}
       /* Pressed-отклик на все кнопки игры + расширенные хит-зоны мелких крестиков (визуально 34px, тап 48px) */
@@ -1148,7 +1149,7 @@
   // ── Гайд «Как играть» — полный справочник по механикам (кнопка ? / ссылка в тьюториале) ──
   function guideSections() {
     const s = [
-      { ic: ICON.tap(20), t: 'Тап и комбо', d: 'Тапай Василия — каждый тап приносит монеты, а сколько монет за один тап, растёт вместе с уровнем. Держи темп без пауз дольше пяти тапов подряд — над котиком загорится комбо-счётчик ×N, а на каждой десятке комбо экран вспыхивает искрами. Энергия тратится на каждый тап и сама восстанавливается со временем — если она кончилась, просто вернись чуть позже.' },
+      { ic: ICON.tap(20), t: 'Тап и комбо', d: 'Тапай Василия — каждый тап приносит монеты и расходует 2 энергии. Одна единица энергии возвращается за 4 секунды. Держи темп без пауз дольше пяти тапов подряд — над котиком загорится комбо-счётчик ×N, а на каждой десятке комбо экран вспыхивает искрами.' },
       { ic: ICON.star(20), t: 'Уровни и карьера Василия', d: 'Все монеты, что ты когда-либо заработал, двигают Василия по карьерной лестнице — девятнадцать ступеней, от Котёнка-стажёра до Императора выпечки. На каждом новом уровне у кота меняется образ и сцена вокруг — костюм, атрибуты, фон. Полоска под балансом показывает прогресс до следующего уровня, а рядом — силуэт того, кем Василий станет дальше.' },
       { ic: ICON.rocket(20), t: 'Бусты', d: 'Турбо и Энергия — два бесплатных буста на вкладке «Котик». Турбо на 20 секунд даёт монеты за тап ×5, Энергия сразу наполняет шкалу энергии до максимума. Каждый буст доступен до 6 раз в день, а на следующий день лимит обновляется — счётчик рядом с кнопкой показывает, сколько попыток осталось.' },
       { ic: ICON.shop(20), t: 'Прокачка и бизнесы', d: 'В «Прокачке» — четыре направления: Производство, Маркетинг, Персонал и Сеть. Каждый бизнес, который ты завёл, дальше сам приносит монеты в час — доход капает даже когда игра закрыта, а следующий уровень бизнеса поднимает доход ещё выше. Часть бизнесов открывается только с определённого уровня игрока — до этого карточка показана силуэтом с замком. Там же можно докупить Мультитап (больше монет за тап) и Запас энергии (выше потолок энергии).' },
@@ -1156,7 +1157,7 @@
       { ic: ICON.gem(20), t: 'Комбо дня', d: 'В «Прокачке» каждый день выбираются три случайных бизнеса — прокачай (купи хотя бы один уровень) все три, и получишь бонус +12 000 монет. Забрать бонус можно на вкладке «Призы». Комбо обновляется раз в сутки.' },
       { ic: ICON.chest(20), t: 'Сундук и бонусы', d: 'Иногда на главном экране пролетает золотая монетка — тронь её, пока не улетела, и получишь бонусные монеты. На вкладке «Призы» раз в день можно открыть Сундук удачи — там монеты, буст или неожиданный джекпот.' },
       { ic: ICON.paw(20), t: 'Дом Василия', d: 'В Доме Василия — четыре комнаты: Кухня, Спальня, Игровая и Двор. В каждой — своё действие (покормить, уложить спать, поиграть, погладить), которое поднимает нужную шкалу — сытость, энергию или настроение — и приносит коту немного опыта. Если заботиться о Василии каждый день подряд, раз в сутки капают монеты питомца — награда растёт с каждым днём серии и с десятого дня держится на максимуме. Во Дворе — магазин шляп для Василия: покупай их за монеты питомца, накопленные заботой.' },
-      { ic: ICON.dove(20), t: 'Голубятня', d: 'Альбом из шестнадцати пород голубей — они выпадают за комбо дня и сундук удачи. Породы собраны в четыре сета, за полный сет — приз. Дубли можно скормить голубю и поднять ему звёзды, а любимцев выставить на витрину. Закрытую породу можно открыть, посмотреть характеристики и купить за монеты прямо в её карточке.' },
+      { ic: ICON.dove(20), t: 'Голубятня', d: 'Каждый голубь добавляет монеты к доходу в час; звёзды и тюнинг усиливают вклад. Голубей можно отправлять на задания с таймером и шансом успеха. До трёх любимцев можно выбрать для показа рядом со своим именем в рейтинге — на силу и доход этот выбор не влияет.' },
       { ic: ICON.trophy(20), t: 'Рейтинг и команды', d: 'Рейтинг недели показывает игроков по количеству монет, заработанных с начала недели — отсчёт идёт с понедельника, а в конце недели сезон обнуляется и начинается заново. Здесь же можно вступить в одну из четырёх команд — Шоколадные, Ванильные, Карамельные или Ягодные — и соревноваться вместе с командой в общем зачёте по сумме очков всех участников.' },
       { ic: ICON.users(20), t: 'Друзья', d: 'Позови друга в игру по своей ссылке — как только он присоединится, тебе начислится 30 000 монет, а другу — 2 500 монет на старт. Ссылку можно скопировать или отправить прямо из игры кнопкой «Позвать».' },
     ];
@@ -1341,7 +1342,7 @@
       activeTapPointers.add(e.pointerId);
     }
     if (!st) return; // тап до завершения load() на медленной сети — не ронять TypeError'ом
-    if (st.energy < 1) { energyEmpty(); return; }
+    if (st.energy < TAP_COST) { energyEmpty(); return; }
     const mult = turboOn() ? TURBO_MULT : 1;
     const eMult = (st.event && st.event.active) ? st.event.mult : 1; // ивент ×N (зеркало сервера)
     const bankMult = (st.bankMult && st.bankMult > 1) ? st.bankMult : 1;
@@ -1354,8 +1355,8 @@
     const sweet = lifetime % SWEET_TAP_EVERY === 0;
     const baseTapGain = Math.floor(st.perTap * mult * (st.prestigeMult || 1) * eMult * bankMult);
     const gain = baseTapGain * (sweet ? SWEET_TAP_MULT : 1);
-    st.energy -= 1; st.balance += gain; st.totalEarned += gain; pending++;
-    if (!authed()) { const s = rawGet(); s.energy -= 1; s.balance += gain; s.totalEarned += gain; s.taps = (s.taps || 0) + 1; rawSave(s); st.taps = s.taps; }
+    st.energy -= TAP_COST; st.balance += gain; st.totalEarned += gain; pending++;
+    if (!authed()) { const s = rawGet(); s.energy -= TAP_COST; s.balance += gain; s.totalEarned += gain; s.taps = (s.taps || 0) + 1; rawSave(s); st.taps = s.taps; }
     if (sweet) sweetTapFx(e.clientX, e.clientY, gain);
     else maybeCatSpeak();
     // комбо
@@ -1475,10 +1476,9 @@
     const scr = ov.querySelector('#ck-scr-cat'); if (!scr) return;
     const old = scr.querySelector('.ck-ehint'); if (old) old.remove();
     const hasBoost = st && st.boostEnergyLeft > 0;
-    const persec = Math.round(REGEN * 10) / 10;
     const el = document.createElement('div'); el.className = 'ck-ehint';
     el.innerHTML = `<div class="ck-ehint__h">${ICON.bolt(20)} Энергия кончилась</div>`
-      + `<div class="ck-ehint__s">${hasBoost ? 'Восстанови сейчас или подожди — энергия копится сама, +' + persec + '/сек.' : 'Энергия копится сама, +' + persec + '/сек. А бизнесы в «Прокачке» приносят монеты даже без тапов.'}</div>`
+      + `<div class="ck-ehint__s">${hasBoost ? 'Восстанови сейчас или подожди — возвращается 1 энергия за 4 секунды.' : 'Возвращается 1 энергия за 4 секунды. А бизнесы в «Прокачке» приносят монеты даже без тапов.'}</div>`
       + `<button class="ck-ehint__btn" id="ck-eh-act">${ICON.bolt(17)} ${hasBoost ? 'Восстановить (' + st.boostEnergyLeft + ')' : 'К бизнесам'}</button>`;
     scr.appendChild(el);
     requestAnimationFrame(() => el.classList.add('show'));
@@ -2525,7 +2525,7 @@
       { text: 'Мур! Я Василий — будущий император выпечки. Это мой главный зал, покажу что тут к чему', anchor: '#ck-catwrap', pos: 'top' },
       { text: 'Тапай по мне — каждый тап приносит монету. Ну-ка, пять тапов!', anchor: '#ck-catwrap', pos: 'top', wait: 'taps' },
       { text: 'Кстати: каждый 40-й тап — «Сладкий», сразу ×8 монет. Лови золотые вспышки!', anchor: '#ck-catwrap', pos: 'top' },
-      { text: 'Энергия: тап стоит единичку, сама восстанавливается. Кончилась — загляни в другие вкладки', anchor: '.ck-energy', pos: 'top' },
+      { text: 'Энергия: тап стоит 2 единицы, а 1 единица возвращается за 4 секунды. Кончилась — используй бесплатный буст или загляни в другие вкладки', anchor: '.ck-energy', pos: 'top' },
       { text: 'Бусты: Турбо ×5 и мгновенная энергия — бесплатные, по кулдауну. Используй их, когда хочешь быстро добрать монеты до покупки', anchor: '.ck-boosts', pos: 'top' },
       { text: 'Твои монеты и доход в час. Монеты тратим на бизнесы, тюнинг голубей и ставки', anchor: '.ck-bal', pos: 'bottom' },
       { text: 'Полоска карьеры: все заработанные монеты двигают меня по 19 уровням — от стажёра до Императора выпечки', anchor: '.ck-progwrap', pos: 'bottom' },
@@ -2549,10 +2549,11 @@
       { text: 'Пригласи друга — обоим монеты: тебе +30 000, ему +2 500 на старт', anchor: '#ck-toplist', pos: 'bottom' },
     ],
     col: [
-      { text: 'Альбом пород: собери все 16! Породы выпадают за комбо дня и сундук удачи', anchor: '#ck-dove-col .cd-summary', pos: 'bottom' },
+      { text: 'Альбом пород: собери все 16! Каждый голубь увеличивает доход в час, а звёзды и тюнинг усиливают его', anchor: '#ck-dove-col .cd-summary', pos: 'bottom' },
       { text: 'Породы собраны в сеты. Собери четвёрку — над ней появится кнопка «Забрать приз»', anchor: '#ck-dove-col .cd-sethead', pos: 'bottom' },
+      { text: 'В «Заданиях» отправляй голубей в полёт. Чем лучше птица и тюнинг, тем выше шанс полной награды; даже за провал будет 20%', anchor: '#cd-nav-missions', anchorFn: function () { return ov.querySelector('#cd-nav-missions') || ov.querySelector('#ck-dove-col .cd-navrow'); }, pos: 'bottom' },
       { text: 'Кнопка «Гонки» открывает всё спортивное: гонку стаи, драг-заезды, тренировки и ставки монетами', anchor: '#cd-nav-race', anchorFn: function () { return ov.querySelector('#cd-nav-race') || ov.querySelector('#ck-dove-col .cd-navrow'); }, pos: 'bottom' },
-      { text: 'Тапни закрытую породу: там её характеристики и покупка за монеты', anchor: '#ck-dove-col .cd-card.cd-locked', anchorFn: function () { return ov.querySelector('#ck-dove-col .cd-card.cd-locked') || ov.querySelector('#ck-dove-col .cd-grid'); }, pos: 'bottom' },
+      { text: 'Тапни свою породу: там звёзды, тюнинг и выбор любимых голубей для показа рядом с твоим именем в рейтинге', anchor: '#ck-dove-col .cd-card:not(.cd-locked)', anchorFn: function () { return ov.querySelector('#ck-dove-col .cd-card:not(.cd-locked)') || ov.querySelector('#ck-dove-col .cd-grid'); }, pos: 'bottom' },
       { text: 'В «Обменах» меняйся дублями с другими игроками. Бейдж покажет входящие предложения', anchor: '#cd-nav-trades', pos: 'bottom' },
     ],
     home: [

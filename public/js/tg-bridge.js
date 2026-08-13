@@ -44,7 +44,12 @@
 
   // ─── Telegram init + тема ──────────────────────────────────────────────────
   if (tg) {
-    try { tg.ready(); tg.expand(); } catch {}
+    try {
+      tg.ready(); tg.expand();
+      // Не даём частым вертикальным тапам/микросвайпам свернуть Mini App.
+      // Внутренняя прокрутка страниц при этом продолжает работать.
+      if (typeof tg.disableVerticalSwipes === 'function') tg.disableVerticalSwipes();
+    } catch {}
   }
   if (mx) {
     try { mx.ready?.(); mx.expand?.(); } catch {}
