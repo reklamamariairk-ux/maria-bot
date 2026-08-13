@@ -952,8 +952,13 @@ export async function getMailRecipients(chatId: number):
                FROM pigeon_friends WHERE chat_a=$1 OR chat_b=$1) f
        LEFT JOIN subscribers s ON s.chat_id = f.other
       LIMIT 50`, [chatId]);
+  const explicit = mapRows(frR.rows);
+  // «Друзья» в UI — все реальные знакомые игроки: добавленные по ссылке, прямые
+  // рефералы и активные участники своей стаи. Дедуп по chat_id, явная дружба первая.
+  const friends = [...explicit, ...mapRows(refR.rows), ...mapRows(squadRows)].filter((r, i, all) =>
+    all.findIndex(x => x.chat === r.chat) === i).slice(0, 100);
   const { clickerFriendLink } = await import("./links");
-  return { squad: mapRows(squadRows), refs: mapRows(refR.rows), friends: mapRows(frR.rows), friendLink: clickerFriendLink(chatId) };
+  return { squad: mapRows(squadRows), refs: mapRows(refR.rows), friends, friendLink: clickerFriendLink(chatId) };
 }
 
 // ── Тюнинг гонщика (операции с БД) ──────────────────────────────────────────

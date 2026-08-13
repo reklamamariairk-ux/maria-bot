@@ -360,7 +360,15 @@ async function assertDuelFriend(client: any, chatId: number, friendChat: number)
   if (!Number.isInteger(friendChat) || friendChat <= 0 || friendChat === chatId) return false;
   const a = Math.min(chatId, friendChat), b = Math.max(chatId, friendChat);
   const rel = await client.query(`SELECT 1 FROM pigeon_friends WHERE chat_a=$1 AND chat_b=$2 LIMIT 1`, [a, b]);
-  return !!rel.rowCount;
+  if (rel.rowCount) return true;
+  // Рефералы и однокомандники также отображаются в «Друзьях»: разрешаем им дуэли.
+  const known = await client.query(
+    `SELECT 1 FROM clicker_state me JOIN clicker_state other ON other.chat_id=$2
+      WHERE me.chat_id=$1 AND (
+        me.referred_by=$2 OR other.referred_by=$1 OR
+        (me.squad IS NOT NULL AND me.squad=other.squad)
+      ) LIMIT 1`, [chatId, friendChat]);
+  return !!known.rowCount;
 }
 async function getDuelStats(client: any, chatId: number, breed: string): Promise<DuelStats | null> {
   const r = await client.query(`SELECT stars, tune_speed, tune_stamina, tune_luck FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 AND count>0`, [chatId, breed]);

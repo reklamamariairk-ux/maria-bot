@@ -358,7 +358,7 @@
   const LOOP_FRAME_BUDGET = 1 / 30;
   const MG_MIN_FRAME_MS = 15; // кап рендера экшен-мини-игр ~60fps: на 120–144 Гц не жжём батарею лишними кадрами (геймплей на dt, скорость не меняется)
   let st = null, turboUntil = 0, combo = 0, comboT = 0, bonusTimer = 0, rainState = null, rainRAF = 0, upCat = 'prod', lastBought = null;
-  let sessionTapCount = 0, energyHintFired = false, boostsHintFired = false, bizCoachPending = false;
+  let sessionTapCount = 0, energyHintFired = false, boostsHintFired = false, bizCoachPending = false, lastTapFxAt = 0;
 
   function authed() { return !!(window.App && App.isAuthed && App.isAuthed()); }
 
@@ -1373,19 +1373,25 @@
     else maybeCatSpeak();
     // комбо
     const now = performance.now(); combo = (now - comboT < 450) ? combo + 1 : 1; comboT = now;
-    const cat = ov.querySelector('#ck-cat'); cat.classList.remove('tap'); void cat.offsetWidth; cat.classList.add('tap'); setTimeout(() => cat.classList.remove('tap'), 80);
-    sfxTap(combo); window.haptic && window.haptic('light');
-    flyUp(e.clientX, e.clientY, '+' + gain, Math.min(40, 22 + combo));
+    // Монеты считаются на КАЖДЫЙ тап, но тяжёлые DOM/audio/haptic-эффекты ограничены
+    // ~20 кадрами/с: при мультитапе не копятся сотни узлов и таймеров.
+    const fxNow = performance.now(), drawTapFx = fxNow - lastTapFxAt >= 50;
+    if (drawTapFx) {
+      lastTapFxAt = fxNow;
+      const cat = ov.querySelector('#ck-cat'); cat.classList.add('tap'); setTimeout(() => cat.classList.remove('tap'), 80);
+      sfxTap(combo); window.haptic && window.haptic('light');
+      flyUp(e.clientX, e.clientY, '+' + gain, Math.min(40, 22 + combo));
+      ripple(e.clientX, e.clientY); flyCoin(e.clientX, e.clientY);
+      renderTop2();
+    }
     const comboBonus = comboBonusFor(baseTapGain);
     if (comboBonus > 0) {
       st.balance += comboBonus; st.totalEarned += comboBonus; pendingComboBonus += comboBonus;
       if (!authed()) { const s = rawGet(); s.balance += comboBonus; s.totalEarned += comboBonus; rawSave(s); }
       flyUp(e.clientX, e.clientY - 22, `комбо +${fmt(comboBonus)}`, 34);
     }
-    ripple(e.clientX, e.clientY); flyCoin(e.clientX, e.clientY);
-    if (combo >= 5) showCombo();
-    if (combo >= 12 && combo % 3 === 0) coinShower();
-    renderTop2();
+    if (combo >= 5 && drawTapFx) showCombo();
+    if (combo >= 30 && combo % 30 === 0) coinShower();
     tourOnTap();
     sessionTapCount++;
     if (sessionTapCount === 30) coach('level', COACH.level.t, '.ck-progwrap', { icon: ICON[COACH.level.icon](18) });
