@@ -14,7 +14,23 @@ import {
   tuneCost, raceDivision, TUNE_MAX,
   createTrade, sendMail, thankMail, setShowcase, claimSet, enterRace,
   pigeonPrice, PIGEON_PRICE, normalizeCoinDelta, TRADE_COIN_CAP,
+  pigeonPassiveValue, pigeonCollectionPassiveBonus, PIGEON_SET_PASSIVE_BONUS,
 } from "../src/pigeons";
+
+
+describe("pigeon passive income — голуби и коллекции дают доход/час", () => {
+  it("каждый голубь даёт пассив, а тюнинг и звёзды увеличивают вклад", () => {
+    const base = pigeonPassiveValue("sizar", 1, 0, 0, 0);
+    const tuned = pigeonPassiveValue("sizar", 3, 10, 10, 10);
+    expect(base).toBeGreaterThan(0);
+    expect(tuned).toBeGreaterThan(base);
+  });
+
+  it("закрытый сет даёт отдельный бонус коллекции", () => {
+    const city = new Set(["sizar", "belobok", "ryaboy", "chubaty"]);
+    expect(pigeonCollectionPassiveBonus(city)).toBe(PIGEON_SET_PASSIVE_BONUS.city);
+  });
+});
 
 describe("normalizeCoinDelta — доплата монетами в обмене (untrusted)", () => {
   it("целое в [−CAP,+CAP] проходит (знак = кто платит), 0 = чистый своп", () => {

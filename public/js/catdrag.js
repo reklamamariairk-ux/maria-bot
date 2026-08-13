@@ -290,14 +290,8 @@
       ? `<div class="cd-drag-hint">Дуэль с другом: <b>${esc(duelRace.name || 'Друг')}</b>${duelRace.stake ? ` · ставка ${fmt(duelRace.stake)}` : ' · без ставки'}</div>`
       : friendRace
       ? `<div class="cd-drag-hint">Гонка с другом: <b>${esc(friendRace.name || 'Друг')}</b> · без ставки</div>`
-      : `<div class="cd-drag-sect">Режим</div>
-        <div class="cd-drag-seg">
-          <button class="cd-drag-seg__b${mode === 'training' ? ' on' : ''}" data-mode="training">Тренировка</button>
-          <button class="cd-drag-seg__b${mode === 'bet' ? ' on' : ''}" data-mode="bet">💰 Ставка</button>
-        </div>`;
-    const stakesHtml = !friendRace && mode === 'bet'
-      ? `<div class="cd-drag-stakes">${STAKE_PRESETS.map((v) => `<button class="cd-drag-stake${v === stake ? ' on' : ''}" data-stake="${v}" ${balance !== null && v > balance ? 'disabled' : ''}>${fmt(v)}</button>`).join('')}</div>`
-      : '';
+      : `<div class="cd-drag-hint">Тренировка без ставки: проверь голубя и разгон перед дуэлью.</div>`;
+    const stakesHtml = '';
     const friendReady = !friendRace || (Array.isArray(opponentsPreview) && opponentsPreview.some((o) => o && o.friend));
     const canStart = !lowEnergy && (duelRace || (opponentsPreview !== null && friendReady));
     return `<div class="cd-drag-hd"><div class="cd-drag-t">🏁 Драг-заезд</div><button class="cd-drag-x" id="cd-drag-x">×</button></div>

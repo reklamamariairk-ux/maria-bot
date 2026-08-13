@@ -42,23 +42,18 @@ const pigeonSlot = (rarity: Rarity, weight: number): Slot => ({
   evValue: PIGEON_PRICE[rarity],
 });
 
-// Базовая таблица. Веса подобраны так, чтобы EV ≈ 67% цены (домовый эдж ~33%):
-// большинство открытий — монеты НИЖЕ цены или дешёвый голубь (дом в плюсе), редко —
-// дорогой голубь/джекпот (крупный выигрыш игрока). Порядок = порядок розыгрыша.
+// Таблица по новой продуктовой логике: кейс чаще возвращает ощутимые монеты.
+// Веса суммируются до 1000 = проценты с точностью 0.1%:
+// 10% заметный минус, 50% около цены, 10% чуть ниже 50k, 20% плюс до 150k,
+// 9% крупный плюс 150-250k, 1% джекпот до 1M.
 export const CASE_SLOTS: Slot[] = [
-  coinsSlot("coins_small", 447, 8_000, 20_000),     // консолидация, ниже цены
-  coinsSlot("coins_med", 190, 22_000, 42_000),      // ниже цены
-  coinsSlot("coins_big", 40, 55_000, 95_000),       // небольшой выигрыш
-  coinsSlot("coins_jackpot", 7, 150_000, 400_000),  // джекпот-монеты
-  { key: "turbo", weight: 90, roll: () => ({ type: "turbo" }), evValue: TURBO_VALUE },
-  { key: "energy", weight: 90, roll: () => ({ type: "energy" }), evValue: ENERGY_VALUE },
-  pigeonSlot("common", 90),        // 30k — ниже цены (эдж)
-  pigeonSlot("rare", 35),          // 120k — выигрыш
-  pigeonSlot("epic", 8),           // 600k — крупный выигрыш
-  pigeonSlot("legendary", 2),      // 2.5M — джекпот-голубь
-  { key: "champion", weight: 1, roll: () => ({ type: "champion" }), evValue: CHAMPION_VALUE },
+  coinsSlot("coins_loss", 100, 5_000, 25_000),
+  coinsSlot("coins_equal", 500, 50_000, 50_000),
+  coinsSlot("coins_slight_under", 100, 35_000, 49_000),
+  coinsSlot("coins_plus", 200, 60_000, 150_000),
+  coinsSlot("coins_big", 90, 150_000, 250_000),
+  coinsSlot("coins_jackpot", 10, 250_000, 1_000_000),
 ];
-
 export const CASE_TOTAL_WEIGHT = CASE_SLOTS.reduce((s, x) => s + x.weight, 0);
 
 // Средняя ценность приза (EV) и домовый эдж — без учёта гейта чемпиона (его вклад

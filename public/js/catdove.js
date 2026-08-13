@@ -1291,68 +1291,22 @@
     const resBtn = sh.querySelector('#cd-race-results'); if (resBtn) resBtn.onclick = openRaceResultsSheet;
   }
   function raceHtml() {
-    if (!race || !race.enabled) {
-      return `<div class="cd-sect-t">Драг-заезд</div>
-        <div class="cd-racehero">
-          <div class="cd-racehero__bg"></div>
-          <div class="cd-racehero__scrim"></div>
-          <div class="cd-racehero__in">
-            <div class="cd-racehero__b">
-              <div class="cd-racehero__t">Быстрый заезд</div>
-              <div class="cd-racehero__s">выбери голубя, тапай на старте и соревнуйся прямо сейчас</div>
-            </div>
-          </div>
-          <div class="cd-racehero__acts">
-            <button class="cd-ctabtn" id="cd-drag-enter">${FLAG_ICON(14)} Драг-заезд</button>
-            <button class="cd-ctabtn cd-ctabtn--ghost" id="cd-friend-race-enter">${USERS_ICON(14)} Гонка с другом</button>
-          </div>
-        </div>
-        <div class="cd-racenote"><b>Драг-заезд</b> — быстрый режим: тренировка без ставок или ставка монетами. Недельная Гонка стаи сейчас недоступна.</div>`;
-    }
-    const mine = race.myBreed ? BY_ID.get(race.myBreed) : null;
-    const lr = raceResults();
-    // Полные таблицы трёх дивизионов НЕ в ленте (стена из 9 строк хоронила альбом) —
-    // компактная строка-тизер открывает их шитом.
-    const winner = lr ? (['gold', 'silver', 'bronze'].map(d => (lr[d] || [])[0]).find(Boolean)) : null;
-    const winnerB = winner ? BY_ID.get(winner.breed) : null;
-    const teaser = lr
-      ? `<button class="cd-resultsrow" id="cd-race-results" type="button">
-          <span class="cd-resultsrow__medal">1</span>
-          <span class="cd-resultsrow__s">Итоги прошлой недели${winnerB ? `<span class="cd-resultsrow__sub">победитель — ${winnerB.name}</span>` : ''}</span>
-          <span class="cd-resultsrow__chev">›</span>
-        </button>`
-      : '';
-    // hero — закатная сцена драг-трассы (те же слои /img/drag/), мой заявленный голубь крупно
-    const heroArt = mine
-      ? `<div class="cd-racehero__art"><img src="/img/pigeons/${mine.id}.webp?v=2" alt="" loading="lazy" onerror="this.style.display='none'"></div>`
-      : '';
-    // заявлен и сервер отдаёт живую неделю → очки, место и таймер прямо в hero
-    const heroSub = mine
-      ? (race.myScore != null && race.myPlace
-        ? `${fmt(race.myScore)} ${plu(num(race.myScore), 'очко', 'очка', 'очков')} · ${race.myPlace}-е из ${num(race.divisionTotal)} · итоги через ${fmtLeft(race.weekEndsTs)}`
-        : 'заявлен на этой неделе')
-      : `заяви голубя — отборочный полёт решает часть очков · ${num(race.entrants)} ${plu(num(race.entrants), 'участник', 'участника', 'участников')}`;
-    return `<div class="cd-sect-t">Гонка стаи</div>
+    return `<div class="cd-sect-t">Гонки голубей</div>
       <div class="cd-racehero">
         <div class="cd-racehero__bg"></div>
         <div class="cd-racehero__scrim"></div>
         <div class="cd-racehero__in">
           <div class="cd-racehero__b">
-            <div class="cd-racehero__t">${mine ? mine.name : 'Пока не участвуешь'}</div>
-            <div class="cd-racehero__s">${heroSub}</div>
-            ${mine && race.myDivision ? divChip(race.myDivision) : ''}
+            <div class="cd-racehero__t">Тренировка и дуэли</div>
+            <div class="cd-racehero__s">выбери голубя, сделай разгон тапами и сразу увидь честный результат</div>
           </div>
-          ${heroArt}
         </div>
         <div class="cd-racehero__acts">
-          ${!mine ? `<button class="cd-ctabtn" id="cd-race-enter">Отборочный полёт</button>` : ''}
-          <button class="cd-ctabtn${!mine ? ' cd-ctabtn--ghost' : ''}" id="cd-drag-enter">${FLAG_ICON(14)} Драг-заезд</button>
-          <button class="cd-ctabtn cd-ctabtn--ghost" id="cd-friend-race-enter">${USERS_ICON(14)} Гонка с другом</button>
+          <button class="cd-ctabtn" id="cd-drag-enter">${FLAG_ICON(14)} Тренировка</button>
+          <button class="cd-ctabtn cd-ctabtn--ghost" id="cd-friend-race-enter">${USERS_ICON(14)} Дуэль с другом</button>
         </div>
       </div>
-      <div class="cd-racenote"><b>Драг-заезд</b> — гоняй прямо сейчас, тапай на старте · <b>Гонка стаи</b> — заявка раз в неделю (отборочный полёт), итоги в понедельник</div>
-      ${weekStandingsHtml()}
-      ${teaser}`;
+      <div class="cd-racenote"><b>Тренировка</b> — без ставки, чтобы проверить голубя и разгон. <b>Дуэль</b> — только вы вдвоём: оба выбираете голубя, оба тапаете, ставку забирает победитель.</div>`;
   }
   function fmtLeft(ts) {
     const ms = num(ts) - Date.now();

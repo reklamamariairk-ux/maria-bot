@@ -375,7 +375,7 @@ async function readCards(client: any, chatId: number): Promise<Record<string, nu
   const { rows } = await client.query(`SELECT card, level FROM clicker_cards WHERE chat_id=$1`, [chatId]);
   const m: Record<string, number> = {}; for (const r of rows) m[r.card] = r.level; return m;
 }
-function profitPerHour(cl: Record<string, number>, albumMult = 1): number { let p = 0; for (const c of CARDS) p += cardProfit(c, cl[c.id] || 0); return p * albumMult; }
+function profitPerHour(cl: Record<string, number>, albumMult = 1, pigeonPassive = 0): number { let p = Math.max(0, Math.floor(Number(pigeonPassive) || 0)); for (const c of CARDS) p += cardProfit(c, cl[c.id] || 0); return p * albumMult; }
 
 function buildState(r: any, cl: Record<string, number>, passiveEarned: number): ClickerState {
   // Эффективный уровень с учётом храповика: не ниже max_level (защита от отката при новых порогах).
@@ -387,7 +387,7 @@ function buildState(r: any, cl: Record<string, number>, passiveEarned: number): 
   const bUsedT = r.boost_date === today ? r.boost_turbo_used : 0;
   return {
     balance: Number(r.balance), totalEarned: Number(r.total_earned), energy: r.energy, energyMax: energyMaxFor(r.energy_limit_level),
-    perTap: perTapFor(r.multitap_level), profitPerHour: profitPerHour(cl, r.__albumMult || 1), passiveEarned,
+    perTap: perTapFor(r.multitap_level), profitPerHour: profitPerHour(cl, r.__albumMult || 1, r.__pigeonPassive || 0), passiveEarned,
     bankMult: Number(r.__bankMult || 1),
     level: lg.level, levelName: lg.name, nextNeed: nextNeed(Number(r.total_earned)),
     multitapLevel: r.multitap_level, multitapPrice: priceMultitap(r.multitap_level),
@@ -437,13 +437,15 @@ async function refresh(client: any, chatId: number): Promise<{ r: any; cl: Recor
   r.energy = Math.min(energyMaxFor(r.energy_limit_level), Math.round(r.energy + secs * REGEN_PER_SEC));
   // Перк полного альбома (+5% к пассиву): флаг кэширован на clicker_state.album_bonus
   // (выставляется в grantPigeon при 16/16 пород) — без похода в pigeon_inventory на каждый тап.
-  const { ALBUM_PASSIVE_BONUS } = await import("./pigeons");
+  const { ALBUM_PASSIVE_BONUS, pigeonPassiveBonus } = await import("./pigeons");
   const albumMult = r.album_bonus ? 1 + ALBUM_PASSIVE_BONUS : 1;
+  const pigeonPassive = await pigeonPassiveBonus(chatId, client);
   r.__albumMult = albumMult;
+  r.__pigeonPassive = pigeonPassive;
   // Копилка стаи: закрытая цель недели множит ВЕСЬ доход (пассив здесь, тапы в tapClicker)
   const bankMult = (await squadBankActive(r.squad || null)) ? SQUAD_BANK_MULT : 1;
   r.__bankMult = bankMult;
-  const passive = Math.floor(profitPerHour(cl, albumMult) * Math.min(secs / 3600, PASSIVE_CAP_HOURS) * gainMult(r.prestige) * bankMult);
+  const passive = Math.floor(profitPerHour(cl, albumMult, pigeonPassive) * Math.min(secs / 3600, PASSIVE_CAP_HOURS) * gainMult(r.prestige) * bankMult);
   if (passive > 0) { r.balance = Number(r.balance) + passive; r.total_earned = Number(r.total_earned) + passive; }
   // сезон: новая неделя → база = текущий total (очки сезона обнуляются)
   const wk = weekKey();

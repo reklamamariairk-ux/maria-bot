@@ -1,53 +1,55 @@
 import { describe, it, expect } from "vitest";
 import { CASE_COST, CASE_SLOTS, CASE_TOTAL_WEIGHT, caseEV, rollCase, prizeValue, type CasePrize } from "../src/lootbox";
 
-describe("экономика кейса — дом в плюсе (EV < цены)", () => {
-  it("средняя ценность приза ниже цены открытия — домовый эдж положительный", () => {
-    const { ev, evNoChampion, edge, edgeNoChampion } = caseEV();
-    // Печатаем для наглядности при тюнинге.
-    console.log(`CASE: cost=${CASE_COST} EV=${Math.round(ev)} edge=${(edge * 100).toFixed(1)}% | EV(без чемпиона)=${Math.round(evNoChampion)} edge=${(edgeNoChampion * 100).toFixed(1)}%`);
-    // Реалистичный EV (чемпион падает ≤1/год, его вклад в дистанции ~0) должен быть заметно ниже цены.
-    expect(evNoChampion).toBeLessThan(CASE_COST);
-    expect(edgeNoChampion).toBeGreaterThan(0.2);   // дом забирает ≥20%
-    expect(edgeNoChampion).toBeLessThan(0.5);       // но не грабёж (≤50%)
+describe("экономика кейса — новая таблица призов", () => {
+  it("веса соответствуют заданным процентам", () => {
+    expect(CASE_TOTAL_WEIGHT).toBe(1000);
+    const byKey = Object.fromEntries(CASE_SLOTS.map(s => [s.key, s.weight]));
+    expect(byKey.coins_loss).toBe(100);
+    expect(byKey.coins_equal).toBe(500);
+    expect(byKey.coins_slight_under).toBe(100);
+    expect(byKey.coins_plus).toBe(200);
+    expect(byKey.coins_big).toBe(90);
+    expect(byKey.coins_jackpot).toBe(10);
   });
-  it("веса положительны и слоты покрывают весь диапазон", () => {
-    expect(CASE_TOTAL_WEIGHT).toBeGreaterThan(0);
-    for (const s of CASE_SLOTS) expect(s.weight).toBeGreaterThan(0);
+
+  it("средняя ценность стала выше цены — кейс ощущается щедрее", () => {
+    const { ev, evNoChampion } = caseEV();
+    console.log(`CASE: cost=${CASE_COST} EV=${Math.round(ev)} return=${(ev / CASE_COST * 100).toFixed(1)}%`);
+    expect(ev).toBeGreaterThan(CASE_COST);
+    expect(evNoChampion).toBe(ev);
   });
 });
 
-describe("rollCase — розыгрыш и гейт чемпиона", () => {
-  it("чемпион НЕ выпадает, когда гейт закрыт (championAllowed=false)", () => {
-    let champ = 0;
-    for (let i = 0; i < 20000; i++) {
-      const p = rollCase(Math.random(), Math.random(), false);
-      if (p.type === "champion") champ++;
-    }
-    expect(champ).toBe(0);
-  });
-  it("чемпион МОЖЕТ выпасть, когда гейт открыт (championAllowed=true)", () => {
-    let champ = 0;
-    for (let i = 0; i < 200000; i++) {
-      const p = rollCase(Math.random(), Math.random(), true);
-      if (p.type === "champion") champ++;
-    }
-    expect(champ).toBeGreaterThan(0); // при весе ~0.1% на 200k бросков появится
-  });
-  it("все призы — валидного типа, монеты в разумных границах", () => {
+describe("rollCase — диапазоны призов", () => {
+  it("все призы — валидные монеты в заданных границах", () => {
     for (let i = 0; i < 5000; i++) {
       const p: CasePrize = rollCase(Math.random(), Math.random(), true);
-      expect(["coins", "turbo", "energy", "pigeon", "champion"]).toContain(p.type);
-      if (p.type === "coins") { expect(p.amount).toBeGreaterThan(0); expect(prizeValue(p)).toBe(p.amount); }
+      expect(p.type).toBe("coins");
+      if (p.type === "coins") {
+        expect(p.amount).toBeGreaterThanOrEqual(5_000);
+        expect(p.amount).toBeLessThanOrEqual(1_000_000);
+        expect(prizeValue(p)).toBe(p.amount);
+      }
     }
   });
-  it("на дистанции дом в плюсе: сумма выигрышей < сумма ставок (Монте-Карло, гейт закрыт)", () => {
-    let staked = 0, won = 0;
-    for (let i = 0; i < 100000; i++) {
-      staked += CASE_COST;
-      won += prizeValue(rollCase(Math.random(), Math.random(), false));
+
+  it("проверяет границы каждой вероятностной группы", () => {
+    const samples = [
+      [0.05, 0.5, 5_000, 25_000],
+      [0.35, 0.5, 50_000, 50_000],
+      [0.65, 0.5, 35_000, 49_000],
+      [0.80, 0.5, 60_000, 150_000],
+      [0.945, 0.5, 150_000, 250_000],
+      [0.995, 0.5, 250_000, 1_000_000],
+    ] as const;
+    for (const [r1, r2, lo, hi] of samples) {
+      const p = rollCase(r1, r2, false);
+      expect(p.type).toBe("coins");
+      if (p.type === "coins") {
+        expect(p.amount).toBeGreaterThanOrEqual(lo);
+        expect(p.amount).toBeLessThanOrEqual(hi);
+      }
     }
-    expect(won).toBeLessThan(staked); // дом не уходит в минус на дистанции
-    console.log(`Монте-Карло 100k: возврат игроку ${(won / staked * 100).toFixed(1)}%`);
   });
 });

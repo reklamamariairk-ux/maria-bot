@@ -59,6 +59,12 @@ export const PIGEON_SETS: { id: string; name: string; reward: number }[] = [
 ];
 export const ALBUM_PASSIVE_BONUS = 0.05; // +5% к пассиву за полный альбом (16/16)
 
+// Пассив от голубей: каждый уникальный голубь добавляет монеты/час, тюнинг и звёзды
+// усиливают его вклад. Закрытые коллекции дают отдельный плоский бонус к доходу/час.
+export const PIGEON_PASSIVE_BASE: Record<Rarity, number> = { common: 60, rare: 180, epic: 600, legendary: 2500 };
+export const PIGEON_SET_PASSIVE_BONUS: Record<string, number> = { city: 1000, sweet: 2500, post: 5000, fest: 10000 };
+export const PIGEON_ALL_PASSIVE_BONUS = 25000;
+
 // Стикер-фразы Василия (id = индекс). Свободного текста в системе нет.
 export const STICKERS: string[] = [
   "Держи, пригодится!", "Сладкого дня!", "От Василия с любовью 🐾", "Такой красавец искал тебя!",
@@ -142,6 +148,40 @@ export function tuneCost(level: number): number | null {
 export const PIGEON_PRICE: Record<Rarity, number> = {
   common: 30_000, rare: 120_000, epic: 600_000, legendary: 2_500_000,
 };
+export function pigeonPassiveValue(breed: string, stars = 1, speed = 0, stamina = 0, luck = 0): number {
+  const b = BREED_BY_ID.get(breed);
+  if (!b) return 0;
+  const base = PIGEON_PASSIVE_BASE[b.rarity] || 0;
+  const safeStars = Math.min(3, Math.max(1, Math.floor(Number(stars) || 1)));
+  const tune = Math.min(30, Math.max(0, Math.floor(Number(speed) || 0) + Math.floor(Number(stamina) || 0) + Math.floor(Number(luck) || 0)));
+  const starMult = 1 + (safeStars - 1) * 0.25;
+  const tuneMult = 1 + tune * 0.04;
+  return Math.floor(base * starMult * tuneMult);
+}
+
+export function pigeonCollectionPassiveBonus(owned: Set<string>): number {
+  let bonus = 0;
+  for (const set of PIGEON_SETS) {
+    const breeds = PIGEON_BREEDS.filter(b => b.set === set.id).map(b => b.id);
+    if (breeds.length && breeds.every(id => owned.has(id))) bonus += PIGEON_SET_PASSIVE_BONUS[set.id] || 0;
+  }
+  const allSetBreeds = PIGEON_BREEDS.filter(b => b.id !== "champion" && b.set).map(b => b.id);
+  if (allSetBreeds.length && allSetBreeds.every(id => owned.has(id))) bonus += PIGEON_ALL_PASSIVE_BONUS;
+  return bonus;
+}
+
+export async function pigeonPassiveBonus(chatId: number, client: PoolClient | typeof pool = pool): Promise<number> {
+  const { rows } = await client.query(
+    `SELECT breed, stars, tune_speed, tune_stamina, tune_luck FROM pigeon_inventory WHERE chat_id=$1 AND count>0`,
+    [chatId]);
+  const owned = new Set<string>();
+  let total = 0;
+  for (const r of rows) {
+    owned.add(String(r.breed));
+    total += pigeonPassiveValue(String(r.breed), Number(r.stars), Number(r.tune_speed), Number(r.tune_stamina), Number(r.tune_luck));
+  }
+  return total + pigeonCollectionPassiveBonus(owned);
+}
 export function pigeonPrice(breed: string): number | null {
   const b = BREED_BY_ID.get(breed);
   if (!b || breed === "champion") return null;
