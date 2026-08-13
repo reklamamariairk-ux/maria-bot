@@ -7,7 +7,7 @@
 import type { Rarity } from "./pigeons";
 import { PIGEON_PRICE } from "./pigeons";
 
-export const CASE_COST = 50_000;            // цена открытия кейса, монеты
+export const CASE_COST = 100_000;           // цена открытия кейса, монеты
 export const CHAMPION_COOLDOWN_DAYS = 365;  // чемпион — не чаще 1 раза в год на всех
 
 export type CasePrize =
@@ -44,8 +44,8 @@ const pigeonSlot = (rarity: Rarity, weight: number): Slot => ({
 
 // Таблица по новой продуктовой логике: кейс чаще возвращает ощутимые монеты.
 // Веса суммируются до 1000 = проценты с точностью 0.1%:
-// 10% заметный минус, 50% около цены, 10% чуть ниже 50k, 20% плюс до 150k,
-// 9% крупный плюс 150-250k, 1% джекпот до 1M.
+// При цене 100k: 10% заметный минус, 60% возврат ниже цены, 20% шанс получить
+// до 150k, 9% крупный плюс 150-250k, 1% джекпот до 1M.
 export const CASE_SLOTS: Slot[] = [
   coinsSlot("coins_loss", 100, 5_000, 25_000),
   coinsSlot("coins_equal", 500, 50_000, 50_000),

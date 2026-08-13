@@ -13,10 +13,11 @@ describe("экономика кейса — новая таблица призо
     expect(byKey.coins_jackpot).toBe(10);
   });
 
-  it("средняя ценность стала выше цены — кейс ощущается щедрее", () => {
+  it("при цене 100k средняя ценность остаётся ниже цены кейса", () => {
     const { ev, evNoChampion } = caseEV();
     console.log(`CASE: cost=${CASE_COST} EV=${Math.round(ev)} return=${(ev / CASE_COST * 100).toFixed(1)}%`);
-    expect(ev).toBeGreaterThan(CASE_COST);
+    expect(CASE_COST).toBe(100_000);
+    expect(ev).toBeLessThan(CASE_COST);
     expect(evNoChampion).toBe(ev);
   });
 });

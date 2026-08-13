@@ -170,7 +170,7 @@
 
   // ── Бонусы дня (зеркало src/clicker.ts — алгоритм/слова/морзе менять синхронно) ──
   const COMBO_REWARD = 12000, CIPHER_REWARD = 3000;
-  const CASE_COST = 50000; // цена открытия платного кейса — зеркало src/lootbox.ts::CASE_COST
+  const CASE_COST = 100000; // цена открытия платного кейса — зеркало src/lootbox.ts::CASE_COST
   const CIPHER_WORDS = ['МАРИЯ', 'ТОРТ', 'КОТИК', 'КРЕМ', 'ЭКЛЕР', 'МУСС', 'БИСКВИТ', 'ВАНИЛЬ', 'ШОКОЛАД', 'КАРАМЕЛЬ', 'ДЕСЕРТ', 'ПЕКАРНЯ'];
   const MORSE = { А: '.-', Б: '-...', В: '.--', Г: '--.', Д: '-..', Е: '.', Ж: '...-', З: '--..', И: '..', Й: '.---', К: '-.-', Л: '.-..', М: '--', Н: '-.', О: '---', П: '.--.', Р: '.-.', С: '...', Т: '-', У: '..-', Ф: '..-.', Х: '....', Ц: '-.-.', Ч: '---.', Ш: '----', Щ: '--.-', Ь: '-..-', Ы: '-.--', Э: '..-..', Ю: '..--', Я: '.-.-' };
   function dateSeed(day, salt) { let h = 2166136261 >>> 0; const s = day + salt; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h >>> 0; }
@@ -726,12 +726,13 @@
       .ck-case__reel{position:relative;width:100%;height:132px;overflow:hidden;-webkit-mask:linear-gradient(90deg,transparent,#000 13%,#000 87%,transparent);mask:linear-gradient(90deg,transparent,#000 13%,#000 87%,transparent)}
       .ck-case__mark{position:absolute;top:-4px;bottom:-4px;left:50%;width:3px;background:linear-gradient(180deg,#D8FF7A,#8DBF20);box-shadow:0 0 14px rgba(192,255,51,.9);transform:translateX(-50%);z-index:2;border-radius:2px}
       .ck-case__track{position:absolute;top:50%;left:0;display:flex;gap:10px;transform:translateY(-50%);will-change:transform}
-      .ck-caset{width:96px;height:112px;flex:none;border-radius:14px;background:var(--panel);border:2px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;box-sizing:border-box;padding:6px}
+      .ck-caset{width:96px;height:112px;flex:none;border-radius:14px;background:var(--panel);border:2px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;box-sizing:border-box;padding:5px}
       .ck-caset[data-r="common"]{border-color:rgba(141,146,156,.5)}
       .ck-caset[data-r="rare"]{border-color:#C0FF33}
       .ck-caset[data-r="epic"]{border-color:#9B5CFF}
       .ck-caset[data-r="legendary"]{border-color:#FF2E7E;box-shadow:0 0 13px rgba(255,46,126,.45)}
-      .ck-caset img{width:56px;height:56px;object-fit:contain}
+      .ck-caset__pic{width:76px;height:76px;display:flex;align-items:center;justify-content:center;overflow:visible;flex:none}
+      .ck-caset__pic img{display:block;width:auto;height:auto;max-width:100%;max-height:100%;object-fit:contain;object-position:center}
       .ck-caset__t{font-size:10px;font-weight:800;color:var(--muted);text-align:center;line-height:1.1;font-variant-numeric:tabular-nums}
       .ck-case__res{position:absolute;bottom:44px;left:0;right:0;text-align:center;opacity:0;transition:opacity .3s}
       .ck-case__res.on{opacity:1}
@@ -1676,7 +1677,7 @@
     if (p.type === 'coins') inner = `${COIN(38)}<div class="ck-caset__t">${fmt(p.amount || 0)}</div>`;
     else if (p.type === 'turbo') inner = `${ICON.rocket(38)}<div class="ck-caset__t">Турбо</div>`;
     else if (p.type === 'energy') inner = `${ICON.bolt(38)}<div class="ck-caset__t">Энергия</div>`;
-    else { const meta = DOVE_META[p.breed] || { name: 'Голубь' }; inner = `<img src="/img/pigeons/${p.breed}.webp?v=2" alt="" onerror="this.style.display='none'"><div class="ck-caset__t">${meta.name}</div>`; }
+    else { const meta = DOVE_META[p.breed] || { name: 'Голубь' }; inner = `<div class="ck-caset__pic"><img src="/img/pigeons/${p.breed}.webp?v=2" alt="" onerror="this.style.display='none'"></div><div class="ck-caset__t">${meta.name}</div>`; }
     return `<div class="ck-caset" data-r="${rar}">${inner}</div>`;
   }
   // Наполнитель рила: в основном дешёвое (монеты/обычные голуби), редко ценное — как в кейсе.
