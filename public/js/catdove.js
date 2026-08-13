@@ -11,7 +11,7 @@
  * молча (не должно случиться, catdove.js всегда грузится вместе с catclick.js).
  * ───────────────────────────────────────────────────────────────────────────── */
 (function () {
-  // 4 сета × 4 + «Чемпион» вне сетов (только приз гонки) — зеркало src/pigeons.ts::PIGEON_BREEDS
+  // 4 сета × 4 — зеркало src/pigeons.ts::PIGEON_BREEDS
   const BREEDS = [
     { id: "sizar",    name: "Сизарь",             set: "city",  rarity: "common" },
     { id: "belobok",  name: "Белобокий",          set: "city",  rarity: "common" },
@@ -29,7 +29,6 @@
     { id: "imeninny", name: "Именинный",          set: "fest",  rarity: "epic" },
     { id: "snezhny",  name: "Снежный",            set: "fest",  rarity: "epic" },
     { id: "zolotoy",  name: "Золотой голубь Василия", set: "fest", rarity: "legendary" },
-    { id: "champion", name: "Чемпион",            set: "",      rarity: "legendary" }, // не дропается
   ];
   const BY_ID = new Map(BREEDS.map(b => [b.id, b]));
   const SETS = [
@@ -402,21 +401,6 @@
     </div>`;
   }
 
-  function championHtml() {
-    const b = BY_ID.get('champion');
-    const inv = data.invMap.champion;
-    if (!inv || inv.count <= 0) return '';
-    const artSrc = `/img/pigeons/champion.webp?v=2`;
-    const art = `<img src="${artSrc}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;align-items:center;justify-content:center;width:100%;height:100%">${DOVE_ICON(30)}</span>`;
-    return `<div class="cd-champ" data-breed="champion">
-      <div class="cd-champ__art">${art}</div>
-      <div class="cd-champ__b">
-        <div class="cd-champ__n">${b.name} ${'★'.repeat(Math.max(1, Math.min(3, num(inv.stars))))}</div>
-        <div class="cd-champ__s">Приз гонки стаи · ×${num(inv.count)}${inv.showcase > 0 ? ' · показывается в рейтинге' : ''}</div>
-      </div>
-    </div>`;
-  }
-
   // Блок сета в альбоме: заголовок (имя + прогресс + награда/клейм) прямо над
   // своей четвёркой карточек — награда живёт рядом с тем, за что её дают.
   function setBlockHtml(setDef) {
@@ -463,7 +447,6 @@
       </div>
       <div class="cd-sect-t">Альбом · собери сет — забери приз</div>
       ${setBlocks}
-      ${championHtml()}
       <div class="cd-scrim" id="cd-scrim"></div>
       <div class="cd-sheet" id="cd-sheet"></div>
       <div class="cd-pop-scrim" id="cd-pop-scrim"><div class="cd-pop" id="cd-pop"></div></div>
@@ -497,8 +480,6 @@
     container.querySelectorAll('.cd-card.cd-locked').forEach(el => {
       el.onclick = () => openLockedSheet(el.dataset.breed);
     });
-    const champ = container.querySelector('.cd-champ');
-    if (champ) champ.onclick = () => openSheet('champion');
     container.querySelectorAll('[data-claim]').forEach(el => {
       el.onclick = () => claimSetAct(el.dataset.claim, el);
     });

@@ -10,7 +10,7 @@ import type { PushService } from "./push";
 export type Rarity = "common" | "rare" | "epic" | "legendary";
 export interface Breed { id: string; name: string; set: string; rarity: Rarity; }
 
-// 4 сета × 4 + «Чемпион» вне сетов (только приз гонки)
+// 4 сета × 4. Отдельный «Чемпион» удалён из продукта 13.08.2026.
 export const PIGEON_BREEDS: Breed[] = [
   { id: "sizar",    name: "Сизарь",             set: "city",  rarity: "common" },
   { id: "belobok",  name: "Белобокий",          set: "city",  rarity: "common" },
@@ -28,7 +28,6 @@ export const PIGEON_BREEDS: Breed[] = [
   { id: "imeninny", name: "Именинный",          set: "fest",  rarity: "epic" },
   { id: "snezhny",  name: "Снежный",            set: "fest",  rarity: "epic" },
   { id: "zolotoy",  name: "Золотой голубь Василия", set: "fest", rarity: "legendary" },
-  { id: "champion", name: "Чемпион",            set: "",      rarity: "legendary" }, // не дропается
 ];
 export const BREED_BY_ID = new Map(PIGEON_BREEDS.map(b => [b.id, b]));
 
@@ -543,9 +542,6 @@ export function normalizeCoinDelta(v: unknown): number | null {
 export async function createTrade(chatId: number, give: string, want: string, to?: number, coinDelta: number = 0):
   Promise<{ ok: boolean; id?: number; reason?: string; newBalance?: number }> {
   if (!BREED_BY_ID.has(give) || !BREED_BY_ID.has(want) || give === want) return { ok: false, reason: "bad_input" };
-  // Чемпион — эксклюзивный приз Гонки стаи (не дропается, не продаётся): не торгуем им,
-  // иначе теряется смысл «заслуженной» награды. Ни отдать, ни запросить.
-  if (give === "champion" || want === "champion") return { ok: false, reason: "not_tradeable" };
   if (to === chatId) return { ok: false, reason: "self" };
   const coin = normalizeCoinDelta(coinDelta);
   if (coin == null) return { ok: false, reason: "bad_coins" };
@@ -1113,8 +1109,6 @@ export async function closeRaceWeek(): Promise<{ week: string; entries: number; 
         await addClickerBalance(Number(top.rows[i].chat_id), prizes[i], client);
         results[div].push({ place: i + 1, chat: Number(top.rows[i].chat_id), breed: top.rows[i].breed, score: top.rows[i].score, prize: prizes[i] });
       }
-      // Чемпион — только победителю Золота
-      if (div === "gold" && top.rows.length) await grantPigeon(Number(top.rows[0].chat_id), "champion", client);
       total += top.rows.length;
     }
     await client.query(`UPDATE pigeon_race_winners SET results=$2 WHERE week=$1`, [prevWeek, JSON.stringify(results)]);

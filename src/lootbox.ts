@@ -8,19 +8,16 @@ import type { Rarity } from "./pigeons";
 import { PIGEON_PRICE } from "./pigeons";
 
 export const CASE_COST = 100_000;           // цена открытия кейса, монеты
-export const CHAMPION_COOLDOWN_DAYS = 365;  // чемпион — не чаще 1 раза в год на всех
 
 export type CasePrize =
   | { type: "coins"; amount: number }
   | { type: "turbo" }
   | { type: "energy" }
-  | { type: "pigeon"; rarity: Rarity }
-  | { type: "champion" };
+  | { type: "pigeon"; rarity: Rarity };
 
 // Условная ценность бустов в монетах — только для расчёта EV/эджа (буст = разовый).
 const TURBO_VALUE = 1500, ENERGY_VALUE = 1200;
 // Ценность чемпиона для EV — «бесценный», но гейт 1/год делает его вклад в EV ~0.
-const CHAMPION_VALUE = 5_000_000;
 
 // Слот таблицы дропа. weight — вес (из суммы всех). lo/hi — диапазон суммы для монет.
 // value(prize) — ценность в монетах для EV. roll(r) — розыгрыш конкретного значения.
@@ -64,26 +61,19 @@ export function caseEV(): { ev: number; evNoChampion: number; edge: number; edge
   let ev = 0, evNoChamp = 0;
   for (const s of CASE_SLOTS) {
     ev += (s.weight / w) * s.evValue;
-    if (s.key !== "champion") evNoChamp += (s.weight / w) * s.evValue;
+    evNoChamp += (s.weight / w) * s.evValue;
   }
   return { ev, evNoChampion: evNoChamp, edge: 1 - ev / CASE_COST, edgeNoChampion: 1 - evNoChamp / CASE_COST };
 }
 
 // Розыгрыш приза. r1 ∈ [0,1) выбирает слот по весам, r2 ∈ [0,1) — значение внутри слота.
-// championAllowed=false (глобальный гейт закрыт) → выпавший чемпион заменяется на
-// consolation (coins_small), т.к. чемпион отдаётся не чаще 1 раза в год на всех.
-export function rollCase(r1: number, r2: number, championAllowed: boolean): CasePrize {
+export function rollCase(r1: number, r2: number, _championAllowed = false): CasePrize {
   const target = r1 * CASE_TOTAL_WEIGHT;
   let acc = 0;
   for (const s of CASE_SLOTS) {
     acc += s.weight;
     if (target < acc) {
-      const prize = s.roll(r2);
-      if (prize.type === "champion" && !championAllowed) {
-        // гейт закрыт — отдаём consolation вместо чемпиона
-        return { type: "coins", amount: Math.round(8_000 + r2 * 12_000) };
-      }
-      return prize;
+      return s.roll(r2);
     }
   }
   // страховка от накопленной погрешности — последний слот
@@ -97,6 +87,5 @@ export function prizeValue(prize: CasePrize): number {
     case "turbo": return TURBO_VALUE;
     case "energy": return ENERGY_VALUE;
     case "pigeon": return PIGEON_PRICE[prize.rarity];
-    case "champion": return CHAMPION_VALUE;
   }
 }

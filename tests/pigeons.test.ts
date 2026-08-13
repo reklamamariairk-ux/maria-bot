@@ -78,7 +78,7 @@ describe("pigeonPrice — цена гонщика в питомнике", () => 
   it("любая коллекционная порода покупаема по цене своей редкости", () => {
     for (const b of droppable) expect(pigeonPrice(b.id)).toBe(PIGEON_PRICE[b.rarity]);
   });
-  it("Чемпион не продаётся (только приз гонки), неизвестная порода — null", () => {
+  it("удалённый Чемпион и неизвестная порода не продаются", () => {
     expect(pigeonPrice("champion")).toBeNull();
     expect(pigeonPrice("no-such-breed")).toBeNull();
   });
@@ -260,9 +260,9 @@ describe("guard'ы обменов/почты — отвечают до похо�
     expect((await createTrade(42, "sizar", "vanil", 42)).reason).toBe("self");
   });
 
-  it("createTrade: чемпион не торгуется (ни отдать, ни запросить) → not_tradeable", async () => {
-    expect((await createTrade(1, "champion", "vanil")).reason).toBe("not_tradeable");
-    expect((await createTrade(1, "vanil", "champion")).reason).toBe("not_tradeable");
+  it("createTrade: удалённый чемпион считается неизвестной породой", async () => {
+    expect((await createTrade(1, "champion", "vanil")).reason).toBe("bad_input");
+    expect((await createTrade(1, "vanil", "champion")).reason).toBe("bad_input");
   });
 
   it("sendMail: неизвестная порода → bad_breed", async () => {

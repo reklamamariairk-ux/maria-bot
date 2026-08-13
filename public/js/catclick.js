@@ -1077,7 +1077,6 @@
       ${COIN_SPRITE}
       <button class="ck-x" id="ck-x">×</button>
       <div class="ck-screen on" id="ck-scr-cat">
-        <button class="ck-guide-btn" id="ck-guide-btn" type="button" aria-label="Как играть">?</button>
         <button class="ck-daily" id="ck-daily" style="display:none"></button>
         <div class="ck-lvl" id="ck-lvl"></div>
         <div class="ck-greet" id="ck-greet"></div>
@@ -1116,7 +1115,8 @@
         <button class="ck-nav__b" data-tab="dove">${ICON.dove(21)}Голуби<span class="ck-badge" id="ck-dove-badge" hidden></span></button>
         <button class="ck-nav__b" data-tab="tasks">${ICON.gift(21)}Призы<span class="ck-badge" id="ck-tasks-badge" hidden></span></button>
         <button class="ck-nav__b" data-tab="top">${ICON.trophy(21)}Рейтинг</button>
-      </div>`;
+      </div>
+      <button class="ck-guide-btn" id="ck-guide-btn" type="button" aria-label="Как работает этот раздел">?</button>`;
     document.body.appendChild(ov);
     const xBtn = ov.querySelector('#ck-x');
     if (PURE) {
@@ -1186,7 +1186,7 @@
         b.onclick = () => {
           // Полный перепросмотр онбординга: welcome-карта + все 6 туров + коучи
           try {
-            ['cat', 'up', 'dove', 'col', 'tasks', 'top', 'home'].forEach(k => localStorage.removeItem('ck_tour2_' + k));
+            ['cat', 'up', 'dove', 'col', 'tasks', 'top', 'home', 'hub'].forEach(k => localStorage.removeItem('ck_tour3_' + k));
             localStorage.removeItem('ck_tut_v1');
             localStorage.removeItem('ck_dove_col_seen');
             Object.keys(localStorage).filter(k => k.indexOf('ck_coach_') === 0).forEach(k => localStorage.removeItem(k));
@@ -1672,7 +1672,7 @@
   }
   // Тайл рила: монеты/буст/голубь(по редкости)/чемпион. p={type,amount?,breed?,rarity?}
   function caseTileHtml(p) {
-    const rar = p.rarity || (p.type === 'champion' ? 'legendary' : '');
+    const rar = p.rarity || '';
     let inner;
     if (p.type === 'coins') inner = `${COIN(38)}<div class="ck-caset__t">${fmt(p.amount || 0)}</div>`;
     else if (p.type === 'turbo') inner = `${ICON.rocket(38)}<div class="ck-caset__t">Турбо</div>`;
@@ -1727,10 +1727,10 @@
     if (prize.type === 'coins') { title = `+${fmt(prize.amount)} ${COIN(22)}`; if (prize.amount >= 150000) sub = 'ДЖЕКПОТ!'; else if (prize.amount < CASE_COST) sub = 'В этот раз немного — крутани ещё'; }
     else if (prize.type === 'turbo') { title = `${ICON.rocket(22)} Турбо ×5`; sub = '20 секунд множителя за тап'; }
     else if (prize.type === 'energy') { title = `${ICON.bolt(22)} Полная энергия`; }
-    else { const meta = DOVE_META[prize.breed] || { name: 'Голубь', r: prize.rarity }; const rl = { common: 'обычный', rare: 'редкий', epic: 'эпический', legendary: 'легендарный' }[meta.r || prize.rarity] || ''; title = `${meta.name}`; sub = prize.type === 'champion' ? 'ЧЕМПИОН — 1 раз в год на всех!' : `${rl} голубь${prize.isNew ? ' · новый в альбоме!' : ' — запаска для звёзд/гонок'}`; }
+    else { const meta = DOVE_META[prize.breed] || { name: 'Голубь', r: prize.rarity }; const rl = { common: 'обычный', rare: 'редкий', epic: 'эпический', legendary: 'легендарный' }[meta.r || prize.rarity] || ''; title = `${meta.name}`; sub = `${rl} голубь${prize.isNew ? ' · новый в альбоме!' : ' — запаска для звёзд/гонок'}`; }
     res.innerHTML = `<div class="rt">${title}</div><div class="rs">${sub}</div><button id="ck-case-ok" type="button">Забрать</button>`;
     res.classList.add('on');
-    const big = prize.type === 'champion' || prize.type === 'pigeon' && (prize.rarity === 'epic' || prize.rarity === 'legendary') || (prize.type === 'coins' && prize.amount >= 150000);
+    const big = prize.type === 'pigeon' && (prize.rarity === 'epic' || prize.rarity === 'legendary') || (prize.type === 'coins' && prize.amount >= 150000);
     window.haptic && window.haptic(big ? 'success' : 'light');
     if (big) { sfxLevel(); confettiBurst(); coinShower(); } else sfxReward();
     res.querySelector('#ck-case-ok').onclick = () => el.classList.remove('on');
@@ -2443,7 +2443,6 @@
     vanil: { name: 'Ванильный', r: 'rare' }, shoko: { name: 'Шоколадный', r: 'rare' }, karamel: { name: 'Карамельный', r: 'rare' }, yagodny: { name: 'Ягодный', r: 'rare' },
     pochtar: { name: 'Иркутский почтарь', r: 'epic' }, baikal: { name: 'Байкальский гонец', r: 'epic' }, kurier: { name: 'Ночной курьер', r: 'epic' }, vozhak: { name: 'Вожак стаи', r: 'epic' },
     svadebny: { name: 'Свадебный', r: 'epic' }, imeninny: { name: 'Именинный', r: 'epic' }, snezhny: { name: 'Снежный', r: 'epic' }, zolotoy: { name: 'Золотой голубь Василия', r: 'legendary' },
-    champion: { name: 'Чемпион', r: 'legendary' },
   };
   const DOVE_RCOLOR = { common: 'rgba(200,204,212,.7)', rare: '#d9a35f', epic: '#c1a3f0', legendary: 'var(--gold-l)' };
   let doveDropQueue = [], pendingDoveSummary = null;
@@ -2514,12 +2513,11 @@
   // ── Повкладочное обучение (спека 2026-07-31-guided-tour, v2 по фидбеку юзера):
   // у КАЖДОЙ вкладки свой мини-тур, запускается при первом входе новичка туда.
   // Спотлайт-дырка + пузырь Василия; клики проходят сквозь затемнение (мягкий тур).
-  // Прогресс: ck_tour2_<kind>; свежесть игрока — totalEarned < 50k. Тур «Дома» живёт
+  // Прогресс: ck_tour3_<kind>. Обновлённая версия один раз показывается всем игрокам.
   // поверх пет-оверлея (z 9999) → тур-элемент в document.body с z выше.
   let tourActive = false, tourKind = null, tourStep = 0, tourTapCount = 0, tourEl = null;
-  const tourSeen = (k) => { try { return localStorage.getItem('ck_tour2_' + k) === 'done'; } catch (e) { return true; } };
-  const tourMark = (k) => { try { localStorage.setItem('ck_tour2_' + k, 'done'); } catch (e) {} };
-  const freshPlayer = () => st && Number(st.totalEarned || 0) < 50000;
+  const tourSeen = (k) => { try { return localStorage.getItem('ck_tour3_' + k) === 'done'; } catch (e) { return true; } };
+  const tourMark = (k) => { try { localStorage.setItem('ck_tour3_' + k, 'done'); } catch (e) {} };
   const TOURS = {
     cat: [
       { text: 'Мур! Я Василий — будущий император выпечки. Это мой главный зал, покажу что тут к чему', anchor: '#ck-catwrap', pos: 'top' },
@@ -2548,6 +2546,10 @@
       { text: 'Команды: монеты всех игроков команды складываются — выбери свою и тащи её в топ', anchor: '#ck-toplist', anchorFn: function () { return ov.querySelector('#ck-toplist .ck-cats') || ov.querySelector('#ck-toplist'); }, pos: 'bottom' },
       { text: 'Пригласи друга — обоим монеты: тебе +30 000, ему +2 500 на старт', anchor: '#ck-toplist', pos: 'bottom' },
     ],
+    hub: [
+      { text: 'Это раздел мини-игр. Выбирай игру, выполняй её условия и получай дополнительные монеты', anchor: '#ck-hub-body', pos: 'bottom' },
+      { text: 'У каждой игры свои правила и лимит награды. Перед стартом читай короткое описание на карточке', anchor: '#ck-hub-body', pos: 'top' },
+    ],
     col: [
       { text: 'Альбом пород: собери все 16! Каждый голубь увеличивает доход в час, а звёзды и тюнинг усиливают его', anchor: '#ck-dove-col .cd-summary', pos: 'bottom' },
       { text: 'Породы собраны в сеты. Собери четвёрку — над ней появится кнопка «Забрать приз»', anchor: '#ck-dove-col .cd-sethead', pos: 'bottom' },
@@ -2563,7 +2565,7 @@
       { text: 'А тут гардероб — наряжай меня в шапки. За заботу капают монеты, между прочим!', anchor: '#pet-shop-btn', pos: 'bottom', root: 'doc' },
     ],
   };
-  const TAB_TOURS = { cat: 'cat', up: 'up', dove: 'dove', tasks: 'tasks', top: 'top' };
+  const TAB_TOURS = { cat: 'cat', up: 'up', dove: 'col', tasks: 'tasks', top: 'top', hub: 'hub' };
   function tourRoot(s) { return (s && s.root === 'doc') ? document : ov; }
   function startTour(kind) {
     if (tourActive || !ov || !TOURS[kind] || tourSeen(kind)) return;
@@ -2660,7 +2662,7 @@
   function maybeTabTour(t) {
     const kind = TAB_TOURS[t];
     if (!kind || kind === 'cat') return; // cat-тур стартует из welcome/open()
-    if (!freshPlayer() || tourSeen(kind)) return;
+    if (tourSeen(kind)) return;
     setTimeout(() => { if (tab === t && !tourActive) startTour(kind); }, 500);
   }
 
@@ -2707,7 +2709,7 @@
     if (!onboarded && !hasProgress && authed() && st && Number(st.taps || 0) === 0 && Number(st.cardsOwned || 0) === 0 && Number(st.totalEarned || 0) <= 500 && _seenTut) {
       try {
         localStorage.removeItem('ck_tut_v1');
-        ['cat', 'up', 'dove', 'col', 'tasks', 'top', 'home'].forEach(k => localStorage.removeItem('ck_tour2_' + k));
+        ['cat', 'up', 'dove', 'col', 'tasks', 'top', 'home', 'hub'].forEach(k => localStorage.removeItem('ck_tour3_' + k));
         Object.keys(localStorage).filter(k => k.indexOf('ck_coach_') === 0).forEach(k => localStorage.removeItem(k));
       } catch (e) {}
       coachSeenMem.clear();
@@ -2717,7 +2719,7 @@
     // ещё не помнит — записываем, чтобы будущая потеря localStorage не переигрывала обучение.
     if (!onboarded && _seenTut && authed()) { api('/api/clicker/onboarded', { method: 'POST', body: '{}' }).catch(() => {}); if (st) st.onboarded = true; }
     if (!_seenTut) showTutorial();
-    else if (!tourSeen('cat') && st && Number(st.taps || 0) < 30) {
+    else if (!tourSeen('cat')) {
       // welcome видел, но тур главной не проходил и игрок ещё свежий (пришёл через
       // «Полный гайд» или закрыл игру на середине) — доводим обучение
       setTimeout(() => startTour('cat'), 600);

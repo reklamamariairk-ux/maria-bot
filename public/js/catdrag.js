@@ -33,7 +33,6 @@
     imeninny: { name: 'Именинный', rarity: 'epic' },
     snezhny: { name: 'Снежный', rarity: 'epic' },
     zolotoy: { name: 'Золотой голубь Василия', rarity: 'legendary' },
-    champion: { name: 'Чемпион', rarity: 'legendary' },
   };
   const STAKE_PRESETS = [500, 2000, 10000]; // зеркало src/drag.ts::STAKE_PRESETS
   const DRAG_ENERGY_COST = 250;             // зеркало src/drag.ts::DRAG_ENERGY_COST

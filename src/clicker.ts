@@ -854,7 +854,7 @@ export async function openChest(chatId: number): Promise<{ ok: boolean; prize?: 
 const PITY_DRY = 30;
 export type CasePrizeOut = { type: string; amount?: number; rarity?: string; breed?: string; isNew?: boolean };
 export async function openCase(chatId: number): Promise<{ ok: boolean; prize?: CasePrizeOut; state?: ClickerState; reason?: string; newBalance?: number; cost?: number; pigeonDrop?: { breed: string; isNew: boolean } }> {
-  const { CASE_COST, CHAMPION_COOLDOWN_DAYS, rollCase, prizeValue } = await import("./lootbox");
+  const { CASE_COST, rollCase, prizeValue } = await import("./lootbox");
   const { grantPigeon, pickBreedOfRarity, pickBreed, BREED_BY_ID } = await import("./pigeons");
   const client = await pool.connect();
   try {
@@ -862,17 +862,11 @@ export async function openCase(chatId: number): Promise<{ ok: boolean; prize?: C
     const { r, cl } = await refresh(client, chatId);
     if (Number(r.balance) < CASE_COST) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
     r.balance = Number(r.balance) - CASE_COST; // цена открытия
-    // Гейт чемпиона: одна глобальная строка под FOR UPDATE — не чаще 1 раза в год на всех.
-    await client.query(`INSERT INTO game_globals(key, ts) VALUES('champion_granted_at', NULL) ON CONFLICT (key) DO NOTHING`);
-    const g = await client.query(`SELECT ts FROM game_globals WHERE key='champion_granted_at' FOR UPDATE`);
-    const lastTs = g.rows[0] && g.rows[0].ts ? new Date(g.rows[0].ts).getTime() : 0;
-    const championAllowed = (Date.now() - lastTs) >= CHAMPION_COOLDOWN_DAYS * 86400000;
-
     const dry = Number(r.case_dry || 0);
-    let prize = rollCase(Math.random(), Math.random(), championAllowed);
+    let prize = rollCase(Math.random(), Math.random());
     // Пити: «сухая серия» дошла до порога, а выпали не-голубь → форсим голубя (по базовым
     // весам редкости). Чемпион пити НЕ выдаёт (только настоящий гейт-ролл).
-    if (dry + 1 >= PITY_DRY && prize.type !== "pigeon" && prize.type !== "champion") {
+    if (dry + 1 >= PITY_DRY && prize.type !== "pigeon") {
       const b = BREED_BY_ID.get(pickBreed(Math.random(), Math.random(), weekKey(), !!activeEvent()));
       prize = { type: "pigeon", rarity: b ? b.rarity : "common" };
     }
@@ -883,9 +877,8 @@ export async function openCase(chatId: number): Promise<{ ok: boolean; prize?: C
     else if (prize.type === "turbo") { r.turbo_until = new Date(Date.now() + TURBO_SEC * 1000); }
     else if (prize.type === "energy") { r.energy = energyMaxFor(r.energy_limit_level); }
     else if (prize.type === "pigeon") { const breed = pickBreedOfRarity(prize.rarity, Math.random()); pigeonDrop = await grantPigeon(chatId, breed, client); out.rarity = prize.rarity; out.breed = breed; out.isNew = pigeonDrop.isNew; }
-    else if (prize.type === "champion") { pigeonDrop = await grantPigeon(chatId, "champion", client); out.breed = "champion"; out.isNew = pigeonDrop.isNew; await client.query(`UPDATE game_globals SET ts=NOW() WHERE key='champion_granted_at'`); }
 
-    const isPigeon = prize.type === "pigeon" || prize.type === "champion";
+    const isPigeon = prize.type === "pigeon";
     const won = prizeValue(prize);
     const newDry = isPigeon ? 0 : dry + 1;
     await client.query(
