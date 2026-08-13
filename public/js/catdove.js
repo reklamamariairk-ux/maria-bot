@@ -1529,6 +1529,14 @@
     } finally { busy = false; }
   }
 
+  function duelBalance() { return typeof window.ckBalance === 'function' ? num(window.ckBalance()) : 0; }
+  function ensureDuelStake(stake) {
+    const need = Math.max(0, num(stake)), balance = duelBalance();
+    if (balance >= need) return true;
+    flash(`Не хватает ${fmt(need - balance)} монет на ставку. Сейчас на балансе ${fmt(balance)}.`);
+    return false;
+  }
+
   function openFriendRaceStakePicker(friend) {
     if (!data || !friend || !friend.chat) return;
     const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
@@ -1539,16 +1547,17 @@
       <div style="display:flex;gap:8px;margin-top:10px"><input id="cd-duel-custom" inputmode="numeric" type="number" min="0" max="1000000" step="1" placeholder="Своя сумма" class="cd-cipher-in" style="text-transform:none"><button class="cd-tbtn" id="cd-duel-custom-go">Дальше</button></div>`;
     sc.classList.add('on'); requestAnimationFrame(() => sh.classList.add('on'));
     sh.querySelector('#cd-sheet-x').onclick = openFriendRaceFriendPicker;
-    sh.querySelectorAll('.cd-duel-stake').forEach(el => { el.onclick = () => openFriendRaceBreedPicker(friend, num(el.dataset.stake)); });
+    sh.querySelectorAll('.cd-duel-stake').forEach(el => { el.onclick = () => { const stake = num(el.dataset.stake); if (ensureDuelStake(stake)) openFriendRaceBreedPicker(friend, stake); }; });
     sh.querySelector('#cd-duel-custom-go').onclick = () => {
       const raw = Number(sh.querySelector('#cd-duel-custom').value);
       if (!Number.isSafeInteger(raw) || raw < 0 || raw > 1000000) { flash('Введи целую сумму от 0 до 1 000 000'); return; }
-      openFriendRaceBreedPicker(friend, raw);
+      if (ensureDuelStake(raw)) openFriendRaceBreedPicker(friend, raw);
     };
   }
 
   function openFriendRaceBreedPicker(friend, stake) {
     if (!data || !friend || !friend.chat) return;
+    if (!ensureDuelStake(stake)) return;
     const owned = Object.keys(data.invMap).filter(id => data.invMap[id].count > 0 && id !== 'champion');
     if (!owned.length) { flash('Нет птицы для заезда'); return; }
     const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
@@ -1559,6 +1568,7 @@
     sh.querySelectorAll('.cd-pickcard').forEach(el => {
       el.onclick = () => {
         const breedId = el.dataset.breed;
+        if (!ensureDuelStake(stake)) return;
         closeSheet();
         if (window.CatDrag && window.CatDrag.openDuelCreate) window.CatDrag.openDuelCreate(apiRef, breedId, friend.chat, friend.name, stake);
       };
@@ -1567,6 +1577,7 @@
 
   function openFriendRaceAcceptBreedPicker(duel) {
     if (!data || !duel || !duel.id) return;
+    if (!ensureDuelStake(duel.stake || 0)) return;
     const owned = Object.keys(data.invMap).filter(id => data.invMap[id].count > 0 && id !== 'champion');
     if (!owned.length) { flash('Нет птицы для заезда'); return; }
     const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
@@ -1577,6 +1588,7 @@
     sh.querySelectorAll('.cd-pickcard').forEach(el => {
       el.onclick = () => {
         const breedId = el.dataset.breed;
+        if (!ensureDuelStake(duel.stake || 0)) return;
         closeSheet();
         if (window.CatDrag && window.CatDrag.openDuelAccept) window.CatDrag.openDuelAccept(apiRef, breedId, duel.id, duel.fromName || 'Друг', duel.stake || 0);
       };

@@ -1207,6 +1207,9 @@
 
   function openDuelCreate(api, breed, friendChat, friendName, duelStake) {
     if (!api || !breed || !friendChat) return;
+    const required = Math.max(0, num(duelStake));
+    const balance = typeof window.ckBalance === 'function' ? num(window.ckBalance()) : 0;
+    if (balance < required) { flash(`Не хватает ${fmt(required - balance)} монет на ставку`); return; }
     apiRef = api; curBreed = breed; mode = 'training'; stake = STAKE_PRESETS[0]; friendRace = null;
     duelRace = { role: 'create', chat: Number(friendChat), name: friendName || 'Друг', stake: num(duelStake) };
     opponentsPreview = []; myPower = null; raceBusy = false; phase = 'idle'; raceData = null;
@@ -1222,6 +1225,9 @@
 
   function openDuelAccept(api, breed, duelId, friendName, duelStake) {
     if (!api || !breed || !duelId) return;
+    const required = Math.max(0, num(duelStake));
+    const balance = typeof window.ckBalance === 'function' ? num(window.ckBalance()) : 0;
+    if (balance < required) { flash(`Не хватает ${fmt(required - balance)} монет на ставку`); return; }
     apiRef = api; curBreed = breed; mode = 'training'; stake = STAKE_PRESETS[0]; friendRace = null;
     duelRace = { role: 'accept', id: Number(duelId), name: friendName || 'Друг', stake: num(duelStake) };
     opponentsPreview = []; myPower = null; raceBusy = false; phase = 'idle'; raceData = null;
