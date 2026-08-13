@@ -15,6 +15,7 @@ import {
   createTrade, sendMail, thankMail, setShowcase, claimSet, enterRace,
   pigeonPrice, PIGEON_PRICE, normalizeCoinDelta, TRADE_COIN_CAP,
   pigeonPassiveValue, pigeonCollectionPassiveBonus, PIGEON_SET_PASSIVE_BONUS,
+  pigeonMissionChance, PIGEON_MISSIONS,
 } from "../src/pigeons";
 
 
@@ -29,6 +30,21 @@ describe("pigeon passive income — голуби и коллекции дают 
   it("закрытый сет даёт отдельный бонус коллекции", () => {
     const city = new Set(["sizar", "belobok", "ryaboy", "chubaty"]);
     expect(pigeonCollectionPassiveBonus(city)).toBe(PIGEON_SET_PASSIVE_BONUS.city);
+  });
+});
+
+describe("pigeon missions — шанс зависит от голубя и тюнинга", () => {
+  it("прокачка и звёзды повышают шанс, но шанс остаётся в безопасных границах", () => {
+    const raw = pigeonMissionChance("sizar", 1, 0, 0, 0, 32);
+    const tuned = pigeonMissionChance("sizar", 3, 10, 10, 10, 32);
+    expect(tuned).toBeGreaterThan(raw);
+    expect(raw).toBeGreaterThanOrEqual(20);
+    expect(tuned).toBeLessThanOrEqual(95);
+  });
+
+  it("сложные задания дольше и дают больше монет", () => {
+    expect(PIGEON_MISSIONS[2].durationSec).toBeGreaterThan(PIGEON_MISSIONS[0].durationSec);
+    expect(PIGEON_MISSIONS[2].reward).toBeGreaterThan(PIGEON_MISSIONS[0].reward);
   });
 });
 

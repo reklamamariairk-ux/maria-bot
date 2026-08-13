@@ -13,7 +13,7 @@ import {
   getPigeonsOverview, claimSet, getTradeBoard, createTrade, acceptTrade, cancelTrade, declineTrade,
   feedPigeon, setShowcase,
   enterRace, getRace, getTuning, upgradeTune, BREED_BY_ID,
-  getMailRecipients,
+  getMailRecipients, getPigeonMissions, startPigeonMission, claimPigeonMission,
 } from "../pigeons";
 import type { PushService } from "../push";
 import { requireTgUser, getTgUser } from "../auth";
@@ -75,6 +75,30 @@ export function createPigeonsRouter(push: PushService): Router {
     if (!Number.isInteger(id)) { res.status(400).json({ error: "bad_input" }); return; }
     try { const r = await declineTrade(u.id, id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json(r); }
     catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/trade/decline]"); res.status(500).json({ error: "internal" }); }
+  });
+
+  router.get("/api/pigeons/missions", requireTgUser, rateLimit(60), async (req, res) => {
+    const u = getTgUser(req)!;
+    try { res.json(await getPigeonMissions(u.id)); }
+    catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/missions]"); res.status(500).json({ error: "internal" }); }
+  });
+
+  router.post("/api/pigeons/missions/start", requireTgUser, rateLimit(30), async (req, res) => {
+    const u = getTgUser(req)!; const b = req.body as { missionId?: string; breed?: string };
+    try {
+      const r = await startPigeonMission(u.id, String(b.missionId || ""), String(b.breed || ""));
+      if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
+      res.json(r);
+    } catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/missions/start]"); res.status(500).json({ error: "internal" }); }
+  });
+
+  router.post("/api/pigeons/missions/claim", requireTgUser, rateLimit(30), async (req, res) => {
+    const u = getTgUser(req)!; const id = Number((req.body as { id?: number }).id);
+    try {
+      const r = await claimPigeonMission(u.id, id);
+      if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
+      res.json(r);
+    } catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/missions/claim]"); res.status(500).json({ error: "internal" }); }
   });
   router.post("/api/pigeons/mail", requireTgUser, rateLimit(10), async (req, res) => {
     res.status(410).json({ error: "disabled" });

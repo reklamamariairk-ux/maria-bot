@@ -74,7 +74,7 @@
   function flash(msg) { if (window.ckFlash) window.ckFlash(msg); }
   function haptic(k) { window.haptic && window.haptic(k); }
 
-  let container = null, apiRef = null, data = null, busy = false;
+  let container = null, apiRef = null, data = null, busy = false, missionTimer = null;
   // ── доп. состояние: гонка (грузится вместе с альбомом), обмены/рецепиенты
   // (лениво, при первом открытии соответствующей страницы), мастера создания
   // предложения/письма (шаг за шагом переиспользуют #cd-sheet). needsRerenderOnClose —
@@ -334,8 +334,8 @@
     ]);
     if (!d || !Array.isArray(d.inventory)) { data = null; return; }
     const invMap = {};
-    d.inventory.forEach((row) => { invMap[row.breed] = { count: num(row.count), stars: num(row.stars) || 1, showcase: num(row.showcase) }; });
-    data = { sets: Array.isArray(d.sets) ? d.sets : [], invMap, weekBreed: d.weekBreed || null, unreadMail: num(d.unreadMail) };
+    d.inventory.forEach((row) => { invMap[row.breed] = { count: num(row.count), stars: num(row.stars) || 1, showcase: num(row.showcase), speed: num(row.tune_speed), stamina: num(row.tune_stamina), luck: num(row.tune_luck), passivePerHour: num(row.passivePerHour) }; });
+    data = { sets: Array.isArray(d.sets) ? d.sets : [], invMap, weekBreed: d.weekBreed || null, unreadMail: num(d.unreadMail), passivePerHour: num(d.passivePerHour) };
     // race — за флагом PIGEON_RACE_ENABLED на сервере; секция рисуется только когда enabled=true.
     race = (r && typeof r.enabled === 'boolean') ? r : null;
   }
@@ -450,13 +450,14 @@
     const setBlocks = SETS.map(setBlockHtml).join('');
     const hint = nextStepHint();
     container.innerHTML = `<div class="cd-root">
-      <div class="cd-summary">Собери <b>${ownedCount}/16 пород</b> — они выпадают за игру. Твой голубь — ещё и гонщик.</div>
+      <div class="cd-summary">Собрано <b>${ownedCount}/16 пород</b> · голуби приносят <b>+${fmt(data.passivePerHour)}/час</b><br>Звёзды и любой тюнинг увеличивают этот доход.</div>
       <div class="cd-hint">
         <div class="cd-hint__b"><span class="cd-hint__tag">Что дальше</span><div class="cd-hint__t">${hint.text}</div></div>
         ${hint.ctaLabel ? `<button class="cd-hint__cta" id="cd-hint-cta" type="button">${hint.ctaLabel}</button>` : ''}
       </div>
       <div class="cd-navrow">
         ${ownedCount > 0 ? `<button class="cd-navbtn" id="cd-nav-race">${FLAG_ICON(15)} Гонки</button>` : ''}
+        ${ownedCount > 0 ? `<button class="cd-navbtn" id="cd-nav-missions">${DOVE_ICON(16)} Задания</button>` : ''}
         <button class="cd-navbtn" id="cd-nav-trades">${SWAP_ICON(15)} Обмены${incomingTrades > 0 ? `<span class="cd-navbadge">${incomingTrades > 9 ? '9+' : incomingTrades}</span>` : ''}</button>
         <button class="cd-navbtn" id="cd-nav-friends">${USERS_ICON(15)} Друзья</button>
       </div>
@@ -505,6 +506,7 @@
     if (scrim) scrim.onclick = closeSheet;
     const hintBtn = container.querySelector('#cd-hint-cta'); if (hintBtn && hintCta) hintBtn.onclick = hintCta;
     const navR = container.querySelector('#cd-nav-race'); if (navR) navR.onclick = openRacePage;
+    const navM = container.querySelector('#cd-nav-missions'); if (navM) navM.onclick = openMissionsPage;
     const navT = container.querySelector('#cd-nav-trades'); if (navT) navT.onclick = openTradesPage;
     const navF = container.querySelector('#cd-nav-friends'); if (navF) navF.onclick = openFriendsPage;
   }
@@ -512,6 +514,7 @@
   // ── шит действий (звёзды/витрина/обмены/гонка) — общий #cd-scrim/#cd-sheet,
   // переиспользуется всеми под-экранами (см. openTradesPage/openFriendsPage/openSheet).
   function closeSheet() {
+    if (missionTimer) { clearInterval(missionTimer); missionTimer = null; }
     const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
     if (sc) sc.classList.remove('on');
     if (sh) { sh.classList.remove('on'); sh.innerHTML = ''; }
@@ -539,6 +542,7 @@
     sh.innerHTML = `
       <div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">${b.name}</div></div>
       <div class="cd-sheet__stars">${'★'.repeat(stars)}<span style="color:rgba(255,255,255,.18)">${'★'.repeat(3 - stars)}</span></div>
+      <div class="cd-sheet__hint" style="margin:-4px 0 10px;text-align:center">Приносит <b style="color:var(--gold-l)">+${fmt(inv.passivePerHour)}/час</b></div>
       <div class="cd-sheet__hint" style="margin:-6px 0 10px">Звёзды усиливают голубя в заезде — расти их, скармливая дубли</div>
       <button class="cd-sheet__act" id="cd-feed" ${feedEnabled ? '' : 'disabled'}>${feedLabel}</button>
       ${need != null && !feedEnabled ? `<div class="cd-sheet__hint">Нужно ${need} запасных (сейчас ${Math.max(0, spare)})</div>` : ''}
@@ -606,6 +610,81 @@
     if (buyBtn && !buyBtn.disabled) buyBtn.onclick = () => buyPigeonAct(breedId, closeSheet);
   }
 
+  // ── Задания голубей: один полёт на птицу, результат забирается после таймера ──
+  const MISSION_REASON = { bird_busy: 'Этот голубь уже на задании', not_owned: 'Птица не найдена', unknown_mission: 'Задание не найдено', not_ready: 'Голубь ещё в пути', not_found: 'Задание уже получено' };
+  const durationText = (sec) => sec < 3600 ? `${Math.round(sec / 60)} мин` : `${Math.round(sec / 3600)} ч`;
+  const leftText = (date) => {
+    const s = Math.max(0, Math.ceil((new Date(date).getTime() - Date.now()) / 1000));
+    if (!s) return 'готово';
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
+    return h ? `${h} ч ${m} мин` : `${m}:${String(x).padStart(2, '0')}`;
+  };
+
+  async function openMissionsPage() {
+    haptic('light');
+    const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet'); if (!sc || !sh) return;
+    sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Задания голубей</div></div><div id="cd-missions-body" style="padding:4px 0">Загрузка…</div>`;
+    sc.classList.add('on'); requestAnimationFrame(() => sh.classList.add('on'));
+    sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+    await renderMissions();
+    if (missionTimer) clearInterval(missionTimer);
+    missionTimer = setInterval(updateMissionTimers, 1000);
+  }
+
+  function updateMissionTimers() {
+    if (!container) return;
+    container.querySelectorAll('[data-completes]').forEach(el => {
+      const ready = new Date(el.dataset.completes).getTime() <= Date.now();
+      el.textContent = ready ? 'Забрать награду' : `В пути · ${leftText(el.dataset.completes)}`;
+      el.disabled = !ready;
+    });
+  }
+
+  async function renderMissions() {
+    const body = container.querySelector('#cd-missions-body'); if (!body) return;
+    const d = await apiRef('/api/pigeons/missions').catch(() => null);
+    if (!d || !Array.isArray(d.pigeons)) { body.innerHTML = '<div class="cd-sheet__hint">Не удалось загрузить задания</div>'; return; }
+    const defs = new Map((d.missions || []).map(m => [m.id, m]));
+    const active = new Map((d.active || []).map(m => [m.breed, m]));
+    const cards = d.pigeons.map(p => {
+      const b = BY_ID.get(p.breed) || { name: p.breed };
+      const a = active.get(p.breed);
+      if (a) {
+        const def = defs.get(a.mission_id) || { name: 'Задание' };
+        return `<div class="cd-setrow" style="display:block;margin-bottom:9px"><div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:7px"><b>${b.name}</b><span style="color:var(--gold-l);font-size:11px">шанс ${num(a.chance)}%</span></div><div style="font-size:12px;color:var(--muted);margin-bottom:8px">${def.name} · награда ${fmt(a.reward)} (${fmt(a.consolation)} при провале)</div><button class="cd-sheet__act" style="margin:0" data-claim-mission="${a.id}" data-completes="${a.completes_at}"></button></div>`;
+      }
+      const opts = (d.missions || []).map(m => `<option value="${m.id}">${m.name} · ${durationText(m.durationSec)} · ${fmt(m.reward)}</option>`).join('');
+      return `<div class="cd-setrow" style="display:block;margin-bottom:9px"><div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:7px"><b>${b.name}</b><span style="color:var(--gold-l);font-size:11px">+${fmt(p.passivePerHour)}/час</span></div><div style="font-size:11px;color:var(--muted);margin-bottom:7px">★${p.stars} · тюнинг ${p.speed}/${p.stamina}/${p.luck}</div><select data-mission-select="${p.breed}" style="width:100%;box-sizing:border-box;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:7px">${opts}</select><button class="cd-sheet__act" style="margin:0" data-start-mission="${p.breed}">Отправить</button></div>`;
+    }).join('');
+    body.innerHTML = `<div class="cd-sheet__hint" style="margin-bottom:10px">Тюнинг и звёзды повышают шанс успеха. При провале голубь всё равно привезёт 20% награды. Доход в час во время полёта сохраняется.</div>${cards}`;
+    body.querySelectorAll('[data-start-mission]').forEach(btn => { btn.onclick = () => startMissionAct(btn.dataset.startMission, btn); });
+    body.querySelectorAll('[data-claim-mission]').forEach(btn => { btn.onclick = () => claimMissionAct(num(btn.dataset.claimMission), btn); });
+    updateMissionTimers();
+  }
+
+  async function startMissionAct(breed, btn) {
+    if (busy) return; const sel = container.querySelector(`[data-mission-select="${breed}"]`); if (!sel) return;
+    busy = true; btn.disabled = true;
+    try {
+      const d = await apiRef('/api/pigeons/missions/start', { method: 'POST', body: JSON.stringify({ breed, missionId: sel.value }) }).catch(() => null);
+      if (d && d.ok) { haptic('medium'); flash('Голубь отправлен!'); await renderMissions(); }
+      else { flash(MISSION_REASON[d && d.error] || 'Не удалось отправить'); btn.disabled = false; }
+    } finally { busy = false; }
+  }
+
+  async function claimMissionAct(id, btn) {
+    if (busy || btn.disabled) return; busy = true; btn.disabled = true;
+    try {
+      const d = await apiRef('/api/pigeons/missions/claim', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null);
+      if (d && d.ok) {
+        haptic(d.success ? 'success' : 'medium');
+        flash(d.success ? `Задание выполнено: +${fmt(d.reward)}` : `Задание провалено, но голубь привёз +${fmt(d.reward)}`);
+        if (typeof window.ckSyncState === 'function') window.ckSyncState({ balance: num(d.newBalance) });
+        await renderMissions();
+      } else { flash(MISSION_REASON[d && d.error] || 'Не удалось забрать'); btn.disabled = false; }
+    } finally { busy = false; }
+  }
+
   // ── Тюнинг гонщика: 3 характеристики за монеты, дивизион по сумме уровней ──
   const STAT_LABEL = { speed: 'Скорость', stamina: 'Выносливость', luck: 'Удача' };
   const STAT_HINT = { speed: 'базовый темп', stamina: 'тапы сильнее', luck: 'меньше случайности' };
@@ -629,6 +708,11 @@
     const t = await apiRef('/api/pigeons/tune?breed=' + encodeURIComponent(breedId)).catch(() => null);
     if (!t || !t.owned) { body.innerHTML = `<div style="color:var(--muted);font-size:12.5px;text-align:center;padding:10px 0">Птица не найдена</div>`; return; }
     const balance = num(t.balance);
+    if (data && data.invMap[breedId]) {
+      data.passivePerHour += num(t.passivePerHour) - num(data.invMap[breedId].passivePerHour);
+      data.invMap[breedId].passivePerHour = num(t.passivePerHour);
+      data.invMap[breedId].speed = num(t.speed); data.invMap[breedId].stamina = num(t.stamina); data.invMap[breedId].luck = num(t.luck);
+    }
     const rows = ['speed', 'stamina', 'luck'].map(stat => {
       const lvl = num(t[stat]);
       const cost = t.nextCost[stat];
@@ -647,7 +731,7 @@
     }).join('');
     // дивизион-бар: зоны 0-8 бронза / 9-17 серебро / 18-30 золото (зеркало src/drag.ts::raceDivision)
     const pr = Math.max(0, Math.min(30, num(t.powerRating)));
-    body.innerHTML = `<div class="cd-setrow" style="margin-bottom:4px">
+    body.innerHTML = `<div class="cd-summary" style="margin-bottom:8px">Этот голубь приносит <b>+${fmt(t.passivePerHour)}/час</b>. Каждый уровень тюнинга увеличивает доход.</div><div class="cd-setrow" style="margin-bottom:4px">
       <div class="cd-setrow__n" style="flex:1">
         <div style="display:flex;align-items:center;gap:8px"><b>Дивизион:</b><span style="display:inline-flex" class="cd-divhead">${divChip(t.division)}</span></div>
         <div class="cd-divbar"><i style="width:${Math.round(pr / 30 * 100)}%"></i><b style="left:30%"></b><b style="left:60%"></b></div>

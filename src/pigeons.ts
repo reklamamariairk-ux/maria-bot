@@ -159,6 +159,23 @@ export function pigeonPassiveValue(breed: string, stars = 1, speed = 0, stamina 
   return Math.floor(base * starMult * tuneMult);
 }
 
+export interface PigeonMissionDef {
+  id: string; name: string; description: string; durationSec: number; reward: number; difficulty: number;
+}
+export const PIGEON_MISSIONS: PigeonMissionDef[] = [
+  { id: "bakery", name: "Доставка в кондитерскую", description: "Отнести срочную коробку в соседнюю кондитерскую", durationSec: 15 * 60, reward: 2_500, difficulty: 18 },
+  { id: "city", name: "Посылка через город", description: "Пронести заказ через весь Иркутск", durationSec: 60 * 60, reward: 10_000, difficulty: 32 },
+  { id: "baikal", name: "Рейс над Байкалом", description: "Сложный дальний маршрут с большой наградой", durationSec: 4 * 60 * 60, reward: 45_000, difficulty: 50 },
+];
+
+/** Шанс задания: редкость, звёзды и каждый вид тюнинга имеют заметный вес. */
+export function pigeonMissionChance(breed: string, stars = 1, speed = 0, stamina = 0, luck = 0, difficulty = 0): number {
+  const b = BREED_BY_ID.get(breed); if (!b) return 0;
+  const power = RARITY_BASE[b.rarity] + (Math.max(1, Math.min(3, stars)) - 1) * 4
+    + Math.max(0, speed) * 2 + Math.max(0, stamina) * 2 + Math.max(0, luck) * 2;
+  return Math.max(20, Math.min(95, Math.round(65 + (power - difficulty) * 1.5)));
+}
+
 export function pigeonCollectionPassiveBonus(owned: Set<string>): number {
   let bonus = 0;
   for (const set of PIGEON_SETS) {
@@ -275,6 +292,15 @@ export async function initPigeonSchema(): Promise<void> {
       PRIMARY KEY (week, chat_id));
     CREATE TABLE IF NOT EXISTS pigeon_race_winners (
       week TEXT PRIMARY KEY, results JSONB NOT NULL, closed_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+    CREATE TABLE IF NOT EXISTS pigeon_missions (
+      id BIGSERIAL PRIMARY KEY, chat_id BIGINT NOT NULL, breed TEXT NOT NULL, mission_id TEXT NOT NULL,
+      chance SMALLINT NOT NULL, reward BIGINT NOT NULL, consolation BIGINT NOT NULL,
+      succeeds BOOLEAN NOT NULL, status TEXT NOT NULL DEFAULT 'active',
+      started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), completes_at TIMESTAMPTZ NOT NULL,
+      claimed_at TIMESTAMPTZ);
+    CREATE UNIQUE INDEX IF NOT EXISTS pigeon_missions_one_active_bird
+      ON pigeon_missions (chat_id, breed) WHERE status='active';
+    CREATE INDEX IF NOT EXISTS pigeon_missions_player ON pigeon_missions (chat_id, status, completes_at);
   `);
   // Кэш перка «полный альбом» (+5% к пассиву, ALBUM_PASSIVE_BONUS) на clicker_state —
   // выставляется в grantPigeon при 16/16 пород, читается в clicker.ts::refresh без
@@ -338,22 +364,96 @@ export async function hasFullAlbum(chatId: number, client?: PoolClient): Promise
 
 export async function getPigeonsOverview(chatId: number) {
   const [inv, claimed] = await Promise.all([
-    pool.query(`SELECT breed, count, stars, showcase FROM pigeon_inventory WHERE chat_id=$1 AND count>0`, [chatId]),
+    pool.query(`SELECT breed, count, stars, showcase, tune_speed, tune_stamina, tune_luck FROM pigeon_inventory WHERE chat_id=$1 AND count>0`, [chatId]),
     pool.query(`SELECT set_id FROM pigeon_sets_claimed WHERE chat_id=$1`, [chatId]),
   ]);
   const owned = new Set(inv.rows.map((r: any) => r.breed));
   const claimedSet = new Set(claimed.rows.map((r: any) => r.set_id));
+  const inventory = inv.rows.map((r: any) => ({
+    ...r,
+    passivePerHour: pigeonPassiveValue(r.breed, Number(r.stars), Number(r.tune_speed), Number(r.tune_stamina), Number(r.tune_luck)),
+  }));
   const sets = PIGEON_SETS.map(s => ({
     ...s,
     owned: PIGEON_BREEDS.filter(b => b.set === s.id && owned.has(b.id)).length,
     claimed: claimedSet.has(s.id),
   }));
   return {
-    inventory: inv.rows, sets,
+    inventory, sets,
+    passivePerHour: inventory.reduce((sum: number, r: any) => sum + Number(r.passivePerHour), 0) + pigeonCollectionPassiveBonus(owned),
     albumDone: [...owned].filter(b => b !== "champion").length >= 16,
     unreadMail: 0,
     weekBreed: breedOfWeek(await currentWeekKey()),
   };
+}
+
+export async function getPigeonMissions(chatId: number) {
+  const [inv, active] = await Promise.all([
+    pool.query(`SELECT breed, stars, tune_speed, tune_stamina, tune_luck FROM pigeon_inventory WHERE chat_id=$1 AND count>0 ORDER BY breed`, [chatId]),
+    pool.query(`SELECT id, breed, mission_id, chance, reward, consolation, started_at, completes_at
+      FROM pigeon_missions WHERE chat_id=$1 AND status='active' ORDER BY completes_at`, [chatId]),
+  ]);
+  const activeByBreed = new Map(active.rows.map((r: any) => [String(r.breed), r]));
+  return {
+    missions: PIGEON_MISSIONS,
+    pigeons: inv.rows.map((r: any) => ({
+      breed: r.breed, stars: Number(r.stars), speed: Number(r.tune_speed), stamina: Number(r.tune_stamina), luck: Number(r.tune_luck),
+      passivePerHour: pigeonPassiveValue(r.breed, Number(r.stars), Number(r.tune_speed), Number(r.tune_stamina), Number(r.tune_luck)),
+      activeMissionId: activeByBreed.get(String(r.breed))?.id ?? null,
+    })),
+    active: active.rows,
+    serverNow: new Date().toISOString(),
+  };
+}
+
+export async function startPigeonMission(chatId: number, missionId: string, breed: string):
+  Promise<{ ok: boolean; mission?: any; reason?: string }> {
+  const def = PIGEON_MISSIONS.find(m => m.id === missionId);
+  if (!def) return { ok: false, reason: "unknown_mission" };
+  if (!BREED_BY_ID.has(breed)) return { ok: false, reason: "not_owned" };
+  const owned = await pool.query(
+    `SELECT stars, tune_speed, tune_stamina, tune_luck FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 AND count>0`,
+    [chatId, breed]);
+  if (!owned.rowCount) return { ok: false, reason: "not_owned" };
+  const r = owned.rows[0];
+  const chance = pigeonMissionChance(breed, Number(r.stars), Number(r.tune_speed), Number(r.tune_stamina), Number(r.tune_luck), def.difficulty);
+  const succeeds = Math.random() * 100 < chance;
+  const consolation = Math.max(1, Math.floor(def.reward * 0.2));
+  try {
+    const created = await pool.query(
+      `INSERT INTO pigeon_missions (chat_id, breed, mission_id, chance, reward, consolation, succeeds, completes_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW() + $8 * INTERVAL '1 second')
+       RETURNING id, breed, mission_id, chance, reward, consolation, started_at, completes_at`,
+      [chatId, breed, def.id, chance, def.reward, consolation, succeeds, def.durationSec]);
+    return { ok: true, mission: created.rows[0] };
+  } catch (e: any) {
+    if (e?.code === "23505") return { ok: false, reason: "bird_busy" };
+    throw e;
+  }
+}
+
+export async function claimPigeonMission(chatId: number, id: number):
+  Promise<{ ok: boolean; success?: boolean; reward?: number; newBalance?: number; reason?: string }> {
+  if (!Number.isSafeInteger(id) || id <= 0) return { ok: false, reason: "bad_input" };
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const found = await client.query(
+      `SELECT id, succeeds, reward, consolation, completes_at FROM pigeon_missions
+       WHERE id=$1 AND chat_id=$2 AND status='active' FOR UPDATE`, [id, chatId]);
+    if (!found.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "not_found" }; }
+    const mission = found.rows[0];
+    if (new Date(mission.completes_at).getTime() > Date.now()) { await client.query("ROLLBACK"); return { ok: false, reason: "not_ready" }; }
+    const success = Boolean(mission.succeeds);
+    const reward = Number(success ? mission.reward : mission.consolation);
+    await client.query(`UPDATE pigeon_missions SET status='claimed', claimed_at=NOW() WHERE id=$1`, [id]);
+    const { addClickerBalance } = await import("./clicker");
+    await addClickerBalance(chatId, reward, client);
+    const balance = await client.query(`SELECT balance FROM clicker_state WHERE chat_id=$1`, [chatId]);
+    await client.query("COMMIT");
+    return { ok: true, success, reward, newBalance: Number(balance.rows[0].balance) };
+  } catch (e) { await client.query("ROLLBACK"); throw e; }
+  finally { client.release(); }
 }
 
 // claimSet: строка-мьютекс + монеты в одной транзакции (паттерн clicker_gifts).
@@ -864,10 +964,10 @@ const STAT_COL: Record<TuneStat, string> = { speed: "tune_speed", stamina: "tune
 
 export async function getTuning(chatId: number, breed: string): Promise<{
   owned: boolean; speed: number; stamina: number; luck: number; powerRating: number;
-  division: Division; nextCost: Record<TuneStat, number | null>; balance: number;
+  division: Division; nextCost: Record<TuneStat, number | null>; balance: number; passivePerHour: number;
 }> {
   const [inv, bal] = await Promise.all([
-    pool.query(`SELECT tune_speed, tune_stamina, tune_luck FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 AND count>0`, [chatId, breed]),
+    pool.query(`SELECT stars, tune_speed, tune_stamina, tune_luck FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 AND count>0`, [chatId, breed]),
     pool.query(`SELECT balance FROM clicker_state WHERE chat_id=$1`, [chatId]),
   ]);
   const speed = inv.rows[0]?.tune_speed ?? 0, stamina = inv.rows[0]?.tune_stamina ?? 0, luck = inv.rows[0]?.tune_luck ?? 0;
@@ -876,6 +976,7 @@ export async function getTuning(chatId: number, breed: string): Promise<{
     owned: !!inv.rowCount, speed, stamina, luck, powerRating: power, division: raceDivision(power),
     nextCost: { speed: tuneCost(speed), stamina: tuneCost(stamina), luck: tuneCost(luck) },
     balance: bal.rows[0] ? Number(bal.rows[0].balance) : 0,
+    passivePerHour: inv.rowCount ? pigeonPassiveValue(breed, Number(inv.rows[0].stars), speed, stamina, luck) : 0,
   };
 }
 
