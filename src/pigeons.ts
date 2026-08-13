@@ -561,6 +561,23 @@ export async function cancelTrade(chatId: number, tradeId: number): Promise<{ ok
   finally { client.release(); }
 }
 
+export async function declineTrade(chatId: number, tradeId: number): Promise<{ ok: boolean; reason?: string }> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const t = await client.query(
+      `SELECT * FROM pigeon_trades WHERE id=$1 AND to_chat=$2 AND status='open' FOR UPDATE`, [tradeId, chatId]);
+    if (!t.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "gone" }; }
+    const tr = t.rows[0];
+    await grantPigeon(Number(tr.from_chat), tr.give, client); // вернуть эскроу-птицу создателю
+    const backCoin = Number(tr.coin_delta) || 0;
+    if (backCoin > 0) await client.query(`UPDATE clicker_state SET balance = balance + $2 WHERE chat_id=$1`, [Number(tr.from_chat), backCoin]);
+    await client.query(`UPDATE pigeon_trades SET status='declined', closed_at=NOW(), closed_by=$2 WHERE id=$1`, [tradeId, chatId]);
+    await client.query("COMMIT");
+    return { ok: true };
+  } catch (e) { await client.query("ROLLBACK"); throw e; }
+  finally { client.release(); }
+}
 // Ленивый expiry: при каждом чтении доски возвращаем эскроу протухших. Курсивно малый объём — норм.
 export async function expireTrades(): Promise<number> {
   const client = await pool.connect();

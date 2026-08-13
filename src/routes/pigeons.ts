@@ -2,7 +2,7 @@
  * Pigeons routes — «Голубятня» (коллекция/сеты/звёзды/обмены).
  * GET  /api/pigeons                  · POST /api/pigeons/set-claim {set}
  * GET  /api/pigeons/trades           · POST /api/pigeons/trade {give,want,to?}
- * POST /api/pigeons/trade/accept {id}· POST /api/pigeons/trade/cancel {id}
+ * POST /api/pigeons/trade/accept {id}· POST /api/pigeons/trade/cancel {id} · POST /api/pigeons/trade/decline {id}
  * Почта отключена продуктово: mail endpoints ниже возвращают 410, чтобы старый клиент
  * не мог продолжать отправлять голубей.
  * POST /api/pigeons/feed {breed}     · POST /api/pigeons/showcase {breeds}
@@ -10,7 +10,7 @@
  */
 import { Router } from "express";
 import {
-  getPigeonsOverview, claimSet, getTradeBoard, createTrade, acceptTrade, cancelTrade,
+  getPigeonsOverview, claimSet, getTradeBoard, createTrade, acceptTrade, cancelTrade, declineTrade,
   feedPigeon, setShowcase,
   enterRace, getRace, getTuning, upgradeTune, BREED_BY_ID,
   getMailRecipients,
@@ -70,6 +70,12 @@ export function createPigeonsRouter(push: PushService): Router {
     catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/trade/cancel]"); res.status(500).json({ error: "internal" }); }
   });
 
+  router.post("/api/pigeons/trade/decline", requireTgUser, rateLimit(20), async (req, res) => {
+    const u = getTgUser(req)!; const id = Number((req.body as { id?: number }).id);
+    if (!Number.isInteger(id)) { res.status(400).json({ error: "bad_input" }); return; }
+    try { const r = await declineTrade(u.id, id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json(r); }
+    catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/trade/decline]"); res.status(500).json({ error: "internal" }); }
+  });
   router.post("/api/pigeons/mail", requireTgUser, rateLimit(10), async (req, res) => {
     res.status(410).json({ error: "disabled" });
   });

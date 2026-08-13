@@ -279,7 +279,7 @@
       .cd-traderow__art img{width:80%;height:80%;object-fit:contain}
       .cd-traderow__arrow{color:var(--muted);flex:none;font-size:12px}
       .cd-traderow__meta{font-size:10.5px;color:var(--muted);margin-top:2px}
-      .cd-traderow__act{flex:none}
+      .cd-traderow__act{flex:none;display:flex;flex-direction:column;gap:6px;align-items:stretch}
       .cd-tbtn{border:1px solid #DFFF8F;border-radius:10px;padding:8px 12px;font-weight:800;font-size:11.5px;background:linear-gradient(180deg,#D4FF6A,#A8F51E 56%,#8DBF20);color:#12210A;cursor:pointer;white-space:nowrap;min-height:34px}
       .cd-tbtn:disabled{opacity:.6;cursor:default}
       .cd-tbtn--ghost{background:rgba(255,255,255,.06);color:var(--muted);border-color:var(--line)}
@@ -968,6 +968,7 @@
     box.innerHTML = list.map(t => tradeRowHtml(t, tradesTab)).join('');
     box.querySelectorAll('[data-accept]').forEach(el => { el.onclick = () => acceptTradeAct(Number(el.dataset.accept), el); });
     box.querySelectorAll('[data-cancel]').forEach(el => { el.onclick = () => cancelTradeAct(Number(el.dataset.cancel), el); });
+    box.querySelectorAll('[data-decline]').forEach(el => { el.onclick = () => declineTradeAct(Number(el.dataset.decline), el); });
   }
   function tradeRowHtml(t, kind) {
     const give = BY_ID.get(t.give), want = BY_ID.get(t.want);
@@ -984,6 +985,8 @@
       : coin < 0 ? `<span class="cd-deal__coin">+ доплата ${fmt(-coin)}</span>` : '';
     const btn = kind === 'mine'
       ? `<button class="cd-tbtn cd-tbtn--ghost" data-cancel="${t.id}">Отменить</button>`
+      : kind === 'toMe'
+      ? `<button class="cd-tbtn" data-accept="${t.id}"${canFulfill ? '' : ' disabled'}>Принять</button><button class="cd-tbtn cd-tbtn--ghost" data-decline="${t.id}">Отказаться</button>`
       : `<button class="cd-tbtn" data-accept="${t.id}"${canFulfill ? '' : ' disabled'}>Принять</button>`;
     // meta: почему нельзя принять — приоритет «нет запасного», затем «мало монет»
     const why = !haveSpare ? `нужен запасной «${want ? want.name : t.want}» — сейчас его нет`
@@ -1020,6 +1023,24 @@
         renderTradesTab();
       } else {
         flash(TRADE_ACCEPT_REASON[d && d.error] || 'Не получилось принять обмен');
+        if (btn) btn.disabled = false;
+      }
+    } finally { busy = false; }
+  }
+  const TRADE_DECLINE_REASON = { gone: 'Предложение уже разобрали' };
+  async function declineTradeAct(id, btn) {
+    if (busy) return; busy = true; if (btn) btn.disabled = true;
+    try {
+      const d = await apiRef('/api/pigeons/trade/decline', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null);
+      if (d && d.ok) {
+        haptic('light'); flash('Ты отказался от обмена');
+        needsRerenderOnClose = true;
+        const list = await apiRef('/api/pigeons/trades').catch(() => null);
+        tradesCache = (list && Array.isArray(list.open)) ? list : tradesCache;
+        incomingTrades = (tradesCache.toMe || []).length; updateTradesBadgeDom();
+        renderTradesTab();
+      } else {
+        flash(TRADE_DECLINE_REASON[d && d.error] || 'Не получилось отказаться');
         if (btn) btn.disabled = false;
       }
     } finally { busy = false; }
