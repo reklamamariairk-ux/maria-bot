@@ -923,6 +923,7 @@ export async function getMailRecipients(chatId: number):
   const mapRows = (rows: any[]) => rows.map((r: any) => ({
     chat: Number(r.chat_id),
     name: (r.first_name || r.username || "Котовод").toString().slice(0, 24),
+    username: r.username ? String(r.username).replace(/^@/, "").slice(0, 32) : null,
   }));
   const sq = await pool.query(`SELECT squad FROM clicker_state WHERE chat_id=$1`, [chatId]);
   const squad = sq.rows[0]?.squad ?? null;

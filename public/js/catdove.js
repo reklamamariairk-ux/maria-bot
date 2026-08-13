@@ -73,7 +73,7 @@
   function flash(msg) { if (window.ckFlash) window.ckFlash(msg); }
   function haptic(k) { window.haptic && window.haptic(k); }
 
-  let container = null, apiRef = null, data = null, busy = false, missionTimer = null;
+  let container = null, apiRef = null, data = null, busy = false, missionTimer = null, mountReady = null;
   // ── доп. состояние: гонка (грузится вместе с альбомом), обмены/рецепиенты
   // (лениво, при первом открытии соответствующей страницы), мастера создания
   // предложения/письма (шаг за шагом переиспользуют #cd-sheet). needsRerenderOnClose —
@@ -83,7 +83,7 @@
   let race = null, recipients = null, tradesCache = null, tradesTab = 'toMe', mailCache = null;
   // Бейдж входящих обменов на кнопке «Обмены» + флаг «создаю обмен с доски» (для нумерации шагов).
   let incomingTrades = 0, tradesBadgeInit = false, tradeFromBoard = false;
-  let tcState = null, msState = null, needsRerenderOnClose = false;
+  let tcState = null, msState = null, needsRerenderOnClose = false, tradeTargetFriend = null;
 
   // ── стили (свой блок, не трогаем catclick-css — переменные --gold-*/--muted/--panel/
   // --line/--ink/--cream каскадируются от .ck-ov, наш контейнер лежит внутри него) ──
@@ -841,9 +841,33 @@
     if (!list) return;
     const friends = Array.isArray(rec.friends) ? rec.friends : [];
     list.innerHTML = friends.length
-      ? friends.map(r => `<div class="cd-reciperow" data-chat="${r.chat}"><span>${esc(r.name)}</span><small>можно слать голубей и предлагать обмен</small></div>`).join('')
+      ? friends.map(r => `<div class="cd-reciperow cd-friend-open" data-chat="${r.chat}"><span>${esc(r.name)}</span><small>${r.username ? '@' + esc(r.username) + ' · ' : ''}нажми, чтобы открыть друга</small></div>`).join('')
       : emptyState('Пока нет друзей', 'Нажми «Позвать друга по ссылке». Когда друг откроет ссылку в боте, он появится в этом списке.');
+    const byChat = new Map(friends.map(r => [num(r.chat), r]));
+    list.querySelectorAll('.cd-friend-open').forEach(el => { el.onclick = () => openFriendProfile(byChat.get(num(el.dataset.chat))); });
     const inv = sh.querySelector('#cd-fr-invite'); if (inv) inv.onclick = () => shareFriendLink(rec);
+  }
+
+  async function openFriendProfile(friend) {
+    if (!friend || !friend.chat) return;
+    const sh = container.querySelector('#cd-sheet'); if (!sh) return;
+    const username = String(friend.username || '').replace(/^@/, '');
+    sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Друзья</button><div class="cd-sheet__t">${esc(friend.name)}</div></div>
+      ${username ? `<button class="cd-sheet__act" id="cd-friend-tg">Написать @${esc(username)} в Telegram</button>` : `<div class="cd-sheet__hint">У друга не указан публичный username Telegram, поэтому открыть личный чат по ссылке нельзя.</div>`}
+      <button class="cd-sheet__act" id="cd-friend-trade">${SWAP_ICON(15)} Предложить обмен</button>
+      <button class="cd-sheet__act" id="cd-friend-duel">${FLAG_ICON(15)} Вызвать на дуэль</button>
+      <div class="cd-sect-t">Обмены от этого друга</div><div id="cd-friend-trades">${skeletonRows(2)}</div>`;
+    sh.querySelector('#cd-sheet-x').onclick = openFriendsPage;
+    const tg = sh.querySelector('#cd-friend-tg'); if (tg) tg.onclick = () => { window.open('https://t.me/' + encodeURIComponent(username), '_blank'); };
+    sh.querySelector('#cd-friend-trade').onclick = () => { tradeTargetFriend = friend; openTradeGive(); };
+    sh.querySelector('#cd-friend-duel').onclick = () => openFriendRaceStakePicker(friend);
+    const d = await apiRef('/api/pigeons/trades').catch(() => null);
+    if (d && Array.isArray(d.open)) tradesCache = d;
+    const box = sh.querySelector('#cd-friend-trades'); if (!box) return;
+    const incoming = (tradesCache && tradesCache.toMe || []).filter(t => num(t.from_chat) === num(friend.chat));
+    box.innerHTML = incoming.length ? incoming.map(t => tradeRowHtml(t, 'toMe')).join('') : `<div class="cd-sheet__hint">Новых предложений от этого друга нет.</div>`;
+    box.querySelectorAll('[data-accept]').forEach(el => { el.onclick = async () => { await acceptTradeAct(num(el.dataset.accept), el); openFriendProfile(friend); }; });
+    box.querySelectorAll('[data-decline]').forEach(el => { el.onclick = async () => { await declineTradeAct(num(el.dataset.decline), el); openFriendProfile(friend); }; });
   }
 
   // ── Обмены: создание предложения ───────────────────────────────────────────
@@ -939,6 +963,16 @@
     haptic('light');
     const sh = container.querySelector('#cd-sheet');
     if (!sh) return;
+    if (tradeTargetFriend) {
+      const friend = tradeTargetFriend;
+      sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Обмен с ${esc(friend.name)}</div></div>
+        ${dealChip(tcState.give, wantId, num(tcState.coin))}
+        <div class="cd-sheet__hint">Предложение увидит только этот друг. Он сможет принять его или отказаться.</div>
+        <button class="cd-sheet__act" id="cd-trade-direct">Отправить предложение</button>`;
+      sh.querySelector('#cd-sheet-x').onclick = () => openTradeCoins(tcState.want);
+      sh.querySelector('#cd-trade-direct').onclick = () => submitTrade(friend.chat);
+      return;
+    }
     sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Кому предложить?</div></div>
       ${tradeFromBoard ? '<div class="cd-steps">Обмен · шаг 4 из 4</div>' : ''}
       ${dealChip(tcState.give, wantId, num(tcState.coin))}
@@ -968,7 +1002,7 @@
       if (d && d.ok) {
         haptic('medium'); flash('Предложение создано');
         if (typeof window.ckSyncState === 'function' && typeof d.newBalance === 'number') window.ckSyncState({ balance: d.newBalance }); // доплата ушла в эскроу
-        tcState = null; tradeFromBoard = false;
+        tcState = null; tradeFromBoard = false; tradeTargetFriend = null;
         await load(); render();       // альбом обновился (запасной дубль ушёл в эскроу)
         tradesTab = 'mine';
         openTradesPage();             // возвращаемся на доску, вкладка «Мои» — видно новое предложение
@@ -1019,7 +1053,7 @@
     sc.classList.add('on');
     requestAnimationFrame(() => sh.classList.add('on'));
     sh.querySelector('#cd-sheet-x').onclick = closeSheet;
-    sh.querySelector('#cd-trade-create').onclick = openTradeGive;
+    sh.querySelector('#cd-trade-create').onclick = () => { tradeTargetFriend = null; openTradeGive(); };
     sh.querySelectorAll('.cd-subtab').forEach(b => { b.onclick = () => { tradesTab = b.dataset.t; renderTradesTab(); }; });
     // Мгновенный рендер из кэша (refreshTradesBadge мог уже подтянуть доску), затем свежий запрос.
     if (tradesCache) { if (!tradesCache.toMe.length && tradesTab === 'toMe') tradesTab = tradesCache.open.length ? 'open' : 'toMe'; renderTradesTab(); }
@@ -1469,7 +1503,7 @@
     const outgoing = Array.isArray(duels.outgoing) ? duels.outgoing : [];
     const box = sh.querySelector('#cd-friend-race-list'); if (!box) return;
     const incomingHtml = incoming.length
-      ? `<div class="cd-sect-t">Тебя вызвали</div>${incoming.map(d => `<div class="cd-reciperow cd-duel-in" data-id="${num(d.id)}"><span>${esc(d.fromName || 'Друг')} · ${fmt(d.stake || 0)}</span><small>принять: выбери голубя и сделай разгон</small></div>`).join('')}`
+      ? `<div class="cd-sect-t">Тебя вызвали</div>${incoming.map(d => `<div class="cd-reciperow"><div class="cd-duel-in" data-id="${num(d.id)}" style="flex:1;min-width:0"><span>${esc(d.fromName || 'Друг')} · ${d.stake ? fmt(d.stake) + ' монет' : 'без ставки'}</span><small>нажми, чтобы принять и выбрать голубя</small></div><button class="cd-tbtn cd-tbtn--ghost cd-duel-decline" data-id="${num(d.id)}">Отказать</button></div>`).join('')}`
       : '';
     const outgoingHtml = outgoing.length
       ? `<div class="cd-sect-t">Ждут ответа</div>${outgoing.map(d => `<div class="cd-reciperow"><span>${esc(d.fromName || d.toName || 'Друг')} · ${fmt(d.stake || 0)}</span><small>друг ещё не выбрал голубя</small></div>`).join('')}`
@@ -1481,8 +1515,18 @@
     box.innerHTML = incomingHtml + outgoingHtml + friendsHtml;
     const byId = new Map(incoming.map(d => [num(d.id), d]));
     box.querySelectorAll('.cd-duel-in').forEach(el => { el.onclick = () => openFriendRaceAcceptBreedPicker(byId.get(num(el.dataset.id))); });
+    box.querySelectorAll('.cd-duel-decline').forEach(el => { el.onclick = () => declineDuelAct(num(el.dataset.id), el); });
     box.querySelectorAll('.cd-duel-new').forEach(el => { el.onclick = () => openFriendRaceStakePicker({ chat: num(el.dataset.chat), name: el.dataset.name || 'Друг' }); });
     const btn = box.querySelector('#cd-friend-race-link'); if (btn) btn.onclick = shareFriendLink;
+  }
+
+  async function declineDuelAct(id, btn) {
+    if (busy) return; busy = true; if (btn) btn.disabled = true;
+    try {
+      const d = await apiRef('/api/pigeons/drag/duel/decline', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null);
+      if (d && d.ok) { haptic('light'); flash('Ты отказался от дуэли'); openFriendRaceFriendPicker(); }
+      else { flash('Вызов уже недоступен'); if (btn) btn.disabled = false; }
+    } finally { busy = false; }
   }
 
   function openFriendRaceStakePicker(friend) {
@@ -1490,11 +1534,17 @@
     const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
     if (!sc || !sh) return;
     sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Ставка с ${esc(friend.name)}</div></div>
-      <div class="cd-sheet__hint">Оба ставят одинаково. Победитель забирает банк.</div>
-      ${DUEL_STAKES.map(v => `<div class="cd-reciperow cd-duel-stake" data-stake="${v}"><span>${v ? `${fmt(v)} монет` : 'Без ставки'}</span><small>следующий шаг — выбрать голубя</small></div>`).join('')}`;
+      <div class="cd-sheet__hint">Оба ставят одинаково. Победитель забирает банк. Можно выбрать готовую сумму или написать свою — до 1 000 000.</div>
+      ${DUEL_STAKES.map(v => `<div class="cd-reciperow cd-duel-stake" data-stake="${v}"><span>${v ? `${fmt(v)} монет` : 'Без ставки'}</span><small>следующий шаг — выбрать голубя</small></div>`).join('')}
+      <div style="display:flex;gap:8px;margin-top:10px"><input id="cd-duel-custom" inputmode="numeric" type="number" min="0" max="1000000" step="1" placeholder="Своя сумма" class="cd-cipher-in" style="text-transform:none"><button class="cd-tbtn" id="cd-duel-custom-go">Дальше</button></div>`;
     sc.classList.add('on'); requestAnimationFrame(() => sh.classList.add('on'));
     sh.querySelector('#cd-sheet-x').onclick = openFriendRaceFriendPicker;
     sh.querySelectorAll('.cd-duel-stake').forEach(el => { el.onclick = () => openFriendRaceBreedPicker(friend, num(el.dataset.stake)); });
+    sh.querySelector('#cd-duel-custom-go').onclick = () => {
+      const raw = Number(sh.querySelector('#cd-duel-custom').value);
+      if (!Number.isSafeInteger(raw) || raw < 0 || raw > 1000000) { flash('Введи целую сумму от 0 до 1 000 000'); return; }
+      openFriendRaceBreedPicker(friend, raw);
+    };
   }
 
   function openFriendRaceBreedPicker(friend, stake) {
@@ -1612,8 +1662,10 @@
     container = el; apiRef = api || window.ckApi;
     styles();
     container.innerHTML = skeleton();
-    await load();
+    mountReady = load();
+    await mountReady;
     render();
+    mountReady = null;
   }
 
   async function refreshBadge() {
@@ -1642,5 +1694,12 @@
     return items ? `<span class="cd-mini-row">${items}</span>` : '';
   }
 
-  window.CatDove = { mount, refreshBadge, miniIconsHtml };
+  async function openIncomingDuel(duel) {
+    if (!duel || !duel.id) return;
+    if (mountReady) await mountReady;
+    if (!data) { await load(); render(); }
+    openFriendRaceAcceptBreedPicker(duel);
+  }
+
+  window.CatDove = { mount, refreshBadge, miniIconsHtml, openIncomingDuel, openDuels: openFriendRaceFriendPicker };
 })();

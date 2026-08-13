@@ -5,6 +5,7 @@ import { pool } from "./db";
 import { PIGEON_BREEDS, BREED_BY_ID, TUNE_MAX } from "./pigeons";
 
 export const DRAG_ENERGY_COST = 250;
+export const DUEL_STAKE_MAX = 1_000_000;
 export const TRACK_LEN = 2000;
 export const BASE_SPEED = 220;
 export const SPEED_PER_POWER = 5;      // мощность доминирует: разрыв power перевешивает реакцию
@@ -343,9 +344,10 @@ type DuelTapInput = { count: number; reactionMs: number; durationMs: number };
 type DuelStats = { breed: string; rarity: Rarity; stars: number; speed: number; stamina: number; luck: number; power: number; cruise: number };
 const DUEL_OPEN_LIMIT = 10;
 
-function normalizeDuelStake(stake: number): number {
-  const n = Math.max(0, Math.floor(Number(stake) || 0));
-  return STAKE_PRESETS.includes(n) ? n : 0;
+export function normalizeDuelStake(stake: unknown): number | null {
+  const n = Number(stake);
+  if (!Number.isFinite(n) || !Number.isSafeInteger(n) || n < 0 || n > DUEL_STAKE_MAX) return null;
+  return n;
 }
 function normalizeDuelTap(tap: any): DuelTapInput {
   return {
@@ -433,6 +435,7 @@ export async function listFriendDuels(chatId: number): Promise<{ incoming: any[]
 
 export async function createFriendDuel(chatId: number, friendChat: number, breed: string, stakeRaw: number, tapRaw: any): Promise<{ ok: boolean; id?: number; newBalance?: number; newEnergy?: number; reason?: string }> {
   const stake = normalizeDuelStake(stakeRaw);
+  if (stake == null) return { ok: false, reason: "bad_stake" };
   if (!BREED_BY_ID.has(breed)) return { ok: false, reason: "not_owned" };
   const client = await pool.connect();
   try {
@@ -459,6 +462,23 @@ export async function createFriendDuel(chatId: number, friendChat: number, breed
     await client.query("ROLLBACK");
     throw e;
   } finally { client.release(); }
+}
+
+export async function declineFriendDuel(chatId: number, duelId: number): Promise<{ ok: boolean; newBalance?: number; reason?: string }> {
+  if (!Number.isSafeInteger(duelId) || duelId <= 0) return { ok: false, reason: "bad_input" };
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const d = await client.query(`SELECT from_chat, stake FROM pigeon_duels WHERE id=$1 AND to_chat=$2 AND status='open' FOR UPDATE`, [duelId, chatId]);
+    if (!d.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "not_found" }; }
+    const fromChat = Number(d.rows[0].from_chat), stake = Number(d.rows[0].stake) || 0;
+    await client.query(`UPDATE pigeon_duels SET status='declined', closed_at=NOW() WHERE id=$1`, [duelId]);
+    if (stake > 0) await client.query(`UPDATE clicker_state SET balance=balance+$2, updated_at=NOW() WHERE chat_id=$1`, [fromChat, stake]);
+    const bal = await client.query(`SELECT balance FROM clicker_state WHERE chat_id=$1`, [chatId]);
+    await client.query("COMMIT");
+    return { ok: true, newBalance: bal.rows[0] ? Number(bal.rows[0].balance) : undefined };
+  } catch (e) { await client.query("ROLLBACK"); throw e; }
+  finally { client.release(); }
 }
 
 export async function acceptFriendDuel(chatId: number, duelId: number, breed: string, tapRaw: any): Promise<any> {

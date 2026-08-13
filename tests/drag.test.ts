@@ -9,7 +9,21 @@ import {
   assignFieldSkillV3, trainingOpponentSkill,
   TAP_TARGET_BASE, TAP_TARGET_PER, TAP_W, TAP_SPEED_BOOST, BET_POWER_GAP,
   cacheOpponents, takeCachedOpponents,
+  normalizeDuelStake, DUEL_STAKE_MAX,
 } from "../src/drag";
+
+describe("произвольная ставка в дуэли", () => {
+  it("принимает любое целое значение в разрешённом диапазоне", () => {
+    expect(normalizeDuelStake(0)).toBe(0);
+    expect(normalizeDuelStake(7777)).toBe(7777);
+    expect(normalizeDuelStake(DUEL_STAKE_MAX)).toBe(DUEL_STAKE_MAX);
+  });
+  it("отклоняет дробные, отрицательные и слишком большие ставки", () => {
+    expect(normalizeDuelStake(1.5)).toBeNull();
+    expect(normalizeDuelStake(-1)).toBeNull();
+    expect(normalizeDuelStake(DUEL_STAKE_MAX + 1)).toBeNull();
+  });
+});
 
 describe("кэш соперников — превью и заезд гоняются с одним набором", () => {
   const field = [

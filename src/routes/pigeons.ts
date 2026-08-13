@@ -191,8 +191,21 @@ export function createPigeonsRouter(push: PushService): Router {
       const { createFriendDuel } = await import("../drag");
       const r = await createFriendDuel(u.id, Math.floor(Number(b.friendChat) || 0), String(b.breed || ""), Number(b.stake) || 0, b.tap || null);
       if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
+      const sender = String((u as any).first_name || (u as any).username || "Друг").slice(0, 24);
+      const stake = Math.max(0, Math.floor(Number(b.stake) || 0));
+      void push.sendRaw(Math.floor(Number(b.friendChat) || 0), `🏁 ${sender} вызывает тебя на дуэль в «Котик Комбат»!\nСтавка: ${stake ? stake.toLocaleString("ru-RU") + " монет" : "без ставки"}.\nОткрой игру — вызов ждёт на Главной.`);
       res.json(r);
     } catch (e) { log.error({ err: e, chatId: u.id }, "[drag/duel]"); res.status(500).json({ error: "internal" }); }
+  });
+
+  router.post("/api/pigeons/drag/duel/decline", requireTgUser, rateLimit(30), async (req, res) => {
+    const u = getTgUser(req)!; const id = Math.floor(Number((req.body as { id?: number }).id) || 0);
+    try {
+      const { declineFriendDuel } = await import("../drag");
+      const r = await declineFriendDuel(u.id, id);
+      if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
+      res.json(r);
+    } catch (e) { log.error({ err: e, chatId: u.id }, "[drag/duel/decline]"); res.status(500).json({ error: "internal" }); }
   });
 
   router.post("/api/pigeons/drag/duel/accept", requireTgUser, rateLimit(20), async (req, res) => {

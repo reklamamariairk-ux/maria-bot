@@ -820,6 +820,8 @@
       .ck-hub__av{width:70px;height:70px;margin:0 auto 8px;border-radius:50%;object-fit:cover;box-shadow:0 8px 22px rgba(0,0,0,.4),0 0 26px rgba(155,92,255,.32)}
       .ck-hub__name{font-family:'Nunito',sans-serif;font-weight:900;font-size:17px;color:var(--cream)}
       .ck-hub__sub{font-size:11.5px;color:var(--muted);margin-top:2px}
+      .ck-duelcall{display:flex;align-items:center;gap:10px;padding:12px;margin:0 0 12px;border:1px solid rgba(255,46,126,.55);border-radius:16px;background:linear-gradient(135deg,rgba(255,46,126,.18),rgba(155,92,255,.10));box-shadow:0 8px 24px rgba(0,0,0,.24)}
+      .ck-duelcall__b{flex:1;min-width:0}.ck-duelcall__b b{display:block;color:var(--ink);font-size:13.5px}.ck-duelcall__b span{display:block;color:var(--muted);font-size:11.5px;margin-top:2px}.ck-duelcall button{flex:none;border:1px solid #DFFF8F;border-radius:11px;padding:9px 11px;background:linear-gradient(180deg,#D4FF6A,#A8F51E);color:#12210A;font-weight:800;font-size:11.5px}
       .ck-bento{display:grid;grid-template-columns:1fr 1fr;gap:8px}
       .ck-tile{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
       .ck-tile__l{display:block;font-size:9px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
@@ -1211,7 +1213,7 @@
     if (col && !doveColMounted && window.CatDove) { doveColMounted = true; window.CatDove.mount(col, api); }
     // тур альбома при первом входе новичка — с задержкой на асинхронный монтаж CatDove
     // (якорь ещё не отрисован → мягкий выход, покажется в следующий раз)
-    if (freshPlayer() && !tourSeen('col')) setTimeout(() => { if (tab === 'dove' && !tourActive) startTour('col'); }, 1100);
+    if (!tourSeen('col')) setTimeout(() => { if (tab === 'dove' && !tourActive) startTour('col'); }, 1100);
   }
   // Бейдж непрочитанной почты голубятни на кнопке навбара — грузится один раз при
   // старте игры и при каждом открытии вкладки «Голуби» (unreadMail из /api/pigeons).
@@ -1270,7 +1272,7 @@
       try { window.catPetOpen && window.catPetOpen(); } catch (_) {}
       // тур «Дома» — поверх пет-оверлея, при первом входе новичка
       if (tourActive) endTour(false);
-      if (freshPlayer() && !tourSeen('home')) setTimeout(() => { if (!tourActive) startTour('home'); }, 900);
+      if (!tourSeen('home')) setTimeout(() => { if (!tourActive) startTour('home'); }, 900);
       return;
     }
     window.haptic && window.haptic('selection');
@@ -1320,6 +1322,16 @@
       `<div class="ck-bento">${tiles}</div>` +
       `<div class="ck-sect">Разделы</div><div class="ck-hubrows">${rows}</div>`;
     body.querySelectorAll('[data-goto]').forEach(b => b.onclick = () => { window.haptic && window.haptic('selection'); setTab(b.dataset.goto); });
+    if (authed()) api('/api/pigeons/drag/duels').then(d => {
+      const duel = d && Array.isArray(d.incoming) ? d.incoming[0] : null;
+      if (!duel || tab !== 'hub' || !body.isConnected) return;
+      const safeName = window.escapeHtml ? window.escapeHtml(duel.fromName || 'Друг') : 'Друг';
+      body.insertAdjacentHTML('afterbegin', `<div class="ck-duelcall"><span>${ICON.flag(24)}</span><div class="ck-duelcall__b"><b>${safeName} вызывает на дуэль</b><span>${duel.stake ? 'Ставка ' + fmt(duel.stake) + ' монет' : 'Без ставки'}</span></div><button id="ck-duel-accept">Принять дуэль</button></div>`);
+      const btn = body.querySelector('#ck-duel-accept'); if (btn) btn.onclick = () => {
+        setTab('dove');
+        setTimeout(() => { if (window.CatDove && window.CatDove.openIncomingDuel) window.CatDove.openIncomingDuel(duel); }, 250);
+      };
+    }).catch(() => {});
     // Топ недели и копилка стаи — по сети, best-effort; до ответа «…», при неудаче «—»/«нет»
     if (authed()) {
       Promise.all([loadTop().catch(() => null), api('/api/clicker/squads').catch(() => null)]).then(([top, sq]) => {
@@ -2556,6 +2568,7 @@
       { text: 'В «Заданиях» отправляй голубей в полёт. Чем лучше птица и тюнинг, тем выше шанс полной награды; даже за провал будет 20%', anchor: '#cd-nav-missions', anchorFn: function () { return ov.querySelector('#cd-nav-missions') || ov.querySelector('#ck-dove-col .cd-navrow'); }, pos: 'bottom' },
       { text: 'Кнопка «Гонки» открывает всё спортивное: гонку стаи, драг-заезды, тренировки и ставки монетами', anchor: '#cd-nav-race', anchorFn: function () { return ov.querySelector('#cd-nav-race') || ov.querySelector('#ck-dove-col .cd-navrow'); }, pos: 'bottom' },
       { text: 'Тапни свою породу: там звёзды, тюнинг и выбор любимых голубей для показа рядом с твоим именем в рейтинге', anchor: '#ck-dove-col .cd-card:not(.cd-locked)', anchorFn: function () { return ov.querySelector('#ck-dove-col .cd-card:not(.cd-locked)') || ov.querySelector('#ck-dove-col .cd-grid'); }, pos: 'bottom' },
+      { text: 'В «Друзьях» нажми на человека: можно написать ему в Telegram, предложить личный обмен или вызвать на дуэль со своей ставкой', anchor: '#cd-nav-friends', pos: 'bottom' },
       { text: 'В «Обменах» меняйся дублями с другими игроками. Бейдж покажет входящие предложения', anchor: '#cd-nav-trades', pos: 'bottom' },
     ],
     home: [
