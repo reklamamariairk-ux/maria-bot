@@ -333,6 +333,16 @@ export async function initClickerSchema(): Promise<void> {
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS case_dry INT NOT NULL DEFAULT 0;
     -- Персональная административная прибавка к пассиву (не влияет на уровни/гонки).
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS bonus_profit_per_hour BIGINT NOT NULL DEFAULT 0;
+    -- Раздельные часы: игровые операции больше не сбрасывают накопленный пассив,
+    -- когда им нужно лишь зафиксировать реген энергии или изменение профиля.
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS passive_updated_at TIMESTAMPTZ;
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS energy_updated_at TIMESTAMPTZ;
+    UPDATE clicker_state SET passive_updated_at=COALESCE(passive_updated_at, updated_at), energy_updated_at=COALESCE(energy_updated_at, updated_at)
+      WHERE passive_updated_at IS NULL OR energy_updated_at IS NULL;
+    ALTER TABLE clicker_state ALTER COLUMN passive_updated_at SET DEFAULT NOW();
+    ALTER TABLE clicker_state ALTER COLUMN passive_updated_at SET NOT NULL;
+    ALTER TABLE clicker_state ALTER COLUMN energy_updated_at SET DEFAULT NOW();
+    ALTER TABLE clicker_state ALTER COLUMN energy_updated_at SET NOT NULL;
     CREATE TABLE IF NOT EXISTS clicker_case_history (
       id BIGSERIAL PRIMARY KEY,
       chat_id BIGINT NOT NULL,
@@ -453,8 +463,9 @@ async function refresh(client: any, chatId: number): Promise<{ r: any; cl: Recor
   const cl = await readCards(client, chatId);
   const today = irkToday();
   if (r.boost_date !== today) { r.boost_energy_used = 0; r.boost_turbo_used = 0; r.boost_date = today; }
-  const secs = Math.max(0, (Date.now() - new Date(r.updated_at).getTime()) / 1000);
-  r.energy = Math.min(energyMaxFor(r.energy_limit_level), Math.round(r.energy + secs * REGEN_PER_SEC));
+  const energySecs = Math.max(0, (Date.now() - new Date(r.energy_updated_at || r.updated_at).getTime()) / 1000);
+  const passiveSecs = Math.max(0, (Date.now() - new Date(r.passive_updated_at || r.updated_at).getTime()) / 1000);
+  r.energy = Math.min(energyMaxFor(r.energy_limit_level), Math.round(r.energy + energySecs * REGEN_PER_SEC));
   // Перк полного альбома (+5% к пассиву): флаг кэширован на clicker_state.album_bonus
   // (выставляется в grantPigeon при 16/16 пород) — без похода в pigeon_inventory на каждый тап.
   const { ALBUM_PASSIVE_BONUS, pigeonPassiveBonus } = await import("./pigeons");
@@ -465,13 +476,13 @@ async function refresh(client: any, chatId: number): Promise<{ r: any; cl: Recor
   // Копилка стаи: закрытая цель недели множит ВЕСЬ доход (пассив здесь, тапы в tapClicker)
   const bankMult = (await squadBankActive(r.squad || null)) ? SQUAD_BANK_MULT : 1;
   r.__bankMult = bankMult;
-  const passive = Math.floor(profitPerHour(cl, albumMult, pigeonPassive, r.bonus_profit_per_hour) * Math.min(secs / 3600, PASSIVE_CAP_HOURS) * gainMult(r.prestige) * bankMult);
+  const passive = Math.floor(profitPerHour(cl, albumMult, pigeonPassive, r.bonus_profit_per_hour) * Math.min(passiveSecs / 3600, PASSIVE_CAP_HOURS) * gainMult(r.prestige) * bankMult);
   if (passive > 0) { r.balance = Number(r.balance) + passive; r.total_earned = Number(r.total_earned) + passive; }
   // сезон: новая неделя → база = текущий total (очки сезона обнуляются)
   const wk = weekKey();
   if (r.week_key !== wk) { r.week_key = wk; r.week_base = Number(r.total_earned); }
   await client.query(
-    `UPDATE clicker_state SET balance=$2, total_earned=$3, energy=$4, boost_energy_used=$5, boost_turbo_used=$6, boost_date=$7, week_key=$8, week_base=$9, updated_at=NOW() WHERE chat_id=$1`,
+    `UPDATE clicker_state SET balance=$2, total_earned=$3, energy=$4, boost_energy_used=$5, boost_turbo_used=$6, boost_date=$7, week_key=$8, week_base=$9, updated_at=NOW(), passive_updated_at=NOW(), energy_updated_at=NOW() WHERE chat_id=$1`,
     [chatId, r.balance, r.total_earned, r.energy, r.boost_energy_used, r.boost_turbo_used, r.boost_date, r.week_key, r.week_base]
   );
   // аналитика: повышение уровня (одно событие на уровень, из любого источника дохода)
@@ -491,9 +502,9 @@ async function refresh(client: any, chatId: number): Promise<{ r: any; cl: Recor
 // чтобы не сбрасывать updated_at раньше времени и не гонять два UPDATE подряд.
 export async function refreshEnergyFor(client: PoolClient, chatId: number): Promise<{ energy: number; balance: number }> {
   await client.query(`INSERT INTO clicker_state (chat_id) VALUES ($1) ON CONFLICT (chat_id) DO NOTHING`, [chatId]);
-  const { rows } = await client.query(`SELECT energy, energy_limit_level, balance, updated_at FROM clicker_state WHERE chat_id=$1 FOR UPDATE`, [chatId]);
+  const { rows } = await client.query(`SELECT energy, energy_limit_level, balance, updated_at, energy_updated_at FROM clicker_state WHERE chat_id=$1 FOR UPDATE`, [chatId]);
   const r = rows[0];
-  const secs = Math.max(0, (Date.now() - new Date(r.updated_at).getTime()) / 1000);
+  const secs = Math.max(0, (Date.now() - new Date(r.energy_updated_at || r.updated_at).getTime()) / 1000);
   const energy = Math.min(energyMaxFor(r.energy_limit_level), Math.round(r.energy + secs * REGEN_PER_SEC));
   return { energy, balance: Number(r.balance) };
 }
@@ -877,11 +888,11 @@ export async function openCase(chatId: number, requestId: string): Promise<{ ok:
     await client.query("BEGIN");
     const { r, cl } = await refresh(client, chatId);
     const previous = await client.query(
-      `SELECT prize, balance_before FROM clicker_case_history WHERE chat_id=$1 AND request_id=$2`,
+      `SELECT prize, balance_before, balance_after FROM clicker_case_history WHERE chat_id=$1 AND request_id=$2`,
       [chatId, requestId]);
     if (previous.rowCount) {
       await client.query("COMMIT");
-      return { ok: true, prize: previous.rows[0].prize as CasePrizeOut, state: buildState(r, cl, 0), newBalance: Number(r.balance), balanceBefore: Number(previous.rows[0].balance_before), cost: CASE_COST, duplicate: true };
+      return { ok: true, prize: previous.rows[0].prize as CasePrizeOut, state: buildState(r, cl, 0), newBalance: Number(previous.rows[0].balance_after), balanceBefore: Number(previous.rows[0].balance_before), cost: CASE_COST, duplicate: true };
     }
     if (Number(r.balance) < CASE_COST) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
     const balanceBefore = Number(r.balance);

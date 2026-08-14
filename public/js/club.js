@@ -437,10 +437,7 @@ window.animateCounter = animateCounter;
 
 // Haptic feedback shortcut
 function haptic(type) {
-  const hf = window.Telegram?.WebApp?.HapticFeedback;
-  if (!hf) return;
-  if (type === 'selection') { try { hf.selectionChanged(); } catch {} }
-  else { try { hf.impactOccurred(type || 'light'); } catch {} }
+  window.App?.haptic?.(type || 'light');
 }
 
 function renderOrderRow(o) {
@@ -838,18 +835,13 @@ function startVerification() {
     });
     return;
   }
-  const tg = window.Telegram?.WebApp;
-  if (!tg) {
-    alert("Откройте через Telegram");
-    return;
-  }
-  if (typeof tg.requestContact !== "function") {
+  if (!window.App?.requestContact) {
     App.alert(
       "Подтверждение через приложение требует Telegram 6.9+. Откройте /start в боте — там кнопка «Поделиться номером»"
     );
     return;
   }
-  tg.requestContact(async (sent, response) => {
+  const requested = App.requestContact(async (sent, response) => {
     if (!sent && response?.status !== "sent") return;
     // Phone arrives via bot's contact handler. Poll /api/me for verification.
     document.getElementById("verify-status").textContent = "Сохраняем номер…";
@@ -860,13 +852,14 @@ function startVerification() {
     }
     if (CLUB_STATE.phoneVerified) {
       document.getElementById("verify-status").textContent = "";
-      tg.HapticFeedback?.notificationOccurred?.("success");
+      App.haptic("success");
       renderClub();
     } else {
       document.getElementById("verify-status").textContent =
         "Не пришёл контакт от Telegram. Попробуй ещё раз или открой /start в боте.";
     }
   });
+  if (!requested) App.alert("Откройте через Telegram или МАКС либо используйте кнопку «Поделиться номером» в боте");
 }
 
 /* ── Daily claim ─────────────────────────────────────────────────────────── */
@@ -881,7 +874,7 @@ async function claimDaily() {
     pulseCounter("hdr-points");
     let msg = `+${r.pointsAwarded} 💎`;
     if (r.streakBonus) msg += ` (бонус за стрик: +${r.streakBonus} 💎)`;
-    window.Telegram?.WebApp?.showPopup?.({ title: "Награда дня", message: msg, buttons: [{ type: "ok" }] }) ||
+    App.showPopup?.({ title: "Награда дня", message: msg, buttons: [{ type: "ok" }] }) ||
       alert(msg);
     renderHeaderCounters();
     renderHero();
@@ -930,7 +923,7 @@ async function doConvert() {
     renderHeaderCounters();
     renderHero();
     renderShop();
-    window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("success");
+    App.haptic("success");
   } else {
     alert(r.reason === "insufficient_stars" ? "Не хватает звёзд" : "Ошибка обмена");
   }
@@ -975,7 +968,7 @@ async function doRedeem() {
     renderHero();
     renderShop();
     renderMyRewardsBlock();
-    window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("success");
+    App.haptic("success");
   } else {
     alert(r.reason === "insufficient" ? "Не хватает баллов" : "Ошибка получения");
   }

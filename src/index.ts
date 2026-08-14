@@ -2322,7 +2322,7 @@ async function main() {
       try {
         await bot.api.setWebhook(`${WEBHOOK_URL}${webhookPath}`);
         const info = await bot.api.getWebhookInfo();
-        console.log(`[STARTUP] Webhook set: ${info.url}`);
+        console.log(`[STARTUP] Webhook set successfully (${info.pending_update_count || 0} pending updates)`);
         if (info.last_error_message) {
           console.error(`[WEBHOOK] Last error: ${info.last_error_message} (${new Date((info.last_error_date ?? 0) * 1000).toISOString()})`);
         }

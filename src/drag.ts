@@ -460,7 +460,7 @@ export async function createFriendDuel(chatId: number, friendChat: number, breed
     const energyLeft = st.energy - DRAG_ENERGY_COST;
     const balance = st.balance - stake;
     const tap = normalizeDuelTap(tapRaw);
-    await client.query(`UPDATE clicker_state SET energy=$2, balance=$3, race_reaction_ms=$4, updated_at=NOW() WHERE chat_id=$1`, [chatId, energyLeft, balance, clampReact(tap.reactionMs)]);
+    await client.query(`UPDATE clicker_state SET energy=$2, balance=$3, race_reaction_ms=$4, updated_at=NOW(), energy_updated_at=NOW() WHERE chat_id=$1`, [chatId, energyLeft, balance, clampReact(tap.reactionMs)]);
     const ins = await client.query(
       `INSERT INTO pigeon_duels (from_chat,to_chat,stake,from_breed,from_tap,from_stats) VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb) RETURNING id`,
       [chatId, friendChat, stake, breed, JSON.stringify(tap), JSON.stringify(stats)]);
@@ -513,7 +513,7 @@ export async function acceptFriendDuel(chatId: number, duelId: number, breed: st
     let balance = st.balance - stake;
     const bank = stake * 2;
     if (resolved.winnerChat === chatId) balance += bank;
-    await client.query(`UPDATE clicker_state SET energy=$2, balance=$3, race_reaction_ms=$4, updated_at=NOW() WHERE chat_id=$1`, [chatId, energyLeft, balance, clampReact(tap.reactionMs)]);
+    await client.query(`UPDATE clicker_state SET energy=$2, balance=$3, race_reaction_ms=$4, updated_at=NOW(), energy_updated_at=NOW() WHERE chat_id=$1`, [chatId, energyLeft, balance, clampReact(tap.reactionMs)]);
     if (resolved.winnerChat !== chatId && bank > 0) await client.query(`UPDATE clicker_state SET balance=balance+$2 WHERE chat_id=$1`, [Number(duel.from_chat), bank]);
     await client.query(
       `UPDATE pigeon_duels SET status='done', to_breed=$2, to_tap=$3::jsonb, to_stats=$4::jsonb, winner_chat=$5, result=$6::jsonb, closed_at=NOW() WHERE id=$1`,
@@ -686,7 +686,7 @@ export async function runRace(chatId: number, breed: string, mode: "training" | 
     // updated_at=NOW() сбрасывает базу регена — иначе следующий refresh() в кликере досчитает
     // энергию ещё раз за те же секунды, что уже учёл refreshEnergyFor выше (двойной реген).
     await client.query(
-      `UPDATE clicker_state SET energy=$2, balance=$3, race_reaction_ms=$4, updated_at=NOW() WHERE chat_id=$1`,
+      `UPDATE clicker_state SET energy=$2, balance=$3, race_reaction_ms=$4, updated_at=NOW(), energy_updated_at=NOW() WHERE chat_id=$1`,
       [chatId, energyLeft, balance, react]
     );
     await client.query("COMMIT");

@@ -293,6 +293,27 @@
       return null;
     },
 
+    initDataLength() {
+      if (PLATFORM === 'tg') return String(tg?.initData || '').length;
+      if (PLATFORM === 'max') return String(mx?.initData || '').length;
+      if (PLATFORM === 'vk') return location.search.length;
+      return 0;
+    },
+
+    haptic(kind) { window.haptic(kind); },
+
+    requestContact(callback) {
+      const host = PLATFORM === 'max' ? mx : PLATFORM === 'tg' ? tg : null;
+      if (!host || typeof host.requestContact !== 'function') return false;
+      try { host.requestContact(callback); return true; } catch { return false; }
+    },
+
+    showPopup(params) {
+      const host = PLATFORM === 'max' ? mx : PLATFORM === 'tg' ? tg : null;
+      if (!host || typeof host.showPopup !== 'function') return false;
+      try { host.showPopup(params); return true; } catch { return false; }
+    },
+
     startParam() {
       let sp = '';
       if (PLATFORM === 'tg') sp = tg?.initDataUnsafe?.start_param || '';

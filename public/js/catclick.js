@@ -2430,7 +2430,7 @@
   }
   function giftPopup(points) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Подарок на карту!</h3><div class="v">+${points} баллов</div><div style="color:var(--muted);font-size:13px">Баллы «Мария» зачислены на твою карту клуба — трать при заказе тортов 🎂</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
   function requestPhone() {
-    try { const tg = window.Telegram && window.Telegram.WebApp; if (tg && typeof tg.requestContact === 'function') { tg.requestContact((ok) => { if (ok) { flashMsg('Спасибо! Проверяем номер…', 'light'); setTimeout(renderTasks, 1500); } }); return; } } catch (_) {}
+    if (window.App?.requestContact?.((ok) => { if (ok) { flashMsg('Спасибо! Проверяем номер…', 'light'); setTimeout(renderTasks, 1500); } })) return;
     flashMsg('Открой бота «Мария» → кнопка «Поделиться телефоном»');
   }
   async function redeemCodeAct(code) {
@@ -3144,7 +3144,7 @@
         + ckDiagLine('errors', st_.errors);
     }
     st_.platform = (window.App && App.platform) || 'н/д';
-    st_.initLen = String(((window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) || '').length);
+    st_.initLen = String((window.App && App.initDataLength && App.initDataLength()) || 0);
     st_.authed = String(!!(window.App && App.isAuthed && App.isAuthed()));
     try { sessionStorage.setItem('ck_diag', '1'); sessionStorage.removeItem('ck_diag'); st_.ss = 'ok'; }
     catch (e) { st_.ss = 'FAIL ' + (e && e.message); }
