@@ -754,6 +754,7 @@
       .ck-case__res .rt{font-family:'Nunito',sans-serif;font-weight:900;font-size:22px;color:var(--gold-l);display:inline-flex;align-items:center;gap:8px}
       .ck-case__res .rs{color:var(--muted);font-size:13px;margin-top:4px}
       .ck-case__res button{margin-top:14px;border:1px solid #DFFF8F;border-radius:14px;padding:12px 30px;font-weight:800;background:linear-gradient(180deg,#D4FF6A,#A8F51E 56%,#8DBF20);color:#12210A;cursor:pointer}
+      .ck-case__actions{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;padding:0 12px}.ck-case__actions button{padding:11px 18px}.ck-case__actions button:disabled{opacity:.45;cursor:default}.ck-case__actions .secondary{background:rgba(255,255,255,.07);border-color:var(--line);color:var(--cream)}
       .ck-rain{position:absolute;inset:0;z-index:11;display:none;flex-direction:column;background:radial-gradient(135% 100% at 50% -8%,#1B0F26,#120D1C);touch-action:none}
       .ck-rain.on{display:flex}
       .ck-rain__hud{display:flex;align-items:center;gap:14px;padding:14px 16px;font-weight:800;font-size:15px;color:var(--cream);font-variant-numeric:tabular-nums}
@@ -1762,14 +1763,18 @@
     else if (prize.type === 'energy') { title = `${ICON.bolt(22)} Полная энергия`; }
     else { const meta = DOVE_META[prize.breed] || { name: 'Голубь', r: prize.rarity }; const rl = { common: 'обычный', rare: 'редкий', epic: 'эпический', legendary: 'легендарный' }[meta.r || prize.rarity] || ''; title = `${meta.name}`; sub = `${rl} голубь${prize.isNew ? ' · новый в альбоме!' : ' — запаска для звёзд/гонок'}`; }
     const receipt = Number.isFinite(Number(balanceBefore)) && Number.isFinite(Number(newBalance)) ? `<div class="rs">Было ${fmt(balanceBefore)} − ${fmt(cost || CASE_COST)} + ${fmt(prize.amount || 0)} = ${fmt(newBalance)}</div>` : '';
-    res.innerHTML = `<div class="rt">${title}</div><div class="rs">${sub}</div>${receipt}<button id="ck-case-ok" type="button">Забрать</button>`;
+    const canAgain = st && Number(st.balance) >= CASE_COST;
+    res.innerHTML = `<div class="rt">${title}</div><div class="rs">${sub}</div>${receipt}<div class="ck-case__actions"><button id="ck-case-again" type="button"${canAgain ? '' : ' disabled'}>${canAgain ? `Крутить ещё · ${fmt(CASE_COST)}` : 'Не хватает монет'}</button><button class="secondary" id="ck-case-ok" type="button">Закрыть</button></div>`;
     res.classList.add('on');
     const big = prize.type === 'pigeon' && (prize.rarity === 'epic' || prize.rarity === 'legendary') || (prize.type === 'coins' && prize.amount >= 150000);
     window.haptic && window.haptic(big ? 'success' : 'light');
     if (big) { sfxLevel(); confettiBurst(); coinShower(); } else sfxReward();
-    const finish = () => { el.classList.remove('on'); resolve(); };
-    const close = el.querySelector('#ck-case-x'); close.disabled = false; close.style.opacity = '1'; close.onclick = finish;
-    res.querySelector('#ck-case-ok').onclick = finish;
+    let settled = false;
+    const finish = (hide = true) => { if (settled) return; settled = true; if (hide) el.classList.remove('on'); resolve(); };
+    const close = el.querySelector('#ck-case-x'); close.disabled = false; close.style.opacity = '1'; close.onclick = () => finish(true);
+    res.querySelector('#ck-case-ok').onclick = () => finish(true);
+    const again = res.querySelector('#ck-case-again');
+    if (again && canAgain) again.onclick = () => { again.disabled = true; finish(false); setTimeout(openCaseAct, 0); };
   }
 
   // ── Мини-игра «Золотой дождь» (canvas, 20с лови монеты) ───────────────────────
