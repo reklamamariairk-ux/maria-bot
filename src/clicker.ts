@@ -270,7 +270,7 @@ export interface ClickerState {
   level: number; levelName: string; nextNeed: number | null;
   multitapLevel: number; multitapPrice: number;
   energyLevel: number; energyPrice: number;
-  cards: { id: string; name: string; cat: string; level: number; profit: number; price: number; req: number; locked: boolean }[];
+  cards: { id: string; name: string; cat: string; level: number; profit: number; currentProfit: number; profitGain: number; price: number; req: number; locked: boolean }[];
   // усиления
   dailyAvailable: boolean; dailyStreak: number; dailyNext: number;
   chestAvailable: boolean; rainAvailable: boolean; squad: string | null;
@@ -406,7 +406,7 @@ function buildState(r: any, cl: Record<string, number>, passiveEarned: number): 
     level: lg.level, levelName: lg.name, nextNeed: nextNeed(Number(r.total_earned)),
     multitapLevel: r.multitap_level, multitapPrice: priceMultitap(r.multitap_level),
     energyLevel: r.energy_limit_level, energyPrice: priceEnergy(r.energy_limit_level),
-    cards: CARDS.map((c) => { const lv = cl[c.id] || 0; const locked = lv === 0 && !!c.req && lg.level < c.req; return { id: c.id, name: c.name, cat: c.cat, level: lv, profit: cardProfit(c, lv + 1), price: cardPrice(c, lv), req: c.req || 0, locked }; }),
+    cards: CARDS.map((c) => { const lv = cl[c.id] || 0; const locked = lv === 0 && !!c.req && lg.level < c.req; return { id: c.id, name: c.name, cat: c.cat, level: lv, profit: cardProfit(c, lv + 1), currentProfit: cardProfit(c, lv), profitGain: c.baseProfit, price: cardPrice(c, lv), req: c.req || 0, locked }; }),
     dailyAvailable: r.daily_date !== today, dailyStreak: r.daily_streak, dailyNext: dailyReward((r.daily_date === today ? r.daily_streak : r.daily_streak + 1)),
     chestAvailable: r.chest_date !== today,
     rainAvailable: r.rain_date !== today,

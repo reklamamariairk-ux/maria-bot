@@ -374,7 +374,7 @@
     top:    { icon: 'trophy',  t: 'Рейтинг недели: очки копятся с понедельника. Зови друзей — вместе веселее' },
     energy: { icon: 'battery', t: 'Энергия кончилась? Она восстанавливается сама — возвращайся чуть позже' },
     combo:    { icon: 'fire',   t: 'Это комбо: тапай без пауз — каждые 10 тапов дают бонус' },
-    bizFirst: { icon: 'shop',   t: 'Бизнес работает сам — монеты капают даже офлайн. Смотри строку +N/час' },
+    bizFirst: { icon: 'shop',   t: 'Бизнес работает сам даже офлайн. «Прибавится» — доход нового уровня, «станет» — весь доход этого бизнеса' },
     boosts:   { icon: 'rocket', t: 'Турбо и Энергия — бесплатные бусты, обновляются каждый день' },
   };
   const coachSeenMem = new Set();
@@ -482,7 +482,7 @@
       level: leagueFor(s.totalEarned).level, levelName: leagueFor(s.totalEarned).name, nextNeed: nextNeed(s.totalEarned),
       multitapLevel: s.multitapLevel, multitapPrice: priceMultitap(s.multitapLevel),
       energyLevel: s.energyLevel, energyPrice: priceEnergy(s.energyLevel),
-      cards: CARDS.map(c => { const lv = s.cards[c.id] || 0; const locked = lv === 0 && !!c.req && leagueFor(s.totalEarned).level < c.req; return { id: c.id, name: c.name, cat: c.cat, level: lv, profit: cardProfit(c, lv + 1), price: cardPrice(c, lv), req: c.req || 0, locked }; }),
+      cards: CARDS.map(c => { const lv = s.cards[c.id] || 0; const locked = lv === 0 && !!c.req && leagueFor(s.totalEarned).level < c.req; return { id: c.id, name: c.name, cat: c.cat, level: lv, profit: cardProfit(c, lv + 1), currentProfit: cardProfit(c, lv), profitGain: c.baseProfit, price: cardPrice(c, lv), req: c.req || 0, locked }; }),
       dailyAvailable: s.dailyDate !== today, dailyStreak: s.dailyStreak, dailyNext: dailyReward(s.dailyDate === today ? s.dailyStreak : s.dailyStreak + 1),
       chestAvailable: s.chestDate !== today,
       rainAvailable: s.rainDate !== today,
@@ -2033,7 +2033,10 @@
     for (const c of st.cards) {
       if (c.cat !== upCat) continue;
       if (c.locked) h += biz(c.cat + ' locked', cardArt(c.id), c.name, `<span class="ck-biz__lock">${ICON.lock(12)} с уровня ${c.req}</span>`, `<button class="ck-biz__buy" disabled>${ICON.lock(15)}</button>`, i++);
-      else h += biz(c.cat, cardArt(c.id), c.name, `<span class="ck-biz__lvl">Ур. ${c.level}</span><span class="ck-biz__prof">+${fmt(c.profit)}/час</span>`, buyBtn(c.price, st.balance < c.price, 'card', c.id), i++);
+      else {
+        const gain = Number(c.profitGain != null ? c.profitGain : Math.max(0, c.profit - (c.currentProfit || 0)));
+        h += biz(c.cat, cardArt(c.id), c.name, `<span class="ck-biz__lvl">Ур. ${c.level}</span><span class="ck-biz__prof">прибавится +${fmt(gain)}/час · станет ${fmt(c.profit)}/час</span>`, buyBtn(c.price, st.balance < c.price, 'card', c.id), i++);
+      }
     }
     list.innerHTML = h;
     if (lastBought) { const el = list.querySelector(`[data-id="${lastBought}"]`); const card = el && el.closest('.ck-biz'); if (card) { card.classList.add('bump'); if (bizCoachPending) coach('bizFirst', COACH.bizFirst.t, card, { icon: ICON[COACH.bizFirst.icon](18) }); } bizCoachPending = false; lastBought = null; }
