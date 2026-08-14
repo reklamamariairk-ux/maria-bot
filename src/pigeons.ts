@@ -171,6 +171,22 @@ export const PIGEON_MISSIONS: PigeonMissionDef[] = [
   { id: "marathon", name: "Байкальский марафон", description: "Элитный маршрут для лучших голубей", durationSec: 8 * 60 * 60, reward: 300_000, difficulty: 75, minPower: 65, tier: "elite" },
 ];
 
+export const PIGEON_MISSION_RANKS = [
+  { id: "rookie", name: "Новичок", need: 0, rewardMult: 1 },
+  { id: "courier", name: "Курьер", need: 3, rewardMult: 1.05 },
+  { id: "expert", name: "Опытный", need: 10, rewardMult: 1.10 },
+  { id: "master", name: "Мастер", need: 25, rewardMult: 1.20 },
+  { id: "legend", name: "Легенда", need: 50, rewardMult: 1.35 },
+] as const;
+export function pigeonMissionRank(completed: number) {
+  const done = Math.max(0, Math.floor(Number(completed) || 0));
+  let rank: (typeof PIGEON_MISSION_RANKS)[number] = PIGEON_MISSION_RANKS[0];
+  for (const r of PIGEON_MISSION_RANKS) if (done >= r.need) rank = r;
+  const idx = PIGEON_MISSION_RANKS.indexOf(rank);
+  const next = PIGEON_MISSION_RANKS[idx + 1] || null;
+  return { ...rank, completed: done, nextNeed: next?.need ?? null, nextName: next?.name ?? null };
+}
+
 export function pigeonMissionPower(breed: string, stars = 1, speed = 0, stamina = 0, luck = 0): number {
   const b = BREED_BY_ID.get(breed); if (!b) return 0;
   return RARITY_BASE[b.rarity] + (Math.max(1, Math.min(3, stars)) - 1) * 4
@@ -395,17 +411,20 @@ export async function getPigeonsOverview(chatId: number) {
 }
 
 export async function getPigeonMissions(chatId: number) {
-  const [inv, active] = await Promise.all([
+  const [inv, active, progress] = await Promise.all([
     pool.query(`SELECT breed, stars, tune_speed, tune_stamina, tune_luck FROM pigeon_inventory WHERE chat_id=$1 AND count>0 ORDER BY breed`, [chatId]),
     pool.query(`SELECT id, breed, mission_id, chance, reward, consolation, started_at, completes_at
       FROM pigeon_missions WHERE chat_id=$1 AND status='active' ORDER BY completes_at`, [chatId]),
+    pool.query(`SELECT breed, COUNT(*)::int AS completed FROM pigeon_missions WHERE chat_id=$1 AND status='claimed' GROUP BY breed`, [chatId]),
   ]);
   const activeByBreed = new Map(active.rows.map((r: any) => [String(r.breed), r]));
+  const progressByBreed = new Map(progress.rows.map((r: any) => [String(r.breed), Number(r.completed)]));
   return {
     missions: PIGEON_MISSIONS,
     pigeons: inv.rows.map((r: any) => ({
       breed: r.breed, stars: Number(r.stars), speed: Number(r.tune_speed), stamina: Number(r.tune_stamina), luck: Number(r.tune_luck),
       power: pigeonMissionPower(r.breed, Number(r.stars), Number(r.tune_speed), Number(r.tune_stamina), Number(r.tune_luck)),
+      missionRank: pigeonMissionRank(progressByBreed.get(String(r.breed)) || 0),
       passivePerHour: pigeonPassiveValue(r.breed, Number(r.stars), Number(r.tune_speed), Number(r.tune_stamina), Number(r.tune_luck)),
       activeMissionId: activeByBreed.get(String(r.breed))?.id ?? null,
     })),
@@ -426,15 +445,20 @@ export async function startPigeonMission(chatId: number, missionId: string, bree
   const r = owned.rows[0];
   const power = pigeonMissionPower(breed, Number(r.stars), Number(r.tune_speed), Number(r.tune_stamina), Number(r.tune_luck));
   if (power < def.minPower) return { ok: false, reason: "mission_locked" };
+  const progress = await pool.query(
+    `SELECT COUNT(*)::int AS completed FROM pigeon_missions WHERE chat_id=$1 AND breed=$2 AND status='claimed'`,
+    [chatId, breed]);
+  const rank = pigeonMissionRank(Number(progress.rows[0]?.completed || 0));
   const chance = pigeonMissionChance(breed, Number(r.stars), Number(r.tune_speed), Number(r.tune_stamina), Number(r.tune_luck), def.difficulty);
   const succeeds = Math.random() * 100 < chance;
-  const consolation = Math.max(1, Math.floor(def.reward * 0.2));
+  const reward = Math.round(def.reward * rank.rewardMult);
+  const consolation = Math.max(1, Math.floor(reward * 0.2));
   try {
     const created = await pool.query(
       `INSERT INTO pigeon_missions (chat_id, breed, mission_id, chance, reward, consolation, succeeds, completes_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,NOW() + $8 * INTERVAL '1 second')
        RETURNING id, breed, mission_id, chance, reward, consolation, started_at, completes_at`,
-      [chatId, breed, def.id, chance, def.reward, consolation, succeeds, def.durationSec]);
+      [chatId, breed, def.id, chance, reward, consolation, succeeds, def.durationSec]);
     return { ok: true, mission: created.rows[0] };
   } catch (e: any) {
     if (e?.code === "23505") return { ok: false, reason: "bird_busy" };

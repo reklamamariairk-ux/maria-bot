@@ -15,7 +15,7 @@ import {
   createTrade, sendMail, thankMail, setShowcase, claimSet, enterRace,
   pigeonPrice, PIGEON_PRICE, normalizeCoinDelta, TRADE_COIN_CAP,
   pigeonPassiveValue, pigeonCollectionPassiveBonus, PIGEON_SET_PASSIVE_BONUS,
-  pigeonMissionChance, pigeonMissionPower, PIGEON_MISSIONS,
+  pigeonMissionChance, pigeonMissionPower, pigeonMissionRank, PIGEON_MISSIONS,
 } from "../src/pigeons";
 
 
@@ -53,6 +53,15 @@ describe("pigeon missions — шанс зависит от голубя и тю�
     const elite = PIGEON_MISSIONS.find(m => m.id === "marathon")!;
     expect(elite.minPower).toBeGreaterThan(base.minPower);
     expect(elite.reward / elite.durationSec).toBeGreaterThan(base.reward / base.durationSec);
+  });
+
+  it("выполненные задания повышают ранг и множитель награды", () => {
+    expect(pigeonMissionRank(0).name).toBe("Новичок");
+    expect(pigeonMissionRank(3).rewardMult).toBe(1.05);
+    expect(pigeonMissionRank(10).name).toBe("Опытный");
+    expect(pigeonMissionRank(25).rewardMult).toBe(1.20);
+    expect(pigeonMissionRank(50).rewardMult).toBe(1.35);
+    expect(pigeonMissionRank(50).nextNeed).toBeNull();
   });
 });
 

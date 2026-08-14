@@ -614,7 +614,7 @@
     sc.classList.add('on'); requestAnimationFrame(() => sh.classList.add('on'));
     sh.querySelector('#cd-sheet-x').onclick = closeSheet;
     await renderMissions();
-    let introSeen = false; try { introSeen = localStorage.getItem('cd_missions_tutorial_v2') === '1'; } catch (_) {}
+    let introSeen = false; try { introSeen = localStorage.getItem('cd_missions_tutorial_v3') === '1'; } catch (_) {}
     if (!introSeen) missionHelpPopup(true);
     if (missionTimer) clearInterval(missionTimer);
     missionTimer = setInterval(updateMissionTimers, 1000);
@@ -643,11 +643,13 @@
         return `<div class="cd-setrow" style="display:block;margin-bottom:9px"><div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:7px"><b>${b.name}</b><span style="color:var(--gold-l);font-size:11px">шанс ${num(a.chance)}%</span></div><div style="font-size:12px;color:var(--muted);margin-bottom:8px">${def.name} · награда ${fmt(a.reward)} (${fmt(a.consolation)} при провале)</div><button class="cd-sheet__act" style="margin:0" data-claim-mission="${a.id}" data-completes="${a.completes_at}"></button></div>`;
       }
       const unlocked = (d.missions || []).filter(m => num(p.power) >= num(m.minPower));
-      const opts = unlocked.map(m => { const perHour = Math.round(num(m.reward) * 3600 / num(m.durationSec)); const tier = m.tier === 'elite' ? 'Элита' : m.tier === 'advanced' ? 'Продвинутое' : 'Базовое'; return `<option value="${m.id}">${tier} · ${m.name} · ${fmt(perHour)}/час</option>`; }).join('');
+      const rank = p.missionRank || { name: 'Новичок', completed: 0, rewardMult: 1, nextNeed: 3, nextName: 'Курьер' };
+      const opts = unlocked.map(m => { const effectiveReward = Math.round(num(m.reward) * num(rank.rewardMult || 1)); const perHour = Math.round(effectiveReward * 3600 / num(m.durationSec)); const tier = m.tier === 'elite' ? 'Элита' : m.tier === 'advanced' ? 'Продвинутое' : 'Базовое'; return `<option value="${m.id}">${tier} · ${m.name} · ${fmt(perHour)}/час</option>`; }).join('');
       const next = (d.missions || []).filter(m => num(m.minPower) > num(p.power)).sort((a, b) => num(a.minPower) - num(b.minPower))[0];
-      return `<div class="cd-setrow" style="display:block;margin-bottom:9px"><div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:7px"><b>${b.name}</b><span style="color:var(--gold-l);font-size:11px">+${fmt(p.passivePerHour)}/час</span></div><div style="font-size:11px;color:var(--muted);margin-bottom:7px">Сила ${num(p.power)} · ★${p.stars} · тюнинг ${p.speed}/${p.stamina}/${p.luck}</div><select data-mission-select="${p.breed}" style="width:100%;box-sizing:border-box;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:7px">${opts}</select>${next ? `<div class="cd-sheet__hint" style="margin:-2px 0 7px">Следующее задание откроется при силе ${next.minPower}</div>` : `<div class="cd-sheet__hint" style="margin:-2px 0 7px">Открыты все задания</div>`}<button class="cd-sheet__act" style="margin:0" data-start-mission="${p.breed}">Отправить</button></div>`;
+      const rankProgress = rank.nextNeed != null ? `до ранга «${rank.nextName}» ещё ${Math.max(0, num(rank.nextNeed) - num(rank.completed))}` : 'максимальный ранг';
+      return `<div class="cd-setrow" style="display:block;margin-bottom:9px"><div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:7px"><b>${b.name}</b><span style="color:var(--gold-l);font-size:11px">+${fmt(p.passivePerHour)}/час</span></div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Сила ${num(p.power)} · ★${p.stars} · тюнинг ${p.speed}/${p.stamina}/${p.luck}</div><div style="font-size:11px;color:var(--gold-l);margin-bottom:7px">Ранг: ${rank.name} · выполнено ${num(rank.completed)} · награда ×${num(rank.rewardMult).toFixed(2)}<br><span style="color:var(--muted)">${rankProgress}</span></div><select data-mission-select="${p.breed}" style="width:100%;box-sizing:border-box;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:7px">${opts}</select>${next ? `<div class="cd-sheet__hint" style="margin:-2px 0 7px">Следующее задание откроется при силе ${next.minPower}</div>` : `<div class="cd-sheet__hint" style="margin:-2px 0 7px">Открыты все задания</div>`}<button class="cd-sheet__act" style="margin:0" data-start-mission="${p.breed}">Отправить</button></div>`;
     }).join('');
-    body.innerHTML = `<button class="cd-navbtn" id="cd-mission-help" style="width:100%;margin-bottom:9px" type="button">? Как работают задания и сила</button><div class="cd-sheet__hint" style="margin-bottom:10px">Звёзды и тюнинг повышают силу: она открывает прибыльные задания и увеличивает шанс. В списке указан доход задания за час.</div>${cards}`;
+    body.innerHTML = `<button class="cd-navbtn" id="cd-mission-help" style="width:100%;margin-bottom:9px" type="button">? Сила, задания и ранги</button><div class="cd-sheet__hint" style="margin-bottom:10px">Сила открывает маршруты, а каждое завершённое задание развивает ранг курьера и повышает награду.</div>${cards}`;
     body.querySelector('#cd-mission-help').onclick = () => missionHelpPopup(false);
     body.querySelectorAll('[data-start-mission]').forEach(btn => { btn.onclick = () => startMissionAct(btn.dataset.startMission, btn); });
     body.querySelectorAll('[data-claim-mission]').forEach(btn => { btn.onclick = () => claimMissionAct(num(btn.dataset.claimMission), btn); });
@@ -662,10 +664,11 @@
         <p><b>2.</b> Сила 20 открывает продвинутые задания, 50 — элитные. Самые прибыльные маршруты требуют силу 65.</p>
         <p><b>3.</b> В выборе маршрута показана прибыль за час. Чем выше уровень задания, тем больше заработок.</p>
         <p><b>4.</b> Сила также повышает шанс успеха. За успех выдаётся 100% награды, при провале — 20%.</p>
+        <p><b>5.</b> Каждое завершённое задание идёт в опыт конкретного голубя: 3 полёта — Курьер ×1,05; 10 — Опытный ×1,10; 25 — Мастер ×1,20; 50 — Легенда ×1,35.</p>
         <p><b>Важно:</b> личный доход голубя в час продолжает начисляться и во время полёта.</p>
       </div><button id="cd-mission-help-ok">Понятно, отправляем!</button>`;
     s.classList.add('on');
-    const close = () => { try { localStorage.setItem('cd_missions_tutorial_v2', '1'); } catch (_) {} s.classList.remove('on'); };
+    const close = () => { try { localStorage.setItem('cd_missions_tutorial_v3', '1'); } catch (_) {} s.classList.remove('on'); };
     s.onclick = (e) => { if (e.target === s) close(); };
     p.querySelector('#cd-mission-help-ok').onclick = close;
   }
