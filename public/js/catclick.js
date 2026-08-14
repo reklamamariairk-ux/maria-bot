@@ -349,7 +349,7 @@
   // не обещать неработающее). Бэк (/api/clicker/redeem, CLICKER_REWARDS_ENABLED) жив —
   // при включении Машей вернуть витрину из git-истории (catclick v122).
 
-  let ov, audio, raf, lastTs = 0, pending = 0, pendingComboBonus = 0, tapsInflight = 0, syncT = 0, curLevel = 1, tab = 'cat';
+  let ov, audio, raf, lastTs = 0, pending = 0, pendingComboBonus = 0, pendingTapGain = 0, pendingTapEnergy = 0, tapsInflight = 0, tapFlushPromise = null, syncT = 0, curLevel = 1, tab = 'cat';
   const MAX_TAP_POINTERS = 4;
   const activeTapPointers = new Set();
   // «Сладкий тап» — зеркало src/clicker.ts::SWEET_TAP_* (менять синхронно)
@@ -567,16 +567,27 @@
   }
   async function flush() {
     if (pending <= 0 || !authed()) return;
-    const n = pending, comboBonus = pendingComboBonus;
-    pending = 0; pendingComboBonus = 0; tapsInflight += n;
-    try {
-      const d = await api('/api/clicker/tap', { method: 'POST', body: JSON.stringify({ taps: n, comboBonus }) });
-      st = d;
-    } catch (_) {
-      pending += n; pendingComboBonus += comboBonus;
-    } finally {
-      tapsInflight -= n;
-    }
+    if (tapFlushPromise) return tapFlushPromise;
+    tapFlushPromise = (async () => {
+      const n = pending, comboBonus = pendingComboBonus, sentGain = pendingTapGain, sentEnergy = pendingTapEnergy;
+      pending = 0; pendingComboBonus = 0; pendingTapGain = 0; pendingTapEnergy = 0; tapsInflight += n;
+      try {
+        const d = await api('/api/clicker/tap', { method: 'POST', body: JSON.stringify({ taps: n, comboBonus }) });
+        if (!d || d.error) throw new Error('tap_sync_failed');
+        // Пока запрос был в пути, игрок мог продолжить тапать. Ответ сервера уже
+        // содержит отправленный батч, а ещё не отправленные тапы возвращаем поверх
+        // него, иначе баланс визуально «откатывается» каждые 1,6 секунды.
+        st = d;
+        st.balance = Number(st.balance) + pendingTapGain;
+        st.totalEarned = Number(st.totalEarned) + pendingTapGain;
+        st.energy = Math.max(0, Number(st.energy) - pendingTapEnergy);
+      } catch (_) {
+        pending += n; pendingComboBonus += comboBonus; pendingTapGain += sentGain; pendingTapEnergy += sentEnergy;
+      } finally {
+        tapsInflight -= n; tapFlushPromise = null;
+      }
+    })();
+    return tapFlushPromise;
   }
 
   async function buy(type, id) {
@@ -1370,7 +1381,7 @@
     const sweet = lifetime % SWEET_TAP_EVERY === 0;
     const baseTapGain = Math.floor(st.perTap * mult * (st.prestigeMult || 1) * eMult * bankMult);
     const gain = baseTapGain * (sweet ? SWEET_TAP_MULT : 1);
-    st.energy -= TAP_COST; st.balance += gain; st.totalEarned += gain; pending++;
+    st.energy -= TAP_COST; st.balance += gain; st.totalEarned += gain; pending++; pendingTapGain += gain; pendingTapEnergy += TAP_COST;
     if (!authed()) { const s = rawGet(); s.energy -= TAP_COST; s.balance += gain; s.totalEarned += gain; s.taps = (s.taps || 0) + 1; rawSave(s); st.taps = s.taps; }
     if (sweet) sweetTapFx(e.clientX, e.clientY, gain);
     else maybeCatSpeak();
@@ -1389,7 +1400,7 @@
     }
     const comboBonus = comboBonusFor(baseTapGain);
     if (comboBonus > 0) {
-      st.balance += comboBonus; st.totalEarned += comboBonus; pendingComboBonus += comboBonus;
+      st.balance += comboBonus; st.totalEarned += comboBonus; pendingComboBonus += comboBonus; pendingTapGain += comboBonus;
       if (!authed()) { const s = rawGet(); s.balance += comboBonus; s.totalEarned += comboBonus; rawSave(s); }
       flyUp(e.clientX, e.clientY - 22, `комбо +${fmt(comboBonus)}`, 34);
     }
