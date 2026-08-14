@@ -327,6 +327,18 @@ export async function initClickerSchema(): Promise<void> {
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS case_spent BIGINT NOT NULL DEFAULT 0;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS case_won BIGINT NOT NULL DEFAULT 0;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS case_dry INT NOT NULL DEFAULT 0;
+    CREATE TABLE IF NOT EXISTS clicker_case_history (
+      id BIGSERIAL PRIMARY KEY,
+      chat_id BIGINT NOT NULL,
+      request_id TEXT NOT NULL,
+      cost BIGINT NOT NULL,
+      prize JSONB NOT NULL,
+      balance_before BIGINT NOT NULL,
+      balance_after BIGINT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (chat_id, request_id)
+    );
+    CREATE INDEX IF NOT EXISTS clicker_case_history_idx ON clicker_case_history (chat_id, created_at DESC);
     -- Глобальные значения игры (key→ts): гейт чемпиона «1 раз в год на всех».
     CREATE TABLE IF NOT EXISTS game_globals (key TEXT PRIMARY KEY, ts TIMESTAMPTZ, val TEXT);
     CREATE TABLE IF NOT EXISTS clicker_cards (
@@ -853,14 +865,22 @@ export async function openChest(chatId: number): Promise<{ ok: boolean; prize?: 
 // голубя (награда за «наигранность»/потраченное; эдж всё равно у дома на дистанции).
 const PITY_DRY = 30;
 export type CasePrizeOut = { type: string; amount?: number; rarity?: string; breed?: string; isNew?: boolean };
-export async function openCase(chatId: number): Promise<{ ok: boolean; prize?: CasePrizeOut; state?: ClickerState; reason?: string; newBalance?: number; cost?: number; pigeonDrop?: { breed: string; isNew: boolean } }> {
+export async function openCase(chatId: number, requestId: string): Promise<{ ok: boolean; prize?: CasePrizeOut; state?: ClickerState; reason?: string; newBalance?: number; balanceBefore?: number; cost?: number; pigeonDrop?: { breed: string; isNew: boolean }; duplicate?: boolean }> {
   const { CASE_COST, rollCase, prizeValue } = await import("./lootbox");
   const { grantPigeon, pickBreedOfRarity, pickBreed, BREED_BY_ID } = await import("./pigeons");
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const { r, cl } = await refresh(client, chatId);
+    const previous = await client.query(
+      `SELECT prize, balance_before FROM clicker_case_history WHERE chat_id=$1 AND request_id=$2`,
+      [chatId, requestId]);
+    if (previous.rowCount) {
+      await client.query("COMMIT");
+      return { ok: true, prize: previous.rows[0].prize as CasePrizeOut, state: buildState(r, cl, 0), newBalance: Number(r.balance), balanceBefore: Number(previous.rows[0].balance_before), cost: CASE_COST, duplicate: true };
+    }
     if (Number(r.balance) < CASE_COST) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
+    const balanceBefore = Number(r.balance);
     r.balance = Number(r.balance) - CASE_COST; // цена открытия
     const dry = Number(r.case_dry || 0);
     let prize = rollCase(Math.random(), Math.random());
@@ -884,8 +904,11 @@ export async function openCase(chatId: number): Promise<{ ok: boolean; prize?: C
     await client.query(
       `UPDATE clicker_state SET balance=$2, total_earned=$3, energy=$4, turbo_until=$5, case_spent=case_spent+$6, case_won=case_won+$7, case_dry=$8, updated_at=NOW() WHERE chat_id=$1`,
       [chatId, r.balance, r.total_earned, r.energy, r.turbo_until || null, CASE_COST, won, newDry]);
+    await client.query(
+      `INSERT INTO clicker_case_history (chat_id, request_id, cost, prize, balance_before, balance_after) VALUES ($1,$2,$3,$4,$5,$6)`,
+      [chatId, requestId, CASE_COST, JSON.stringify(out), balanceBefore, r.balance]);
     await client.query("COMMIT");
-    return { ok: true, prize: out, state: buildState(r, cl, 0), newBalance: Number(r.balance), cost: CASE_COST, pigeonDrop };
+    return { ok: true, prize: out, state: buildState(r, cl, 0), newBalance: Number(r.balance), balanceBefore, cost: CASE_COST, pigeonDrop };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 

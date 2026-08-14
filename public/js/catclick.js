@@ -724,9 +724,12 @@
       .ck-case.on{display:flex}
       .ck-case__hd{position:absolute;top:18px;left:0;right:0;text-align:center;font-family:'Nunito',sans-serif;font-weight:900;font-size:16px;color:var(--cream);display:flex;align-items:center;justify-content:center;gap:7px}
       .ck-case__x{position:absolute;top:13px;right:13px;width:34px;height:34px;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.3);color:var(--cream);font-size:17px;cursor:pointer;z-index:3}
-      .ck-case__reel{position:relative;width:100%;height:132px;overflow:hidden;-webkit-mask:linear-gradient(90deg,transparent,#000 13%,#000 87%,transparent);mask:linear-gradient(90deg,transparent,#000 13%,#000 87%,transparent)}
+      .ck-case__reel{position:relative;width:100%;height:132px;overflow:hidden;background:rgba(255,255,255,.035);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+      .ck-case__reel:before,.ck-case__reel:after{content:"";position:absolute;top:0;bottom:0;width:15%;z-index:1;pointer-events:none}
+      .ck-case__reel:before{left:0;background:linear-gradient(90deg,#0B0814,transparent)}
+      .ck-case__reel:after{right:0;background:linear-gradient(270deg,#0B0814,transparent)}
       .ck-case__mark{position:absolute;top:-4px;bottom:-4px;left:50%;width:3px;background:linear-gradient(180deg,#D8FF7A,#8DBF20);box-shadow:0 0 14px rgba(192,255,51,.9);transform:translateX(-50%);z-index:2;border-radius:2px}
-      .ck-case__track{position:absolute;top:50%;left:0;display:flex;gap:10px;transform:translateY(-50%);will-change:transform}
+      .ck-case__track{position:absolute;top:50%;left:0;display:flex;gap:10px;transform:translate3d(0,-50%,0);will-change:transform}
       .ck-caset{width:96px;height:112px;flex:none;border-radius:14px;background:var(--panel);border:2px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;box-sizing:border-box;padding:5px}
       .ck-caset[data-r="common"]{border-color:rgba(141,146,156,.5)}
       .ck-caset[data-r="rare"]{border-color:#C0FF33}
@@ -1681,11 +1684,12 @@
     if (!authed()) { flashMsg('Кейс открывается в приложении — войди в игру'); return; }
     if (st && Number(st.balance) < CASE_COST) { flashMsg('Не хватает монет на кейс'); return; }
     return withLock('case', async () => {
-      const d = await api('/api/clicker/case', { method: 'POST', body: '{}' }).catch(() => null);
+      const requestId = (window.crypto && typeof window.crypto.randomUUID === 'function') ? window.crypto.randomUUID().replace(/-/g, '') : (Date.now().toString(36) + '_' + Math.random().toString(36).slice(2));
+      const d = await api('/api/clicker/case', { method: 'POST', body: JSON.stringify({ requestId }) }).catch(() => null);
       if (!d || d.error) { flashMsg(d && d.error === 'not_enough_coins' ? 'Не хватает монет' : 'Нет связи — попробуй ещё раз'); return; }
       st = d; turboUntil = Date.now() + (st.turboMsLeft || 0);
       window.haptic && window.haptic('light'); renderAll(); renderTasks(); bumpBalance();
-      runCaseReel(d.prize, d.pigeonDrop);
+      await runCaseReel(d.prize, d.pigeonDrop, d.balanceBefore, d.newBalance, d.cost);
     });
   }
   // Тайл рила: монеты/буст/голубь(по редкости)/чемпион. p={type,amount?,breed?,rarity?}
@@ -1710,7 +1714,8 @@
     const pool = CASE_FILLER_BREEDS[rarity]; const breed = pool[Math.floor(Math.random() * pool.length)];
     return { type: 'pigeon', breed, rarity };
   }
-  function runCaseReel(prize, pigeonDrop) {
+  function runCaseReel(prize, pigeonDrop, balanceBefore, newBalance, cost) {
+    return new Promise(resolve => {
     let el = ov.querySelector('#ck-case');
     if (!el) {
       el = document.createElement('div'); el.id = 'ck-case'; el.className = 'ck-case';
@@ -1719,14 +1724,14 @@
     }
     const track = el.querySelector('#ck-case-track'), res = el.querySelector('#ck-case-res');
     // Рил сам показывает выпавшего голубя — отдельный dove-drop попап не нужен (не двоим).
-    el.querySelector('#ck-case-x').onclick = () => el.classList.remove('on');
+    const close = el.querySelector('#ck-case-x'); close.disabled = true; close.style.opacity = '.35'; close.onclick = null;
     res.className = 'ck-case__res'; res.innerHTML = '';
     const WIN = 45, N = 52; // выигрышный тайл ближе к концу ленты
     const win = { type: prize.type, amount: prize.amount, breed: prize.breed, rarity: prize.rarity };
     let html = '';
     for (let i = 0; i < N; i++) html += (i === WIN) ? caseTileHtml(win) : caseTileHtml(randomFiller());
     track.innerHTML = html;
-    track.style.transition = 'none'; track.style.transform = 'translateX(0)';
+    track.style.transition = 'none'; track.style.transform = 'translate3d(0,-50%,0)';
     el.classList.add('on');
     requestAnimationFrame(() => {
       const tileW = 96 + 10;                                   // ширина тайла + gap
@@ -1735,23 +1740,27 @@
       const target = -(WIN * tileW + 48 - reelW / 2) + jitter;
       void track.offsetWidth;
       track.style.transition = 'transform 4.4s cubic-bezier(.10,.62,.14,1)';
-      track.style.transform = 'translateX(' + target.toFixed(1) + 'px)';
+      track.style.transform = 'translate3d(' + target.toFixed(1) + 'px,-50%,0)';
       window.haptic && window.haptic('light');
-      setTimeout(() => revealCase(prize, res, el), 4550);
+      setTimeout(() => revealCase(prize, res, el, balanceBefore, newBalance, cost, resolve), 4550);
+    });
     });
   }
-  function revealCase(prize, res, el) {
+  function revealCase(prize, res, el, balanceBefore, newBalance, cost, resolve) {
     let title, sub = '';
     if (prize.type === 'coins') { title = `+${fmt(prize.amount)} ${COIN(22)}`; if (prize.amount >= 150000) sub = 'ДЖЕКПОТ!'; else if (prize.amount < CASE_COST) sub = 'В этот раз немного — крутани ещё'; }
     else if (prize.type === 'turbo') { title = `${ICON.rocket(22)} Турбо ×5`; sub = '20 секунд множителя за тап'; }
     else if (prize.type === 'energy') { title = `${ICON.bolt(22)} Полная энергия`; }
     else { const meta = DOVE_META[prize.breed] || { name: 'Голубь', r: prize.rarity }; const rl = { common: 'обычный', rare: 'редкий', epic: 'эпический', legendary: 'легендарный' }[meta.r || prize.rarity] || ''; title = `${meta.name}`; sub = `${rl} голубь${prize.isNew ? ' · новый в альбоме!' : ' — запаска для звёзд/гонок'}`; }
-    res.innerHTML = `<div class="rt">${title}</div><div class="rs">${sub}</div><button id="ck-case-ok" type="button">Забрать</button>`;
+    const receipt = Number.isFinite(Number(balanceBefore)) && Number.isFinite(Number(newBalance)) ? `<div class="rs">Было ${fmt(balanceBefore)} − ${fmt(cost || CASE_COST)} + ${fmt(prize.amount || 0)} = ${fmt(newBalance)}</div>` : '';
+    res.innerHTML = `<div class="rt">${title}</div><div class="rs">${sub}</div>${receipt}<button id="ck-case-ok" type="button">Забрать</button>`;
     res.classList.add('on');
     const big = prize.type === 'pigeon' && (prize.rarity === 'epic' || prize.rarity === 'legendary') || (prize.type === 'coins' && prize.amount >= 150000);
     window.haptic && window.haptic(big ? 'success' : 'light');
     if (big) { sfxLevel(); confettiBurst(); coinShower(); } else sfxReward();
-    res.querySelector('#ck-case-ok').onclick = () => el.classList.remove('on');
+    const finish = () => { el.classList.remove('on'); resolve(); };
+    const close = el.querySelector('#ck-case-x'); close.disabled = false; close.style.opacity = '1'; close.onclick = finish;
+    res.querySelector('#ck-case-ok').onclick = finish;
   }
 
   // ── Мини-игра «Золотой дождь» (canvas, 20с лови монеты) ───────────────────────

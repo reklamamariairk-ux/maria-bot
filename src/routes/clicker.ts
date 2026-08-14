@@ -123,7 +123,8 @@ router.post("/api/clicker/chest", requireTgUser, rateLimit(30), async (req, res)
 // Платный кейс: платишь монетами → взвешенный приз (казино-эдж, см. lootbox.ts).
 router.post("/api/clicker/case", requireTgUser, rateLimit(30), async (req, res) => {
   const u = getTgUser(req)!;
-  try { const r = await openCase(u.id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ prize: r.prize, newBalance: r.newBalance, cost: r.cost, pigeonDrop: r.pigeonDrop, ...r.state }); trackEvent(u.id, "case", { prize: r.prize?.type }); }
+  const requestId = typeof req.body?.requestId === "string" && /^[a-zA-Z0-9_-]{8,80}$/.test(req.body.requestId) ? req.body.requestId : `legacy_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  try { const r = await openCase(u.id, requestId); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ prize: r.prize, newBalance: r.newBalance, balanceBefore: r.balanceBefore, cost: r.cost, duplicate: r.duplicate, pigeonDrop: r.pigeonDrop, ...r.state }); if (!r.duplicate) trackEvent(u.id, "case", { prize: r.prize?.type }); }
   catch (e) { log.error({ err: e, chatId: u.id }, "[case]"); res.status(500).json({ error: "internal" }); }
 });
 
