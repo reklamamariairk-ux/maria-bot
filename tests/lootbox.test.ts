@@ -5,20 +5,23 @@ describe("экономика кейса — новая таблица призо
   it("веса соответствуют заданным процентам", () => {
     expect(CASE_TOTAL_WEIGHT).toBe(1000);
     const byKey = Object.fromEntries(CASE_SLOTS.map(s => [s.key, s.weight]));
-    expect(byKey.coins_loss).toBe(100);
-    expect(byKey.coins_equal).toBe(500);
-    expect(byKey.coins_slight_under).toBe(100);
+    expect(byKey.coins_loss).toBe(150);
+    expect(byKey.coins_slight_under).toBe(250);
+    expect(byKey.coins_equal).toBe(300);
     expect(byKey.coins_plus).toBe(200);
     expect(byKey.coins_big).toBe(90);
     expect(byKey.coins_jackpot).toBe(10);
   });
 
-  it("при цене 100k средняя ценность остаётся ниже цены кейса", () => {
+  it("при цене 100k средняя отдача выше ставки, а 60% веса не дают проигрыш", () => {
     const { ev, evNoChampion } = caseEV();
     console.log(`CASE: cost=${CASE_COST} EV=${Math.round(ev)} return=${(ev / CASE_COST * 100).toFixed(1)}%`);
     expect(CASE_COST).toBe(100_000);
-    expect(ev).toBeLessThan(CASE_COST);
+    expect(ev).toBeGreaterThan(CASE_COST);
+    expect(ev).toBeCloseTo(109_750, -2);
     expect(evNoChampion).toBe(ev);
+    const nonLossWeight = CASE_SLOTS.filter(s => ["coins_equal", "coins_plus", "coins_big", "coins_jackpot"].includes(s.key)).reduce((sum, s) => sum + s.weight, 0);
+    expect(nonLossWeight).toBe(600);
   });
 });
 
@@ -28,7 +31,7 @@ describe("rollCase — диапазоны призов", () => {
       const p: CasePrize = rollCase(Math.random(), Math.random(), true);
       expect(p.type).toBe("coins");
       if (p.type === "coins") {
-        expect(p.amount).toBeGreaterThanOrEqual(5_000);
+        expect(p.amount).toBeGreaterThanOrEqual(40_000);
         expect(p.amount).toBeLessThanOrEqual(1_000_000);
         expect(prizeValue(p)).toBe(p.amount);
       }
@@ -37,10 +40,10 @@ describe("rollCase — диапазоны призов", () => {
 
   it("проверяет границы каждой вероятностной группы", () => {
     const samples = [
-      [0.05, 0.5, 5_000, 25_000],
-      [0.35, 0.5, 50_000, 50_000],
-      [0.65, 0.5, 35_000, 49_000],
-      [0.80, 0.5, 60_000, 150_000],
+      [0.075, 0.5, 40_000, 70_000],
+      [0.275, 0.5, 75_000, 99_000],
+      [0.55, 0.5, 100_000, 100_000],
+      [0.80, 0.5, 105_000, 150_000],
       [0.945, 0.5, 150_000, 250_000],
       [0.995, 0.5, 250_000, 1_000_000],
     ] as const;

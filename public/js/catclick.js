@@ -1713,17 +1713,15 @@
     else { const meta = DOVE_META[p.breed] || { name: 'Голубь' }; inner = `<div class="ck-caset__pic"><img src="/img/pigeons/${p.breed}.webp?v=2" alt="" onerror="this.style.display='none'"></div><div class="ck-caset__t">${meta.name}</div>`; }
     return `<div class="ck-caset" data-r="${rar}">${inner}</div>`;
   }
-  // Наполнитель рила: в основном дешёвое (монеты/обычные голуби), редко ценное — как в кейсе.
-  const CASE_FILLER_BREEDS = { common: ['sizar', 'belobok', 'ryaboy', 'chubaty'], rare: ['vanil', 'shoko', 'karamel', 'yagodny'], epic: ['pochtar', 'baikal', 'kurier', 'vozhak', 'svadebny', 'imeninny', 'snezhny'], legendary: ['zolotoy'] };
+  // Наполнитель показывает только реальные варианты денежного кейса.
   function randomFiller() {
     const r = Math.random();
-    if (r < 0.42) return { type: 'coins', amount: Math.round(8000 + Math.random() * 34000) };
-    if (r < 0.52) return { type: 'turbo' };
-    if (r < 0.62) return { type: 'energy' };
-    const rr = Math.random();
-    const rarity = rr < 0.62 ? 'common' : rr < 0.88 ? 'rare' : rr < 0.98 ? 'epic' : 'legendary';
-    const pool = CASE_FILLER_BREEDS[rarity]; const breed = pool[Math.floor(Math.random() * pool.length)];
-    return { type: 'pigeon', breed, rarity };
+    if (r < .15) return { type: 'coins', amount: Math.round(40000 + Math.random() * 30000) };
+    if (r < .40) return { type: 'coins', amount: Math.round(75000 + Math.random() * 24000) };
+    if (r < .70) return { type: 'coins', amount: 100000 };
+    if (r < .90) return { type: 'coins', amount: Math.round(105000 + Math.random() * 45000) };
+    if (r < .99) return { type: 'coins', amount: Math.round(150000 + Math.random() * 100000) };
+    return { type: 'coins', amount: Math.round(250000 + Math.random() * 750000) };
   }
   function runCaseReel(prize, pigeonDrop, balanceBefore, newBalance, cost) {
     return new Promise(resolve => {
@@ -2449,7 +2447,7 @@
     // реже голубь — тем ценнее. Экономика с домовым эджем (сервер src/lootbox.ts).
     const canCase = !st || (Number(st.balance) >= CASE_COST);
     const caseCard = `<div class="ck-card ck-bonus" style="background:linear-gradient(90deg,rgba(155,92,255,.20),rgba(155,92,255,.05));border-color:rgba(155,92,255,.4)">
-      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic" style="background:rgba(155,92,255,.2)">${ICON.chest(26)}</div><div class="ck-card__b"><div class="ck-card__n">Кейс удачи</div><div class="ck-card__s">Голуби, бусты, джекпот — чем реже голубь, тем ценнее</div></div>
+      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic" style="background:rgba(155,92,255,.2)">${ICON.chest(26)}</div><div class="ck-card__b"><div class="ck-card__n">Кейс удачи</div><div class="ck-card__s">60% — вернёшь ставку или получишь больше · джекпот до 1 млн</div></div>
       <button class="ck-card__buy" id="ck-case-open"${canCase ? '' : ' disabled'}>${COIN(13)} ${fmt(CASE_COST)}</button></div>`;
     return '<div class="ck-sect">Бонусы дня</div>' + chestCard + caseCard + comboCard;
   }

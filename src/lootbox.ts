@@ -39,15 +39,17 @@ const pigeonSlot = (rarity: Rarity, weight: number): Slot => ({
   evValue: PIGEON_PRICE[rarity],
 });
 
-// Таблица по новой продуктовой логике: кейс чаще возвращает ощутимые монеты.
+// Честная для игрока таблица: в 60% открытий ставка возвращается полностью или
+// игрок получает больше. Средняя отдача немного выше цены, чтобы кейс ощущался
+// бонусной механикой, а не скрытым сливом накоплений.
 // Веса суммируются до 1000 = проценты с точностью 0.1%:
-// При цене 100k: 10% заметный минус, 60% возврат ниже цены, 20% шанс получить
-// до 150k, 9% крупный плюс 150-250k, 1% джекпот до 1M.
+// 15%: 40–70k, 25%: 75–99k, 30%: возврат 100k,
+// 20%: 105–150k, 9%: 150–250k, 1%: джекпот до 1M.
 export const CASE_SLOTS: Slot[] = [
-  coinsSlot("coins_loss", 100, 5_000, 25_000),
-  coinsSlot("coins_equal", 500, 50_000, 50_000),
-  coinsSlot("coins_slight_under", 100, 35_000, 49_000),
-  coinsSlot("coins_plus", 200, 60_000, 150_000),
+  coinsSlot("coins_loss", 150, 40_000, 70_000),
+  coinsSlot("coins_slight_under", 250, 75_000, 99_000),
+  coinsSlot("coins_equal", 300, 100_000, 100_000),
+  coinsSlot("coins_plus", 200, 105_000, 150_000),
   coinsSlot("coins_big", 90, 150_000, 250_000),
   coinsSlot("coins_jackpot", 10, 250_000, 1_000_000),
 ];
@@ -77,7 +79,7 @@ export function rollCase(r1: number, r2: number, _championAllowed = false): Case
     }
   }
   // страховка от накопленной погрешности — последний слот
-  return { type: "coins", amount: Math.round(8_000 + r2 * 12_000) };
+  return { type: "coins", amount: Math.round(40_000 + r2 * 30_000) };
 }
 
 // Ценность приза в монетах (для учёта case_won игрока — «казино»-баланс дом/игрок).
