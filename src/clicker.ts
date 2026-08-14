@@ -861,13 +861,11 @@ export async function openChest(chatId: number): Promise<{ ok: boolean; prize?: 
 }
 
 // ── Платный кейс (казино-экономика, см. src/lootbox.ts) ──────────────────────
-// Пити: после PITY_DRY открытий подряд без голубя — следующий гарантированно даёт
-// голубя (награда за «наигранность»/потраченное; эдж всё равно у дома на дистанции).
-const PITY_DRY = 30;
+// case_dry теперь хранит серию денежных призов ниже стоимости кейса.
 export type CasePrizeOut = { type: string; amount?: number; rarity?: string; breed?: string; isNew?: boolean };
 export async function openCase(chatId: number, requestId: string): Promise<{ ok: boolean; prize?: CasePrizeOut; state?: ClickerState; reason?: string; newBalance?: number; balanceBefore?: number; cost?: number; pigeonDrop?: { breed: string; isNew: boolean }; duplicate?: boolean }> {
-  const { CASE_COST, rollCase, prizeValue } = await import("./lootbox");
-  const { grantPigeon, pickBreedOfRarity, pickBreed, BREED_BY_ID } = await import("./pigeons");
+  const { CASE_COST, rollCase, prizeValue, protectCaseLossStreak } = await import("./lootbox");
+  const { grantPigeon, pickBreedOfRarity } = await import("./pigeons");
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -883,13 +881,7 @@ export async function openCase(chatId: number, requestId: string): Promise<{ ok:
     const balanceBefore = Number(r.balance);
     r.balance = Number(r.balance) - CASE_COST; // цена открытия
     const dry = Number(r.case_dry || 0);
-    let prize = rollCase(Math.random(), Math.random());
-    // Пити: «сухая серия» дошла до порога, а выпали не-голубь → форсим голубя (по базовым
-    // весам редкости). Чемпион пити НЕ выдаёт (только настоящий гейт-ролл).
-    if (dry + 1 >= PITY_DRY && prize.type !== "pigeon") {
-      const b = BREED_BY_ID.get(pickBreed(Math.random(), Math.random(), weekKey(), !!activeEvent()));
-      prize = { type: "pigeon", rarity: b ? b.rarity : "common" };
-    }
+    let prize = protectCaseLossStreak(rollCase(Math.random(), Math.random()), dry, Math.random());
 
     const out: CasePrizeOut = { type: prize.type };
     let pigeonDrop: { breed: string; isNew: boolean } | undefined;
@@ -898,9 +890,8 @@ export async function openCase(chatId: number, requestId: string): Promise<{ ok:
     else if (prize.type === "energy") { r.energy = energyMaxFor(r.energy_limit_level); }
     else if (prize.type === "pigeon") { const breed = pickBreedOfRarity(prize.rarity, Math.random()); pigeonDrop = await grantPigeon(chatId, breed, client); out.rarity = prize.rarity; out.breed = breed; out.isNew = pigeonDrop.isNew; }
 
-    const isPigeon = prize.type === "pigeon";
     const won = prizeValue(prize);
-    const newDry = isPigeon ? 0 : dry + 1;
+    const newDry = prize.type === "coins" && prize.amount < CASE_COST ? dry + 1 : 0;
     await client.query(
       `UPDATE clicker_state SET balance=$2, total_earned=$3, energy=$4, turbo_until=$5, case_spent=case_spent+$6, case_won=case_won+$7, case_dry=$8, updated_at=NOW() WHERE chat_id=$1`,
       [chatId, r.balance, r.total_earned, r.energy, r.turbo_until || null, CASE_COST, won, newDry]);

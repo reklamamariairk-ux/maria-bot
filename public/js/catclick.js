@@ -2447,7 +2447,7 @@
     // реже голубь — тем ценнее. Экономика с домовым эджем (сервер src/lootbox.ts).
     const canCase = !st || (Number(st.balance) >= CASE_COST);
     const caseCard = `<div class="ck-card ck-bonus" style="background:linear-gradient(90deg,rgba(155,92,255,.20),rgba(155,92,255,.05));border-color:rgba(155,92,255,.4)">
-      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic" style="background:rgba(155,92,255,.2)">${ICON.chest(26)}</div><div class="ck-card__b"><div class="ck-card__n">Кейс удачи</div><div class="ck-card__s">60% — вернёшь ставку или получишь больше · джекпот до 1 млн</div></div>
+      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic" style="background:rgba(155,92,255,.2)">${ICON.chest(26)}</div><div class="ck-card__b"><div class="ck-card__n">Кейс удачи</div><div class="ck-card__s">60% — ставка или плюс · после 2 проигрышей гарантия 220–300 тыс.</div></div>
       <button class="ck-card__buy" id="ck-case-open"${canCase ? '' : ' disabled'}>${COIN(13)} ${fmt(CASE_COST)}</button></div>`;
     return '<div class="ck-sect">Бонусы дня</div>' + chestCard + caseCard + comboCard;
   }

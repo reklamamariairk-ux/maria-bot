@@ -55,6 +55,15 @@ export const CASE_SLOTS: Slot[] = [
 ];
 export const CASE_TOTAL_WEIGHT = CASE_SLOTS.reduce((s, x) => s + x.weight, 0);
 
+// Защита от неприятных серий: после двух призов ниже ставки следующий денежный
+// приз становится 220–300k. Даже две минимальные выплаты по 40k и защищённый
+// третий спин вместе возвращают не меньше стоимости трёх открытий.
+export const CASE_LOSS_PITY = 2;
+export function protectCaseLossStreak(prize: CasePrize, lossStreak: number, r: number): CasePrize {
+  if (lossStreak < CASE_LOSS_PITY || prize.type !== "coins" || prize.amount >= 220_000) return prize;
+  return { type: "coins", amount: Math.round(220_000 + Math.max(0, Math.min(1, r)) * 80_000) };
+}
+
 // Средняя ценность приза (EV) и домовый эдж — без учёта гейта чемпиона (его вклад
 // в реальности ~0, т.к. падает ≤1 раза в год; для «сырого» EV считаем как есть,
 // но есть и evNoChampion — реалистичный EV на дистанции).

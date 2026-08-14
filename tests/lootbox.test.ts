@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CASE_COST, CASE_SLOTS, CASE_TOTAL_WEIGHT, caseEV, rollCase, prizeValue, type CasePrize } from "../src/lootbox";
+import { CASE_COST, CASE_SLOTS, CASE_TOTAL_WEIGHT, caseEV, protectCaseLossStreak, rollCase, prizeValue, type CasePrize } from "../src/lootbox";
 
 describe("экономика кейса — новая таблица призов", () => {
   it("веса соответствуют заданным процентам", () => {
@@ -26,6 +26,13 @@ describe("экономика кейса — новая таблица призо
 });
 
 describe("rollCase — диапазоны призов", () => {
+  it("после двух проигрышей гарантирует 220–300k и перекрывает худшую тройку", () => {
+    const low: CasePrize = { type: "coins", amount: 40_000 };
+    expect(protectCaseLossStreak(low, 1, 0)).toEqual(low);
+    expect(protectCaseLossStreak(low, 2, 0)).toEqual({ type: "coins", amount: 220_000 });
+    expect(protectCaseLossStreak(low, 2, 1)).toEqual({ type: "coins", amount: 300_000 });
+    expect(40_000 + 40_000 + 220_000).toBe(3 * CASE_COST);
+  });
   it("все призы — валидные монеты в заданных границах", () => {
     for (let i = 0; i < 5000; i++) {
       const p: CasePrize = rollCase(Math.random(), Math.random(), true);
