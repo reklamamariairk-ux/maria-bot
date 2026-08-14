@@ -1173,7 +1173,7 @@
       { ic: ICON.shop(20), t: 'Прокачка и бизнесы', d: 'В «Прокачке» — четыре направления: Производство, Маркетинг, Персонал и Сеть. Каждый бизнес, который ты завёл, дальше сам приносит монеты в час — доход капает даже когда игра закрыта, а следующий уровень бизнеса поднимает доход ещё выше. Часть бизнесов открывается только с определённого уровня игрока — до этого карточка показана силуэтом с замком. Там же можно докупить Мультитап (больше монет за тап) и Запас энергии (выше потолок энергии).' },
       { ic: ICON.gift(20), t: 'Награда дня', d: 'Каждый день, когда заходишь в игру впервые, тебе доступна награда дня — забери её кнопкой сверху экрана. Награда растёт вместе со стриком: чем больше дней подряд ты заходишь, тем она весомее, а пропущенный день сбрасывает счётчик. Календарь на семь дней вперёд показывает, сколько причитается в каждый из ближайших дней.' },
       { ic: ICON.gem(20), t: 'Комбо дня', d: 'В «Прокачке» каждый день выбираются три случайных бизнеса — прокачай (купи хотя бы один уровень) все три, и получишь бонус +12 000 монет. Забрать бонус можно на вкладке «Призы». Комбо обновляется раз в сутки.' },
-      { ic: ICON.chest(20), t: 'Сундук и бонусы', d: 'Иногда на главном экране пролетает золотая монетка — тронь её, пока не улетела, и получишь бонусные монеты. На вкладке «Призы» раз в день можно открыть Сундук удачи — там монеты, буст или неожиданный джекпот.' },
+      { ic: ICON.chest(20), t: 'Сундук и кейс', d: 'Сундук удачи открывается бесплатно раз в день. Платный Кейс удачи стоит 100 000: в нём монеты до 1,5 млн, голуби и бесплатные уровни бизнеса. После пяти проигрышей следующая попытка защищена.' },
       { ic: ICON.paw(20), t: 'Дом Василия', d: 'В Доме Василия — четыре комнаты: Кухня, Спальня, Игровая и Двор. В каждой — своё действие (покормить, уложить спать, поиграть, погладить), которое поднимает нужную шкалу — сытость, энергию или настроение — и приносит коту немного опыта. Если заботиться о Василии каждый день подряд, раз в сутки капают монеты питомца — награда растёт с каждым днём серии и с десятого дня держится на максимуме. Во Дворе — магазин шляп для Василия: покупай их за монеты питомца, накопленные заботой.' },
       { ic: ICON.dove(20), t: 'Голубятня', d: 'Каждый голубь добавляет монеты к доходу в час; звёзды и тюнинг усиливают вклад. Голубей можно отправлять на задания с таймером и шансом успеха. До трёх любимцев можно выбрать для показа рядом со своим именем в рейтинге — на силу и доход этот выбор не влияет.' },
       { ic: ICON.trophy(20), t: 'Рейтинг и команды', d: 'Рейтинг недели показывает игроков по количеству монет, заработанных с начала недели — отсчёт идёт с понедельника, а в конце недели сезон обнуляется и начинается заново. Здесь же можно вступить в одну из четырёх команд — Шоколадные, Ванильные, Карамельные или Ягодные — и соревноваться вместе с командой в общем зачёте по сумме очков всех участников.' },
@@ -1705,25 +1705,28 @@
       await runCaseReel(d.prize, d.pigeonDrop, d.balanceBefore, d.newBalance, d.cost);
     });
   }
-  // Тайл рила: монеты/буст/голубь(по редкости)/чемпион. p={type,amount?,breed?,rarity?}
+  // Тайл рила: монеты, голубь или бесплатный уровень бизнеса.
   function caseTileHtml(p) {
     const rar = p.rarity || '';
     let inner;
     if (p.type === 'coins') inner = `${COIN(38)}<div class="ck-caset__t">${fmt(p.amount || 0)}</div>`;
     else if (p.type === 'turbo') inner = `${ICON.rocket(38)}<div class="ck-caset__t">Турбо</div>`;
     else if (p.type === 'energy') inner = `${ICON.bolt(38)}<div class="ck-caset__t">Энергия</div>`;
+    else if (p.type === 'business') inner = `${ICON.shop(38)}<div class="ck-caset__t">${p.businessName || 'Бизнес'}</div>`;
     else { const meta = DOVE_META[p.breed] || { name: 'Голубь' }; inner = `<div class="ck-caset__pic"><img src="/img/pigeons/${p.breed}.webp?v=2" alt="" onerror="this.style.display='none'"></div><div class="ck-caset__t">${meta.name}</div>`; }
     return `<div class="ck-caset" data-r="${rar}">${inner}</div>`;
   }
-  // Наполнитель показывает только реальные варианты денежного кейса.
+  // Наполнитель визуально повторяет распределение денежных результатов; точный
+  // приз (включая предметы) всегда выбирает сервер.
   function randomFiller() {
     const r = Math.random();
-    if (r < .15) return { type: 'coins', amount: Math.round(40000 + Math.random() * 30000) };
-    if (r < .40) return { type: 'coins', amount: Math.round(75000 + Math.random() * 24000) };
-    if (r < .70) return { type: 'coins', amount: 100000 };
-    if (r < .90) return { type: 'coins', amount: Math.round(105000 + Math.random() * 45000) };
-    if (r < .99) return { type: 'coins', amount: Math.round(150000 + Math.random() * 100000) };
-    return { type: 'coins', amount: Math.round(500000 + Math.random() * 500000) };
+    if (r < .10) return { type: 'coins', amount: 0 };
+    if (r < .40) return { type: 'coins', amount: Math.round(10000 + Math.random() * 60000) };
+    if (r < .60) return { type: 'coins', amount: Math.round(70000 + Math.random() * 29000) };
+    if (r < .72) return { type: 'coins', amount: 100000 };
+    if (r < .82) return { type: 'coins', amount: Math.round(110000 + Math.random() * 50000) };
+    if (r < .88) return { type: 'coins', amount: Math.round(200000 + Math.random() * 200000) };
+    return { type: 'coins', amount: Math.round(500000 + Math.random() * 1000000) };
   }
   function runCaseReel(prize, pigeonDrop, balanceBefore, newBalance, cost) {
     return new Promise(resolve => {
@@ -1738,7 +1741,7 @@
     const close = el.querySelector('#ck-case-x'); close.disabled = true; close.style.opacity = '.35'; close.onclick = null;
     res.className = 'ck-case__res'; res.innerHTML = '';
     const WIN = 45, N = 52; // выигрышный тайл ближе к концу ленты
-    const win = { type: prize.type, amount: prize.amount, breed: prize.breed, rarity: prize.rarity };
+    const win = { type: prize.type, amount: prize.amount, breed: prize.breed, rarity: prize.rarity, businessName: prize.businessName };
     let html = '';
     for (let i = 0; i < N; i++) html += (i === WIN) ? caseTileHtml(win) : caseTileHtml(randomFiller());
     track.innerHTML = html;
@@ -1762,12 +1765,14 @@
     if (prize.type === 'coins') { title = `+${fmt(prize.amount)} ${COIN(22)}`; if (prize.amount >= 150000) sub = 'ДЖЕКПОТ!'; else if (prize.amount < CASE_COST) sub = 'В этот раз немного — крутани ещё'; }
     else if (prize.type === 'turbo') { title = `${ICON.rocket(22)} Турбо ×5`; sub = '20 секунд множителя за тап'; }
     else if (prize.type === 'energy') { title = `${ICON.bolt(22)} Полная энергия`; }
-    else { const meta = DOVE_META[prize.breed] || { name: 'Голубь', r: prize.rarity }; const rl = { common: 'обычный', rare: 'редкий', epic: 'эпический', legendary: 'легендарный' }[meta.r || prize.rarity] || ''; title = `${meta.name}`; sub = `${rl} голубь${prize.isNew ? ' · новый в альбоме!' : ' — запаска для звёзд/гонок'}`; }
-    const receipt = Number.isFinite(Number(balanceBefore)) && Number.isFinite(Number(newBalance)) ? `<div class="rs">Было ${fmt(balanceBefore)} − ${fmt(cost || CASE_COST)} + ${fmt(prize.amount || 0)} = ${fmt(newBalance)}</div>` : '';
+    else if (prize.type === 'business') { title = `${ICON.shop(22)} ${prize.businessName || 'Уровень бизнеса'}`; sub = `Бесплатная прокачка · рыночная цена ${fmt(prize.marketValue || 0)}`; }
+    else { const meta = DOVE_META[prize.breed] || { name: 'Голубь', r: prize.rarity }; const rl = { common: 'обычный', rare: 'редкий', epic: 'эпический', legendary: 'легендарный' }[meta.r || prize.rarity] || ''; title = `${meta.name}`; sub = `${rl} голубь · цена ${fmt(prize.marketValue || 0)}${prize.isNew ? ' · новый в альбоме!' : ' · дубль для звёзд/гонок'}`; }
+    const itemText = prize.type === 'coins' ? ` + ${fmt(prize.amount || 0)}` : ` + предмет ${fmt(prize.marketValue || 0)}`;
+    const receipt = Number.isFinite(Number(balanceBefore)) && Number.isFinite(Number(newBalance)) ? `<div class="rs">Было ${fmt(balanceBefore)} − ${fmt(cost || CASE_COST)}${itemText} = ${fmt(newBalance)} монет${prize.type === 'coins' ? '' : ' + предмет'}</div>` : '';
     const canAgain = st && Number(st.balance) >= CASE_COST;
     res.innerHTML = `<div class="rt">${title}</div><div class="rs">${sub}</div>${receipt}<div class="ck-case__actions"><button id="ck-case-again" type="button"${canAgain ? '' : ' disabled'}>${canAgain ? `Крутить ещё · ${fmt(CASE_COST)}` : 'Не хватает монет'}</button><button class="secondary" id="ck-case-ok" type="button">Закрыть</button></div>`;
     res.classList.add('on');
-    const big = prize.type === 'pigeon' && (prize.rarity === 'epic' || prize.rarity === 'legendary') || (prize.type === 'coins' && prize.amount >= 150000);
+    const big = prize.type === 'business' || prize.type === 'pigeon' && (prize.rarity === 'epic' || prize.rarity === 'legendary') || (prize.type === 'coins' && prize.amount >= 150000);
     window.haptic && window.haptic(big ? 'success' : 'light');
     if (big) { sfxLevel(); confettiBurst(); coinShower(); } else sfxReward();
     let settled = false;
@@ -2456,7 +2461,7 @@
     // реже голубь — тем ценнее. Экономика с домовым эджем (сервер src/lootbox.ts).
     const canCase = !st || (Number(st.balance) >= CASE_COST);
     const caseCard = `<div class="ck-card ck-bonus" style="background:linear-gradient(90deg,rgba(155,92,255,.20),rgba(155,92,255,.05));border-color:rgba(155,92,255,.4)">
-      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic" style="background:rgba(155,92,255,.2)">${ICON.chest(26)}</div><div class="ck-card__b"><div class="ck-card__n">Кейс удачи</div><div class="ck-card__s">60% — ставка или плюс · после 2 проигрышей гарантия 220–300 тыс.</div></div>
+      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic" style="background:rgba(155,92,255,.2)">${ICON.chest(26)}</div><div class="ck-card__b"><div class="ck-card__n">Кейс удачи</div><div class="ck-card__s">Монеты до 1,5 млн · голуби и бизнесы · защита после 5 проигрышей</div></div>
       <button class="ck-card__buy" id="ck-case-open"${canCase ? '' : ' disabled'}>${COIN(13)} ${fmt(CASE_COST)}</button></div>`;
     return '<div class="ck-sect">Бонусы дня</div>' + chestCard + caseCard + comboCard;
   }

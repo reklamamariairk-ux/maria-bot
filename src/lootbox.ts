@@ -13,7 +13,8 @@ export type CasePrize =
   | { type: "coins"; amount: number }
   | { type: "turbo" }
   | { type: "energy" }
-  | { type: "pigeon"; rarity: Rarity };
+  | { type: "pigeon"; rarity: Rarity }
+  | { type: "business"; id: string };
 
 // Условная ценность бустов в монетах — только для расчёта EV/эджа (буст = разовый).
 const TURBO_VALUE = 1500, ENERGY_VALUE = 1200;
@@ -38,29 +39,37 @@ const pigeonSlot = (rarity: Rarity, weight: number): Slot => ({
   roll: () => ({ type: "pigeon", rarity }),
   evValue: PIGEON_PRICE[rarity],
 });
+const businessSlot = (id: string, weight: number, value: number): Slot => ({
+  key: "business_" + id, weight,
+  roll: () => ({ type: "business", id }),
+  evValue: value,
+});
 
-// Честная для игрока таблица: в 60% открытий ставка возвращается полностью или
-// игрок получает больше. Средняя отдача немного выше цены, чтобы кейс ощущался
-// бонусной механикой, а не скрытым сливом накоплений.
-// Веса суммируются до 1000 = проценты с точностью 0.1%:
-// 15%: 40–70k, 25%: 75–99k, 30%: возврат 100k,
-// 20%: 105–150k, 9%: 150–250k, 1%: джекпот 500k–1M.
+// CS2-подобная таблица: частые дешёвые результаты, редкие игровые предметы и
+// денежный джекпот до 15 цен кейса. Веса суммируются до 1000 (0.1% на единицу).
 export const CASE_SLOTS: Slot[] = [
-  coinsSlot("coins_loss", 150, 40_000, 70_000),
-  coinsSlot("coins_slight_under", 250, 75_000, 99_000),
-  coinsSlot("coins_equal", 300, 100_000, 100_000),
-  coinsSlot("coins_plus", 200, 105_000, 150_000),
-  coinsSlot("coins_big", 90, 150_000, 250_000),
-  coinsSlot("coins_jackpot", 10, 500_000, 1_000_000),
+  coinsSlot("coins_zero", 100, 0, 0),
+  coinsSlot("coins_loss", 300, 10_000, 70_000),
+  coinsSlot("coins_slight_under", 200, 70_000, 99_000),
+  coinsSlot("coins_equal", 120, 100_000, 100_000),
+  coinsSlot("coins_plus", 100, 110_000, 160_000),
+  coinsSlot("coins_big", 60, 200_000, 400_000),
+  coinsSlot("coins_jackpot", 10, 500_000, 1_500_000),
+  pigeonSlot("common", 50),
+  pigeonSlot("rare", 30),
+  pigeonSlot("epic", 5),
+  businessSlot("region", 10, 100_000),
+  businessSlot("loyalty", 8, 100_000),
+  businessSlot("manager", 4, 100_000),
+  businessSlot("franchise", 3, 100_000),
 ];
 export const CASE_TOTAL_WEIGHT = CASE_SLOTS.reduce((s, x) => s + x.weight, 0);
 
-// Защита от неприятных серий: после двух призов ниже ставки следующий денежный
-// приз становится 220–300k. Даже две минимальные выплаты по 40k и защищённый
-// третий спин вместе возвращают не меньше стоимости трёх открытий.
-export const CASE_LOSS_PITY = 2;
+// После пяти призов рыночной ценностью ниже ставки следующий денежный результат
+// защищён. Серия учитывает и предметы по их игровой рыночной цене.
+export const CASE_LOSS_PITY = 5;
 export function protectCaseLossStreak(prize: CasePrize, lossStreak: number, r: number): CasePrize {
-  if (lossStreak < CASE_LOSS_PITY || prize.type !== "coins" || prize.amount >= 220_000) return prize;
+  if (lossStreak < CASE_LOSS_PITY || prizeValue(prize) >= 220_000) return prize;
   return { type: "coins", amount: Math.round(220_000 + Math.max(0, Math.min(1, r)) * 80_000) };
 }
 
@@ -98,5 +107,6 @@ export function prizeValue(prize: CasePrize): number {
     case "turbo": return TURBO_VALUE;
     case "energy": return ENERGY_VALUE;
     case "pigeon": return PIGEON_PRICE[prize.rarity];
+    case "business": return 100_000; // фактическая цена уровня уточняется при выдаче
   }
 }

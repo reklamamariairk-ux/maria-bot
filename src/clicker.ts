@@ -868,7 +868,7 @@ export async function openChest(chatId: number): Promise<{ ok: boolean; prize?: 
 
 // ── Платный кейс (казино-экономика, см. src/lootbox.ts) ──────────────────────
 // case_dry теперь хранит серию денежных призов ниже стоимости кейса.
-export type CasePrizeOut = { type: string; amount?: number; rarity?: string; breed?: string; isNew?: boolean };
+export type CasePrizeOut = { type: string; amount?: number; rarity?: string; breed?: string; isNew?: boolean; businessId?: string; businessName?: string; marketValue?: number };
 export async function openCase(chatId: number, requestId: string): Promise<{ ok: boolean; prize?: CasePrizeOut; state?: ClickerState; reason?: string; newBalance?: number; balanceBefore?: number; cost?: number; pigeonDrop?: { breed: string; isNew: boolean }; duplicate?: boolean }> {
   const { CASE_COST, rollCase, prizeValue, protectCaseLossStreak } = await import("./lootbox");
   const { grantPigeon, pickBreedOfRarity } = await import("./pigeons");
@@ -894,10 +894,19 @@ export async function openCase(chatId: number, requestId: string): Promise<{ ok:
     if (prize.type === "coins") { r.balance = Number(r.balance) + prize.amount; r.total_earned = Number(r.total_earned) + prize.amount; out.amount = prize.amount; }
     else if (prize.type === "turbo") { r.turbo_until = new Date(Date.now() + TURBO_SEC * 1000); }
     else if (prize.type === "energy") { r.energy = energyMaxFor(r.energy_limit_level); }
-    else if (prize.type === "pigeon") { const breed = pickBreedOfRarity(prize.rarity, Math.random()); pigeonDrop = await grantPigeon(chatId, breed, client); out.rarity = prize.rarity; out.breed = breed; out.isNew = pigeonDrop.isNew; }
+    else if (prize.type === "pigeon") { const breed = pickBreedOfRarity(prize.rarity, Math.random()); pigeonDrop = await grantPigeon(chatId, breed, client); out.rarity = prize.rarity; out.breed = breed; out.isNew = pigeonDrop.isNew; out.marketValue = prizeValue(prize); }
+    else if (prize.type === "business") {
+      const card = CARD_BY_ID[prize.id];
+      if (!card) throw new Error(`Unknown case business: ${prize.id}`);
+      const level = Number(cl[prize.id] || 0);
+      const marketValue = cardPrice(card, level);
+      cl[prize.id] = level + 1;
+      await client.query(`INSERT INTO clicker_cards (chat_id, card, level) VALUES ($1,$2,$3) ON CONFLICT (chat_id, card) DO UPDATE SET level=$3`, [chatId, prize.id, cl[prize.id]]);
+      out.businessId = prize.id; out.businessName = card.name; out.marketValue = marketValue;
+    }
 
-    const won = prizeValue(prize);
-    const newDry = prize.type === "coins" && prize.amount < CASE_COST ? dry + 1 : 0;
+    const won = prize.type === "business" ? Number(out.marketValue) : prizeValue(prize);
+    const newDry = won < CASE_COST ? dry + 1 : 0;
     await client.query(
       `UPDATE clicker_state SET balance=$2, total_earned=$3, energy=$4, turbo_until=$5, case_spent=case_spent+$6, case_won=case_won+$7, case_dry=$8, updated_at=NOW() WHERE chat_id=$1`,
       [chatId, r.balance, r.total_earned, r.energy, r.turbo_until || null, CASE_COST, won, newDry]);
