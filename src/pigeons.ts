@@ -173,10 +173,10 @@ export const PIGEON_MISSIONS: PigeonMissionDef[] = [
 
 export const PIGEON_MISSION_RANKS = [
   { id: "rookie", name: "Новичок", need: 0, rewardMult: 1 },
-  { id: "courier", name: "Курьер", need: 3, rewardMult: 1.05 },
-  { id: "expert", name: "Опытный", need: 10, rewardMult: 1.10 },
-  { id: "master", name: "Мастер", need: 25, rewardMult: 1.20 },
-  { id: "legend", name: "Легенда", need: 50, rewardMult: 1.35 },
+  { id: "courier", name: "Курьер", need: 3, rewardMult: 1.10 },
+  { id: "expert", name: "Опытный", need: 10, rewardMult: 1.25 },
+  { id: "master", name: "Мастер", need: 25, rewardMult: 1.50 },
+  { id: "legend", name: "Легенда", need: 50, rewardMult: 2.00 },
 ] as const;
 export function pigeonMissionRank(completed: number) {
   const done = Math.max(0, Math.floor(Number(completed) || 0));

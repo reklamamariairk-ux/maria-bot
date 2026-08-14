@@ -57,10 +57,11 @@ describe("pigeon missions — шанс зависит от голубя и тю�
 
   it("выполненные задания повышают ранг и множитель награды", () => {
     expect(pigeonMissionRank(0).name).toBe("Новичок");
-    expect(pigeonMissionRank(3).rewardMult).toBe(1.05);
+    expect(pigeonMissionRank(3).rewardMult).toBe(1.10);
     expect(pigeonMissionRank(10).name).toBe("Опытный");
-    expect(pigeonMissionRank(25).rewardMult).toBe(1.20);
-    expect(pigeonMissionRank(50).rewardMult).toBe(1.35);
+    expect(pigeonMissionRank(10).rewardMult).toBe(1.25);
+    expect(pigeonMissionRank(25).rewardMult).toBe(1.50);
+    expect(pigeonMissionRank(50).rewardMult).toBe(2.00);
     expect(pigeonMissionRank(50).nextNeed).toBeNull();
   });
 });
