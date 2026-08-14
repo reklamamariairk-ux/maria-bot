@@ -5,7 +5,24 @@
  * дневные лимиты (1 письмо/день) и закрытие недельных сезонов.
  */
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { computePurchaseGrant, todayIrkutsk, weekMonday, weekKey } from "../src/clicker";
+import { CARDS, cardPrice, cardProfit, computePurchaseGrant, todayIrkutsk, weekMonday, weekKey } from "../src/clicker";
+
+describe("экономика прокачки бизнеса", () => {
+  it("дорогой следующий уровень увеличивает и саму прибавку дохода", () => {
+    const franchise = CARDS.find((c) => c.id === "franchise")!;
+    const gain1 = cardProfit(franchise, 1) - cardProfit(franchise, 0);
+    const gain7 = cardProfit(franchise, 7) - cardProfit(franchise, 6);
+    expect(gain1).toBe(franchise.baseProfit);
+    expect(gain7).toBeGreaterThan(gain1 * 3);
+  });
+
+  it("цена уровня растёт мягче прежнего коэффициента 1.7", () => {
+    const region = CARDS.find((c) => c.id === "region")!;
+    expect(cardPrice(region, 5)).toBeLessThan(Math.round(region.basePrice * Math.pow(1.7, 5)));
+    const gain = cardProfit(region, 6) - cardProfit(region, 5);
+    expect(cardPrice(region, 5) / gain).toBeLessThan(40);
+  });
+});
 
 describe("computePurchaseGrant — покупки → монеты (watermark, капы)", () => {
   it("нет новых трат → ничего не начисляем", () => {

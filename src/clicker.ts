@@ -231,8 +231,12 @@ const priceMultitap = (lvl: number) => Math.round(200 * Math.pow(2, lvl));
 const priceEnergy = (lvl: number) => Math.round(300 * Math.pow(2, lvl));
 const energyMaxFor = (lvl: number) => 1000 + 500 * lvl;
 const perTapFor = (lvl: number) => 1 + lvl;
-const cardPrice = (c: { basePrice: number }, lvl: number) => Math.round(c.basePrice * Math.pow(1.7, lvl));
-const cardProfit = (c: { baseProfit: number }, lvl: number) => c.baseProfit * lvl;
+// Цена и доход растут вместе: раньше цена росла ×1.7 за уровень, а прибавка
+// оставалась постоянной — дорогие уровни окупались сотни часов.
+export const CARD_PRICE_GROWTH = 1.45;
+export const CARD_PROFIT_GROWTH = 1.25;
+export const cardPrice = (c: { basePrice: number }, lvl: number) => Math.round(c.basePrice * Math.pow(CARD_PRICE_GROWTH, lvl));
+export const cardProfit = (c: { baseProfit: number }, lvl: number) => lvl <= 0 ? 0 : Math.round(c.baseProfit * (Math.pow(CARD_PROFIT_GROWTH, lvl) - 1) / (CARD_PROFIT_GROWTH - 1));
 
 // ── Бонусы дня: Комбо (3 карты) + Шифр (морзе) — детерминированы от даты ─────────
 // ⚠️ Алгоритм/слова/морзе продублированы во фронте public/js/catclick.js — менять синхронно.
@@ -406,7 +410,7 @@ function buildState(r: any, cl: Record<string, number>, passiveEarned: number): 
     level: lg.level, levelName: lg.name, nextNeed: nextNeed(Number(r.total_earned)),
     multitapLevel: r.multitap_level, multitapPrice: priceMultitap(r.multitap_level),
     energyLevel: r.energy_limit_level, energyPrice: priceEnergy(r.energy_limit_level),
-    cards: CARDS.map((c) => { const lv = cl[c.id] || 0; const locked = lv === 0 && !!c.req && lg.level < c.req; return { id: c.id, name: c.name, cat: c.cat, level: lv, profit: cardProfit(c, lv + 1), currentProfit: cardProfit(c, lv), profitGain: c.baseProfit, price: cardPrice(c, lv), req: c.req || 0, locked }; }),
+    cards: CARDS.map((c) => { const lv = cl[c.id] || 0; const locked = lv === 0 && !!c.req && lg.level < c.req; const currentProfit = cardProfit(c, lv), profit = cardProfit(c, lv + 1); return { id: c.id, name: c.name, cat: c.cat, level: lv, profit, currentProfit, profitGain: profit - currentProfit, price: cardPrice(c, lv), req: c.req || 0, locked }; }),
     dailyAvailable: r.daily_date !== today, dailyStreak: r.daily_streak, dailyNext: dailyReward((r.daily_date === today ? r.daily_streak : r.daily_streak + 1)),
     chestAvailable: r.chest_date !== today,
     rainAvailable: r.rain_date !== today,
