@@ -1721,7 +1721,7 @@
     if (r < .70) return { type: 'coins', amount: 100000 };
     if (r < .90) return { type: 'coins', amount: Math.round(105000 + Math.random() * 45000) };
     if (r < .99) return { type: 'coins', amount: Math.round(150000 + Math.random() * 100000) };
-    return { type: 'coins', amount: Math.round(250000 + Math.random() * 750000) };
+    return { type: 'coins', amount: Math.round(500000 + Math.random() * 500000) };
   }
   function runCaseReel(prize, pigeonDrop, balanceBefore, newBalance, cost) {
     return new Promise(resolve => {

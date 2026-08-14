@@ -18,7 +18,7 @@ describe("экономика кейса — новая таблица призо
     console.log(`CASE: cost=${CASE_COST} EV=${Math.round(ev)} return=${(ev / CASE_COST * 100).toFixed(1)}%`);
     expect(CASE_COST).toBe(100_000);
     expect(ev).toBeGreaterThan(CASE_COST);
-    expect(ev).toBeCloseTo(109_750, -2);
+    expect(ev).toBeCloseTo(111_000, -2);
     expect(evNoChampion).toBe(ev);
     const nonLossWeight = CASE_SLOTS.filter(s => ["coins_equal", "coins_plus", "coins_big", "coins_jackpot"].includes(s.key)).reduce((sum, s) => sum + s.weight, 0);
     expect(nonLossWeight).toBe(600);
@@ -45,7 +45,7 @@ describe("rollCase — диапазоны призов", () => {
       [0.55, 0.5, 100_000, 100_000],
       [0.80, 0.5, 105_000, 150_000],
       [0.945, 0.5, 150_000, 250_000],
-      [0.995, 0.5, 250_000, 1_000_000],
+      [0.995, 0.5, 500_000, 1_000_000],
     ] as const;
     for (const [r1, r2, lo, hi] of samples) {
       const p = rollCase(r1, r2, false);

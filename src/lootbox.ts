@@ -44,14 +44,14 @@ const pigeonSlot = (rarity: Rarity, weight: number): Slot => ({
 // бонусной механикой, а не скрытым сливом накоплений.
 // Веса суммируются до 1000 = проценты с точностью 0.1%:
 // 15%: 40–70k, 25%: 75–99k, 30%: возврат 100k,
-// 20%: 105–150k, 9%: 150–250k, 1%: джекпот до 1M.
+// 20%: 105–150k, 9%: 150–250k, 1%: джекпот 500k–1M.
 export const CASE_SLOTS: Slot[] = [
   coinsSlot("coins_loss", 150, 40_000, 70_000),
   coinsSlot("coins_slight_under", 250, 75_000, 99_000),
   coinsSlot("coins_equal", 300, 100_000, 100_000),
   coinsSlot("coins_plus", 200, 105_000, 150_000),
   coinsSlot("coins_big", 90, 150_000, 250_000),
-  coinsSlot("coins_jackpot", 10, 250_000, 1_000_000),
+  coinsSlot("coins_jackpot", 10, 500_000, 1_000_000),
 ];
 export const CASE_TOTAL_WEIGHT = CASE_SLOTS.reduce((s, x) => s + x.weight, 0);
 
