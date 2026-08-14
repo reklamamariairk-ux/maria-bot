@@ -202,6 +202,10 @@
       .cd-setrow__n b{font-weight:700;font-size:13.5px;color:var(--ink);display:block}
       .cd-setrow__p{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:2px}
       .cd-setrow__done{flex:none;font-size:11.5px;font-weight:800;color:#9be7a8;white-space:nowrap}
+      .cd-mission-route{display:block;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:9px}
+      .cd-mission-route.is-locked{opacity:.68}
+      .cd-mission-route__grid{display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;margin:9px 0;font-size:11.5px;color:var(--muted)}
+      .cd-mission-route__grid b{color:var(--cream)}
       .cd-claimbtn{flex:none;display:inline-flex;align-items:center;gap:5px;border:1px solid #DFFF8F;border-radius:12px;padding:9px 13px;font-weight:800;font-size:12px;background:linear-gradient(180deg,#D4FF6A,#A8F51E 56%,#8DBF20);color:#12210A;cursor:pointer;white-space:nowrap;min-height:38px}
       .cd-claimbtn:disabled{opacity:.6;cursor:default}
       .cd-scrim{position:fixed;inset:0;z-index:9400;background:rgba(10,6,5,.5);display:none}
@@ -614,7 +618,7 @@
     sc.classList.add('on'); requestAnimationFrame(() => sh.classList.add('on'));
     sh.querySelector('#cd-sheet-x').onclick = closeSheet;
     await renderMissions();
-    let introSeen = false; try { introSeen = localStorage.getItem('cd_missions_tutorial_v3') === '1'; } catch (_) {}
+    let introSeen = false; try { introSeen = localStorage.getItem('cd_missions_tutorial_v4') === '1'; } catch (_) {}
     if (!introSeen) missionHelpPopup(true);
     if (missionTimer) clearInterval(missionTimer);
     missionTimer = setInterval(updateMissionTimers, 1000);
@@ -642,42 +646,60 @@
         const def = defs.get(a.mission_id) || { name: 'Задание' };
         return `<div class="cd-setrow" style="display:block;margin-bottom:9px"><div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:7px"><b>${b.name}</b><span style="color:var(--gold-l);font-size:11px">шанс ${num(a.chance)}%</span></div><div style="font-size:12px;color:var(--muted);margin-bottom:8px">${def.name} · награда ${fmt(a.reward)} (${fmt(a.consolation)} при провале)</div><button class="cd-sheet__act" style="margin:0" data-claim-mission="${a.id}" data-completes="${a.completes_at}"></button></div>`;
       }
-      const unlocked = (d.missions || []).filter(m => num(p.power) >= num(m.minPower));
       const rank = p.missionRank || { name: 'Новичок', completed: 0, rewardMult: 1, nextNeed: 3, nextName: 'Курьер' };
-      const opts = unlocked.map(m => { const effectiveReward = Math.round(num(m.reward) * num(rank.rewardMult || 1)); const perHour = Math.round(effectiveReward * 3600 / num(m.durationSec)); const tier = m.tier === 'elite' ? 'Элита' : m.tier === 'advanced' ? 'Продвинутое' : 'Базовое'; return `<option value="${m.id}">${tier} · ${m.name} · ${fmt(perHour)}/час</option>`; }).join('');
       const next = (d.missions || []).filter(m => num(m.minPower) > num(p.power)).sort((a, b) => num(a.minPower) - num(b.minPower))[0];
       const rankProgress = rank.nextNeed != null ? `до ранга «${rank.nextName}» ещё ${Math.max(0, num(rank.nextNeed) - num(rank.completed))}` : 'максимальный ранг';
-      return `<div class="cd-setrow" style="display:block;margin-bottom:9px"><div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:7px"><b>${b.name}</b><span style="color:var(--gold-l);font-size:11px">+${fmt(p.passivePerHour)}/час</span></div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Сила ${num(p.power)} · ★${p.stars} · тюнинг ${p.speed}/${p.stamina}/${p.luck}</div><div style="font-size:11px;color:var(--gold-l);margin-bottom:7px">Ранг: ${rank.name} · выполнено ${num(rank.completed)} · награда ×${num(rank.rewardMult).toFixed(2)}<br><span style="color:var(--muted)">${rankProgress}</span></div><select data-mission-select="${p.breed}" style="width:100%;box-sizing:border-box;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:7px">${opts}</select>${next ? `<div class="cd-sheet__hint" style="margin:-2px 0 7px">Следующее задание откроется при силе ${next.minPower}</div>` : `<div class="cd-sheet__hint" style="margin:-2px 0 7px">Открыты все задания</div>`}<button class="cd-sheet__act" style="margin:0" data-start-mission="${p.breed}">Отправить</button></div>`;
+      return `<div class="cd-setrow" style="display:block;margin-bottom:9px"><div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:7px"><b>${b.name}</b><span style="color:var(--gold-l);font-size:11px">+${fmt(p.passivePerHour)}/час</span></div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Сила ${num(p.power)} · ★${p.stars} · тюнинг ${p.speed}/${p.stamina}/${p.luck}</div><div style="font-size:11px;color:var(--gold-l);margin-bottom:7px">Ранг: ${rank.name} · выполнено ${num(rank.completed)} · награда ×${num(rank.rewardMult).toFixed(2)}<br><span style="color:var(--muted)">${rankProgress}</span></div>${next ? `<div class="cd-sheet__hint" style="margin:0 0 7px">Следующий маршрут откроется при силе ${next.minPower}</div>` : `<div class="cd-sheet__hint" style="margin:0 0 7px">Открыты все маршруты</div>`}<button class="cd-sheet__act" style="margin:0" data-pick-mission="${p.breed}">Выбрать маршрут</button></div>`;
     }).join('');
     body.innerHTML = `<button class="cd-navbtn" id="cd-mission-help" style="width:100%;margin-bottom:9px" type="button">? Сила, задания и ранги</button><div class="cd-sheet__hint" style="margin-bottom:10px">Сила открывает маршруты, а каждое завершённое задание развивает ранг курьера и повышает награду.</div>${cards}`;
     body.querySelector('#cd-mission-help').onclick = () => missionHelpPopup(false);
-    body.querySelectorAll('[data-start-mission]').forEach(btn => { btn.onclick = () => startMissionAct(btn.dataset.startMission, btn); });
+    body.querySelectorAll('[data-pick-mission]').forEach(btn => { btn.onclick = () => openMissionPicker(d.pigeons.find(p => p.breed === btn.dataset.pickMission), d); });
     body.querySelectorAll('[data-claim-mission]').forEach(btn => { btn.onclick = () => claimMissionAct(num(btn.dataset.claimMission), btn); });
     updateMissionTimers();
+  }
+
+  const missionChancePreview = (power, difficulty) => Math.max(20, Math.min(95, Math.round(65 + (num(power) - num(difficulty)) * 1.5)));
+  const missionTierLabel = (tier) => tier === 'elite' ? 'Элитный маршрут' : tier === 'advanced' ? 'Продвинутый маршрут' : 'Базовый маршрут';
+
+  function openMissionPicker(p, d) {
+    const body = container.querySelector('#cd-missions-body'); if (!body || !p) return;
+    const b = BY_ID.get(p.breed) || { name: p.breed };
+    const rank = p.missionRank || { name: 'Новичок', completed: 0, rewardMult: 1 };
+    const routes = (d.missions || []).map(m => {
+      const locked = num(p.power) < num(m.minPower);
+      const reward = Math.round(num(m.reward) * num(rank.rewardMult || 1));
+      const perHour = Math.round(reward * 3600 / num(m.durationSec));
+      const consolation = Math.floor(reward * .2);
+      const chance = missionChancePreview(p.power, m.difficulty);
+      return `<div class="cd-mission-route${locked ? ' is-locked' : ''}"><div style="display:flex;justify-content:space-between;gap:8px"><b>${m.name}</b><span style="font-size:10px;color:var(--gold-l);white-space:nowrap">${missionTierLabel(m.tier)}</span></div><div style="font-size:11.5px;color:var(--muted);margin-top:4px">${m.description}</div><div class="cd-mission-route__grid"><span>Время: <b>${durationText(num(m.durationSec))}</b></span><span>Шанс: <b>${chance}%</b></span><span>При успехе: <b>+${fmt(reward)}</b></span><span>Темп награды: <b>+${fmt(perHour)}/ч</b></span><span style="grid-column:1/-1">При провале: <b>+${fmt(consolation)}</b></span></div>${locked ? `<div class="cd-sheet__hint" style="margin:0 0 7px">Закрыто: нужна сила ${num(m.minPower)}, сейчас ${num(p.power)}</div>` : ''}<button class="cd-sheet__act" style="margin:0" data-route-id="${m.id}" ${locked ? 'disabled' : ''}>${locked ? `Нужна сила ${num(m.minPower)}` : 'Отправить на маршрут'}</button></div>`;
+    }).join('');
+    body.innerHTML = `<button class="cd-sheet__back" id="cd-mission-list-back" type="button">‹ К голубям</button><div class="cd-summary" style="margin:10px 0"><b>${b.name}</b><br>Сила ${num(p.power)} · ранг ${rank.name} · награда ×${num(rank.rewardMult).toFixed(2)}<br><span style="color:var(--muted)">Пассивный доход +${fmt(p.passivePerHour)}/час продолжает идти в полёте.</span></div><div class="cd-sheet__hint" style="margin-bottom:9px">Выберите маршрут. Ниже заранее показаны время, шанс и обе возможные награды.</div>${routes}`;
+    body.querySelector('#cd-mission-list-back').onclick = renderMissions;
+    body.querySelectorAll('[data-route-id]').forEach(btn => { btn.onclick = () => startMissionAct(p.breed, btn, btn.dataset.routeId); });
   }
 
   function missionHelpPopup(firstTime) {
     const s = container.querySelector('#cd-pop-scrim'), p = container.querySelector('#cd-pop'); if (!s || !p) return;
     p.innerHTML = `<h3>${DOVE_ICON(21)} ${firstTime ? 'Новое: задания голубей' : 'Как работают задания'}</h3>
       <div style="font-size:13px;line-height:1.5;color:var(--cream);text-align:left;margin:8px 0 14px">
-        <p><b>1.</b> У каждого голубя есть сила: её дают редкость, звёзды и весь тюнинг.</p>
-        <p><b>2.</b> Сила 20 открывает продвинутые задания, 50 — элитные. Самые прибыльные маршруты требуют силу 65.</p>
-        <p><b>3.</b> В выборе маршрута показана прибыль за час. Чем выше уровень задания, тем больше заработок.</p>
-        <p><b>4.</b> Сила также повышает шанс успеха. За успех выдаётся 100% награды, при провале — 20%.</p>
-        <p><b>5.</b> Каждое завершённое задание идёт в опыт конкретного голубя: 3 полёта — Курьер ×1,10; 10 — Опытный ×1,25; 25 — Мастер ×1,50; 50 — Легенда ×2,00.</p>
+        <p><b>1. Выберите голубя.</b> На его карточке видны сила, ранг и постоянный доход в час.</p>
+        <p><b>2. Нажмите «Выбрать маршрут».</b> Игра покажет все маршруты, включая ещё закрытые.</p>
+        <p><b>3. Сравните условия.</b> До отправки видны время, шанс успеха, полная награда, доход за час и 20% награды при провале.</p>
+        <p><b>4. Развивайте силу.</b> Её дают редкость, звёзды и тюнинг. Сила открывает новые маршруты и повышает шанс успеха.</p>
+        <p><b>5. Развивайте ранг.</b> 3 завершённых полёта — Курьер ×1,10; 10 — Опытный ×1,25; 25 — Мастер ×1,50; 50 — Легенда ×2,00.</p>
         <p><b>Важно:</b> личный доход голубя в час продолжает начисляться и во время полёта.</p>
       </div><button id="cd-mission-help-ok">Понятно, отправляем!</button>`;
     s.classList.add('on');
-    const close = () => { try { localStorage.setItem('cd_missions_tutorial_v3', '1'); } catch (_) {} s.classList.remove('on'); };
+    const close = () => { try { localStorage.setItem('cd_missions_tutorial_v4', '1'); } catch (_) {} s.classList.remove('on'); };
     s.onclick = (e) => { if (e.target === s) close(); };
     p.querySelector('#cd-mission-help-ok').onclick = close;
   }
 
-  async function startMissionAct(breed, btn) {
-    if (busy) return; const sel = container.querySelector(`[data-mission-select="${breed}"]`); if (!sel) return;
+  async function startMissionAct(breed, btn, missionId) {
+    if (busy || !missionId) return;
     busy = true; btn.disabled = true;
     try {
-      const d = await apiRef('/api/pigeons/missions/start', { method: 'POST', body: JSON.stringify({ breed, missionId: sel.value }) }).catch(() => null);
+      const d = await apiRef('/api/pigeons/missions/start', { method: 'POST', body: JSON.stringify({ breed, missionId }) }).catch(() => null);
       if (d && d.ok) { haptic('medium'); flash('Голубь отправлен!'); await renderMissions(); }
       else { flash(MISSION_REASON[d && d.error] || 'Не удалось отправить'); btn.disabled = false; }
     } finally { busy = false; }
