@@ -331,6 +331,8 @@ export async function initClickerSchema(): Promise<void> {
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS case_spent BIGINT NOT NULL DEFAULT 0;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS case_won BIGINT NOT NULL DEFAULT 0;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS case_dry INT NOT NULL DEFAULT 0;
+    -- Персональная административная прибавка к пассиву (не влияет на уровни/гонки).
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS bonus_profit_per_hour BIGINT NOT NULL DEFAULT 0;
     CREATE TABLE IF NOT EXISTS clicker_case_history (
       id BIGSERIAL PRIMARY KEY,
       chat_id BIGINT NOT NULL,
@@ -393,7 +395,7 @@ async function readCards(client: any, chatId: number): Promise<Record<string, nu
   const { rows } = await client.query(`SELECT card, level FROM clicker_cards WHERE chat_id=$1`, [chatId]);
   const m: Record<string, number> = {}; for (const r of rows) m[r.card] = r.level; return m;
 }
-function profitPerHour(cl: Record<string, number>, albumMult = 1, pigeonPassive = 0): number { let p = Math.max(0, Math.floor(Number(pigeonPassive) || 0)); for (const c of CARDS) p += cardProfit(c, cl[c.id] || 0); return p * albumMult; }
+function profitPerHour(cl: Record<string, number>, albumMult = 1, pigeonPassive = 0, bonusProfitPerHour = 0): number { let p = Math.max(0, Math.floor(Number(pigeonPassive) || 0)); for (const c of CARDS) p += cardProfit(c, cl[c.id] || 0); return p * albumMult + Math.max(0, Math.floor(Number(bonusProfitPerHour) || 0)); }
 
 function buildState(r: any, cl: Record<string, number>, passiveEarned: number): ClickerState {
   // Эффективный уровень с учётом храповика: не ниже max_level (защита от отката при новых порогах).
@@ -405,7 +407,7 @@ function buildState(r: any, cl: Record<string, number>, passiveEarned: number): 
   const bUsedT = r.boost_date === today ? r.boost_turbo_used : 0;
   return {
     balance: Number(r.balance), totalEarned: Number(r.total_earned), energy: r.energy, energyMax: energyMaxFor(r.energy_limit_level),
-    perTap: perTapFor(r.multitap_level), profitPerHour: profitPerHour(cl, r.__albumMult || 1, r.__pigeonPassive || 0), passiveEarned,
+    perTap: perTapFor(r.multitap_level), profitPerHour: profitPerHour(cl, r.__albumMult || 1, r.__pigeonPassive || 0, r.bonus_profit_per_hour), passiveEarned,
     bankMult: Number(r.__bankMult || 1),
     level: lg.level, levelName: lg.name, nextNeed: nextNeed(Number(r.total_earned)),
     multitapLevel: r.multitap_level, multitapPrice: priceMultitap(r.multitap_level),
@@ -463,7 +465,7 @@ async function refresh(client: any, chatId: number): Promise<{ r: any; cl: Recor
   // Копилка стаи: закрытая цель недели множит ВЕСЬ доход (пассив здесь, тапы в tapClicker)
   const bankMult = (await squadBankActive(r.squad || null)) ? SQUAD_BANK_MULT : 1;
   r.__bankMult = bankMult;
-  const passive = Math.floor(profitPerHour(cl, albumMult, pigeonPassive) * Math.min(secs / 3600, PASSIVE_CAP_HOURS) * gainMult(r.prestige) * bankMult);
+  const passive = Math.floor(profitPerHour(cl, albumMult, pigeonPassive, r.bonus_profit_per_hour) * Math.min(secs / 3600, PASSIVE_CAP_HOURS) * gainMult(r.prestige) * bankMult);
   if (passive > 0) { r.balance = Number(r.balance) + passive; r.total_earned = Number(r.total_earned) + passive; }
   // сезон: новая неделя → база = текущий total (очки сезона обнуляются)
   const wk = weekKey();
