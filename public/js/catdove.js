@@ -518,6 +518,9 @@
     const showcaseFull = curShowcase.length >= MAX_SHOWCASE && !isShown;
     const showLabel = isShown ? 'Не показывать в рейтинге' : (showcaseFull ? `Уже выбрано ${MAX_SHOWCASE}/${MAX_SHOWCASE}` : 'Показывать в рейтинге');
     const canTrade = inv.count > 1; // обмен отдаёт только дубликат — как feed
+    const duplicatePrice = b.id === 'champion' ? null : PIGEON_PRICE[b.rarity];
+    const duplicateBalance = pigeonBuyBalance();
+    const canBuyDuplicate = duplicatePrice != null && duplicateBalance >= duplicatePrice;
     const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
     if (!sc || !sh) return;
     sh.innerHTML = `
@@ -525,6 +528,7 @@
       <div class="cd-sheet__stars">${'★'.repeat(stars)}<span style="color:rgba(255,255,255,.18)">${'★'.repeat(3 - stars)}</span></div>
       <div class="cd-sheet__hint" style="margin:-4px 0 10px;text-align:center">Приносит <b style="color:var(--gold-l)">+${fmt(inv.passivePerHour)}/час</b></div>
       <div class="cd-sheet__hint" style="margin:-6px 0 10px">Звёзды усиливают голубя в заезде — расти их, скармливая дубли</div>
+      ${duplicatePrice != null ? `<button class="cd-sheet__act" id="cd-buy-duplicate" ${canBuyDuplicate ? '' : 'disabled'}>${COIN_ICON(13)} Купить дубль за ${fmt(duplicatePrice)}</button><div class="cd-sheet__hint" style="margin:-6px 0 10px">В запасе дублей: ${Math.max(0, spare)}${canBuyDuplicate ? '' : ` · не хватает ${fmt(duplicatePrice - duplicateBalance)} монет`}</div>` : ''}
       <button class="cd-sheet__act" id="cd-feed" ${feedEnabled ? '' : 'disabled'}>${feedLabel}</button>
       ${need != null && !feedEnabled ? `<div class="cd-sheet__hint">Нужно ${need} запасных (сейчас ${Math.max(0, spare)})</div>` : ''}
       <button class="cd-sheet__act${isShown ? ' cd-sheet__act--on' : ''}" id="cd-show" ${(!isShown && showcaseFull) ? 'disabled' : ''}>${showLabel}</button>
@@ -540,6 +544,8 @@
     sh.querySelector('#cd-sheet-x').onclick = closeSheet;
     const feedBtn = sh.querySelector('#cd-feed');
     if (feedBtn && feedEnabled) feedBtn.onclick = () => feedAct(breedId, feedBtn);
+    const duplicateBtn = sh.querySelector('#cd-buy-duplicate');
+    if (duplicateBtn && !duplicateBtn.disabled) duplicateBtn.onclick = () => buyPigeonAct(breedId, () => openSheet(breedId));
     const showBtn = sh.querySelector('#cd-show');
     if (showBtn && !showBtn.disabled) showBtn.onclick = () => showcaseAct(breedId, isShown, showBtn);
     const tuneBtn = sh.querySelector('#cd-tune');
@@ -1032,7 +1038,8 @@
     await load();
     needsRerenderOnClose = true;
     const ready = (data.sets || []).find(s => num(s.owned) >= 4 && !s.claimed);
-    flash(ready ? 'Сет собран — забери награду!' : (b ? b.name : 'Голубь') + ' теперь твой! Гоняй в Драг-заезде');
+    const bought = data.invMap[breed];
+    flash(ready ? 'Сет собран — забери награду!' : d.isNew ? (b ? b.name : 'Голубь') + ' теперь твой! Гоняй в Драг-заезде' : `Дубль добавлен · запасных: ${Math.max(0, num(bought && bought.count) - 1)}`);
     if (redraw) redraw();
   }
 
