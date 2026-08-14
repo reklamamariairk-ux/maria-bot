@@ -46,22 +46,23 @@ const businessSlot = (id: string, weight: number, value: number): Slot => ({
 });
 
 // CS2-подобная таблица: частые дешёвые результаты, редкие игровые предметы и
-// денежный джекпот до 15 цен кейса. Веса суммируются до 1000 (0.1% на единицу).
+// сверхприз 10 млн. Веса суммируются до 10000 (0.01% на единицу).
 export const CASE_SLOTS: Slot[] = [
-  coinsSlot("coins_zero", 100, 0, 0),
-  coinsSlot("coins_loss", 300, 10_000, 70_000),
-  coinsSlot("coins_slight_under", 200, 70_000, 99_000),
-  coinsSlot("coins_equal", 120, 100_000, 100_000),
-  coinsSlot("coins_plus", 100, 110_000, 160_000),
-  coinsSlot("coins_big", 60, 200_000, 400_000),
-  coinsSlot("coins_jackpot", 10, 500_000, 1_500_000),
-  pigeonSlot("common", 50),
-  pigeonSlot("rare", 30),
-  pigeonSlot("epic", 5),
-  businessSlot("region", 10, 100_000),
-  businessSlot("loyalty", 8, 100_000),
-  businessSlot("manager", 4, 100_000),
-  businessSlot("franchise", 3, 100_000),
+  coinsSlot("coins_zero", 984, 0, 0),
+  coinsSlot("coins_loss", 3000, 10_000, 70_000),
+  coinsSlot("coins_slight_under", 2000, 70_000, 99_000),
+  coinsSlot("coins_equal", 1200, 100_000, 100_000),
+  coinsSlot("coins_plus", 1000, 110_000, 160_000),
+  coinsSlot("coins_big", 600, 200_000, 400_000),
+  coinsSlot("coins_jackpot", 100, 500_000, 1_500_000),
+  coinsSlot("coins_super_jackpot", 16, 10_000_000, 10_000_000),
+  pigeonSlot("common", 500),
+  pigeonSlot("rare", 300),
+  pigeonSlot("epic", 50),
+  businessSlot("region", 100, 100_000),
+  businessSlot("loyalty", 80, 100_000),
+  businessSlot("manager", 40, 100_000),
+  businessSlot("franchise", 30, 100_000),
 ];
 export const CASE_TOTAL_WEIGHT = CASE_SLOTS.reduce((s, x) => s + x.weight, 0);
 
