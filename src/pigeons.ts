@@ -159,19 +159,27 @@ export function pigeonPassiveValue(breed: string, stars = 1, speed = 0, stamina 
 }
 
 export interface PigeonMissionDef {
-  id: string; name: string; description: string; durationSec: number; reward: number; difficulty: number;
+  id: string; name: string; description: string; durationSec: number; reward: number; difficulty: number; minPower: number; tier: "base" | "advanced" | "elite";
 }
 export const PIGEON_MISSIONS: PigeonMissionDef[] = [
-  { id: "bakery", name: "Доставка в кондитерскую", description: "Отнести срочную коробку в соседнюю кондитерскую", durationSec: 15 * 60, reward: 2_500, difficulty: 18 },
-  { id: "city", name: "Посылка через город", description: "Пронести заказ через весь Иркутск", durationSec: 60 * 60, reward: 10_000, difficulty: 32 },
-  { id: "baikal", name: "Рейс над Байкалом", description: "Сложный дальний маршрут с большой наградой", durationSec: 4 * 60 * 60, reward: 45_000, difficulty: 50 },
+  { id: "bakery", name: "Доставка в кондитерскую", description: "Отнести срочную коробку в соседнюю кондитерскую", durationSec: 15 * 60, reward: 2_500, difficulty: 18, minPower: 0, tier: "base" },
+  { id: "city", name: "Посылка через город", description: "Пронести заказ через весь Иркутск", durationSec: 60 * 60, reward: 10_000, difficulty: 32, minPower: 0, tier: "base" },
+  { id: "baikal", name: "Рейс над Байкалом", description: "Сложный дальний маршрут с большой наградой", durationSec: 4 * 60 * 60, reward: 45_000, difficulty: 50, minPower: 0, tier: "base" },
+  { id: "express", name: "Экспресс-доставка", description: "Срочный маршрут для подготовленного гонщика", durationSec: 30 * 60, reward: 9_000, difficulty: 30, minPower: 20, tier: "advanced" },
+  { id: "night", name: "Ночной курьер", description: "Дальний маршрут в сложных условиях", durationSec: 2 * 60 * 60, reward: 45_000, difficulty: 45, minPower: 35, tier: "advanced" },
+  { id: "regional", name: "Региональный рейс", description: "Ответственная доставка за пределы города", durationSec: 4 * 60 * 60, reward: 120_000, difficulty: 60, minPower: 50, tier: "elite" },
+  { id: "marathon", name: "Байкальский марафон", description: "Элитный маршрут для лучших голубей", durationSec: 8 * 60 * 60, reward: 300_000, difficulty: 75, minPower: 65, tier: "elite" },
 ];
+
+export function pigeonMissionPower(breed: string, stars = 1, speed = 0, stamina = 0, luck = 0): number {
+  const b = BREED_BY_ID.get(breed); if (!b) return 0;
+  return RARITY_BASE[b.rarity] + (Math.max(1, Math.min(3, stars)) - 1) * 4
+    + Math.max(0, speed) * 2 + Math.max(0, stamina) * 2 + Math.max(0, luck) * 2;
+}
 
 /** Шанс задания: редкость, звёзды и каждый вид тюнинга имеют заметный вес. */
 export function pigeonMissionChance(breed: string, stars = 1, speed = 0, stamina = 0, luck = 0, difficulty = 0): number {
-  const b = BREED_BY_ID.get(breed); if (!b) return 0;
-  const power = RARITY_BASE[b.rarity] + (Math.max(1, Math.min(3, stars)) - 1) * 4
-    + Math.max(0, speed) * 2 + Math.max(0, stamina) * 2 + Math.max(0, luck) * 2;
+  const power = pigeonMissionPower(breed, stars, speed, stamina, luck); if (!power) return 0;
   return Math.max(20, Math.min(95, Math.round(65 + (power - difficulty) * 1.5)));
 }
 
@@ -397,6 +405,7 @@ export async function getPigeonMissions(chatId: number) {
     missions: PIGEON_MISSIONS,
     pigeons: inv.rows.map((r: any) => ({
       breed: r.breed, stars: Number(r.stars), speed: Number(r.tune_speed), stamina: Number(r.tune_stamina), luck: Number(r.tune_luck),
+      power: pigeonMissionPower(r.breed, Number(r.stars), Number(r.tune_speed), Number(r.tune_stamina), Number(r.tune_luck)),
       passivePerHour: pigeonPassiveValue(r.breed, Number(r.stars), Number(r.tune_speed), Number(r.tune_stamina), Number(r.tune_luck)),
       activeMissionId: activeByBreed.get(String(r.breed))?.id ?? null,
     })),
@@ -415,6 +424,8 @@ export async function startPigeonMission(chatId: number, missionId: string, bree
     [chatId, breed]);
   if (!owned.rowCount) return { ok: false, reason: "not_owned" };
   const r = owned.rows[0];
+  const power = pigeonMissionPower(breed, Number(r.stars), Number(r.tune_speed), Number(r.tune_stamina), Number(r.tune_luck));
+  if (power < def.minPower) return { ok: false, reason: "mission_locked" };
   const chance = pigeonMissionChance(breed, Number(r.stars), Number(r.tune_speed), Number(r.tune_stamina), Number(r.tune_luck), def.difficulty);
   const succeeds = Math.random() * 100 < chance;
   const consolation = Math.max(1, Math.floor(def.reward * 0.2));

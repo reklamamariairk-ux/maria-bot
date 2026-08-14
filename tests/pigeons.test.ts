@@ -15,7 +15,7 @@ import {
   createTrade, sendMail, thankMail, setShowcase, claimSet, enterRace,
   pigeonPrice, PIGEON_PRICE, normalizeCoinDelta, TRADE_COIN_CAP,
   pigeonPassiveValue, pigeonCollectionPassiveBonus, PIGEON_SET_PASSIVE_BONUS,
-  pigeonMissionChance, PIGEON_MISSIONS,
+  pigeonMissionChance, pigeonMissionPower, PIGEON_MISSIONS,
 } from "../src/pigeons";
 
 
@@ -45,6 +45,14 @@ describe("pigeon missions — шанс зависит от голубя и тю�
   it("сложные задания дольше и дают больше монет", () => {
     expect(PIGEON_MISSIONS[2].durationSec).toBeGreaterThan(PIGEON_MISSIONS[0].durationSec);
     expect(PIGEON_MISSIONS[2].reward).toBeGreaterThan(PIGEON_MISSIONS[0].reward);
+  });
+
+  it("прокачка открывает задания с большей прибылью в час", () => {
+    expect(pigeonMissionPower("sizar", 3, 10, 10, 10)).toBeGreaterThanOrEqual(65);
+    const base = PIGEON_MISSIONS.find(m => m.id === "city")!;
+    const elite = PIGEON_MISSIONS.find(m => m.id === "marathon")!;
+    expect(elite.minPower).toBeGreaterThan(base.minPower);
+    expect(elite.reward / elite.durationSec).toBeGreaterThan(base.reward / base.durationSec);
   });
 });
 
