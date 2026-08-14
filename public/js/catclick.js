@@ -875,7 +875,7 @@
       .ck-biz{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:10px 12px;margin-bottom:9px;position:relative;opacity:0;animation:ckBizIn .34s ease-out forwards}
       @keyframes ckBizIn{0%{opacity:0;transform:translateY(9px)}100%{opacity:1;transform:none}}
       .ck-biz.locked{filter:saturate(.35) brightness(.82)}
-      .ck-biz.bump{animation:ckBizBump .32s ease-out}@keyframes ckBizBump{0%{transform:scale(1)}40%{transform:scale(1.03)}100%{transform:scale(1)}}
+      .ck-biz.bump{opacity:1;animation:ckBizBump .32s ease-out}@keyframes ckBizBump{0%{opacity:1;transform:scale(1)}40%{opacity:1;transform:scale(1.03)}100%{opacity:1;transform:scale(1)}}
       .ck-biz__art{width:64px;height:64px;flex:none;border-radius:14px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 3px 8px rgba(0,0,0,.3)}
       .ck-biz__art::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 32% 22%,rgba(255,255,255,.18),transparent 60%);pointer-events:none;z-index:2}
       .ck-biz__art img{width:100%;height:100%;object-fit:contain;position:relative;z-index:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
