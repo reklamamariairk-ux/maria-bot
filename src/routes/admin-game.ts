@@ -172,9 +172,9 @@ export default function adminGameRouter(push: PushService): Router {
     const id = Number(req.params.id);
     const delta = Math.trunc(Number((req.body as { delta?: unknown })?.delta));
     const reason = String((req.body as { reason?: unknown })?.reason || "").slice(0, 200);
-    if (!Number.isFinite(id) || !Number.isFinite(delta) || delta === 0 || Math.abs(delta) > 10_000_000) {
-      res.status(400).json({ error: "bad_delta" }); return;
-    }
+    if (!Number.isFinite(id)) { res.status(400).json({ error: "bad_id", message: "Некорректный ID игрока" }); return; }
+    if (!Number.isFinite(delta) || delta === 0) { res.status(400).json({ error: "bad_delta", message: "Укажи целое ненулевое число, например +5000 или -5000" }); return; }
+    if (Math.abs(delta) > 10_000_000) { res.status(400).json({ error: "bad_delta", message: "Разовое изменение не может превышать 10 000 000 монет" }); return; }
     try {
       const { rows } = await pool.query(
         `UPDATE clicker_state
