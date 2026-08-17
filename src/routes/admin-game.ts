@@ -140,10 +140,13 @@ export default function adminGameRouter(push: PushService): Router {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) { res.status(400).json({ error: "bad_id" }); return; }
     try {
-      const [state, sub, cards, pigeons, redemptions, links, events] = await Promise.all([
+      const [state, sub, cards, cardItems, cases, pigeons, redemptions, links, events] = await Promise.all([
         pool.query(`SELECT * FROM clicker_state WHERE chat_id=$1`, [id]),
         pool.query(`SELECT username, first_name, phone, phone_verified_at, joined_at FROM subscribers WHERE chat_id=$1`, [id]),
         pool.query(`SELECT COUNT(*) AS n, COALESCE(SUM(level),0) AS lv FROM clicker_cards WHERE chat_id=$1`, [id]),
+        pool.query(`SELECT card, level FROM clicker_cards WHERE chat_id=$1 ORDER BY card`, [id]),
+        pool.query(`SELECT request_id, cost, prize, balance_before, balance_after, created_at
+                      FROM clicker_case_history WHERE chat_id=$1 ORDER BY created_at DESC LIMIT 50`, [id]),
         pool.query(`SELECT breed, count FROM pigeon_inventory WHERE chat_id=$1 ORDER BY breed`, [id]),
         pool.query(`SELECT reward_id, cost, code, created_at FROM clicker_redemptions WHERE chat_id=$1 ORDER BY created_at DESC LIMIT 10`, [id]),
         linksOf(id),
@@ -156,6 +159,8 @@ export default function adminGameRouter(push: PushService): Router {
         state: state.rows[0] ? { ...state.rows[0], chat_id: String(id) } : null,
         subscriber: sub.rows[0] || null,
         cards: cards.rows[0],
+        cardItems: cardItems.rows,
+        cases: cases.rows,
         pigeons: pigeons.rows,
         redemptions: redemptions.rows,
         links: links.map((l) => ({ alias: String(l.alias), platform: platformOf(l.alias) })),
