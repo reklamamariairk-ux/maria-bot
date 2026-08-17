@@ -23,6 +23,9 @@ import { log } from "../logger";
 export function createPigeonsRouter(push: PushService): Router {
   const router = Router();
   void push;
+  const tradesDisabled = (_req: unknown, res: { status: (code: number) => { json: (body: unknown) => void } }) => {
+    res.status(410).json({ error: "trades_disabled", message: "Обмен голубями отключён" });
+  };
 
   router.get("/api/pigeons", requireTgUser, rateLimit(60), async (req, res) => {
     const u = getTgUser(req)!;
@@ -36,13 +39,20 @@ export function createPigeonsRouter(push: PushService): Router {
     catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/set-claim]"); res.status(500).json({ error: "internal" }); }
   });
 
-  router.get("/api/pigeons/trades", requireTgUser, rateLimit(60), async (req, res) => {
+  router.get("/api/pigeons/trades", tradesDisabled);
+  router.post("/api/pigeons/trade", tradesDisabled);
+  router.post("/api/pigeons/trade/accept", tradesDisabled);
+  router.post("/api/pigeons/trade/cancel", tradesDisabled);
+  router.post("/api/pigeons/trade/decline", tradesDisabled);
+
+  /* Legacy handlers kept unreachable for rollback/reference during the migration. */
+  router.get("/api/pigeons/trades-legacy", requireTgUser, rateLimit(60), async (req, res) => {
     const u = getTgUser(req)!;
     try { res.json(await getTradeBoard(u.id)); }
     catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/trades]"); res.status(500).json({ error: "internal" }); }
   });
 
-  router.post("/api/pigeons/trade", requireTgUser, rateLimit(20), async (req, res) => {
+  router.post("/api/pigeons/trade-legacy", requireTgUser, rateLimit(20), async (req, res) => {
     const u = getTgUser(req)!;
     const { give, want, to, coinDelta } = req.body as { give?: string; want?: string; to?: number; coinDelta?: number };
     const toNum = to === undefined || to === null ? undefined : Number(to);
@@ -56,21 +66,21 @@ export function createPigeonsRouter(push: PushService): Router {
     } catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/trade]"); res.status(500).json({ error: "internal" }); }
   });
 
-  router.post("/api/pigeons/trade/accept", requireTgUser, rateLimit(20), async (req, res) => {
+  router.post("/api/pigeons/trade/accept-legacy", requireTgUser, rateLimit(20), async (req, res) => {
     const u = getTgUser(req)!; const id = Number((req.body as { id?: number }).id);
     if (!Number.isInteger(id)) { res.status(400).json({ error: "bad_input" }); return; }
     try { const r = await acceptTrade(u.id, id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json(r); }
     catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/trade/accept]"); res.status(500).json({ error: "internal" }); }
   });
 
-  router.post("/api/pigeons/trade/cancel", requireTgUser, rateLimit(20), async (req, res) => {
+  router.post("/api/pigeons/trade/cancel-legacy", requireTgUser, rateLimit(20), async (req, res) => {
     const u = getTgUser(req)!; const id = Number((req.body as { id?: number }).id);
     if (!Number.isInteger(id)) { res.status(400).json({ error: "bad_input" }); return; }
     try { const r = await cancelTrade(u.id, id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json(r); }
     catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/trade/cancel]"); res.status(500).json({ error: "internal" }); }
   });
 
-  router.post("/api/pigeons/trade/decline", requireTgUser, rateLimit(20), async (req, res) => {
+  router.post("/api/pigeons/trade/decline-legacy", requireTgUser, rateLimit(20), async (req, res) => {
     const u = getTgUser(req)!; const id = Number((req.body as { id?: number }).id);
     if (!Number.isInteger(id)) { res.status(400).json({ error: "bad_input" }); return; }
     try { const r = await declineTrade(u.id, id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json(r); }

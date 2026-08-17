@@ -272,6 +272,7 @@
       .cd-coinchip.on{border-color:#DFFF8F;color:var(--gold-l)}
       .cd-coinchip:disabled{opacity:.4;cursor:default}
       .cd-deal__arw{color:var(--gold-l);font-weight:900}
+      #cd-nav-trades,#cd-friend-trade,#cd-trade-start,#cd-trade-create,#cd-trade-direct,#cd-trade-open{display:none!important}
       .cd-traderow{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:9px 10px;margin-bottom:8px}
       .cd-traderow__swap{display:flex;align-items:center;gap:7px;flex:1;min-width:0}
       .cd-traderow__art{width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid rgba(141,146,156,.42);display:flex;align-items:center;justify-content:center;overflow:hidden;flex:none}
@@ -446,7 +447,6 @@
       <div class="cd-navrow">
         ${ownedCount > 0 ? `<button class="cd-navbtn" id="cd-nav-race">${FLAG_ICON(15)} Гонки</button>` : ''}
         ${ownedCount > 0 ? `<button class="cd-navbtn" id="cd-nav-missions">${DOVE_ICON(16)} Задания</button>` : ''}
-        <button class="cd-navbtn" id="cd-nav-trades">${SWAP_ICON(15)} Обмены${incomingTrades > 0 ? `<span class="cd-navbadge">${incomingTrades > 9 ? '9+' : incomingTrades}</span>` : ''}</button>
         <button class="cd-navbtn" id="cd-nav-friends">${USERS_ICON(15)} Друзья</button>
       </div>
       <div class="cd-sect-t">Альбом · собери сет — забери приз</div>
@@ -888,7 +888,7 @@
     const username = String(friend.username || '').replace(/^@/, '');
     sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Друзья</button><div class="cd-sheet__t">${esc(friend.name)}</div></div>
       ${username ? `<button class="cd-sheet__act" id="cd-friend-tg">Написать @${esc(username)} в Telegram</button>` : `<div class="cd-sheet__hint">У друга не указан публичный username Telegram, поэтому открыть личный чат по ссылке нельзя.</div>`}
-      <button class="cd-sheet__act" id="cd-friend-trade">${SWAP_ICON(15)} Предложить обмен</button>
+      
       <button class="cd-sheet__act" id="cd-friend-duel">${FLAG_ICON(15)} Вызвать на дуэль</button>
       <div class="cd-sect-t">Обмены от этого друга</div><div id="cd-friend-trades">${skeletonRows(2)}</div>`;
     sh.querySelector('#cd-sheet-x').onclick = openFriendsPage;
