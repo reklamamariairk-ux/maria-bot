@@ -18,6 +18,15 @@ import { log } from "../logger";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+export function adminCoinsChangeMessage(delta: number, balance: number, reason: string): string {
+  const sign = delta > 0 ? "+" : "−";
+  const action = delta > 0 ? "начислены" : "списаны";
+  return `🔔 Изменение игрового баланса\n\n` +
+    `Администратор изменил ваш баланс: ${action} ${sign}${Math.abs(delta).toLocaleString("ru-RU")} монет.\n` +
+    `Причина: ${reason}\n` +
+    `Текущий баланс: ${Math.max(0, balance).toLocaleString("ru-RU")} монет.`;
+}
+
 // Статус текущей/последней рассылки (процесс один — память достаточна)
 let pushState: {
   running: boolean; startedAt?: number; total?: number; sent?: number; failed?: number; text?: string;
@@ -176,7 +185,12 @@ export default function adminGameRouter(push: PushService): Router {
         RETURNING balance`, [id, delta]);
       if (!rows[0]) { res.status(404).json({ error: "not_found" }); return; }
       trackEvent(id, "admin_coins", { delta, reason });
-      res.json({ ok: true, balance: Number(rows[0].balance) });
+      const balance = Number(rows[0].balance);
+      const notified = await push.sendRaw(id, adminCoinsChangeMessage(delta, balance, reason)).catch((error) => {
+        log.warn({ err: error, id }, "[admin coins] user notification failed");
+        return false;
+      });
+      res.json({ ok: true, balance, notified });
     } catch (e) {
       log.error({ err: e, id }, "[admin coins]");
       res.status(500).json({ error: "internal" });

@@ -6,6 +6,7 @@ import {
   normalizeAdminPassiveBonus,
 } from "../src/clicker";
 import { gameStarsForScore } from "../src/club";
+import { adminCoinsChangeMessage } from "../src/routes/admin-game";
 
 describe("economy safety guards", () => {
   it("keeps real-value achievement gifts disabled by default", () => {
@@ -21,6 +22,14 @@ describe("economy safety guards", () => {
 
   it("keeps business progression finite", () => {
     expect(BUSINESS_MAX_LEVEL).toBe(20);
+  });
+
+  it("формирует понятное уведомление о ручной корректировке баланса", () => {
+    const message = adminCoinsChangeMessage(-500, 1_500, "возврат за ошибочную награду");
+    expect(message).toContain("списаны");
+    expect(message).toContain("−500");
+    expect(message).toContain("возврат за ошибочную награду");
+    expect(message).toContain("1 500");
   });
 
   it("does not award convertible stars from client-reported game scores", () => {
