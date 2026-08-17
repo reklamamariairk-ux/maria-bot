@@ -2170,12 +2170,22 @@
         ? `<div class="ck-bank__sub" style="margin-top:5px">Герои недели: ${b.topDonors.map((t, i) => `${['🥇', '🥈', '🥉'][i] || ''}${(t.name || 'Игрок').replace(/[<>]/g, '')} ${fmt(t.total)}`).join(' · ')}</div>` : '';
       bankHtml = b.reached
         ? `<div class="ck-bank"><div class="ck-bank__hd">🏆 Копилка «${myName}» полна!</div><div class="ck-bank__sub">Весь доход стаи ×${b.mult} до конца недели — тапы и бизнесы</div><div class="ck-bank__bar"><i style="width:100%"></i></div>${donors}</div>`
-        : `<div class="ck-bank"><div class="ck-bank__hd">🏦 Копилка стаи · ${fmt(b.sum)} / ${fmt(b.target)}</div><div class="ck-bank__bar"><i style="width:${pct}%"></i></div><div class="ck-bank__sub">Наполните вместе до воскресенья — весь доход стаи ×${b.mult} (тапы и бизнесы)${b.myTotal ? ` · твой вклад ${fmt(b.myTotal)}` : ''}</div><div class="ck-cats" style="margin-top:6px">${presets}</div>${donors}${b.myToday >= b.dayCap ? `<div class="ck-bank__sub">Дневной лимит вклада исчерпан — продолжишь ${untilNewDay()}</div>` : ''}</div>`;
+        : `<div class="ck-bank"><div class="ck-bank__hd">🏦 Копилка стаи · ${fmt(b.sum)} / ${fmt(b.target)}</div><div class="ck-bank__bar"><i style="width:${pct}%"></i></div><div class="ck-bank__sub">Наполните вместе до воскресенья — весь доход стаи ×${b.mult} (тапы и бизнесы)${b.myTotal ? ` · твой вклад ${fmt(b.myTotal)}` : ''}</div><div class="ck-cats" style="margin-top:6px">${presets}</div><div style="display:flex;gap:8px;margin-top:7px"><input class="ck-cipher-in" id="ck-bank-custom" inputmode="numeric" type="text" maxlength="12" placeholder="Своя сумма" aria-label="Своя сумма в копилку" style="flex:1;min-width:0"/><button class="ck-cat-chip" data-bank-custom="1">Внести</button></div>${donors}${b.myToday >= b.dayCap ? `<div class="ck-bank__sub">Дневной лимит вклада исчерпан — продолжишь ${untilNewDay()}</div>` : ''}</div>`;
     }
     return { html: `<div class="ck-sect">Команды</div><div style="color:var(--muted);font-size:12px;text-align:center;margin:0 0 6px">Монеты всех игроков команды складываются в общий счёт</div>${ownHtml}${bankHtml}${rows}<div style="color:var(--muted);font-size:12px;text-align:center;margin:6px 0 4px">${my ? 'Сменить команду:' : 'Или выбери открытую команду:'}</div><div class="ck-cats">${chips}</div>`, wire: () => {
       ov.querySelectorAll('[data-squad]').forEach(b => b.onclick = () => joinSquadAct(b.dataset.squad));
       ov.querySelectorAll('[data-sq-members]').forEach(b => b.onclick = () => openSquadMembers());
       ov.querySelectorAll('[data-bank]').forEach(b => b.onclick = () => donateBank(Number(b.dataset.bank)));
+      const customBank = ov.querySelector('#ck-bank-custom');
+      const customBankBtn = ov.querySelector('[data-bank-custom]');
+      const donateCustom = () => {
+        const raw = String(customBank && customBank.value || '').replace(/\s/g, '').replace(/,/g, '');
+        const amount = Number(raw);
+        if (!Number.isInteger(amount) || amount <= 0) { flashMsg('Введи целую сумму монет'); return; }
+        donateBank(amount);
+      };
+      if (customBankBtn) customBankBtn.onclick = donateCustom;
+      if (customBank) customBank.onkeydown = (e) => { if (e.key === 'Enter') donateCustom(); };
       ov.querySelectorAll('[data-req]').forEach(b => b.onclick = () => requestJoinAct(b.dataset.req));
       const c = ov.querySelector('[data-sq-create]'); if (c) c.onclick = createSquadAct;
       const k = ov.querySelector('[data-sq-code]'); if (k) k.onclick = joinByCodeAct;

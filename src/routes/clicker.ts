@@ -233,6 +233,7 @@ router.post("/api/clicker/squad-decide", requireTgUser, rateLimit(30), async (re
 router.post("/api/clicker/squad-bank", requireTgUser, rateLimit(30), async (req, res) => {
   const u = getTgUser(req)!;
   const amount = Number((req.body as { amount?: unknown })?.amount);
+  if (!Number.isInteger(amount) || amount <= 0) { res.status(400).json({ error: "bad_amount" }); return; }
   try {
     const r = await donateSquadBank(u.id, amount);
     if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
