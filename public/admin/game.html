@@ -208,8 +208,10 @@
     $('#cgo').onclick = async () => {
       const delta = parseInt($('#cdelta').value, 10);
       if (!delta) { $('#cres').textContent = 'введи число'; return; }
-      const r = await api(`/api/admin/game/user/${id}/coins`, { method: 'POST', body: JSON.stringify({ delta, reason: $('#creason').value }) });
-      $('#cres').innerHTML = r.ok ? `<span class="ok">готово, баланс ${fmt(r.balance)}</span>` : `<span class="bad">${r.error}</span>`;
+      try {
+        const r = await api(`/api/admin/game/user/${id}/coins`, { method: 'POST', body: JSON.stringify({ delta, reason: $('#creason').value }) });
+        $('#cres').innerHTML = r.ok ? `<span class="ok">готово, баланс ${fmt(r.balance)}${r.notified === false ? ' · уведомление не доставлено' : ''}</span>` : `<span class="bad">${r.error}</span>`;
+      } catch (e) { $('#cres').innerHTML = `<span class="bad">Ошибка API: ${e.message || e}</span>`; }
     };
     $('#userCard').scrollIntoView({ behavior: 'smooth' });
   }
