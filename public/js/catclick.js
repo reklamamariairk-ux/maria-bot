@@ -1239,10 +1239,8 @@
   }
   async function loadDoveBadge() {
     if (!authed()) return;
-    // Почта убрана — бейдж «Голуби» теперь считает входящие обмены (то, что требует внимания)
-    const d = await api('/api/pigeons/trades').catch(() => null);
-    if (!d) return;
-    updateDoveBadge(Array.isArray(d.toMe) ? d.toMe.length : 0);
+    // Обмены отключены — бейдж больше не делает лишний сетевой запрос.
+    updateDoveBadge(0);
   }
 
   // ── Прогрессивное открытие вкладок: у новичка активны «Котик»+«Прокачка»,
@@ -2516,7 +2514,7 @@
         <img src="/img/pigeons/${drop.breed}.webp?v=2" alt="" style="width:82%;height:82%;object-fit:contain" onerror="this.style.display='none'">
       </div>
       <div class="v" style="font-size:19px">${meta.name}</div>
-      <div style="color:var(--muted);font-size:13px">${drop.isNew ? 'Новый в альбоме!' : 'Дубликат — можно обменять или отправить'}</div>
+      <div style="color:var(--muted);font-size:13px">${drop.isNew ? 'Новый в альбоме!' : 'Дубликат — усиливает коллекцию'}</div>
       <button id="ck-pop-ok">Класс!</button>`;
     pop.classList.add('on');
     pop.querySelector('#ck-pop-ok').onclick = () => { pop.classList.remove('on'); advancePopupQueue(); };
@@ -2608,8 +2606,7 @@
       { text: 'В «Заданиях» отправляй голубей в полёт. Чем лучше птица и тюнинг, тем выше шанс полной награды; даже за провал будет 20%', anchor: '#cd-nav-missions', anchorFn: function () { return ov.querySelector('#cd-nav-missions') || ov.querySelector('#ck-dove-col .cd-navrow'); }, pos: 'bottom' },
       { text: 'Кнопка «Гонки» открывает всё спортивное: гонку стаи, драг-заезды, тренировки и ставки монетами', anchor: '#cd-nav-race', anchorFn: function () { return ov.querySelector('#cd-nav-race') || ov.querySelector('#ck-dove-col .cd-navrow'); }, pos: 'bottom' },
       { text: 'Тапни свою породу: там звёзды, тюнинг и выбор любимых голубей для показа рядом с твоим именем в рейтинге', anchor: '#ck-dove-col .cd-card:not(.cd-locked)', anchorFn: function () { return ov.querySelector('#ck-dove-col .cd-card:not(.cd-locked)') || ov.querySelector('#ck-dove-col .cd-grid'); }, pos: 'bottom' },
-      { text: 'В «Друзьях» нажми на человека: можно написать ему в Telegram, предложить личный обмен или вызвать на дуэль со своей ставкой', anchor: '#cd-nav-friends', pos: 'bottom' },
-      { text: 'В «Обменах» меняйся дублями с другими игроками. Бейдж покажет входящие предложения', anchor: '#cd-nav-trades', pos: 'bottom' },
+      { text: 'В «Друзьях» нажми на человека: можно написать ему в Telegram или вызвать на дуэль со своей ставкой', anchor: '#cd-nav-friends', pos: 'bottom' },
     ],
     home: [
       { text: 'Мой дом! Наверху — мои потребности: сытость, настроение и сон. Не запускай их', anchor: '#pet-needs', pos: 'bottom', root: 'doc' },
