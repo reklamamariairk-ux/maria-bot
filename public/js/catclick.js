@@ -1697,7 +1697,7 @@
     return withLock('case', async () => {
       const requestId = (window.crypto && typeof window.crypto.randomUUID === 'function') ? window.crypto.randomUUID().replace(/-/g, '') : (Date.now().toString(36) + '_' + Math.random().toString(36).slice(2));
       const d = await api('/api/clicker/case', { method: 'POST', body: JSON.stringify({ requestId }) }).catch(() => null);
-      if (!d || d.error) { flashMsg(d && d.error === 'not_enough_coins' ? 'Не хватает монет' : 'Нет связи — попробуй ещё раз'); return; }
+      if (!d || d.error) { flashMsg(d && d.error === 'not_enough_coins' ? 'Не хватает монет' : d && d.error === 'case_limit' ? 'Лимит кейса на сегодня исчерпан' : 'Нет связи — попробуй ещё раз'); return; }
       st = d; turboUntil = Date.now() + (st.turboMsLeft || 0);
       window.haptic && window.haptic('light'); renderAll(); renderTasks(); bumpBalance();
       await runCaseReel(d.prize, d.pigeonDrop, d.balanceBefore, d.newBalance, d.cost);

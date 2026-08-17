@@ -959,8 +959,10 @@ export async function openChest(chatId: number): Promise<{ ok: boolean; prize?: 
 
 // ── Платный кейс (казино-экономика, см. src/lootbox.ts) ──────────────────────
 // case_dry теперь хранит серию денежных призов ниже стоимости кейса.
+// Ограничение защищает экономику от бесконечной прокрутки кейса за один день.
+export const CASE_DAILY_ROLL_LIMIT = Math.max(1, Number(process.env.CASE_DAILY_ROLL_LIMIT || 10));
 export type CasePrizeOut = { type: string; amount?: number; rarity?: string; breed?: string; isNew?: boolean; businessId?: string; businessName?: string; marketValue?: number };
-export async function openCase(chatId: number, requestId: string): Promise<{ ok: boolean; prize?: CasePrizeOut; state?: ClickerState; reason?: string; newBalance?: number; balanceBefore?: number; cost?: number; pigeonDrop?: { breed: string; isNew: boolean }; duplicate?: boolean }> {
+export async function openCase(chatId: number, requestId: string): Promise<{ ok: boolean; prize?: CasePrizeOut; state?: ClickerState; reason?: string; newBalance?: number; balanceBefore?: number; cost?: number; pigeonDrop?: { breed: string; isNew: boolean }; duplicate?: boolean; caseRollsToday?: number; caseDailyLimit?: number }> {
   const { CASE_COST, canGrantCaseBusinessLevel, rollCase, prizeValue, protectCaseLossStreak } = await import("./lootbox");
   const { grantPigeon, pickBreedOfRarity } = await import("./pigeons");
   const client = await pool.connect();
@@ -974,6 +976,11 @@ export async function openCase(chatId: number, requestId: string): Promise<{ ok:
       await client.query("COMMIT");
       return { ok: true, prize: previous.rows[0].prize as CasePrizeOut, state: buildState(r, cl, 0), newBalance: Number(previous.rows[0].balance_after), balanceBefore: Number(previous.rows[0].balance_before), cost: CASE_COST, duplicate: true };
     }
+    const rollCount = await client.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM clicker_case_history WHERE chat_id=$1 AND (created_at AT TIME ZONE 'Asia/Irkutsk')::date = $2::date`,
+      [chatId, irkToday()]);
+    const caseRollsToday = Number(rollCount.rows[0]?.count || 0);
+    if (caseRollsToday >= CASE_DAILY_ROLL_LIMIT) { await client.query("ROLLBACK"); return { ok: false, reason: "case_limit", caseRollsToday, caseDailyLimit: CASE_DAILY_ROLL_LIMIT }; }
     if (Number(r.balance) < CASE_COST) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
     const balanceBefore = Number(r.balance);
     r.balance = Number(r.balance) - CASE_COST; // цена открытия
@@ -1014,7 +1021,7 @@ export async function openCase(chatId: number, requestId: string): Promise<{ ok:
       `INSERT INTO clicker_case_history (chat_id, request_id, cost, prize, balance_before, balance_after) VALUES ($1,$2,$3,$4,$5,$6)`,
       [chatId, requestId, CASE_COST, JSON.stringify(out), balanceBefore, r.balance]);
     await client.query("COMMIT");
-    return { ok: true, prize: out, state: buildState(r, cl, 0), newBalance: Number(r.balance), balanceBefore, cost: CASE_COST, pigeonDrop };
+    return { ok: true, prize: out, state: buildState(r, cl, 0), newBalance: Number(r.balance), balanceBefore, cost: CASE_COST, pigeonDrop, caseRollsToday: caseRollsToday + 1, caseDailyLimit: CASE_DAILY_ROLL_LIMIT };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
