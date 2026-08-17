@@ -1,5 +1,4 @@
 # Генерируемое — восстанавливается npm i + npx cap add android/ios
 node_modules/
 android/
-ios/
 KotikKombat.apk
