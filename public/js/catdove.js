@@ -206,6 +206,12 @@
       .cd-mission-route.is-locked{opacity:.68}
       .cd-mission-route__grid{display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;margin:9px 0;font-size:11.5px;color:var(--muted)}
       .cd-mission-route__grid b{color:var(--cream)}
+      .cd-mission-pick-btn{width:100%;box-sizing:border-box;display:flex;align-items:center;justify-content:center;border:1px solid rgba(183,155,255,.58);border-radius:11px;padding:9px 12px;font-weight:800;font-size:12px;background:rgba(155,92,255,.12);color:var(--grape-l,#B79BFF);cursor:pointer;min-height:38px}
+      .cd-mission-pick-btn:active{transform:scale(.97);filter:brightness(1.15)}
+      .cd-mission-send-btn{min-height:50px;font-size:14px;box-shadow:0 3px 12px rgba(192,255,51,.18)}
+      button[data-pick-mission]{width:100%;min-height:38px;padding:9px 12px;font-size:12px;background:rgba(155,92,255,.12);color:var(--grape-l,#B79BFF);border-color:rgba(183,155,255,.58);box-shadow:none}
+      button[data-pick-mission]:active{transform:scale(.97)}
+      button[data-route-id]:not(:disabled){min-height:50px;font-size:14px;box-shadow:0 3px 12px rgba(192,255,51,.18)}
       .cd-claimbtn{flex:none;display:inline-flex;align-items:center;gap:5px;border:1px solid #DFFF8F;border-radius:12px;padding:9px 13px;font-weight:800;font-size:12px;background:linear-gradient(180deg,#D4FF6A,#A8F51E 56%,#8DBF20);color:#12210A;cursor:pointer;white-space:nowrap;min-height:38px}
       .cd-claimbtn:disabled{opacity:.6;cursor:default}
       .cd-scrim{position:fixed;inset:0;z-index:9400;background:rgba(10,6,5,.5);display:none}
