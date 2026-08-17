@@ -15,6 +15,7 @@ import { linksOf } from "../account-link";
 import { trackEvent } from "../analytics";
 import type { PushService } from "../push";
 import { log } from "../logger";
+import { resetClickerProgress } from "../clicker";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -221,6 +222,22 @@ export default function adminGameRouter(push: PushService): Router {
       res.json({ ok: true, blocked, notified });
     } catch (error) {
       log.error({ err: error, id }, "[admin block]");
+      res.status(500).json({ error: "internal" });
+    }
+  });
+
+  router.post("/api/admin/game/user/:id/reset", requireAdminToken, requireAdminRole("operator"), rateLimit(10), async (req, res) => {
+    const id = Number(req.params.id);
+    const reason = String((req.body as { reason?: unknown })?.reason || "Сброс игрового прогресса").trim().slice(0, 200);
+    if (!Number.isSafeInteger(id) || id <= 0) { res.status(400).json({ error: "bad_id" }); return; }
+    try {
+      await resetClickerProgress(id);
+      trackEvent(id, "admin_reset", { reason });
+      const notified = await push.sendRaw(id, `♻️ Игровой прогресс «Котик Комбат» сброшен администрацией.\nПричина: ${reason}`).catch((error) => { log.warn({ err: error, id }, "[admin reset] notification failed"); return false; });
+      res.json({ ok: true, notified });
+    } catch (error) {
+      if (error instanceof Error && error.message === "not_found") { res.status(404).json({ error: "not_found" }); return; }
+      log.error({ err: error, id }, "[admin reset]");
       res.status(500).json({ error: "internal" });
     }
   });

@@ -444,6 +444,38 @@ export async function deleteClickerProfile(chatId: number): Promise<void> {
   }
 }
 
+/** Сбрасывает игровой прогресс, сохраняя внешний аккаунт и историю аудита. */
+export async function resetClickerProgress(chatId: number): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const state = await client.query(`SELECT 1 FROM clicker_state WHERE chat_id=$1 FOR UPDATE`, [chatId]);
+    if (!state.rowCount) throw new Error("not_found");
+    for (const table of [
+      "clicker_cards", "clicker_tasks", "clicker_daily", "clicker_gifts",
+      "clicker_codes_used", "clicker_purchase_sync", "clicker_redemptions",
+      "pigeon_inventory", "pet_items", "pet_state", "squad_requests"
+    ]) {
+      await client.query(`DELETE FROM ${table} WHERE chat_id=$1`, [chatId]);
+    }
+    await client.query(`UPDATE clicker_state SET
+      balance=0, total_earned=0, taps=0, energy=1000, multitap_level=0,
+      energy_limit_level=0, daily_streak=0, daily_date=NULL,
+      boost_energy_used=0, boost_turbo_used=0, boost_date=NULL, turbo_until=NULL,
+      referred_by=NULL, referrals=0, combo_date=NULL, combo_hits=NULL, combo_claimed=NULL,
+      cipher_date=NULL, week_key=NULL, week_base=0, bonus_at=NULL, chest_date=NULL,
+      rain_date=NULL, squad=NULL, prestige=0, ftue_claimed=0, case_spent=0,
+      case_won=0, case_dry=0, bonus_profit_per_hour=0, max_level=1,
+      starter_pigeon=FALSE, album_bonus=FALSE, updated_at=NOW(),
+      passive_updated_at=NOW(), energy_updated_at=NOW()
+      WHERE chat_id=$1`, [chatId]);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally { client.release(); }
+}
+
 async function readCards(client: any, chatId: number): Promise<Record<string, number>> {
   const { rows } = await client.query(`SELECT card, level FROM clicker_cards WHERE chat_id=$1`, [chatId]);
   const m: Record<string, number> = {}; for (const r of rows) m[r.card] = r.level; return m;
