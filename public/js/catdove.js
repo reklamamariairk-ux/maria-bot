@@ -899,18 +899,10 @@
       ${username ? `<button class="cd-sheet__act" id="cd-friend-tg">Написать @${esc(username)} в Telegram</button>` : `<div class="cd-sheet__hint">У друга не указан публичный username Telegram, поэтому открыть личный чат по ссылке нельзя.</div>`}
       
       <button class="cd-sheet__act" id="cd-friend-duel">${FLAG_ICON(15)} Вызвать на дуэль</button>
-      <div class="cd-sect-t">Обмены от этого друга</div><div id="cd-friend-trades">${skeletonRows(2)}</div>`;
+      <div class="cd-sheet__hint" style="margin-top:2px">Здесь можно написать другу в Telegram или вызвать его на дуэль. Обмен породами отключён.</div>`;
     sh.querySelector('#cd-sheet-x').onclick = openFriendsPage;
     const tg = sh.querySelector('#cd-friend-tg'); if (tg) tg.onclick = () => { window.open('https://t.me/' + encodeURIComponent(username), '_blank'); };
-    sh.querySelector('#cd-friend-trade').onclick = () => { tradeTargetFriend = friend; openTradeGive(); };
     sh.querySelector('#cd-friend-duel').onclick = () => openFriendRaceStakePicker(friend);
-    const d = await apiRef('/api/pigeons/trades').catch(() => null);
-    if (d && Array.isArray(d.open)) tradesCache = d;
-    const box = sh.querySelector('#cd-friend-trades'); if (!box) return;
-    const incoming = (tradesCache && tradesCache.toMe || []).filter(t => num(t.from_chat) === num(friend.chat));
-    box.innerHTML = incoming.length ? incoming.map(t => tradeRowHtml(t, 'toMe')).join('') : `<div class="cd-sheet__hint">Новых предложений от этого друга нет.</div>`;
-    box.querySelectorAll('[data-accept]').forEach(el => { el.onclick = async () => { await acceptTradeAct(num(el.dataset.accept), el); openFriendProfile(friend); }; });
-    box.querySelectorAll('[data-decline]').forEach(el => { el.onclick = async () => { await declineTradeAct(num(el.dataset.decline), el); openFriendProfile(friend); }; });
   }
 
   // ── Обмены: создание предложения ───────────────────────────────────────────
@@ -1343,7 +1335,7 @@
     const link = (rec && rec.friendLink) || fallbackFriendLink();
     if (!link) { flash('Ссылка дружбы недоступна'); return; }
     haptic('light');
-    const text = '🕊️ Добавь меня в друзья в «Котик Комбат» — будем слать друг другу голубей и меняться породами!';
+    const text = '🕊️ Добавь меня в друзья в «Котик Комбат» — будем слать друг другу голубей и устраивать дуэли!';
     const full = `${text} ${link}`;
     if (window.App && App.share) { App.share(link, text); return; }
     if (navigator.share) { navigator.share({ url: link, text }).catch(() => copyFriendLink(full)); return; }

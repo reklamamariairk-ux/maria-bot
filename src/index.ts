@@ -609,8 +609,8 @@ bot.command("start", async (ctx) => {
         const r = await addFriend(ctx.from.id, ownerId).catch(() => null);
         if (r?.ok && !r.already) {
           const userName = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" ") || "Новый друг";
-          await sendRaw(ownerId, `🕊️ *${userName}* принял твой код дружбы! Теперь он появится в Голубятне → Друзья, и ему можно предлагать обмены.`, { parse_mode: "Markdown" }).catch(() => {});
-          await ctx.reply(`🕊️ Вы теперь друзья! Открывай Голубятню → Друзья или предлагай обмен во вкладке «Голуби» → «Обмены».`, { reply_markup: gameButton() }).catch(() => {});
+          await sendRaw(ownerId, `🕊️ *${userName}* принял твой код дружбы! Теперь он появится в Голубятне → Друзья — можно отправлять друг другу голубей и вызывать друг друга на дуэль.`, { parse_mode: "Markdown" }).catch(() => {});
+          await ctx.reply(`🕊️ Вы теперь друзья! Открывай Голубятню → Друзья: отправляйте друг другу голубей или вызывайте друг друга на дуэль.`, { reply_markup: gameButton() }).catch(() => {});
         } else {
           await ctx.reply(r?.already ? `🕊️ Вы уже друзья! Открывай голубятню и шли голубей.` : `Не получилось добавить в друзья — попробуй позже.`, { reply_markup: gameButton() }).catch(() => {});
         }
