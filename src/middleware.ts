@@ -9,6 +9,11 @@
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
 
+export type AdminRole = "viewer" | "operator" | "superadmin";
+declare global {
+  namespace Express { interface Request { adminRole?: AdminRole } }
+}
+
 /**
  * Constant-time сравнение секретов (токены, HMAC). Обычный `===`/`!==` завершается
  * на первом различающемся байте → тайминг выдаёт длину совпавшего префикса.
@@ -70,9 +75,29 @@ export function requireAdminToken(req: Request, res: Response, next: NextFunctio
   const token = req.header("x-user-token")
              || (req.body as { token?: string })?.token
              || (req.query.token as string | undefined);
-  if (!process.env.ADMIN_TOKEN || !safeEq(token, process.env.ADMIN_TOKEN)) {
+  const role = getAdminRole(token);
+  if (!role) {
     res.status(403).json({ error: "forbidden" });
     return;
   }
+  req.adminRole = role;
   next();
+}
+
+export function getAdminRole(token: string | undefined): AdminRole | null {
+  if (process.env.ADMIN_TOKEN && safeEq(token, process.env.ADMIN_TOKEN)) return "superadmin";
+  if (process.env.ADMIN_OPS_TOKEN && safeEq(token, process.env.ADMIN_OPS_TOKEN)) return "operator";
+  if (process.env.ADMIN_VIEW_TOKEN && safeEq(token, process.env.ADMIN_VIEW_TOKEN)) return "viewer";
+  return null;
+}
+
+export function requireAdminRole(role: AdminRole) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const order: Record<AdminRole, number> = { viewer: 1, operator: 2, superadmin: 3 };
+    if (!req.adminRole || order[req.adminRole] < order[role]) {
+      res.status(403).json({ error: "insufficient_admin_role", required: role });
+      return;
+    }
+    next();
+  };
 }

@@ -9,7 +9,7 @@
  */
 import { Router } from "express";
 import { pool } from "../db";
-import { requireAdminToken, rateLimit } from "../middleware";
+import { requireAdminRole, requireAdminToken, rateLimit } from "../middleware";
 import { platformOf, toPlatformId } from "../platform";
 import { linksOf } from "../account-link";
 import { trackEvent } from "../analytics";
@@ -173,7 +173,7 @@ export default function adminGameRouter(push: PushService): Router {
   });
 
   // ── Коррекция монет (+/-) ──────────────────────────────────────────────────
-  router.post("/api/admin/game/user/:id/coins", requireAdminToken, rateLimit(30), async (req, res) => {
+  router.post("/api/admin/game/user/:id/coins", requireAdminToken, requireAdminRole("operator"), rateLimit(30), async (req, res) => {
     const id = Number(req.params.id);
     const delta = Math.trunc(Number((req.body as { delta?: unknown })?.delta));
     const reason = String((req.body as { reason?: unknown })?.reason || "").slice(0, 200);
@@ -203,7 +203,7 @@ export default function adminGameRouter(push: PushService): Router {
   });
 
   // ── Рассылка ───────────────────────────────────────────────────────────────
-  router.post("/api/admin/game/push", requireAdminToken, rateLimit(10), async (req, res) => {
+  router.post("/api/admin/game/push", requireAdminToken, requireAdminRole("operator"), rateLimit(10), async (req, res) => {
     const body = req.body as { text?: unknown; segment?: unknown; testChatId?: unknown };
     const text = String(body?.text || "").trim();
     const segment = String(body?.segment || "all") as Segment;
