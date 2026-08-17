@@ -211,7 +211,7 @@
       .cd-mission-send-btn{min-height:50px;font-size:14px;box-shadow:0 3px 12px rgba(192,255,51,.18)}
       button[data-pick-mission]{width:100%;min-height:38px;padding:9px 12px;font-size:12px;background:rgba(155,92,255,.12);color:var(--grape-l,#B79BFF);border-color:rgba(183,155,255,.58);box-shadow:none}
       button[data-pick-mission]:active{transform:scale(.97)}
-      button[data-route-id]:not(:disabled){min-height:50px;font-size:14px;box-shadow:0 3px 12px rgba(192,255,51,.18)}
+      button[data-route-id]:not(:disabled){min-height:38px;padding:9px 12px;font-size:12px;box-shadow:0 2px 8px rgba(192,255,51,.14)}
       .cd-claimbtn{flex:none;display:inline-flex;align-items:center;gap:5px;border:1px solid #DFFF8F;border-radius:12px;padding:9px 13px;font-weight:800;font-size:12px;background:linear-gradient(180deg,#D4FF6A,#A8F51E 56%,#8DBF20);color:#12210A;cursor:pointer;white-space:nowrap;min-height:38px}
       .cd-claimbtn:disabled{opacity:.6;cursor:default}
       .cd-scrim{position:fixed;inset:0;z-index:9400;background:rgba(10,6,5,.5);display:none}
@@ -682,6 +682,7 @@
       return `<div class="cd-mission-route${locked ? ' is-locked' : ''}"><div style="display:flex;justify-content:space-between;gap:8px"><b>${m.name}</b><span style="font-size:10px;color:var(--gold-l);white-space:nowrap">${missionTierLabel(m.tier)}</span></div><div style="font-size:11.5px;color:var(--muted);margin-top:4px">${m.description}</div><div class="cd-mission-route__grid"><span>Время: <b>${durationText(num(m.durationSec))}</b></span><span>Шанс: <b>${chance}%</b></span><span>При успехе: <b>+${fmt(reward)}</b></span><span>Темп награды: <b>+${fmt(perHour)}/ч</b></span><span style="grid-column:1/-1">При провале: <b>+${fmt(consolation)}</b></span></div>${locked ? `<div class="cd-sheet__hint" style="margin:0 0 7px">Закрыто: нужна сила ${num(m.minPower)}, сейчас ${num(p.power)}</div>` : ''}<button class="cd-sheet__act" style="margin:0" data-route-id="${m.id}" ${locked ? 'disabled' : ''}>${locked ? `Нужна сила ${num(m.minPower)}` : 'Отправить на маршрут'}</button></div>`;
     }).join('');
     body.innerHTML = `<button class="cd-sheet__back" id="cd-mission-list-back" type="button">‹ К голубям</button><div class="cd-summary" style="margin:10px 0;border-color:var(--gold);box-shadow:0 2px 10px rgba(192,255,51,.12)"><b>Шаг 2 из 2 · ${b.name}</b><br>Сила ${num(p.power)} · ранг ${rank.name} · награда ×${num(rank.rewardMult).toFixed(2)}<br><span style="color:var(--muted)">Пассивный доход +${fmt(p.passivePerHour)}/час продолжает идти в полёте.</span></div><div class="cd-sheet__hint" style="margin-bottom:9px"><b style="color:var(--cream)">Выбери один маршрут для этого голубя.</b><br>«Темп награды» — это пересчёт награды за час при успехе, а не отдельная дополнительная выплата. Награда придёт после завершения полёта.</div>${routes}`;
+    const sheet = container.querySelector('#cd-sheet'); if (sheet) sheet.scrollTop = 0;
     body.querySelector('#cd-mission-list-back').onclick = renderMissions;
     body.querySelectorAll('[data-route-id]').forEach(btn => { btn.onclick = () => startMissionAct(p.breed, btn, btn.dataset.routeId); });
   }
