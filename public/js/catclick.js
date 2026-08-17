@@ -483,7 +483,7 @@
       level: leagueFor(s.totalEarned).level, levelName: leagueFor(s.totalEarned).name, nextNeed: nextNeed(s.totalEarned),
       multitapLevel: s.multitapLevel, multitapPrice: priceMultitap(s.multitapLevel),
       energyLevel: s.energyLevel, energyPrice: priceEnergy(s.energyLevel),
-      cards: CARDS.map(c => { const lv = s.cards[c.id] || 0; const locked = lv === 0 && !!c.req && leagueFor(s.totalEarned).level < c.req; const currentProfit = cardProfit(c, lv), profit = cardProfit(c, lv + 1); return { id: c.id, name: c.name, cat: c.cat, level: lv, profit, currentProfit, profitGain: profit - currentProfit, price: cardPrice(c, lv), req: c.req || 0, locked }; }),
+      cards: CARDS.map(c => { const lv = s.cards[c.id] || 0; const locked = lv === 0 && !!c.req && leagueFor(s.totalEarned).level < c.req; const maxed = lv >= 20; const currentProfit = cardProfit(c, lv), profit = maxed ? currentProfit : cardProfit(c, lv + 1); return { id: c.id, name: c.name, cat: c.cat, level: lv, profit, currentProfit, profitGain: profit - currentProfit, price: maxed ? 0 : cardPrice(c, lv), req: c.req || 0, locked, maxed }; }),
       dailyAvailable: s.dailyDate !== today, dailyStreak: s.dailyStreak, dailyNext: dailyReward(s.dailyDate === today ? s.dailyStreak : s.dailyStreak + 1),
       chestAvailable: s.chestDate !== today,
       rainAvailable: s.rainDate !== today,
@@ -1173,7 +1173,7 @@
       { ic: ICON.shop(20), t: 'Прокачка и бизнесы', d: 'В «Прокачке» — четыре направления: Производство, Маркетинг, Персонал и Сеть. Каждый бизнес, который ты завёл, дальше сам приносит монеты в час — доход капает даже когда игра закрыта, а следующий уровень бизнеса поднимает доход ещё выше. Часть бизнесов открывается только с определённого уровня игрока — до этого карточка показана силуэтом с замком. Там же можно докупить Мультитап (больше монет за тап) и Запас энергии (выше потолок энергии).' },
       { ic: ICON.gift(20), t: 'Награда дня', d: 'Каждый день, когда заходишь в игру впервые, тебе доступна награда дня — забери её кнопкой сверху экрана. Награда растёт вместе со стриком: чем больше дней подряд ты заходишь, тем она весомее, а пропущенный день сбрасывает счётчик. Календарь на семь дней вперёд показывает, сколько причитается в каждый из ближайших дней.' },
       { ic: ICON.gem(20), t: 'Комбо дня', d: 'В «Прокачке» каждый день выбираются три случайных бизнеса — прокачай (купи хотя бы один уровень) все три, и получишь бонус +12 000 монет. Забрать бонус можно на вкладке «Призы». Комбо обновляется раз в сутки.' },
-      { ic: ICON.chest(20), t: 'Сундук и кейс', d: 'Сундук удачи открывается бесплатно раз в день. Платный Кейс удачи стоит 100 000: в нём голуби, бизнесы и шанс 0,16% выиграть 10 млн. После пяти проигрышей следующая попытка защищена.' },
+      { ic: ICON.chest(20), t: 'Сундук и кейс', d: 'Сундук удачи открывается бесплатно раз в день. Платный Кейс удачи стоит 100 000: в нём голуби, ранние уровни бизнесов и шанс 0,05% выиграть 10 млн. После пяти проигрышей следующая попытка как минимум окупается.' },
       { ic: ICON.paw(20), t: 'Дом Василия', d: 'В Доме Василия — четыре комнаты: Кухня, Спальня, Игровая и Двор. В каждой — своё действие (покормить, уложить спать, поиграть, погладить), которое поднимает нужную шкалу — сытость, энергию или настроение — и приносит коту немного опыта. Если заботиться о Василии каждый день подряд, раз в сутки капают монеты питомца — награда растёт с каждым днём серии и с десятого дня держится на максимуме. Во Дворе — магазин шляп для Василия: покупай их за монеты питомца, накопленные заботой.' },
       { ic: ICON.dove(20), t: 'Голубятня', d: 'Каждый голубь добавляет монеты к доходу в час; звёзды и тюнинг усиливают вклад. Голубей можно отправлять на задания с таймером и шансом успеха. До трёх любимцев можно выбрать для показа рядом со своим именем в рейтинге — на силу и доход этот выбор не влияет.' },
       { ic: ICON.trophy(20), t: 'Рейтинг и команды', d: 'Рейтинг недели показывает игроков по количеству монет, заработанных с начала недели — отсчёт идёт с понедельника, а в конце недели сезон обнуляется и начинается заново. Здесь же можно вступить в одну из четырёх команд — Шоколадные, Ванильные, Карамельные или Ягодные — и соревноваться вместе с командой в общем зачёте по сумме очков всех участников.' },
@@ -1763,7 +1763,7 @@
   }
   function revealCase(prize, res, el, balanceBefore, newBalance, cost, resolve) {
     let title, sub = '';
-    if (prize.type === 'coins') { title = `+${fmt(prize.amount)} ${COIN(22)}`; if (prize.amount >= 10000000) sub = 'СУПЕРДЖЕКПОТ · ШАНС 0,16%!'; else if (prize.amount >= 150000) sub = 'ДЖЕКПОТ!'; else if (prize.amount < CASE_COST) sub = 'В этот раз немного — крутани ещё'; }
+    if (prize.type === 'coins') { title = `+${fmt(prize.amount)} ${COIN(22)}`; if (prize.amount >= 10000000) sub = 'СУПЕРДЖЕКПОТ · ШАНС 0,05%!'; else if (prize.amount >= 150000) sub = 'ДЖЕКПОТ!'; else if (prize.amount < CASE_COST) sub = 'В этот раз немного — крутани ещё'; }
     else if (prize.type === 'turbo') { title = `${ICON.rocket(22)} Турбо ×5`; sub = '20 секунд множителя за тап'; }
     else if (prize.type === 'energy') { title = `${ICON.bolt(22)} Полная энергия`; }
     else if (prize.type === 'business') { title = `${ICON.shop(22)} ${prize.businessName || 'Уровень бизнеса'}`; sub = `Бесплатная прокачка · рыночная цена ${fmt(prize.marketValue || 0)}`; }
@@ -2047,7 +2047,8 @@
       if (c.locked) h += biz(c.cat + ' locked', cardArt(c.id), c.name, `<span class="ck-biz__lock">${ICON.lock(12)} с уровня ${c.req}</span>`, `<button class="ck-biz__buy" disabled>${ICON.lock(15)}</button>`, i++);
       else {
         const gain = Number(c.profitGain != null ? c.profitGain : Math.max(0, c.profit - (c.currentProfit || 0)));
-        h += biz(c.cat, cardArt(c.id), c.name, `<span class="ck-biz__lvl">Ур. ${c.level}</span><span class="ck-biz__prof">+${fmt(gain)}/час</span>`, buyBtn(c.price, st.balance < c.price, 'card', c.id), i++);
+        const maxed = c.maxed || c.level >= 20;
+        h += biz(c.cat, cardArt(c.id), c.name, `<span class="ck-biz__lvl">Ур. ${c.level}${maxed ? ' · максимум' : ''}</span><span class="ck-biz__prof">${maxed ? 'Прокачка завершена' : `+${fmt(gain)}/час`}</span>`, maxed ? `<button class="ck-biz__buy" disabled>MAX</button>` : buyBtn(c.price, st.balance < c.price, 'card', c.id), i++);
       }
     }
     list.innerHTML = h;
@@ -2462,7 +2463,7 @@
     // реже голубь — тем ценнее. Экономика с домовым эджем (сервер src/lootbox.ts).
     const canCase = !st || (Number(st.balance) >= CASE_COST);
     const caseCard = `<div class="ck-card ck-bonus" style="background:linear-gradient(90deg,rgba(155,92,255,.20),rgba(155,92,255,.05));border-color:rgba(155,92,255,.4)">
-      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic" style="background:rgba(155,92,255,.2)">${ICON.chest(26)}</div><div class="ck-card__b"><div class="ck-card__n">Кейс удачи</div><div class="ck-card__s">0,16% на 10 млн · голуби и бизнесы · защита после 5 проигрышей</div></div>
+      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic" style="background:rgba(155,92,255,.2)">${ICON.chest(26)}</div><div class="ck-card__b"><div class="ck-card__n">Кейс удачи</div><div class="ck-card__s">0,05% на 10 млн · голуби и ранние уровни бизнесов · защита после 5 проигрышей</div></div>
       <button class="ck-card__buy" id="ck-case-open"${canCase ? '' : ' disabled'}>${COIN(13)} ${fmt(CASE_COST)}</button></div>`;
     return '<div class="ck-sect">Бонусы дня</div>' + chestCard + caseCard + comboCard;
   }

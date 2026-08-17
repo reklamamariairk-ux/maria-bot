@@ -1,9 +1,8 @@
 /**
  * Game results route.
  *
- * - POST /api/game-result — записать результат мини-игры (flappy_cake / memory / bakery),
- *                            если телефон verified → начисляем звёзды + rec. бонус.
- *                            Без verified — возвращаем gated=true.
+ * - POST /api/game-result — записать личный рекорд мини-игры.
+ *   Конвертируемые звёзды за клиентский score отключены в club.ts.
  */
 
 import { Router } from "express";

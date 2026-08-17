@@ -15,11 +15,11 @@ import { trackEvent } from "./analytics";
 import type { PushService } from "./push";
 import type { PoolClient } from "pg";
 import { log } from "./logger";
+import { canonicalChatId } from "./account-link";
 
-// Подарки за достижения → реальные баллы на карту клуба «Мария» (earnPoints).
-// Выдаются ОДИН раз, только игроку с подтверждённым телефоном. Суммы — в gift у
-// достижения ниже. ⚠️ Реальная ценность (баллы клуба) — согласовать суммы с Машей.
-export const GIFTS_ENABLED = true;
+// Подарки за достижения имеют реальную стоимость, поэтому закрыты по умолчанию
+// и включаются только после отдельного согласования экономики.
+export const GIFTS_ENABLED = process.env.CLICKER_GIFTS_ENABLED === "1";
 
 // Энергия должна ограничивать длинные тап-сессии: 1000 ед. = 500 тапов,
 // полный базовый запас восстанавливается примерно за 67 минут.
@@ -58,6 +58,8 @@ function takeTapAllowance(chatId: number, requested: number): number {
   return take;
 }
 const PASSIVE_CAP_HOURS = 3;
+/** Максимальный уровень каждой бизнес-карты в текущем сезоне. */
+export const BUSINESS_MAX_LEVEL = 20;
 const TURBO_MULT = 5;
 const TURBO_SEC = 20;
 const DAILY_BOOSTS = 6;           // бесплатных бустов каждого типа в день
@@ -401,11 +403,53 @@ export async function initClickerSchema(): Promise<void> {
   `);
 }
 
+/** Полностью удаляет игровой профиль «Котик Комбат» и связанную аналитику.
+ * Аккаунт Telegram/клуба «Мария» не затрагивается: это отдельные сервисы. */
+export async function deleteClickerProfile(chatId: number): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(`DELETE FROM pigeon_duels WHERE from_chat=$1 OR to_chat=$1`, [chatId]);
+    await client.query(`DELETE FROM pigeon_trades WHERE from_chat=$1 OR to_chat=$1`, [chatId]);
+    await client.query(`DELETE FROM pigeon_mail WHERE from_chat=$1 OR to_chat=$1`, [chatId]);
+    await client.query(`DELETE FROM pigeon_friends WHERE chat_a=$1 OR chat_b=$1`, [chatId]);
+    for (const table of [
+      "pigeon_missions", "pigeon_race_entries", "pigeon_sets_claimed", "pigeon_inventory",
+      "pet_items", "pet_state", "clicker_case_history", "clicker_cards", "clicker_tasks",
+      "clicker_redemptions", "clicker_codes_used", "clicker_daily", "clicker_gifts",
+      "clicker_purchase_sync", "clicker_activity", "clicker_events", "funnel_dedup",
+      "squad_requests", "clicker_push_log"
+    ]) {
+      await client.query(`DELETE FROM ${table} WHERE chat_id=$1`, [chatId]);
+    }
+    await client.query(`UPDATE clicker_week_winners SET chat_id=0 WHERE chat_id=$1`, [chatId]);
+    await client.query(`UPDATE clicker_state SET referred_by=NULL WHERE referred_by=$1`, [chatId]);
+    const owned = await client.query<{ id: string }>(`SELECT id FROM squads WHERE owner_chat_id=$1`, [chatId]);
+    for (const row of owned.rows) {
+      await client.query(`UPDATE clicker_state SET squad=NULL WHERE squad=$1`, [row.id]);
+      await client.query(`DELETE FROM squad_requests WHERE squad_id=$1`, [row.id]);
+      await client.query(`DELETE FROM squad_week_stats WHERE squad=$1`, [row.id]);
+      await client.query(`DELETE FROM squads WHERE id=$1`, [row.id]);
+    }
+    await client.query(`DELETE FROM clicker_state WHERE chat_id=$1`, [chatId]);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function readCards(client: any, chatId: number): Promise<Record<string, number>> {
   const { rows } = await client.query(`SELECT card, level FROM clicker_cards WHERE chat_id=$1`, [chatId]);
   const m: Record<string, number> = {}; for (const r of rows) m[r.card] = r.level; return m;
 }
-function profitPerHour(cl: Record<string, number>, albumMult = 1, pigeonPassive = 0, bonusProfitPerHour = 0): number { let p = Math.max(0, Math.floor(Number(pigeonPassive) || 0)); for (const c of CARDS) p += cardProfit(c, cl[c.id] || 0); return p * albumMult + Math.max(0, Math.floor(Number(bonusProfitPerHour) || 0)); }
+export function normalizeAdminPassiveBonus(value: unknown): number {
+  const n = Math.floor(Number(value));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+function profitPerHour(cl: Record<string, number>, albumMult = 1, pigeonPassive = 0, bonusProfitPerHour = 0): number { let p = Math.max(0, Math.floor(Number(pigeonPassive) || 0)); for (const c of CARDS) p += cardProfit(c, cl[c.id] || 0); return p * albumMult + normalizeAdminPassiveBonus(bonusProfitPerHour); }
 
 function buildState(r: any, cl: Record<string, number>, passiveEarned: number): ClickerState {
   // Эффективный уровень с учётом храповика: не ниже max_level (защита от отката при новых порогах).
@@ -422,7 +466,7 @@ function buildState(r: any, cl: Record<string, number>, passiveEarned: number): 
     level: lg.level, levelName: lg.name, nextNeed: nextNeed(Number(r.total_earned)),
     multitapLevel: r.multitap_level, multitapPrice: priceMultitap(r.multitap_level),
     energyLevel: r.energy_limit_level, energyPrice: priceEnergy(r.energy_limit_level),
-    cards: CARDS.map((c) => { const lv = cl[c.id] || 0; const locked = lv === 0 && !!c.req && lg.level < c.req; const currentProfit = cardProfit(c, lv), profit = cardProfit(c, lv + 1); return { id: c.id, name: c.name, cat: c.cat, level: lv, profit, currentProfit, profitGain: profit - currentProfit, price: cardPrice(c, lv), req: c.req || 0, locked }; }),
+    cards: CARDS.map((c) => { const lv = cl[c.id] || 0; const locked = lv === 0 && !!c.req && lg.level < c.req; const maxed = lv >= BUSINESS_MAX_LEVEL; const currentProfit = cardProfit(c, lv), profit = maxed ? currentProfit : cardProfit(c, lv + 1); return { id: c.id, name: c.name, cat: c.cat, level: lv, profit, currentProfit, profitGain: profit - currentProfit, price: maxed ? 0 : cardPrice(c, lv), req: c.req || 0, locked, maxed }; }),
     dailyAvailable: r.daily_date !== today, dailyStreak: r.daily_streak, dailyNext: dailyReward((r.daily_date === today ? r.daily_streak : r.daily_streak + 1)),
     chestAvailable: r.chest_date !== today,
     rainAvailable: r.rain_date !== today,
@@ -589,7 +633,7 @@ export async function buyClicker(chatId: number, type: string, id?: string): Pro
     let cost = 0;
     if (type === "multitap") cost = priceMultitap(r.multitap_level);
     else if (type === "energy") cost = priceEnergy(r.energy_limit_level);
-    else if (type === "card") { const c = id && CARD_BY_ID[id]; if (!c) { await client.query("ROLLBACK"); return { ok: false, reason: "bad_card" }; } const lv = cl[id!] || 0; if (lv === 0 && c.req && leagueFor(Number(r.total_earned)).level < c.req) { await client.query("ROLLBACK"); return { ok: false, reason: "locked" }; } cost = cardPrice(c, lv); }
+    else if (type === "card") { const c = id && CARD_BY_ID[id]; if (!c) { await client.query("ROLLBACK"); return { ok: false, reason: "bad_card" }; } const lv = cl[id!] || 0; if (lv >= BUSINESS_MAX_LEVEL) { await client.query("ROLLBACK"); return { ok: false, reason: "max_level" }; } if (lv === 0 && c.req && leagueFor(Number(r.total_earned)).level < c.req) { await client.query("ROLLBACK"); return { ok: false, reason: "locked" }; } cost = cardPrice(c, lv); }
     else { await client.query("ROLLBACK"); return { ok: false, reason: "bad_type" }; }
     if (Number(r.balance) < cost) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough" }; }
     r.balance = Number(r.balance) - cost;
@@ -881,7 +925,7 @@ export async function openChest(chatId: number): Promise<{ ok: boolean; prize?: 
 // case_dry теперь хранит серию денежных призов ниже стоимости кейса.
 export type CasePrizeOut = { type: string; amount?: number; rarity?: string; breed?: string; isNew?: boolean; businessId?: string; businessName?: string; marketValue?: number };
 export async function openCase(chatId: number, requestId: string): Promise<{ ok: boolean; prize?: CasePrizeOut; state?: ClickerState; reason?: string; newBalance?: number; balanceBefore?: number; cost?: number; pigeonDrop?: { breed: string; isNew: boolean }; duplicate?: boolean }> {
-  const { CASE_COST, rollCase, prizeValue, protectCaseLossStreak } = await import("./lootbox");
+  const { CASE_COST, canGrantCaseBusinessLevel, rollCase, prizeValue, protectCaseLossStreak } = await import("./lootbox");
   const { grantPigeon, pickBreedOfRarity } = await import("./pigeons");
   const client = await pool.connect();
   try {
@@ -911,9 +955,18 @@ export async function openCase(chatId: number, requestId: string): Promise<{ ok:
       if (!card) throw new Error(`Unknown case business: ${prize.id}`);
       const level = Number(cl[prize.id] || 0);
       const marketValue = cardPrice(card, level);
-      cl[prize.id] = level + 1;
-      await client.query(`INSERT INTO clicker_cards (chat_id, card, level) VALUES ($1,$2,$3) ON CONFLICT (chat_id, card) DO UPDATE SET level=$3`, [chatId, prize.id, cl[prize.id]]);
-      out.businessId = prize.id; out.businessName = card.name; out.marketValue = marketValue;
+      if (!canGrantCaseBusinessLevel(marketValue)) {
+        // Иначе фиксированный кейс за 100k бесплатно выдаёт экспоненциально дорогие
+        // уровни и превращается в бесконечный источник пассивного дохода.
+        prize = { type: "coins", amount: CASE_COST };
+        out.type = "coins"; out.amount = CASE_COST;
+        r.balance = Number(r.balance) + CASE_COST;
+        r.total_earned = Number(r.total_earned) + CASE_COST;
+      } else {
+        cl[prize.id] = level + 1;
+        await client.query(`INSERT INTO clicker_cards (chat_id, card, level) VALUES ($1,$2,$3) ON CONFLICT (chat_id, card) DO UPDATE SET level=$3`, [chatId, prize.id, cl[prize.id]]);
+        out.businessId = prize.id; out.businessName = card.name; out.marketValue = marketValue;
+      }
     }
 
     const won = prize.type === "business" ? Number(out.marketValue) : prizeValue(prize);
@@ -1531,16 +1584,26 @@ export async function joinSquad(chatId: number, squadId: string): Promise<{ ok: 
 }
 
 /** Регистрация реферала: code = chat_id пригласившего. Бонус обоим, один раз. */
+export function isReferralEligibleState(totalEarned: unknown, taps: unknown, referredBy: unknown): boolean {
+  const earned = Number(totalEarned);
+  const tapCount = Number(taps);
+  return referredBy == null && Number.isFinite(earned) && earned >= 0 && earned <= 5_000
+    && Number.isFinite(tapCount) && tapCount >= 0 && tapCount <= 10;
+}
 export async function registerRef(chatId: number, code: string): Promise<{ ok: boolean; reward?: number; state: ClickerState }> {
-  const refId = Number(code);
+  const rawRefId = Number(code);
   const noop = async () => ({ ok: false, state: await getClicker(chatId) });
-  if (!Number.isFinite(refId) || refId === chatId) return noop();
+  if (!Number.isSafeInteger(rawRefId) || rawRefId <= 0) return noop();
+  const refId = await canonicalChatId(rawRefId);
+  if (refId === chatId) return noop();
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    const referrer = await client.query(`SELECT 1 FROM clicker_state WHERE chat_id=$1`, [refId]);
+    if (!referrer.rowCount) { await client.query("ROLLBACK"); return noop(); }
     await client.query(`INSERT INTO clicker_state (chat_id) VALUES ($1) ON CONFLICT (chat_id) DO NOTHING`, [chatId]);
-    const { rows } = await client.query(`SELECT referred_by FROM clicker_state WHERE chat_id=$1 FOR UPDATE`, [chatId]);
-    if (rows[0].referred_by != null) { await client.query("ROLLBACK"); return noop(); }
+    const { rows } = await client.query(`SELECT referred_by, total_earned, taps FROM clicker_state WHERE chat_id=$1 FOR UPDATE`, [chatId]);
+    if (!isReferralEligibleState(rows[0].total_earned, rows[0].taps, rows[0].referred_by)) { await client.query("ROLLBACK"); return noop(); }
     await client.query(`UPDATE clicker_state SET referred_by=$2, balance=balance+$3, total_earned=total_earned+$3 WHERE chat_id=$1`, [chatId, refId, REF_INVITEE]);
     await client.query(`INSERT INTO clicker_state (chat_id, balance, total_earned, referrals) VALUES ($1,$2,$2,1)
                         ON CONFLICT (chat_id) DO UPDATE SET balance=clicker_state.balance+$2, total_earned=clicker_state.total_earned+$2, referrals=clicker_state.referrals+1`, [refId, REF_REFERRER]);
@@ -1704,8 +1767,9 @@ export async function redeemReward(chatId: number, id: string): Promise<{ ok: bo
  * Идемпотентность НЕ гарантируется — вызывать один раз на событие.
  */
 export async function addClickerBalance(chatId: number, coins: number, client?: PoolClient): Promise<void> {
-  if (!coins || coins <= 0) return;
-  const n = Math.round(coins);
+  const MAX_SINGLE_INTERNAL_GRANT = 10_000_000;
+  if (!Number.isFinite(coins) || coins <= 0) return;
+  const n = Math.min(MAX_SINGLE_INTERNAL_GRANT, Math.round(coins));
   const q = client ?? pool;
   await q.query(
     `INSERT INTO clicker_state (chat_id, balance, total_earned) VALUES ($1,$2,$2)

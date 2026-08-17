@@ -525,12 +525,14 @@ const STAR_RATES: Record<string, (score: number) => number> = {
   flappy_cake: () => 0,
   memory:      () => 0,
   bakery:      () => 0,
-  // «Котик ловит пироги»: 1 звезда за каждые 50 очков (1 пирог = 10 очков).
-  // Дневной кап (STAR_DAILY_CAP) защищает экономику от накрутки.
-  cat_catch:   (score) => Math.floor(score / 50),
-  // «Накорми Котика»: счёт выше (комбо ×N) → 1 звезда за 100 очков.
-  cat_feed:    (score) => Math.floor(score / 100),
+  cat_catch:   () => 0,
+  cat_feed:    () => 0,
 };
+export function gameStarsForScore(game: string, score: number): number {
+  const rate = STAR_RATES[game];
+  if (!rate || !Number.isFinite(score) || score <= 0) return 0;
+  return Math.max(0, Math.floor(rate(score)));
+}
 
 export async function recordGameResult(
   chatId: number,
@@ -542,10 +544,8 @@ export async function recordGameResult(
   recordBonus: number;
   capped: boolean;
 }> {
-  const rateFn = STAR_RATES[game];
-  if (!rateFn) throw new Error(`Unknown game: ${game}`);
-
-  const baseStars = rateFn(score);
+  if (!STAR_RATES[game]) throw new Error(`Unknown game: ${game}`);
+  const baseStars = gameStarsForScore(game, score);
   const baseRes = await earnStars(chatId, baseStars, game, { score });
 
   // Check personal record

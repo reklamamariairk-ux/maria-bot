@@ -39,6 +39,7 @@ import petRouter from "./routes/pet";
 import appAuthRouter, { initAppAuthSchema, attachAppLoginChat, completeAppLogin } from "./routes/app-auth";
 import { initAccountLinkSchema } from "./account-link";
 import adminGameRouter from "./routes/admin-game";
+import adminSystemRouter from "./routes/admin-system";
 import { initPetSchema } from "./pet";
 import clickerRouter from "./routes/clicker";
 import { initClickerSchema, initSquadBankSchema, initCustomSquadSchema, joinSquadByCode, setClickerPushService, registerRef, closeWeeklySeason, pushWeeklyWinners, getRefOrderCandidates, markRefOrderRewarded } from "./clicker";
@@ -593,7 +594,8 @@ bot.command("start", async (ctx) => {
           const userName = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" ") || "Новый друг";
           await sendRaw(ownerId, `🎉 *${userName}* зашёл в «Котик Комбат» по твоей ссылке — тебе +30000 монет 🪙 Спасибо, что зовёшь друзей!`, { parse_mode: "Markdown" }).catch(() => {});
         }
-        await ctx.reply(`🐱 Добро пожаловать в «Котик Комбат»!\n\nТебе начислено +2500 монет за вход по приглашению. Жми и качай котика 👇`, { reply_markup: gameButton("🎮 Играть") }).catch(() => {});
+        const bonusLine = r?.ok ? "\n\nТебе начислено +2500 монет за вход по приглашению." : "";
+        await ctx.reply(`🐱 Добро пожаловать в «Котик Комбат»!${bonusLine}\n\nЖми и качай котика 👇`, { reply_markup: gameButton("🎮 Играть") }).catch(() => {});
         return;
       }
     }
@@ -799,6 +801,20 @@ app.use(express.static(path.join(__dirname, "..", "public"), {
     if (filePath.endsWith(".html")) res.setHeader("Cache-Control", "no-cache");
   },
 }));
+// Явный вход в центр администрирования: некоторые reverse proxy не передают
+// завершающий слэш каталогам, поэтому express.static не всегда резолвит index.
+app.get("/admin", (_req, res) => {
+  res.redirect(302, "/admin/");
+});
+app.get("/admin/", (_req, res) => {
+  res.sendFile(path.join(__dirname, "..", "public", "admin", "index.html"));
+});
+app.get("/privacy", (_req, res) => {
+  res.sendFile(path.join(__dirname, "..", "public", "privacy.html"));
+});
+app.get("/support", (_req, res) => {
+  res.sendFile(path.join(__dirname, "..", "public", "support.html"));
+});
 
 // Прокси логотипа
 function proxyAsset(url: string, contentType: string) {
@@ -1559,6 +1575,7 @@ app.use(clickerRouter);
 
 // Админка игры: метрики/игроки/рассылка (UI: /admin/game.html, гейт ADMIN_TOKEN)
 app.use(adminGameRouter(_pushService));
+app.use(adminSystemRouter());
 
 // GET /api/holidays/upcoming вынесен в src/routes/holidays.ts
 app.use(holidaysRouter);

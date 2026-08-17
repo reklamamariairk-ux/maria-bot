@@ -8,6 +8,9 @@ import type { Rarity } from "./pigeons";
 import { PIGEON_PRICE } from "./pigeons";
 
 export const CASE_COST = 100_000;           // цена открытия кейса, монеты
+export const CASE_BUSINESS_LEVEL_VALUE_CAP = 300_000;
+export const canGrantCaseBusinessLevel = (marketValue: number): boolean =>
+  Number.isFinite(marketValue) && marketValue >= 0 && marketValue <= CASE_BUSINESS_LEVEL_VALUE_CAP;
 
 export type CasePrize =
   | { type: "coins"; amount: number }
@@ -48,14 +51,14 @@ const businessSlot = (id: string, weight: number, value: number): Slot => ({
 // CS2-подобная таблица: частые дешёвые результаты, редкие игровые предметы и
 // сверхприз 10 млн. Веса суммируются до 10000 (0.01% на единицу).
 export const CASE_SLOTS: Slot[] = [
-  coinsSlot("coins_zero", 984, 0, 0),
-  coinsSlot("coins_loss", 3000, 10_000, 70_000),
-  coinsSlot("coins_slight_under", 2000, 70_000, 99_000),
-  coinsSlot("coins_equal", 1200, 100_000, 100_000),
-  coinsSlot("coins_plus", 1000, 110_000, 160_000),
+  coinsSlot("coins_zero", 1745, 0, 0),
+  coinsSlot("coins_loss", 3000, 10_000, 50_000),
+  coinsSlot("coins_slight_under", 2000, 60_000, 90_000),
+  coinsSlot("coins_equal", 800, 100_000, 100_000),
+  coinsSlot("coins_plus", 700, 110_000, 160_000),
   coinsSlot("coins_big", 600, 200_000, 400_000),
-  coinsSlot("coins_jackpot", 100, 500_000, 1_500_000),
-  coinsSlot("coins_super_jackpot", 16, 10_000_000, 10_000_000),
+  coinsSlot("coins_jackpot", 50, 500_000, 1_500_000),
+  coinsSlot("coins_super_jackpot", 5, 10_000_000, 10_000_000),
   pigeonSlot("common", 500),
   pigeonSlot("rare", 300),
   pigeonSlot("epic", 50),
@@ -66,12 +69,12 @@ export const CASE_SLOTS: Slot[] = [
 ];
 export const CASE_TOTAL_WEIGHT = CASE_SLOTS.reduce((s, x) => s + x.weight, 0);
 
-// После пяти призов рыночной ценностью ниже ставки следующий денежный результат
-// защищён. Серия учитывает и предметы по их игровой рыночной цене.
+// После пяти призов рыночной ценностью ниже ставки следующая попытка как минимум
+// окупается. Защита останавливает плохую серию, но не создаёт гарантированную прибыль.
 export const CASE_LOSS_PITY = 5;
 export function protectCaseLossStreak(prize: CasePrize, lossStreak: number, r: number): CasePrize {
-  if (lossStreak < CASE_LOSS_PITY || prizeValue(prize) >= 220_000) return prize;
-  return { type: "coins", amount: Math.round(220_000 + Math.max(0, Math.min(1, r)) * 80_000) };
+  if (lossStreak < CASE_LOSS_PITY || prizeValue(prize) >= CASE_COST) return prize;
+  return { type: "coins", amount: Math.round(CASE_COST + Math.max(0, Math.min(1, r)) * 40_000) };
 }
 
 // Средняя ценность приза (EV) и домовый эдж — без учёта гейта чемпиона (его вклад
