@@ -1239,7 +1239,7 @@ async function* chatAgentStream(
   const MAX_ITERATIONS = 6;
 
   let toolsBroken = false;
-  let currentModel = "llama-3.3-70b-versatile";
+  let currentModel = "openai/gpt-oss-120b";
   let finalText = "";
   let retried429 = false;
 
@@ -1282,16 +1282,16 @@ async function* chatAgentStream(
       const e = err as GroqErr;
       if (e.rateLimited) {
         // Стратегия:
-        // 1. Если на 70b — fallback на 8b сразу (другой пул limit-ов)
-        // 2. Если уже на 8b — ждём retry-after из ответа Groq и повторяем (один раз)
-        if (currentModel === "llama-3.3-70b-versatile") {
-          console.warn("[chatAgentStream] 70b rate-limited, fallback to 8b");
-          currentModel = "llama-3.1-8b-instant";
+        // 1. Если на 120b — fallback на 20b сразу (другой пул limit-ов)
+        // 2. Если уже на 20b — ждём retry-after из ответа Groq и повторяем (один раз)
+        if (currentModel === "openai/gpt-oss-120b") {
+          console.warn("[chatAgentStream] 120b rate-limited, fallback to 20b");
+          currentModel = "openai/gpt-oss-20b";
           iter--; continue;
         }
         if (!retried429) {
           const wait = e.retryAfterMs && e.retryAfterMs > 0 ? e.retryAfterMs : 3000;
-          console.warn(`[chatAgentStream] 8b rate-limited, waiting ${wait}ms and retrying`);
+          console.warn(`[chatAgentStream] 20b rate-limited, waiting ${wait}ms and retrying`);
           await sleep(wait);
           retried429 = true;
           iter--; continue;
@@ -1339,7 +1339,7 @@ async function* chatAgentStream(
   // MAX_ITERATIONS исчерпаны — финальный non-stream запрос без tools
   try {
     const final = await groqRequest({
-      model: "llama-3.1-8b-instant",
+      model: "openai/gpt-oss-20b",
       max_tokens: 768,
       temperature: 0.3,
       messages,
@@ -1387,7 +1387,7 @@ async function chatAgent(
   const MAX_ITERATIONS = 6;
 
   let toolsBroken = false;
-  let currentModel = "llama-3.3-70b-versatile";
+  let currentModel = "openai/gpt-oss-120b";
   let retried429 = false;
   for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
     const sendMessages = trimHistory(messages, 20);
@@ -1404,14 +1404,14 @@ async function chatAgent(
     } catch (err) {
       const e = err as GroqErr;
       if (e.rateLimited) {
-        if (currentModel === "llama-3.3-70b-versatile") {
-          console.warn("[chatAgent] 70b rate-limited, fallback to 8b");
-          currentModel = "llama-3.1-8b-instant";
+        if (currentModel === "openai/gpt-oss-120b") {
+          console.warn("[chatAgent] 120b rate-limited, fallback to 20b");
+          currentModel = "openai/gpt-oss-20b";
           iter--; continue;
         }
         if (!retried429) {
           const wait = e.retryAfterMs && e.retryAfterMs > 0 ? e.retryAfterMs : 3000;
-          console.warn(`[chatAgent] 8b rate-limited, waiting ${wait}ms and retrying`);
+          console.warn(`[chatAgent] 20b rate-limited, waiting ${wait}ms and retrying`);
           await sleep(wait);
           retried429 = true;
           iter--; continue;
@@ -1462,7 +1462,7 @@ async function chatAgent(
 
   // Если за MAX_ITERATIONS не успели — финальный запрос без tools
   const final = await groqRequest({
-    model: "llama-3.1-8b-instant",  // быстрый fallback — гарантированно ответит
+    model: "openai/gpt-oss-20b",  // быстрый fallback — гарантированно ответит
     max_tokens: 768,
     temperature: 0.3,
     messages,
