@@ -48,5 +48,36 @@ export default function adminSystemRouter(): Router {
     }
   });
 
+  router.get("/api/admin/economy/report", requireAdminToken, rateLimit(30), async (_req, res) => {
+    try {
+      const [totals, cases, top, suspicious] = await Promise.all([
+        pool.query(`SELECT COUNT(*)::int AS players,
+                           COALESCE(SUM(balance),0)::bigint AS balance,
+                           COALESCE(SUM(total_earned),0)::bigint AS total_earned,
+                           COALESCE(SUM(case_spent),0)::bigint AS case_spent,
+                           COALESCE(SUM(case_won),0)::bigint AS case_won,
+                           COALESCE(SUM(taps),0)::bigint AS taps
+                      FROM clicker_state`),
+        pool.query(`SELECT COUNT(*)::int AS openings,
+                           COALESCE(SUM(cost),0)::bigint AS spent,
+                           COALESCE(SUM(balance_after-balance_before),0)::bigint AS balance_delta
+                      FROM clicker_case_history`),
+        pool.query(`SELECT chat_id::text, balance::bigint, total_earned::bigint, taps::bigint,
+                           case_spent::bigint, case_won::bigint
+                      FROM clicker_state ORDER BY total_earned DESC LIMIT 20`),
+        pool.query(`SELECT chat_id::text, balance::bigint, total_earned::bigint, taps::bigint,
+                           case_spent::bigint, case_won::bigint
+                      FROM clicker_state
+                     WHERE total_earned > 1000000
+                        OR (case_spent > 0 AND case_won > case_spent * 2)
+                     ORDER BY total_earned DESC LIMIT 100`),
+      ]);
+      res.json({ totals: totals.rows[0], cases: cases.rows[0], top: top.rows, suspicious: suspicious.rows });
+    } catch (error) {
+      log.error({ err: error }, "[admin economy report]");
+      res.status(500).json({ error: "internal" });
+    }
+  });
+
   return router;
 }
