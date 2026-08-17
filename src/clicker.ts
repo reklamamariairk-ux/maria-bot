@@ -328,6 +328,9 @@ export async function initClickerSchema(): Promise<void> {
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS squad TEXT;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS prestige INT NOT NULL DEFAULT 0;
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS ftue_claimed INT NOT NULL DEFAULT 0;
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS admin_blocked BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS admin_block_reason TEXT;
+    ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS admin_blocked_at TIMESTAMPTZ;
     CREATE INDEX IF NOT EXISTS clicker_squad_idx ON clicker_state (squad);
     -- Платный кейс: суммарно потрачено/выиграно игроком (казино-баланс дом/игрок, пити).
     ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS case_spent BIGINT NOT NULL DEFAULT 0;
@@ -487,6 +490,7 @@ async function refresh(client: any, chatId: number): Promise<{ r: any; cl: Recor
   await client.query(`INSERT INTO clicker_state (chat_id) VALUES ($1) ON CONFLICT (chat_id) DO NOTHING`, [chatId]);
   const { rows } = await client.query(`SELECT * FROM clicker_state WHERE chat_id=$1 FOR UPDATE`, [chatId]);
   const r = rows[0];
+  if (r.admin_blocked) throw new Error("account_blocked");
   // Стартовый голубь: при первом заходе выдаём Сизаря один раз (флаг starter_pigeon),
   // чтобы коллекция не была пустой и механика была сразу понятна. Дёшево: r уже загружен.
   if (!r.starter_pigeon) {

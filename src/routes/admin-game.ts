@@ -202,6 +202,29 @@ export default function adminGameRouter(push: PushService): Router {
     }
   });
 
+  router.post("/api/admin/game/user/:id/block", requireAdminToken, requireAdminRole("operator"), rateLimit(20), async (req, res) => {
+    const id = Number(req.params.id);
+    const blocked = Boolean((req.body as { blocked?: unknown })?.blocked);
+    const reason = String((req.body as { reason?: unknown })?.reason || "Административное решение").trim().slice(0, 200);
+    if (!Number.isSafeInteger(id) || id <= 0) { res.status(400).json({ error: "bad_id" }); return; }
+    try {
+      const { rows } = await pool.query(
+        `UPDATE clicker_state SET admin_blocked=$2, admin_block_reason=$3,
+                admin_blocked_at=CASE WHEN $2 THEN NOW() ELSE NULL END, updated_at=NOW()
+          WHERE chat_id=$1 RETURNING balance`, [id, blocked, blocked ? reason : null]);
+      if (!rows[0]) { res.status(404).json({ error: "not_found" }); return; }
+      trackEvent(id, blocked ? "admin_block" : "admin_unblock", { reason });
+      const message = blocked
+        ? `🔒 Доступ к «Котик Комбат» временно ограничен администрацией.\nПричина: ${reason}`
+        : `🔓 Доступ к «Котик Комбат» восстановлен администрацией.\nПричина: ${reason}`;
+      const notified = await push.sendRaw(id, message).catch((error) => { log.warn({ err: error, id }, "[admin block] notification failed"); return false; });
+      res.json({ ok: true, blocked, notified });
+    } catch (error) {
+      log.error({ err: error, id }, "[admin block]");
+      res.status(500).json({ error: "internal" });
+    }
+  });
+
   // ── Рассылка ───────────────────────────────────────────────────────────────
   router.post("/api/admin/game/push", requireAdminToken, requireAdminRole("operator"), rateLimit(10), async (req, res) => {
     const body = req.body as { text?: unknown; segment?: unknown; testChatId?: unknown };
