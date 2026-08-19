@@ -745,10 +745,19 @@
     await renderTune(breedId);
   }
 
-  async function renderTune(breedId) {
+  async function renderTune(breedId, updatedTuning) {
     const body = container.querySelector('#cd-tune-body'); if (!body) return;
-    const t = await apiRef('/api/pigeons/tune?breed=' + encodeURIComponent(breedId)).catch(() => null);
-    if (!t || !t.owned) { body.innerHTML = `<div style="color:var(--muted);font-size:12.5px;text-align:center;padding:10px 0">Птица не найдена</div>`; return; }
+    const t = updatedTuning || await apiRef('/api/pigeons/tune?breed=' + encodeURIComponent(breedId)).catch(() => null);
+    if (!t || t.error) {
+      const message = t && t.error === 'rate_limited'
+        ? 'Слишком много запросов — подожди немного и повтори'
+        : 'Не удалось загрузить тюнинг — проверь соединение';
+      body.innerHTML = `<div style="color:var(--muted);font-size:12.5px;text-align:center;padding:10px 0">${message}</div><button class="cd-sheet__act" id="cd-tune-retry">Повторить</button>`;
+      const retry = body.querySelector('#cd-tune-retry');
+      if (retry) retry.onclick = () => renderTune(breedId);
+      return;
+    }
+    if (!t.owned) { body.innerHTML = `<div style="color:var(--muted);font-size:12.5px;text-align:center;padding:10px 0">Птица не найдена</div>`; return; }
     const balance = num(t.balance);
     if (data && data.invMap[breedId]) {
       data.passivePerHour += num(t.passivePerHour) - num(data.invMap[breedId].passivePerHour);
@@ -787,7 +796,9 @@
     if (busy) return; busy = true; if (btn) btn.disabled = true;
     try {
       const d = await apiRef('/api/pigeons/tune', { method: 'POST', body: JSON.stringify({ breed: breedId, stat }) }).catch(() => null);
-      if (d && d.ok) { haptic('medium'); await renderTune(breedId); }
+      // Сервер возвращает авторитетное состояние после покупки: повторный GET больше
+      // не нужен и длинная серия прокачек не упирается в лимит чтения.
+      if (d && d.ok) { haptic('medium'); await renderTune(breedId, d.tuning); }
       else { flash(TUNE_REASON[d && d.error] || 'Не получилось прокачать'); if (btn) btn.disabled = false; }
     } finally { busy = false; }
   }

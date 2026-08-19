@@ -1,6 +1,6 @@
 /**
  * Express middleware'ы вынесенные из src/index.ts.
- * - rateLimit(maxPerMinute) — sliding window per (IP, path).
+ * - rateLimit(maxPerMinute) — sliding window per (user/IP, HTTP method, path).
  * - adminToken — проверка `x-user-token` или `body.token` против ADMIN_TOKEN.
  *
  * requireTgUser/getTgUser/tryGetTgUser лежат в `src/auth.ts` (не трогаем).
@@ -41,7 +41,10 @@ export function rateLimit(maxPerMinute: number) {
     // requireTgUser стоит в цепочке ДО rateLimit и уже положил appUser на req.
     const uid = (req as { appUser?: { id?: number } }).appUser?.id;
     const who = uid ? `u${uid}` : (req.ip || req.socket.remoteAddress || "unknown");
-    const key = `${who}:${req.path}`;
+    // GET и POST одного URL — разные операции и часто имеют разные лимиты.
+    // Если складывать их в один bucket, POST /tune + следующий GET /tune
+    // преждевременно исчерпывают лимит друг друга при серийной прокачке.
+    const key = `${who}:${req.method.toUpperCase()}:${req.path}`;
     const now = Date.now();
     const win = 60_000;
     const arr = (rateBuckets.get(key) || []).filter((t) => now - t < win);

@@ -999,34 +999,55 @@ export async function getMailRecipients(chatId: number):
 // ── Тюнинг гонщика (операции с БД) ──────────────────────────────────────────
 const STAT_COL: Record<TuneStat, string> = { speed: "tune_speed", stamina: "tune_stamina", luck: "tune_luck" };
 
-export async function getTuning(chatId: number, breed: string): Promise<{
+export interface PigeonTuning {
   owned: boolean; speed: number; stamina: number; luck: number; powerRating: number;
   division: Division; nextCost: Record<TuneStat, number | null>; balance: number; passivePerHour: number;
-}> {
+}
+
+interface PigeonTuningRow {
+  stars: number | string;
+  tune_speed: number | string;
+  tune_stamina: number | string;
+  tune_luck: number | string;
+}
+
+function tuningState(breed: string, row: PigeonTuningRow | undefined, balance: number): PigeonTuning {
+  const speed = Number(row?.tune_speed) || 0;
+  const stamina = Number(row?.tune_stamina) || 0;
+  const luck = Number(row?.tune_luck) || 0;
+  const power = speed + stamina + luck;
+  return {
+    owned: !!row,
+    speed,
+    stamina,
+    luck,
+    powerRating: power,
+    division: raceDivision(power),
+    nextCost: { speed: tuneCost(speed), stamina: tuneCost(stamina), luck: tuneCost(luck) },
+    balance,
+    passivePerHour: row ? pigeonPassiveValue(breed, Number(row.stars), speed, stamina, luck) : 0,
+  };
+}
+
+export async function getTuning(chatId: number, breed: string): Promise<PigeonTuning> {
   const [inv, bal] = await Promise.all([
     pool.query(`SELECT stars, tune_speed, tune_stamina, tune_luck FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 AND count>0`, [chatId, breed]),
     pool.query(`SELECT balance FROM clicker_state WHERE chat_id=$1`, [chatId]),
   ]);
-  const speed = inv.rows[0]?.tune_speed ?? 0, stamina = inv.rows[0]?.tune_stamina ?? 0, luck = inv.rows[0]?.tune_luck ?? 0;
-  const power = speed + stamina + luck;
-  return {
-    owned: !!inv.rowCount, speed, stamina, luck, powerRating: power, division: raceDivision(power),
-    nextCost: { speed: tuneCost(speed), stamina: tuneCost(stamina), luck: tuneCost(luck) },
-    balance: bal.rows[0] ? Number(bal.rows[0].balance) : 0,
-    passivePerHour: inv.rowCount ? pigeonPassiveValue(breed, Number(inv.rows[0].stars), speed, stamina, luck) : 0,
-  };
+  return tuningState(breed, inv.rows[0] as PigeonTuningRow | undefined, bal.rows[0] ? Number(bal.rows[0].balance) : 0);
 }
 
 // Прокачка одной характеристики: списание монет + инкремент уровня в одной транзакции.
 export async function upgradeTune(chatId: number, breed: string, stat: string):
-  Promise<{ ok: boolean; level?: number; spent?: number; reason?: string }> {
+  Promise<{ ok: boolean; level?: number; spent?: number; tuning?: PigeonTuning; reason?: string }> {
   if (!TUNE_STATS.includes(stat as TuneStat)) return { ok: false, reason: "bad_stat" };
   const col = STAT_COL[stat as TuneStat];
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const inv = await client.query(
-      `SELECT ${col} AS lvl FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 AND count>0 FOR UPDATE`,
+      `SELECT ${col} AS lvl, stars, tune_speed, tune_stamina, tune_luck
+         FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 AND count>0 FOR UPDATE`,
       [chatId, breed]);
     if (!inv.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "not_owned" }; }
     const level = inv.rows[0].lvl;
@@ -1034,12 +1055,16 @@ export async function upgradeTune(chatId: number, breed: string, stat: string):
     if (cost == null) { await client.query("ROLLBACK"); return { ok: false, reason: "max_level" }; }
     // списываем монеты только если хватает (атомарно через условный UPDATE баланса)
     const pay = await client.query(
-      `UPDATE clicker_state SET balance = balance - $2 WHERE chat_id=$1 AND balance >= $2 RETURNING 1`,
+      `UPDATE clicker_state SET balance = balance - $2 WHERE chat_id=$1 AND balance >= $2 RETURNING balance`,
       [chatId, cost]);
     if (!pay.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
-    await client.query(`UPDATE pigeon_inventory SET ${col} = ${col} + 1 WHERE chat_id=$1 AND breed=$2`, [chatId, breed]);
+    const updated = await client.query(
+      `UPDATE pigeon_inventory SET ${col} = ${col} + 1 WHERE chat_id=$1 AND breed=$2
+       RETURNING stars, tune_speed, tune_stamina, tune_luck`,
+      [chatId, breed]);
+    const tuning = tuningState(breed, updated.rows[0] as PigeonTuningRow, Number(pay.rows[0].balance));
     await client.query("COMMIT");
-    return { ok: true, level: level + 1, spent: cost };
+    return { ok: true, level: Number(level) + 1, spent: cost, tuning };
   } catch (e) { await client.query("ROLLBACK"); throw e; }
   finally { client.release(); }
 }

@@ -3,8 +3,8 @@
  * VK callback secret, DELIVERY_TOKEN). Самая горячая секьюрити-функция:
  * false-негатив = запертая админка, false-позитив = открытая.
  */
-import { describe, it, expect } from "vitest";
-import { safeEq } from "../src/middleware";
+import { describe, it, expect, vi } from "vitest";
+import { rateLimit, safeEq } from "../src/middleware";
 
 describe("safeEq — constant-time сравнение токенов", () => {
   it("одинаковые строки → true", () => {
@@ -45,5 +45,26 @@ describe("safeEq — constant-time сравнение токенов", () => {
 
   it("префикс токена → false (частичное совпадение не проходит)", () => {
     expect(safeEq("admin-token", "admin-token-full")).toBe(false);
+  });
+});
+
+describe("rateLimit — независимые лимиты методов", () => {
+  it("GET не расходует лимит POST на том же пути", () => {
+    const getLimit = rateLimit(2);
+    const postLimit = rateLimit(2);
+    const nextGet = vi.fn();
+    const nextPost = vi.fn();
+    const status = vi.fn().mockReturnThis();
+    const json = vi.fn();
+    const response = { status, json } as any;
+    const base = { path: "/__test_rate_limit_methods", ip: "127.0.0.1", socket: {} };
+
+    getLimit({ ...base, method: "GET" } as any, response, nextGet);
+    getLimit({ ...base, method: "GET" } as any, response, nextGet);
+    postLimit({ ...base, method: "POST" } as any, response, nextPost);
+
+    expect(nextGet).toHaveBeenCalledTimes(2);
+    expect(nextPost).toHaveBeenCalledTimes(1);
+    expect(status).not.toHaveBeenCalled();
   });
 });
