@@ -36,9 +36,10 @@
     // cat = картинка кота на уровне (эволюция «глоу-ап»: тощий уличный → кот-император)
     // 19 уровней «Кондитерская карьера Василия» (арт-комплект 08.07.2026, спека
     // docs/superpowers/specs/2026-07-08-vasily-art-set-design.md). Кот ОДИН и тот же,
-    // прогрессия — одеждой/аксессуарами/фоном. Пороги need НЕ менялись (прогресс игроков).
+    // прогрессия — одеждой/аксессуарами/фоном. Пороги need меняются только вперёд;
+    // серверный храповик сохраняет уже достигнутый уровень.
     // ⚠️ Лестница продублирована в src/clicker.ts (name) — менять синхронно.
-    // Пороги растянуты 15.07 (ранние уровни пролетали) — синхронно с src/clicker.ts LEAGUES.
+    // Пороги растянуты 15.07 и дополнительно 25.08 для цели 6–8 недель — синхронно с src/clicker.ts.
     // Костюмы кота (cat) НЕ меняются. Уровень игрока не откатывается (храповик max_level на сервере).
     { level: 1,  name: 'Котёнок-стажёр',     need: 0,        cat: 'vasily-stage1.webp' },
     { level: 2,  name: 'Помощник пекаря',    need: 2000,     cat: 'vasily-stage2.webp' },
@@ -50,15 +51,15 @@
     { level: 8,  name: 'Тортодел',           need: 320000,   cat: 'vasily-stage8.webp' },
     { level: 9,  name: 'Шоколатье',          need: 650000,   cat: 'vasily-stage9.webp' },
     { level: 10, name: 'Су-шеф',             need: 1300000,  cat: 'vasily-stage10.webp' },
-    { level: 11, name: 'Шеф-кондитер',       need: 2600000,  cat: 'vasily-stage11.webp' },
-    { level: 12, name: 'Художник десертов',  need: 5200000,  cat: 'vasily-stage12.webp' },
-    { level: 13, name: 'Управляющий',        need: 10000000, cat: 'vasily-stage13.webp' },
-    { level: 14, name: 'Владелец кафе',      need: 18000000, cat: 'vasily-stage14.webp' },
-    { level: 15, name: 'Ресторатор',         need: 30000000,  cat: 'vasily-stage15.webp' },
-    { level: 16, name: 'Магнат выпечки',     need: 50000000,  cat: 'vasily-stage16.webp' },
-    { level: 17, name: 'Легенда',            need: 80000000, cat: 'vasily-stage17.webp' },
-    { level: 18, name: 'Король тортов',      need: 120000000, cat: 'vasily-stage18.webp' },
-    { level: 19, name: 'Император выпечки',  need: 180000000, cat: 'vasily-stage19.webp' },
+    { level: 11, name: 'Шеф-кондитер',       need: 3000000,   cat: 'vasily-stage11.webp' },
+    { level: 12, name: 'Художник десертов',  need: 7000000,   cat: 'vasily-stage12.webp' },
+    { level: 13, name: 'Управляющий',        need: 15000000,  cat: 'vasily-stage13.webp' },
+    { level: 14, name: 'Владелец кафе',      need: 30000000,  cat: 'vasily-stage14.webp' },
+    { level: 15, name: 'Ресторатор',         need: 55000000,  cat: 'vasily-stage15.webp' },
+    { level: 16, name: 'Магнат выпечки',     need: 100000000, cat: 'vasily-stage16.webp' },
+    { level: 17, name: 'Легенда',            need: 180000000, cat: 'vasily-stage17.webp' },
+    { level: 18, name: 'Король тортов',      need: 300000000, cat: 'vasily-stage18.webp' },
+    { level: 19, name: 'Император выпечки',  need: 500000000, cat: 'vasily-stage19.webp' },
   ];
   const BUSINESS_MAX_LEVEL = 20;
   const REF_REFERRER = 30000, REF_INVITEE = 2500, BOT = 'mariatortik_bot'; // зеркало src/clicker.ts
