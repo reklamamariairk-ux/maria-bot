@@ -23,6 +23,7 @@ const promises_1 = __importDefault(require("fs/promises"));
 const path_1 = __importDefault(require("path"));
 const crypto_1 = __importDefault(require("crypto"));
 const SELFIE_DIR = path_1.default.join("/tmp", "cake_selfies");
+const SELFIE_TTL_MS = 2 * 60 * 60 * 1000;
 // Создаём папку при импорте — раз и навсегда. Здесь оставляем sync — это
 // один раз на процесс, не блокирует hot path.
 try {
@@ -79,9 +80,14 @@ async function storeSelfie(b64DataUrl, baseUrl) {
         throw new Error("image_too_large");
     if (parsed.buf.length < 1024)
         throw new Error("image_too_small");
-    const id = crypto_1.default.randomBytes(8).toString("hex");
+    const id = crypto_1.default.randomBytes(16).toString("hex");
     const filename = `${id}.${parsed.ext}`;
-    await promises_1.default.writeFile(path_1.default.join(SELFIE_DIR, filename), parsed.buf);
+    const filePath = path_1.default.join(SELFIE_DIR, filename);
+    await promises_1.default.writeFile(filePath, parsed.buf);
+    // Основной путь удаления — персональный таймер ровно на TTL. Периодический
+    // cleanup остаётся страховкой после рестарта процесса.
+    const expiryTimer = setTimeout(() => { promises_1.default.unlink(filePath).catch(() => { }); }, SELFIE_TTL_MS);
+    expiryTimer.unref();
     // baseUrl: абсолютный URL нашего сервиса. Pollinations стучится сюда чтобы
     // забрать селфи как conditioning image для img2img.
     const publicUrl = `${baseUrl.replace(/\/$/, "")}/api/selfie-img/${id}`;
@@ -89,11 +95,16 @@ async function storeSelfie(b64DataUrl, baseUrl) {
 }
 async function readSelfie(id) {
     // Защита от path traversal
-    if (!/^[0-9a-f]{16}$/.test(id))
+    if (!/^[0-9a-f]{32}$/.test(id))
         return null;
     for (const ext of ["jpeg", "png", "webp"]) {
         const fp = path_1.default.join(SELFIE_DIR, `${id}.${ext}`);
         try {
+            const st = await promises_1.default.stat(fp);
+            if (Date.now() - st.mtimeMs >= SELFIE_TTL_MS) {
+                await promises_1.default.unlink(fp).catch(() => { });
+                return null;
+            }
             const buf = await promises_1.default.readFile(fp);
             return { buf, type: ext === "jpeg" ? "image/jpeg" : `image/${ext}` };
         }
@@ -112,13 +123,12 @@ function generateSelfieCakes(publicSelfieUrl) {
 async function cleanupOldSelfies() {
     try {
         const now = Date.now();
-        const maxAge = 2 * 60 * 60 * 1000;
         const files = await promises_1.default.readdir(SELFIE_DIR);
         for (const f of files) {
             try {
                 const fp = path_1.default.join(SELFIE_DIR, f);
                 const st = await promises_1.default.stat(fp);
-                if (now - st.mtimeMs > maxAge)
+                if (now - st.mtimeMs >= SELFIE_TTL_MS)
                     await promises_1.default.unlink(fp);
             }
             catch { }

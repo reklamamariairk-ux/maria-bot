@@ -21,7 +21,7 @@
  */
 
 import type { Bot } from "grammy";
-import { canSendNotification, logNotification, NotificationKind, getVkMessagesAllowed } from "./db";
+import { reserveNotification, completeNotificationReservation, NotificationKind, getVkMessagesAllowed } from "./db";
 import { isVkId, isMaxId, toPlatformId } from "./platform";
 import type { VkSender } from "./vk/sender";
 import { log } from "./logger";
@@ -31,18 +31,18 @@ export interface PushService {
     chatId: number,
     kind: NotificationKind,
     text: string,
-    opts?: { parse_mode?: "Markdown" | "HTML" }
+    opts?: { parse_mode?: "Markdown" | "HTML"; dedupeKey?: string }
   ) => Promise<boolean>;
   /** Платформо-роутинг без квот/prefs (транзакционные и админ-сообщения). */
   sendRaw: (
     chatId: number,
     text: string,
-    opts?: { parse_mode?: "Markdown" | "HTML" }
+    opts?: { parse_mode?: "Markdown" | "HTML"; dedupeKey?: string }
   ) => Promise<boolean>;
 }
 
 export function createPushService(bot: Bot, vkSender?: VkSender): PushService {
-  async function sendRaw(
+  async function deliverRaw(
     chatId: number,
     text: string,
     opts?: { parse_mode?: "Markdown" | "HTML" }
@@ -74,16 +74,26 @@ export function createPushService(bot: Bot, vkSender?: VkSender): PushService {
   }
 
   return {
-    sendRaw,
-    async sendPushSafely(chatId, kind, text, opts) {
-      const gate = await canSendNotification(chatId, kind)
+    async sendRaw(chatId, text, opts) {
+      if (!opts?.dedupeKey) return deliverRaw(chatId, text, opts);
+      const reservation = await reserveNotification(chatId, "transactional", opts.dedupeKey)
         .catch(() => ({ ok: false as const, reason: "db_error" }));
-      if (!gate.ok) {
-        log.debug({ chatId, kind, reason: gate.reason }, "[push skipped]");
+      if (!reservation.ok || !reservation.token) return false;
+      const ok = await deliverRaw(chatId, text, opts);
+      await completeNotificationReservation(reservation.token, ok)
+        .catch((e) => log.warn({ chatId, err: (e as Error).message }, "[raw push reservation complete]"));
+      return ok;
+    },
+    async sendPushSafely(chatId, kind, text, opts) {
+      const reservation = await reserveNotification(chatId, kind, opts?.dedupeKey)
+        .catch(() => ({ ok: false as const, reason: "db_error" }));
+      if (!reservation.ok || !reservation.token) {
+        log.debug({ chatId, kind, reason: reservation.reason }, "[push skipped]");
         return false;
       }
-      const ok = await sendRaw(chatId, text, { parse_mode: opts?.parse_mode ?? "Markdown" });
-      if (ok) await logNotification(chatId, kind).catch(() => {});
+      const ok = await deliverRaw(chatId, text, { parse_mode: opts?.parse_mode ?? "Markdown" });
+      await completeNotificationReservation(reservation.token, ok)
+        .catch((e) => log.warn({ chatId, kind, err: (e as Error).message }, "[push reservation complete]"));
       return ok;
     },
   };

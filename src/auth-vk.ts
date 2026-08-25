@@ -11,6 +11,8 @@
  */
 
 import crypto from "crypto";
+import { hasUniqueQueryKeys, isFreshAuthTimestamp, isValidPlatformId } from "./auth-validation";
+import { MAX_ID_OFFSET, VK_ID_OFFSET } from "./platform";
 
 export interface VkLaunchUser {
   /** Родной VK user id (НЕ namespaced). */
@@ -30,6 +32,7 @@ export function verifyVkLaunchParams(qs: string): VkLaunchUser | null {
   } catch {
     return null;
   }
+  if (!hasUniqueQueryKeys(params)) return null;
   const sign = params.get("sign");
   if (!sign) return null;
 
@@ -56,12 +59,11 @@ export function verifyVkLaunchParams(qs: string): VkLaunchUser | null {
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
 
   // Свежесть запуска — 24h, как у Telegram initData
-  const ts = Number(params.get("vk_ts") ?? 0);
-  if (!ts || Date.now() / 1000 - ts > 86400) return null;
+  if (!isFreshAuthTimestamp(params.get("vk_ts"))) return null;
 
   const vkUserId = Number(params.get("vk_user_id") ?? 0);
   const appId = Number(params.get("vk_app_id") ?? 0);
-  if (!vkUserId || !appId) return null;
+  if (!isValidPlatformId(vkUserId, MAX_ID_OFFSET - VK_ID_OFFSET) || !isValidPlatformId(appId)) return null;
   // Если VK_APP_ID задан — принимаем подписи только своего приложения
   if (VK_APP_ID && appId !== VK_APP_ID) return null;
 

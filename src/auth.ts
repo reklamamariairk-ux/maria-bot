@@ -4,6 +4,8 @@ import { verifyVkLaunchParams } from "./auth-vk";
 import { verifyMaxInitData } from "./auth-max";
 import { canonicalChatId } from "./account-link";
 import { toInternalId, type Platform } from "./platform";
+import { hasUniqueQueryKeys, isFreshAuthTimestamp, isValidPlatformId } from "./auth-validation";
+import { VK_ID_OFFSET } from "./platform";
 
 export interface TgUser {
   id: number;
@@ -33,6 +35,7 @@ export function verifyInitData(initData: string): TgUser | null {
   if (!initData || !BOT_TOKEN) return null;
 
   const params = new URLSearchParams(initData);
+  if (!hasUniqueQueryKeys(params)) return null;
   const hash = params.get("hash");
   if (!hash) return null;
   params.delete("hash");
@@ -49,14 +52,14 @@ export function verifyInitData(initData: string): TgUser | null {
   const bHash = Buffer.from(hash);
   if (bCalc.length !== bHash.length || !crypto.timingSafeEqual(bCalc, bHash)) return null;
 
-  // Reject if older than 24h
-  const authDate = Number(params.get("auth_date") ?? 0);
-  if (!authDate || Date.now() / 1000 - authDate > 86400) return null;
+  // Replay-окно 24ч; далеко будущий auth_date тоже не должен обходить срок.
+  if (!isFreshAuthTimestamp(params.get("auth_date"))) return null;
 
   const userJson = params.get("user");
   if (!userJson) return null;
   try {
-    return JSON.parse(userJson) as TgUser;
+    const user = JSON.parse(userJson) as TgUser;
+    return user && isValidPlatformId(user.id, VK_ID_OFFSET) ? user : null;
   } catch {
     return null;
   }
@@ -129,7 +132,25 @@ export async function requireUser(req: Request, res: Response, next: NextFunctio
   try {
     const canon = await canonicalChatId(user.id);
     if (canon !== user.id) user.id = canon;
-  } catch {} // сбой резолва канона не должен ронять авторизацию
+  } catch {
+    // Продолжать под platform id опасно: у связанного пользователя появится
+    // второй игровой профиль. Клиент безопасно повторит запрос после восстановления БД.
+    res.status(503).json({ error: "auth_unavailable" });
+    return;
+  }
+  next();
+}
+
+/** Необязательная авторизация: анонимный запрос пропускается, валидный получает
+ * appUser и канонический id. Нужна публичным маршрутам вроде AI-чата. */
+export async function optionalUser(req: Request, _res: Response, next: NextFunction) {
+  const user = resolveUser(req);
+  if (user) {
+    try {
+      const canon = await canonicalChatId(user.id);
+      if (canon !== user.id) user.id = canon;
+    } catch {}
+  }
   next();
 }
 

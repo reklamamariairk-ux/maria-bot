@@ -17,6 +17,7 @@
 import { pool } from "./db";
 import { trackEvent } from "./analytics";
 import { log } from "./logger";
+import type { PoolClient } from "pg";
 
 export async function initAccountLinkSchema(): Promise<void> {
   await pool.query(`
@@ -43,8 +44,8 @@ export interface LinkResult {
 }
 
 /** total_earned кликера (0 если в игру не заходил). */
-async function progressOf(chatId: number): Promise<number> {
-  const { rows } = await pool.query(
+async function progressOf(chatId: number, db: Pick<PoolClient, "query"> = pool): Promise<number> {
+  const { rows } = await db.query(
     `SELECT total_earned FROM clicker_state WHERE chat_id = $1`, [chatId]);
   return Number(rows[0]?.total_earned ?? 0);
 }
@@ -53,6 +54,12 @@ export async function registerAccountLink(chatId: number, phone: string): Promis
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // Если платформа уже является алиасом (например, человек подтвердил новый
+    // номер), новый телефон должен указывать на действующий канон, а не на
+    // замороженный профиль алиаса.
+    const linked = await client.query(
+      `SELECT canonical_chat_id FROM account_links WHERE alias_chat_id=$1`, [chatId]);
+    const candidate = Number(linked.rows[0]?.canonical_chat_id ?? chatId);
     const cur = await client.query(
       `SELECT canonical_chat_id FROM phone_canonical WHERE phone = $1 FOR UPDATE`, [phone]);
 
@@ -60,21 +67,26 @@ export async function registerAccountLink(chatId: number, phone: string): Promis
       // Первый аккаунт с этим телефоном. Если сам был алиасом другого телефона
       // (сменил номер) — старая связь остаётся, канон тот же; новых связей нет.
       await client.query(
-        `INSERT INTO phone_canonical (phone, canonical_chat_id) VALUES ($1, $2)`, [phone, chatId]);
+        `INSERT INTO phone_canonical (phone, canonical_chat_id) VALUES ($1, $2)`, [phone, candidate]);
       await client.query("COMMIT");
-      return { linked: false, canonicalChatId: chatId };
+      _cache.delete(chatId); _cache.delete(candidate);
+      return { linked: false, canonicalChatId: candidate };
     }
 
     const existing = Number(cur.rows[0].canonical_chat_id);
-    if (existing === chatId) {
+    if (existing === candidate) {
       await client.query("COMMIT");
-      return { linked: false, canonicalChatId: chatId };
+      _cache.delete(chatId); _cache.delete(candidate);
+      return { linked: false, canonicalChatId: candidate };
     }
 
     // Второй+ аккаунт того же телефона: канон = кто прокачаннее.
-    const [pNew, pOld] = await Promise.all([progressOf(chatId), progressOf(existing)]);
-    const canonical = pNew > pOld ? chatId : existing;
-    const alias = canonical === chatId ? existing : chatId;
+    // Транзакция уже держит соединение и блокировку телефона. Используем то же
+    // соединение: вложенные pool.query() могли занять весь пул при массовой связке.
+    const pNew = await progressOf(candidate, client);
+    const pOld = await progressOf(existing, client);
+    const canonical = pNew > pOld ? candidate : existing;
+    const alias = canonical === candidate ? existing : candidate;
 
     await client.query(
       `INSERT INTO account_links (alias_chat_id, canonical_chat_id, phone)
@@ -82,8 +94,9 @@ export async function registerAccountLink(chatId: number, phone: string): Promis
        ON CONFLICT (alias_chat_id) DO UPDATE SET canonical_chat_id = $2, phone = $3, linked_at = NOW()`,
       [alias, canonical, phone]);
     // Прежние алиасы этого телефона перенаправляем на нового канона
-    await client.query(
-      `UPDATE account_links SET canonical_chat_id = $1 WHERE phone = $2 AND alias_chat_id <> $1`,
+    const moved = await client.query(
+      `UPDATE account_links SET canonical_chat_id = $1 WHERE phone = $2 AND alias_chat_id <> $1
+       RETURNING alias_chat_id`,
       [canonical, phone]);
     // Канон не может сам быть алиасом
     await client.query(`DELETE FROM account_links WHERE alias_chat_id = $1`, [canonical]);
@@ -92,7 +105,10 @@ export async function registerAccountLink(chatId: number, phone: string): Promis
       [canonical, phone]);
     await client.query("COMMIT");
 
-    _cache.delete(alias); _cache.delete(canonical);
+    // Все затронутые алиасы могли уже кэшировать прежний канон на 60 секунд.
+    for (const id of new Set([chatId, candidate, existing, alias, canonical, ...moved.rows.map((r) => Number(r.alias_chat_id))])) {
+      _cache.delete(id);
+    }
     trackEvent(canonical, "account_link", { alias, phone_last4: phone.slice(-4) });
     log.info({ canonical, alias }, "[account-link] linked");
     return { linked: true, canonicalChatId: canonical, aliasedChatId: alias };
@@ -107,20 +123,22 @@ export async function registerAccountLink(chatId: number, phone: string): Promis
 
 // ── Резолв канона на каждом запросе (кэш 60с, промах = 1 индексный SELECT) ──
 const CACHE_TTL = 60_000;
+const CACHE_MAX = 20_000;
 const _cache = new Map<number, { canon: number; ts: number }>();
 
 export async function canonicalChatId(chatId: number): Promise<number> {
   const hit = _cache.get(chatId);
   if (hit && Date.now() - hit.ts < CACHE_TTL) return hit.canon;
   let canon = chatId;
-  try {
-    const { rows } = await pool.query(
-      `SELECT canonical_chat_id FROM account_links WHERE alias_chat_id = $1`, [chatId]);
-    if (rows[0]) canon = Number(rows[0].canonical_chat_id);
-  } catch {
-    return chatId; // при сбое БД играем как есть — не роняем авторизацию
+  const { rows } = await pool.query(
+    `SELECT canonical_chat_id FROM account_links WHERE alias_chat_id = $1`, [chatId]);
+  if (rows[0]) canon = Number(rows[0].canonical_chat_id);
+  const now = Date.now();
+  _cache.set(chatId, { canon, ts: now });
+  if (_cache.size > CACHE_MAX) {
+    for (const [id, item] of _cache) if (now - item.ts >= CACHE_TTL) _cache.delete(id);
+    if (_cache.size > CACHE_MAX) _cache.delete(_cache.keys().next().value!);
   }
-  _cache.set(chatId, { canon, ts: Date.now() });
   return canon;
 }
 

@@ -40,10 +40,10 @@ function pushLeadToMarketing(payload: {
 }
 
 // ─── Индивидуальный заказ торта ─────────────────────────────────────────────
-router.post("/api/lead", rateLimit(10), express.json({ limit: "8mb" }), async (req, res) => {
-  const { name, phone, description, date, portions, comment, photo, source, utm } = req.body as {
+router.post("/api/lead", rateLimit(10), express.json({ limit: "20mb" }), async (req, res) => {
+  const { name, phone, description, date, portions, comment, photo, photos, source, utm } = req.body as {
     name?: string; phone?: string; description?: string;
-    date?: string; portions?: string; comment?: string; photo?: string;
+    date?: string; portions?: string; comment?: string; photo?: string; photos?: unknown;
     source?: string; utm?: Record<string, string>;
   };
 
@@ -64,22 +64,26 @@ router.post("/api/lead", rateLimit(10), express.json({ limit: "8mb" }), async (r
   // Копия лида в дашборд кампании (не ждём ответа)
   pushLeadToMarketing({ name, phone, source: srcLabel, utm, description, portions, comment });
 
-  // Photo-референс → /tmp + URL в комментарии лида
-  let photoUrl = "";
-  if (photo && photo.startsWith("data:image/")) {
+  // До трёх фото-референсов → /tmp + отдельные URL в комментарии лида.
+  // `photo` оставлен как fallback для старых клиентов.
+  const photoInputs = (Array.isArray(photos) ? photos : (photo ? [photo] : []))
+    .filter((v): v is string => typeof v === "string")
+    .slice(0, 3);
+  const photoUrls: string[] = [];
+  for (const photoInput of photoInputs) {
     try {
-      const m = photo.match(/^data:image\/(\w+);base64,(.+)$/);
+      const m = photoInput.match(/^data:image\/(jpe?g|png|webp);base64,([A-Za-z0-9+/=]+)$/i);
       if (m) {
-        const ext = m[1] === "jpeg" ? "jpg" : m[1];
+        const ext = /^jpe?g$/i.test(m[1]) ? "jpg" : m[1].toLowerCase();
         const buf = Buffer.from(m[2], "base64");
-        if (buf.length < 4 * 1024 * 1024) {
+        if (buf.length > 0 && buf.length <= 4 * 1024 * 1024) {
           const id = crypto.randomBytes(8).toString("hex");
           const dir = path.join("/tmp", "lead_photos");
           fsSync.mkdirSync(dir, { recursive: true });
           const fname = `${Date.now()}_${id}.${ext}`;
           fsSync.writeFileSync(path.join(dir, fname), buf);
           const base = (process.env.MINI_APP_URL || process.env.WEBHOOK_URL || "").replace(/\/$/, "");
-          photoUrl = `${base}/lead-photo/${fname}`;
+          photoUrls.push(`${base}/lead-photo/${fname}`);
         }
       }
     } catch (e) {
@@ -93,7 +97,7 @@ router.post("/api/lead", rateLimit(10), express.json({ limit: "8mb" }), async (r
     date        && `Дата: ${date}`,
     portions    && `Порций: ${portions}`,
     comment     && `Комментарий: ${comment}`,
-    photoUrl    && `Фото референса: ${photoUrl}`,
+    ...photoUrls.map((url, i) => `Фото референса ${i + 1}: ${url}`),
     utmStr      && `UTM: ${utmStr}`,
   ].filter(Boolean).join("\n");
 

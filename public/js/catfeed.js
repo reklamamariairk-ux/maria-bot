@@ -11,11 +11,33 @@
   const ASSET = (s) => `/assets/images/cat/${s}.png`;
   const STATES = ['idle', 'open', 'chew', 'happy', 'hungry', 'full'];
 
+  function scopedBestKey(base) {
+    let scope = 'guest';
+    try {
+      const u = window.App?.user?.();
+      if (u && u.id != null) scope = `${App.platform || 'app'}_${u.id}`;
+    } catch (_) {}
+    const key = `${base}_v2_${scope}`;
+    try {
+      if (localStorage.getItem(key) == null) {
+        const legacy = localStorage.getItem(base);
+        const ownerKey = `${base}_v2_owner`;
+        const owner = localStorage.getItem(ownerKey);
+        if (legacy != null && (!owner || owner === scope)) {
+          localStorage.setItem(ownerKey, scope);
+          localStorage.setItem(key, legacy);
+        }
+      }
+    } catch (_) {}
+    return key;
+  }
+  const BEST_KEY = scopedBestKey('cf2_best');
+
   const DEBUG = location.search.includes('debug');
 
   let root, game, pies = [];     // pies: [{key,name,id}]
   let best = 0;
-  try { best = +localStorage.getItem('cf2_best') || 0; } catch (_) {}
+  try { best = +localStorage.getItem(BEST_KEY) || 0; } catch (_) {}
   let audio;
   let opening = false;
   let sfxTimers = [];            // отложенные ноты — чистим в close()
@@ -221,7 +243,7 @@
         this.st.running = false;
         this.cat.setTexture('full'); sfxHappy();
         const isRec = this.st.score > best;
-        if (isRec) { best = this.st.score; try { localStorage.setItem('cf2_best', String(best)); } catch (_) {} }
+        if (isRec) { best = this.st.score; try { localStorage.setItem(BEST_KEY, String(best)); } catch (_) {} }
         window.haptic?.(isRec ? 'success' : 'medium');
         const result = { score: this.st.score, fed: this.st.fed, best, isRec };
         if (DEBUG) window._cfResult = result; // dev/test hook
@@ -257,7 +279,8 @@
 
   // сигнал таймаута для fetch (5с), с фолбэком для старых webview
   function timeoutSignal(ms) {
-    if (AbortSignal.timeout) return AbortSignal.timeout(ms);
+    if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) return AbortSignal.timeout(ms);
+    if (typeof AbortController === 'undefined') return undefined;
     const c = new AbortController(); setTimeout(() => c.abort(), ms); return c.signal;
   }
 
@@ -268,6 +291,7 @@
     try {
       const resp = await fetch('/api/game-result', { method: 'POST', headers: { 'Content-Type': 'application/json', ...App.authHeader() }, body: JSON.stringify({ game: GAME_KEY, score }), signal: timeoutSignal(5000) });
       const d = await resp.json();
+      if (!resp.ok || d.error) throw new Error(String(d.error || `HTTP ${resp.status}`));
       let reward = '';
       if (PURE) {
         // pure-режим: без клубных звёзд/CTA в UI, рекорд уже показан в тексте выше
@@ -299,7 +323,13 @@
     if (authed) postResult(panel, r.score);
     panel.querySelector('#cf2-again').onclick = () => { panel.classList.remove('on'); restart(); };
     panel.querySelector('#cf2-close2').onclick = close;
-    panel.querySelector('#cf2-share').onclick = () => { const link = window.App?.appLink?.() || 'https://t.me/mariatortik_bot'; const txt = `Я накормил Котика на ${r.score} очков в игре кондитерской «Мария» 🐱🍰 Побей мой рекорд! ${link}`; if (window.App?.share) App.share(txt); else if (navigator.share) navigator.share({ text: txt }).catch(() => {}); };
+    panel.querySelector('#cf2-share').onclick = async () => {
+      let link = 'https://t.me/mariatortik_bot';
+      try { if (window.App?.appLink) link = await App.appLink(); } catch (_) {}
+      const text = `Я накормил Котика на ${r.score} очков в игре кондитерской «Мария» 🐱🍰 Побей мой рекорд!`;
+      if (window.App?.share) App.share(link, text);
+      else if (navigator.share) navigator.share({ url: link, text }).catch(() => {});
+    };
   }
 
   function restart() { if (game) { game.scene.stop('feed'); game.scene.start('feed'); } }

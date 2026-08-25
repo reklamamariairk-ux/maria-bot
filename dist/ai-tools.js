@@ -70,7 +70,7 @@ exports.TOOL_DEFS = [
     },
     {
         type: "function",
-        function: { name: "get_today_special", description: "Торт месяца со скидкой 20%.", parameters: { type: "object", properties: {} } },
+        function: { name: "get_today_special", description: "Текущий торт месяца с реальной скидкой из каталога (если есть).", parameters: { type: "object", properties: {} } },
     },
     {
         type: "function",
@@ -295,18 +295,17 @@ function handleCategories(ctx) {
     return JSON.stringify({ categories: list, total: ctx.catalog.length });
 }
 function handleTodaySpecial(ctx) {
-    // Торт месяца: hit:true в категории Торты с скидкой
-    const candidates = ctx.catalog.filter((p) => p.hit && p.category === "Торты" && (p.discountPercent ?? 0) > 0);
-    if (candidates.length === 0) {
-        // Fallback — просто первый hit
-        const fallback = ctx.catalog.find((p) => p.hit && p.category === "Торты");
-        if (!fallback)
-            return JSON.stringify({ error: "no_special" });
-        if (fallback.id)
-            ctx.surfacedProducts.set(fallback.id, summarizeProduct(fallback));
-        return JSON.stringify({ ...summarizeProduct(fallback), is_today_special: true });
-    }
-    // Берём первого со скидкой (обычно скидка применяется только на одного)
+    // «Торт месяца» = товар из 1С с реальной скидкой (discountPercent > 0).
+    // Никаких fallback'ов на товары без скидки — нельзя выдумывать акцию.
+    const candidates = ctx.catalog.filter((p) => p.category === "Торты" && (p.discountPercent ?? 0) > 0);
+    if (candidates.length === 0)
+        return JSON.stringify({ error: "no_special" });
+    // Приоритет: hit + макс. скидка
+    candidates.sort((a, b) => {
+        if (a.hit !== b.hit)
+            return a.hit ? -1 : 1;
+        return (b.discountPercent ?? 0) - (a.discountPercent ?? 0);
+    });
     const c = candidates[0];
     if (c.id)
         ctx.surfacedProducts.set(c.id, summarizeProduct(c));

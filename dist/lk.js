@@ -12,7 +12,7 @@ const LK_TOKEN = process.env.LK_TOKEN ?? "";
 const ORDERS_API = process.env.ORDERS_API ?? ""; // https://www.maria-irk.ru/api/orders.php
 function fetchJson(url) {
     return new Promise((resolve, reject) => {
-        const req = https_1.default.get(url, { rejectUnauthorized: false }, (r) => {
+        const req = https_1.default.get(url, (r) => {
             let body = "";
             r.on("data", (c) => (body += c));
             r.on("end", () => {

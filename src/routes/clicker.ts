@@ -7,17 +7,20 @@
 import { Router } from "express";
 import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements, getRewards, redeemReward, claimBonus, openChest, openCase, claimRain, claimGame, createGameAttempt, getMilestones, claimMilestone, syncPurchaseBonus, migrateGuest, redeemCode, getSquads, joinSquad, squadBankStatus, donateSquadBank, createSquad, joinSquadByCode, requestJoinSquad, listSquadRequests, decideSquadRequest, prestigeReset, welcomePromoShown, markWelcomePromoShown, markOnboarded, getFtue, claimFtue, getSquadMembers, deleteClickerProfile } from "../clicker";
 import { rateLimit, requireAdminToken } from "../middleware";
-import { requireTgUser, getTgUser } from "../auth";
+import { requireTgUser as requireAnyTgUser, getTgUser } from "../auth";
+import { clearGameAccessCache, requireGameUser as requireTgUser } from "../game-auth";
 import { getBonusQueue, ackBonusQueue, queueAuthOk } from "../bonus1c";
 import { trackActivity, trackEvent, getClickerStats } from "../analytics";
 import { log } from "../logger";
 
 const router = Router();
 
-router.delete("/api/clicker/account", requireTgUser, rateLimit(5), async (req, res) => {
+// Удалить собственные данные можно и при игровой блокировке.
+router.delete("/api/clicker/account", requireAnyTgUser, rateLimit(5), async (req, res) => {
   const u = getTgUser(req)!;
   try {
     await deleteClickerProfile(u.id);
+    clearGameAccessCache(u.id);
     res.json({ ok: true });
   } catch (e) {
     log.error({ err: e, chatId: u.id }, "[DELETE /api/clicker/account]");
@@ -33,7 +36,10 @@ router.get("/api/clicker", requireTgUser, rateLimit(120), async (req, res) => {
     // T6: разметка источника открытия (deep-link несёт ?source=<мультик|соцсеть|упаковка>).
     const source = String(req.query.source || "").trim().slice(0, 32).replace(/[^a-zA-Z0-9_-]/g, "");
     if (source) trackEvent(u.id, "open", { source });
-  } catch (e) { log.error({ err: e, chatId: u.id }, "[GET /api/clicker]"); res.status(500).json({ error: "internal" }); }
+  } catch (e) {
+    if (e instanceof Error && e.message === "account_blocked") { res.status(403).json({ error: "account_blocked" }); return; }
+    log.error({ err: e, chatId: u.id }, "[GET /api/clicker]"); res.status(500).json({ error: "internal" });
+  }
 });
 
 // FTUE «Первый день» (аудит 30.07): чеклист 5 вех первой сессии, награды за шаги.
@@ -84,9 +90,14 @@ router.post("/api/clicker/onboarded", requireTgUser, rateLimit(30), async (req, 
 });
 
 router.post("/api/clicker/tap", requireTgUser, rateLimit(120), async (req, res) => {
-  const u = getTgUser(req)!; const body = req.body as { taps?: number; comboBonus?: number };
+  const u = getTgUser(req)!; const body = req.body as { taps?: number; comboBonus?: number; requestId?: string };
   const taps = Number(body.taps) || 0; const comboBonus = Number(body.comboBonus) || 0;
-  try { res.json(await tapClicker(u.id, taps, comboBonus)); if (taps > 0) trackActivity(u.id, { taps }); } catch (e) { log.error({ err: e, chatId: u.id }, "[tap]"); res.status(500).json({ error: "internal" }); }
+  const requestId = typeof body.requestId === "string" && /^[a-zA-Z0-9_-]{8,80}$/.test(body.requestId) ? body.requestId : "";
+  try {
+    const state = await tapClicker(u.id, taps, comboBonus, requestId);
+    res.json(state);
+    if (!state.duplicate && Number(state.acceptedTaps) > 0) trackActivity(u.id, { taps: Number(state.acceptedTaps) });
+  } catch (e) { log.error({ err: e, chatId: u.id }, "[tap]"); res.status(500).json({ error: "internal" }); }
 });
 
 router.post("/api/clicker/buy", requireTgUser, rateLimit(60), async (req, res) => {
@@ -223,8 +234,13 @@ router.get("/api/clicker/squad-requests", requireTgUser, rateLimit(60), async (r
 router.post("/api/clicker/squad-decide", requireTgUser, rateLimit(30), async (req, res) => {
   const u = getTgUser(req)!;
   const b = req.body as { chatId?: unknown; accept?: unknown };
+  const applicantId = Number(b?.chatId);
+  if (!Number.isSafeInteger(applicantId) || applicantId <= 0 || typeof b?.accept !== "boolean") {
+    res.status(400).json({ error: "bad_input" });
+    return;
+  }
   try {
-    const r = await decideSquadRequest(u.id, Number(b?.chatId), Boolean(b?.accept));
+    const r = await decideSquadRequest(u.id, applicantId, b.accept);
     if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
     res.json({ ok: true });
   } catch (e) { log.error({ err: e, chatId: u.id }, "[squad-decide]"); res.status(500).json({ error: "internal" }); }
@@ -232,10 +248,12 @@ router.post("/api/clicker/squad-decide", requireTgUser, rateLimit(30), async (re
 
 router.post("/api/clicker/squad-bank", requireTgUser, rateLimit(30), async (req, res) => {
   const u = getTgUser(req)!;
-  const amount = Number((req.body as { amount?: unknown })?.amount);
+  const body = req.body as { amount?: unknown; requestId?: unknown };
+  const amount = Number(body?.amount);
   if (!Number.isInteger(amount) || amount <= 0) { res.status(400).json({ error: "bad_amount" }); return; }
   try {
-    const r = await donateSquadBank(u.id, amount);
+    const requestId = typeof body.requestId === "string" && /^[a-zA-Z0-9_-]{8,80}$/.test(body.requestId) ? body.requestId : "";
+    const r = await donateSquadBank(u.id, amount, requestId);
     if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
     res.json({ donated: r.donated, bank: r.bank, ...r.state });
   } catch (e) { log.error({ err: e, chatId: u.id }, "[squad-bank]"); res.status(500).json({ error: "internal" }); }
@@ -287,7 +305,7 @@ router.get("/api/clicker/milestones", requireTgUser, rateLimit(60), async (req, 
 
 router.post("/api/clicker/milestone", requireTgUser, rateLimit(20), async (req, res) => {
   const u = getTgUser(req)!; const id = String((req.body as { id?: string }).id || "");
-  try { const r = await claimMilestone(u.id, id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json(r); trackEvent(u.id, "milestone", { id }); }
+  try { const r = await claimMilestone(u.id, id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json(r); if (!r.duplicate) trackEvent(u.id, "milestone", { id }); }
   catch (e) { log.error({ err: e, chatId: u.id }, "[milestone]"); res.status(500).json({ error: "internal" }); }
 });
 
@@ -297,8 +315,10 @@ router.get("/api/clicker/rewards", requireTgUser, rateLimit(60), async (req, res
 });
 
 router.post("/api/clicker/redeem", requireTgUser, rateLimit(20), async (req, res) => {
-  const u = getTgUser(req)!; const id = String((req.body as { id?: string }).id || "");
-  try { const r = await redeemReward(u.id, id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ code: r.code, points: r.points, ...r.state }); trackEvent(u.id, "redeem", { id }); }
+  const u = getTgUser(req)!;
+  const body = req.body as { id?: string; requestId?: string };
+  const id = String(body.id || ""), requestId = String(body.requestId || "");
+  try { const r = await redeemReward(u.id, id, requestId); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ code: r.code, points: r.points, ...r.state }); trackEvent(u.id, "redeem", { id }); }
   catch (e) { log.error({ err: e, chatId: u.id }, "[redeem]"); res.status(500).json({ error: "internal" }); }
 });
 
@@ -315,17 +335,21 @@ router.get("/api/clicker/stats", requireAdminToken, rateLimit(60), async (_req, 
 });
 
 // ── PULL-режим: 1С сама забирает очередь начислений (без TG-авторизации, токен) ──
-// GET  /api/clicker/bonus-queue?token=...        → pending-начисления {id,phone,amount,reason,key}
-// POST /api/clicker/bonus-ack {token, ids:[...]} → пометить зачисленными
+// GET  /api/clicker/bonus-queue (Bearer/X-Bonus-Queue-Token) → pending-начисления
+// POST /api/clicker/bonus-ack {ids:[...]} с тем же header → подтверждение
 router.get("/api/clicker/bonus-queue", rateLimit(120), async (req, res) => {
-  if (!queueAuthOk(String(req.query.token || ""))) { res.status(403).json({ error: "forbidden" }); return; }
+  const bearer = String(req.header("authorization") || "").match(/^Bearer\s+(.+)$/i)?.[1];
+  const token = req.header("x-bonus-queue-token") || bearer;
+  if (!queueAuthOk(token)) { res.status(403).json({ error: "forbidden" }); return; }
   try { const limit = Number(req.query.limit) || 100; res.json({ items: await getBonusQueue(limit) }); }
   catch (e) { log.error({ err: e }, "[bonus-queue]"); res.status(500).json({ error: "internal" }); }
 });
 
 router.post("/api/clicker/bonus-ack", rateLimit(120), async (req, res) => {
   const body = (req.body || {}) as { token?: string; ids?: number[] };
-  if (!queueAuthOk(String(body.token || ""))) { res.status(403).json({ error: "forbidden" }); return; }
+  const bearer = String(req.header("authorization") || "").match(/^Bearer\s+(.+)$/i)?.[1];
+  const token = req.header("x-bonus-queue-token") || bearer || body.token;
+  if (!queueAuthOk(token)) { res.status(403).json({ error: "forbidden" }); return; }
   try { const acked = await ackBonusQueue(Array.isArray(body.ids) ? body.ids : []); res.json({ acked }); }
   catch (e) { log.error({ err: e }, "[bonus-ack]"); res.status(500).json({ error: "internal" }); }
 });

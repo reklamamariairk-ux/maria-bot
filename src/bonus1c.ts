@@ -32,11 +32,7 @@ export function queueAuthOk(token: string | undefined): boolean {
 /** PULL-режим: 1С забирает pending-начисления. Возвращает список к зачислению. */
 export async function getBonusQueue(limit = 100): Promise<{ id: number; phone: string; amount: number; reason: string | null; key: string | null }[]> {
   const lim = Math.max(1, Math.min(500, Math.floor(limit) || 100));
-  const { rows } = await pool.query(
-    `SELECT id, phone, amount, reason, idem_key FROM bonus_outbox
-      WHERE status='pending' ORDER BY id LIMIT $1`,
-    [lim]
-  );
+  const rows = await claimBonusRows(lim);
   return rows.map((r) => ({ id: Number(r.id), phone: r.phone, amount: r.amount, reason: r.reason, key: r.idem_key }));
 }
 
@@ -45,7 +41,8 @@ export async function ackBonusQueue(ids: number[]): Promise<number> {
   const clean = (Array.isArray(ids) ? ids : []).map((x) => Math.floor(Number(x))).filter((x) => Number.isFinite(x) && x > 0);
   if (!clean.length) return 0;
   const { rowCount } = await pool.query(
-    `UPDATE bonus_outbox SET status='sent', sent_at=NOW(), last_error=NULL WHERE id = ANY($1::bigint[]) AND status='pending'`,
+    `UPDATE bonus_outbox SET status='sent', sent_at=NOW(), processing_at=NULL, last_error=NULL
+      WHERE id = ANY($1::bigint[]) AND status='processing'`,
     [clean]
   );
   return rowCount || 0;
@@ -65,6 +62,7 @@ export async function initBonusSchema(): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       sent_at    TIMESTAMPTZ
     );
+    ALTER TABLE bonus_outbox ADD COLUMN IF NOT EXISTS processing_at TIMESTAMPTZ;
     CREATE INDEX IF NOT EXISTS bonus_outbox_pending ON bonus_outbox (id) WHERE status = 'pending';
   `);
 }
@@ -88,32 +86,75 @@ async function postOne(row: { id: number; phone: string; amount: number; reason:
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token: BONUS_ADD_TOKEN, phone: row.phone, amount: row.amount, reason: row.reason || "", key }),
+    signal: AbortSignal.timeout(15_000),
   });
   if (!r.ok) throw new Error(`http_${r.status}:${(await r.text().catch(() => "")).slice(0, 200)}`);
   const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
   if (j && j.ok === false) throw new Error(`gateway:${j.error || "unknown"}`);
 }
 
+type BonusRow = { id: number; phone: string; amount: number; reason: string | null; idem_key: string | null; attempts: number };
+
+/** Атомарная аренда строк: параллельный worker/1С не получают одну запись. */
+async function claimBonusRows(limit: number): Promise<BonusRow[]> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `UPDATE bonus_outbox SET status='pending', processing_at=NULL
+        WHERE status='processing' AND processing_at < NOW() - INTERVAL '10 minutes'`,
+    );
+    const selected = await client.query(
+      `SELECT id FROM bonus_outbox
+        WHERE status='pending' AND attempts < $1
+        ORDER BY id FOR UPDATE SKIP LOCKED LIMIT $2`,
+      [MAX_ATTEMPTS, limit],
+    );
+    const ids = selected.rows.map((row) => Number(row.id));
+    if (!ids.length) { await client.query("COMMIT"); return []; }
+    const claimed = await client.query(
+      `UPDATE bonus_outbox SET status='processing', processing_at=NOW()
+        WHERE id=ANY($1::bigint[])
+        RETURNING id, phone, amount, reason, idem_key, attempts`,
+      [ids],
+    );
+    await client.query("COMMIT");
+    return claimed.rows as BonusRow[];
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+let flushRunning = false;
 export async function flushBonusOutbox(): Promise<void> {
-  if (!BONUS_ADD_API) return;
-  const { rows } = await pool.query(
-    `SELECT id, phone, amount, reason, idem_key, attempts FROM bonus_outbox
-      WHERE status='pending' AND attempts < $1 ORDER BY id LIMIT $2`,
-    [MAX_ATTEMPTS, BATCH]
-  );
-  for (const row of rows) {
-    try {
-      await postOne(row);
-      await pool.query(`UPDATE bonus_outbox SET status='sent', sent_at=NOW(), last_error=NULL WHERE id=$1`, [row.id]);
-    } catch (e) {
-      const attempts = (row.attempts as number) + 1;
-      const status = attempts >= MAX_ATTEMPTS ? "failed" : "pending";
-      await pool.query(
-        `UPDATE bonus_outbox SET attempts=$2, status=$3, last_error=$4 WHERE id=$1`,
-        [row.id, attempts, status, String((e as Error).message).slice(0, 300)]
-      ).catch(() => {});
-      if (status === "failed") log.error({ outboxId: row.id, err: (e as Error).message }, "[bonus] accrual FAILED (max attempts)");
+  if (!BONUS_ADD_API || flushRunning) return;
+  flushRunning = true;
+  try {
+    const rows = await claimBonusRows(BATCH);
+    for (const row of rows) {
+      try {
+        await postOne(row);
+        await pool.query(
+          `UPDATE bonus_outbox SET status='sent', sent_at=NOW(), processing_at=NULL, last_error=NULL
+            WHERE id=$1 AND status='processing'`,
+          [row.id],
+        );
+      } catch (e) {
+        const attempts = Number(row.attempts) + 1;
+        const status = attempts >= MAX_ATTEMPTS ? "failed" : "pending";
+        await pool.query(
+          `UPDATE bonus_outbox SET attempts=$2, status=$3, processing_at=NULL, last_error=$4
+            WHERE id=$1 AND status='processing'`,
+          [row.id, attempts, status, String((e as Error).message).slice(0, 300)]
+        ).catch(() => {});
+        if (status === "failed") log.error({ outboxId: row.id, err: (e as Error).message }, "[bonus] accrual FAILED (max attempts)");
+      }
     }
+  } finally {
+    flushRunning = false;
   }
 }
 

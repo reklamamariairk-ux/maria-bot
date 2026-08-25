@@ -60,6 +60,7 @@
     { level: 18, name: 'Король тортов',      need: 120000000, cat: 'vasily-stage18.webp' },
     { level: 19, name: 'Император выпечки',  need: 180000000, cat: 'vasily-stage19.webp' },
   ];
+  const BUSINESS_MAX_LEVEL = 20;
   const REF_REFERRER = 30000, REF_INVITEE = 2500, BOT = 'mariatortik_bot'; // зеркало src/clicker.ts
   // Соцссылки «Марии» — зеркало SOCIAL в src/clicker.ts (менять синхронно). Пустая = задание скрыто.
   const SOCIAL = { review: 'https://yandex.ru/maps/?text=Мария кондитерская Иркутск', vk: '', tg: 'https://t.me/mariatortik_bot' };
@@ -75,7 +76,12 @@
     { id: 'streak3', name: 'Заходить 3 дня подряд', icon: '🔥', reward: 4000, type: 'streak', target: 3 },
   ].filter(t => t.type !== 'link' || t.link);
   const leagueFor = (t) => { let l = LEAGUES[0]; for (const x of LEAGUES) if (t >= x.need) l = x; return l; };
-  const nextNeed = (t) => { const n = LEAGUES.find(x => x.need > t); return n ? n.need : null; };
+  const leagueForLevel = (level) => LEAGUES[Math.min(LEAGUES.length, Math.max(1, Math.floor(Number(level) || 1))) - 1];
+  const nextNeedForLevel = (level) => { const n = LEAGUES.find(x => x.level > level); return n ? n.need : null; };
+  const comboHitsIncludingMaxed = (cards, recorded, levels) => {
+    const hits = new Set(recorded || []);
+    return cards.filter(id => hits.has(id) || Number(levels[id] || 0) >= BUSINESS_MAX_LEVEL);
+  };
   // Размер-прогрессия по уровням ОТМЕНЕНА (решение юзера 08.07: разница читалась
   // слишком резко). Кот всегда крупный, эволюция — обликом (19 образов) и фоном
   // (тиры). Жёсткая высота вместо contain-бокса: широкие кадры (шар/дон) не проседают.
@@ -105,8 +111,9 @@
   // Сколько осталось до нового дня по Иркутску (UTC+8) — «через 5 ч 12 мин»
   const untilNewDay = () => {
     const secLeft = 86400 - Math.floor((Date.now() / 1000 + 8 * 3600) % 86400);
-    const h = Math.floor(secLeft / 3600), m = Math.ceil((secLeft % 3600) / 60);
-    return h > 0 ? `через ${h} ч ${m} мин` : `через ${Math.max(1, m)} мин`;
+    const totalMinutes = Math.max(1, Math.ceil(secLeft / 60));
+    const h = Math.floor(totalMinutes / 60), m = totalMinutes % 60;
+    return h > 0 ? `через ${h} ч${m ? ` ${m} мин` : ''}` : `через ${m} мин`;
   };
   const priceMultitap = (l) => Math.round(200 * Math.pow(2, l));
   const priceEnergy = (l) => Math.round(300 * Math.pow(2, l));
@@ -292,7 +299,8 @@
   const weekMonday = () => { const d = Math.floor((Date.now() + 8 * 3600e3) / 86400000); return d - ((d + 3) % 7); };
   const seasonEndsTs = () => (weekMonday() + 7) * 86400000 - 8 * 3600e3;
   // Ивент-зеркало src/clicker.ts (#9): «Выходные ×2» сб/вс по Иркутску. Менять синхронно.
-  function ckEvent() { const wd = new Date(Date.now() + 8 * 3600e3).getUTCDay(); if (wd === 6 || wd === 0) return { active: true, name: 'Выходные ×2', mult: 2, endsTs: seasonEndsTs() }; return null; }
+  function ckEventMultAt(ts) { const wd = new Date(ts + 8 * 3600e3).getUTCDay(); return (wd === 6 || wd === 0) ? 2 : 1; }
+  function ckEvent() { if (ckEventMultAt(Date.now()) > 1) return { active: true, name: 'Выходные ×2', mult: 2, endsTs: seasonEndsTs() }; return null; }
   const ACHIEVEMENTS = [
     { id: 'ach_taps1k', name: 'Разминка лап', icon: 'tap', reward: 2000, type: 'taps', target: 1000 },
     { id: 'ach_taps10k', name: 'Мастер тапа', icon: 'tap', reward: 10000, type: 'taps', target: 10000 },
@@ -302,11 +310,11 @@
     { id: 'ach_lvl19', name: 'Император выпечки', icon: 'star', reward: 100000, type: 'level', target: 19 },
     { id: 'ach_streak7', name: 'Неделя верности', icon: 'fire', reward: 7000, type: 'streak', target: 7 },
     { id: 'ach_ref3', name: 'Душа компании', icon: 'users', reward: 15000, type: 'ref', target: 3 },
-    { id: 'col_prod', name: 'Цех в сборе', icon: 'dove', reward: 10000, type: 'collect', target: 'prod' },
-    { id: 'col_mkt', name: 'Маркетинг в сборе', icon: 'dove', reward: 10000, type: 'collect', target: 'mkt' },
-    { id: 'col_staff', name: 'Команда в сборе', icon: 'dove', reward: 10000, type: 'collect', target: 'staff' },
-    { id: 'col_net', name: 'Сеть в сборе', icon: 'dove', reward: 10000, type: 'collect', target: 'net' },
-    { id: 'col_all', name: 'Повелитель голубей', icon: 'trophy', reward: 60000, type: 'collect', target: 'all' },
+    { id: 'col_prod', name: 'Цех в сборе', icon: 'shop', reward: 10000, type: 'collect', target: 'prod' },
+    { id: 'col_mkt', name: 'Маркетинг в сборе', icon: 'shop', reward: 10000, type: 'collect', target: 'mkt' },
+    { id: 'col_staff', name: 'Команда в сборе', icon: 'shop', reward: 10000, type: 'collect', target: 'staff' },
+    { id: 'col_net', name: 'Сеть в сборе', icon: 'shop', reward: 10000, type: 'collect', target: 'net' },
+    { id: 'col_all', name: 'Бизнес-империя', icon: 'trophy', reward: 60000, type: 'collect', target: 'all' },
   ];
   const achIcon = (key) => ({ tap: ICON.tap, wallet: ICON.wallet, shop: ICON.shop, trophy: ICON.trophy, star: ICON.star, fire: ICON.fire, users: ICON.users, dove: ICON.dove }[key] || ICON.star)(26);
   // Лестница «Награды за прогресс» (зеркало src/clicker.ts MILESTONES — синхронно).
@@ -318,11 +326,11 @@
     { id: 'ms_lvl15', title: 'Уровень 15', cond: { type: 'level', target: 15 }, kind: 'points', points: 1000 },
     { id: 'ms_lvl17', title: 'Уровень 17', cond: { type: 'level', target: 17 }, kind: 'perk', perkText: 'Скидка 500₽ (от 3000₽)' },
     { id: 'ms_lvl19', title: 'Последний уровень — Император выпечки', cond: { type: 'level', target: 19 }, kind: 'both', points: 20000, perkText: 'Бенто-торт в подарок (от 1000₽)' },
-    { id: 'ms_col_prod', title: 'Все голуби «Производство»', cond: { type: 'collect', target: 'prod' }, kind: 'points', points: 300 },
-    { id: 'ms_col_mkt', title: 'Все голуби «Маркетинг»', cond: { type: 'collect', target: 'mkt' }, kind: 'points', points: 300 },
-    { id: 'ms_col_staff', title: 'Все голуби «Персонал»', cond: { type: 'collect', target: 'staff' }, kind: 'points', points: 300 },
-    { id: 'ms_col_net', title: 'Все голуби «Сеть»', cond: { type: 'collect', target: 'net' }, kind: 'points', points: 300 },
-    { id: 'ms_col_all', title: 'Вся коллекция голубей', cond: { type: 'collect', target: 'all' }, kind: 'perk', perkText: 'Бенто-торт в подарок (от 2000₽)' },
+    { id: 'ms_col_prod', title: 'Все бизнесы «Производство»', cond: { type: 'collect', target: 'prod' }, kind: 'points', points: 300 },
+    { id: 'ms_col_mkt', title: 'Все бизнесы «Маркетинг»', cond: { type: 'collect', target: 'mkt' }, kind: 'points', points: 300 },
+    { id: 'ms_col_staff', title: 'Все бизнесы «Персонал»', cond: { type: 'collect', target: 'staff' }, kind: 'points', points: 300 },
+    { id: 'ms_col_net', title: 'Все бизнесы «Сеть»', cond: { type: 'collect', target: 'net' }, kind: 'points', points: 300 },
+    { id: 'ms_col_all', title: 'Вся коллекция бизнесов', cond: { type: 'collect', target: 'all' }, kind: 'perk', perkText: 'Бенто-торт в подарок (от 2000₽)' },
     { id: 'ms_ref3', title: 'Пригласил 3 друзей', cond: { type: 'ref', target: 3 }, kind: 'points', points: 500 },
     { id: 'ms_ref10', title: 'Пригласил 10 друзей', cond: { type: 'ref', target: 10 }, kind: 'perk', perkText: 'Промокод −10% (от 1000₽)' },
     { id: 'ms_care7', title: 'Забота о Василии: 7 дней', cond: { type: 'care_streak', target: 7 }, kind: 'points', points: 200 },
@@ -333,14 +341,17 @@
   ];
   function condMet(t, s) {
     if (t.type === 'link') return !!linkOpened[t.id];
-    if (t.type === 'level') return s.level >= t.target;
-    if (t.type === 'balance') return s.totalEarned >= t.target;
+    if (t.type === 'level') return s.level >= t.target || Number(s.prestige || 0) > 0;
+    if (t.type === 'balance') return s.totalEarned >= t.target || Number(s.prestige || 0) > 0;
     if (t.type === 'streak') return s.dailyStreak >= t.target;
     if (t.type === 'ref') return (s.referrals || 0) >= t.target;
     if (t.type === 'taps') return (s.taps || 0) >= t.target;
     if (t.type === 'cards') return (s.cardsOwned || 0) >= t.target;
     if (t.type === 'collect') { const cs = s.cards || []; if (t.target === 'all') return cs.length > 0 && cs.every(c => c.level > 0); const ic = cs.filter(c => c.cat === t.target); return ic.length > 0 && ic.every(c => c.level > 0); }
-    if (t.type === 'care_streak') { let ps = null; try { ps = JSON.parse(localStorage.getItem('maria_pet_v1')); } catch (_) {} return Number((ps && ps.care_streak) || 0) >= t.target; }
+    if (t.type === 'care_streak') {
+      let ps = null; try { ps = JSON.parse(localStorage.getItem('maria_pet_v1')); } catch (_) {}
+      return Math.max(Number(ps && ps.careStreakBest || 0), Number(ps && ps.care_streak || 0)) >= t.target;
+    }
     return false;
   }
   function fmtDur(ms) { const h = Math.max(0, Math.floor(ms / 3600e3)); const d = Math.floor(h / 24); return d > 0 ? `${d}д ${h % 24}ч` : `${h}ч`; }
@@ -349,7 +360,12 @@
   // не обещать неработающее). Бэк (/api/clicker/redeem, CLICKER_REWARDS_ENABLED) жив —
   // при включении Машей вернуть витрину из git-истории (catclick v122).
 
-  let ov, audio, raf, lastTs = 0, pending = 0, pendingComboBonus = 0, pendingTapGain = 0, pendingTapEnergy = 0, tapsInflight = 0, tapFlushPromise = null, syncT = 0, curLevel = 1, tab = 'cat';
+  let ov, audio, raf, lastTs = 0, pending = 0, pendingComboBonus = 0, pendingTapGain = 0, pendingTapEnergy = 0, tapsInflight = 0, tapsInflightAccount = '', tapAccount = '', tapFlushPromise = null, tapRetryBatch = null, syncT = 0, curLevel = 1, tab = 'cat';
+  // Меняется при каждом реальном открытии/закрытии. Асинхронный ответ от уже
+  // закрытого экземпляра не должен показывать попап в следующей сессии.
+  let overlaySession = 0;
+  function overlaySessionActive(session) { return session === overlaySession && !!ov && ov.classList.contains('on'); }
+  let uiDay = irkToday(), dayCheckAt = 0, dayRetryAt = 0;
   const MAX_TAP_POINTERS = 4;
   const activeTapPointers = new Set();
   // «Сладкий тап» — зеркало src/clicker.ts::SWEET_TAP_* (менять синхронно)
@@ -358,6 +374,18 @@
   const LOOP_FRAME_BUDGET = 1 / 30;
   const MG_MIN_FRAME_MS = 15; // кап рендера экшен-мини-игр ~60fps: на 120–144 Гц не жжём батарею лишними кадрами (геймплей на dt, скорость не меняется)
   let st = null, turboUntil = 0, combo = 0, comboT = 0, bonusTimer = 0, rainState = null, rainRAF = 0, upCat = 'prod', lastBought = null;
+  // Пока сервер сохраняет результат, новую мини-игру запускать нельзя: иначе
+  // старый ответ способен закрыть/перерисовать уже начатую следующую игру.
+  const gameSubmissions = new Set();
+  // profitPerHour уже включает альбом; здесь остаются динамические множители,
+  // которыми сервер умножает итоговую часовую ставку.
+  function passiveIncomeMult() {
+    if (!st) return 1;
+    const prestige = Number(st.prestigeMult) || 1;
+    const event = st.event && st.event.active && (!st.event.endsTs || Number(st.event.endsTs) > Date.now()) ? (Number(st.event.mult) || 1) : 1;
+    const bank = Number(st.bankMult) > 1 ? Number(st.bankMult) : 1;
+    return prestige * event * bank;
+  }
   let sessionTapCount = 0, energyHintFired = false, boostsHintFired = false, bizCoachPending = false, lastTapFxAt = 0;
 
   function authed() { return !!(window.App && App.isAuthed && App.isAuthed()); }
@@ -369,12 +397,12 @@
   const COACH = {
     tap:    { icon: 'tap',     t: 'Тапай Василия — каждый тап приносит монеты. Быстрая серия даёт комбо-бонус' },
     level:  { icon: 'star',    t: 'Копи монеты — на новом уровне Василий сменит образ, а сцена — интерьер' },
-    up:     { icon: 'bolt',    t: 'Бусты усиливают тап, а бизнесы приносят монеты сами — даже когда игра закрыта' },
+    up:     { icon: 'bolt',    t: 'Бусты усиливают тап, а бизнесы приносят монеты сами — офлайн копится до 3 часов' },
     dove:   { icon: 'dove',    t: 'Голуби-помощники открываются, когда заводишь бизнесы в Прокачке' },
     top:    { icon: 'trophy',  t: 'Рейтинг недели: очки копятся с понедельника. Зови друзей — вместе веселее' },
     energy: { icon: 'battery', t: 'Энергия кончилась? Она восстанавливается сама — возвращайся чуть позже' },
     combo:    { icon: 'fire',   t: 'Это комбо: тапай без пауз — каждые 10 тапов дают бонус' },
-    bizFirst: { icon: 'shop',   t: 'Бизнес работает сам даже офлайн. Строка +N/час показывает точную прибавку от покупки нового уровня' },
+    bizFirst: { icon: 'shop',   t: 'Бизнес работает сам; после выхода доход копится до 3 часов. Строка +N/час показывает точную прибавку от покупки нового уровня' },
     boosts:   { icon: 'rocket', t: 'Турбо и Энергия — бесплатные бусты, обновляются каждый день' },
   };
   const coachSeenMem = new Set();
@@ -460,7 +488,7 @@
   function coinSfx() { sfxTap(0); }
 
   // ── Гость (localStorage) ─────────────────────────────────────────────────────
-  function rawDefault() { return { balance: 0, totalEarned: 0, energy: 1000, multitapLevel: 0, energyLevel: 0, cards: {}, taps: 0, dailyStreak: 0, dailyDate: null, bE: 0, bT: 0, bDate: null, turboUntil: 0, tasksDone: {}, comboDate: null, comboHits: [], comboClaimed: null, cipherDate: null, bonusAt: 0, chestDate: null, rainDate: null, gamesDone: {}, _ts: Date.now() }; }
+  function rawDefault() { return { balance: 0, totalEarned: 0, energy: 1000, energyCarry: 0, multitapLevel: 0, energyLevel: 0, cards: {}, taps: 0, dailyStreak: 0, dailyDate: null, bE: 0, bT: 0, bDate: null, turboUntil: 0, tasksDone: {}, comboDate: null, comboHits: [], comboClaimed: null, cipherDate: null, bonusAt: 0, chestDate: null, rainDate: null, gamesDone: {}, passiveCarry: 0, _ts: Date.now() }; }
   let memRaw = null; // in-memory фолбэк: заблокированный localStorage не должен ронять тап (setItem кидает в приватных webview)
   function rawGet() { let s; try { s = JSON.parse(localStorage.getItem(LS)); } catch (_) {} if (memRaw && (!s || (memRaw._ts || 0) >= (s._ts || 0))) s = memRaw; if (!s) s = rawDefault(); if (!s.cards) s.cards = {}; return s; }
   function rawSave(s) { s._ts = Date.now(); memRaw = s; try { localStorage.setItem(LS, JSON.stringify(s)); } catch (_) {} }
@@ -469,25 +497,48 @@
     const s = rawGet(); const today = irkToday();
     if (s.bDate !== today) { s.bE = 0; s.bT = 0; s.bDate = today; }
     const secs = Math.max(0, (Date.now() - (s._ts || Date.now())) / 1000);
-    s.energy = Math.min(energyMaxFor(s.energyLevel), Math.round(s.energy + secs * REGEN));
-    const passive = Math.floor(profitOf(s.cards) * Math.min(secs / 3600, PASSIVE_CAP_H));
+    const energyMax = energyMaxFor(s.energyLevel);
+    const rawEnergy = Number(s.energy || 0) + secs * REGEN + Number(s.energyCarry || 0);
+    s.energy = Math.min(energyMax, Math.floor(rawEnergy + 1e-9));
+    s.energyCarry = s.energy >= energyMax ? 0 : Math.max(0, Math.min(0.999999999, rawEnergy - s.energy));
+    const now = Date.now();
+    const cappedMs = Math.min(Math.max(0, now - (s._ts || now)), PASSIVE_CAP_H * 3600e3);
+    let cursor = now - cappedMs, weightedHours = 0;
+    while (cursor < now) {
+      const irkDay = Math.floor((cursor + 8 * 3600e3) / 86400e3);
+      const nextMidnight = (irkDay + 1) * 86400e3 - 8 * 3600e3;
+      const end = Math.min(now, nextMidnight);
+      weightedHours += (end - cursor) / 3600e3 * ckEventMultAt(cursor);
+      cursor = end;
+    }
+    const rawPassive = profitOf(s.cards) * weightedHours + Number(s.passiveCarry || 0);
+    const passive = Math.floor(rawPassive + 1e-9);
+    const nextCarry = rawPassive - passive;
+    s.passiveCarry = nextCarry < 1e-9 ? 0 : Math.min(0.999999999, nextCarry);
     if (passive > 0) { s.balance += passive; s.totalEarned += passive; }
     rawSave(s); return guestState(s, passive);
   }
   function guestState(s, passive) {
     const today = irkToday();
+    const yesterday = new Date(Date.now() + 8 * 3600 * 1000 - 86400000).toISOString().slice(0, 10);
+    const visibleDailyStreak = (s.dailyDate === today || s.dailyDate === yesterday) ? Math.max(0, Number(s.dailyStreak) || 0) : 0;
+    const dailyAvailable = s.dailyDate !== today;
+    const lg = leagueFor(s.totalEarned);
+    const comboCards = todaysCombo(today);
+    const comboRecorded = s.comboDate === today ? (s.comboHits || []) : [];
+    const comboHits = comboHitsIncludingMaxed(comboCards, comboRecorded, s.cards);
     return {
       balance: s.balance, totalEarned: s.totalEarned, energy: s.energy, energyMax: energyMaxFor(s.energyLevel),
-      perTap: perTapFor(s.multitapLevel), profitPerHour: profitOf(s.cards), passiveEarned: passive || 0,
-      level: leagueFor(s.totalEarned).level, levelName: leagueFor(s.totalEarned).name, nextNeed: nextNeed(s.totalEarned),
+      perTap: perTapFor(s.multitapLevel), profitPerHour: profitOf(s.cards), passiveEarned: passive || 0, albumMult: 1,
+      level: lg.level, levelName: lg.name, nextNeed: nextNeedForLevel(lg.level),
       multitapLevel: s.multitapLevel, multitapPrice: priceMultitap(s.multitapLevel),
       energyLevel: s.energyLevel, energyPrice: priceEnergy(s.energyLevel),
-      cards: CARDS.map(c => { const lv = s.cards[c.id] || 0; const locked = lv === 0 && !!c.req && leagueFor(s.totalEarned).level < c.req; const maxed = lv >= 20; const currentProfit = cardProfit(c, lv), profit = maxed ? currentProfit : cardProfit(c, lv + 1); return { id: c.id, name: c.name, cat: c.cat, level: lv, profit, currentProfit, profitGain: profit - currentProfit, price: maxed ? 0 : cardPrice(c, lv), req: c.req || 0, locked, maxed }; }),
-      dailyAvailable: s.dailyDate !== today, dailyStreak: s.dailyStreak, dailyNext: dailyReward(s.dailyDate === today ? s.dailyStreak : s.dailyStreak + 1),
+      cards: CARDS.map(c => { const lv = s.cards[c.id] || 0; const locked = lv === 0 && !!c.req && lg.level < c.req; const maxed = lv >= BUSINESS_MAX_LEVEL; const currentProfit = cardProfit(c, lv), profit = maxed ? currentProfit : cardProfit(c, lv + 1); return { id: c.id, name: c.name, cat: c.cat, level: lv, profit, currentProfit, profitGain: profit - currentProfit, price: maxed ? 0 : cardPrice(c, lv), req: c.req || 0, locked, maxed }; }),
+      dailyAvailable, dailyStreak: visibleDailyStreak, dailyNext: dailyReward(dailyAvailable ? visibleDailyStreak + 1 : visibleDailyStreak),
       chestAvailable: s.chestDate !== today,
       rainAvailable: s.rainDate !== today,
       boostEnergyLeft: DAILY_BOOSTS - s.bE, boostTurboLeft: DAILY_BOOSTS - s.bT, turboMsLeft: Math.max(0, (s.turboUntil || 0) - Date.now()),
-      combo: (() => { const cards = todaysCombo(today); const hits = s.comboDate === today ? (s.comboHits || []) : []; return { cards, hits, complete: cards.every(c => hits.includes(c)), claimed: s.comboClaimed === today, reward: COMBO_REWARD }; })(),
+      combo: { cards: comboCards, hits: comboHits, complete: comboCards.every(c => comboHits.includes(c)), claimed: s.comboClaimed === today, reward: COMBO_REWARD },
       cipher: { morse: toMorse(todaysCipher(today)), anagram: scrambleWord(todaysCipher(today), today), len: todaysCipher(today).length, claimed: s.cipherDate === today, reward: CIPHER_REWARD },
       taps: s.taps || 0, cardsOwned: CARDS.filter(c => (s.cards[c.id] || 0) > 0).length,
       season: { points: 0, endsTs: seasonEndsTs() },
@@ -496,17 +547,163 @@
   }
 
   async function api(path, opts) { const sig = (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? AbortSignal.timeout(10000) : undefined; const r = await fetch(path, { signal: sig, ...opts, headers: { 'Content-Type': 'application/json', ...(App.authHeader ? App.authHeader() : {}) } }); return r.json(); }
+  async function copyText(value) {
+    const text = String(value || '');
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(text); return true; }
+    } catch (_) {}
+    // Старые Telegram WebView могут не иметь Clipboard API, но поддерживают
+    // копирование выделенного textarea через execCommand.
+    try {
+      const input = document.createElement('textarea');
+      input.value = text; input.setAttribute('readonly', '');
+      input.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+      document.body.appendChild(input); input.select();
+      const ok = !!document.execCommand && document.execCommand('copy');
+      input.remove(); return ok;
+    } catch (_) { return false; }
+  }
+  function clientRequestId() {
+    return (window.crypto && typeof window.crypto.randomUUID === 'function')
+      ? window.crypto.randomUUID().replace(/-/g, '')
+      : (Date.now().toString(36) + '_' + Math.random().toString(36).slice(2));
+  }
+  function accountStorageKey(base) {
+    let account = 'unknown';
+    try {
+      const u = window.App && App.user && App.user();
+      if (u && Number.isFinite(Number(u.id))) account = String(App.platform || 'app') + '_' + String(Math.floor(Number(u.id)));
+    } catch (_) {}
+    return base + '_' + account;
+  }
+  // Все запросы, возвращающие ClickerState, идут последовательно. Серверная revision
+  // дополнительно отсекает запоздавшие ответы при смене версии клиента/повторе сети.
+  let stateMutationTail = Promise.resolve(), appliedStateRevision = -1;
+  function stateApi(path, opts) {
+    const run = () => api(path, opts);
+    const request = stateMutationTail.then(run, run);
+    stateMutationTail = request.then(() => undefined, () => undefined);
+    return request;
+  }
+  // Любая соседняя механика, которая меняет общий баланс/энергию, обязана сначала
+  // дождаться отправки оптимистичных тапов. Иначе, например, старые тапы могли уйти
+  // уже ПОСЛЕ престижа или включения турбо и попасть не в тот цикл/множитель.
+  async function settlePendingTaps() {
+    if (!authed()) return true;
+    const account = accountStorageKey('ck_state_context');
+    if (tapRetryBatch && tapRetryBatch.account && tapRetryBatch.account !== account) tapRetryBatch = null;
+    if (tapAccount && tapAccount !== account) {
+      pending = 0; pendingComboBonus = 0; pendingTapGain = 0; pendingTapEnergy = 0;
+      tapAccount = account;
+    }
+    // Сначала завершаем потерянную пачку с тем же requestId, затем хвост тапов,
+    // набранный пока она была в полёте. Обычно достаточно одного прохода.
+    for (let i = 0; i < 3 && (tapFlushPromise || tapRetryBatch || pending > 0); i++) {
+      if (tapFlushPromise) await tapFlushPromise;
+      else await flush();
+    }
+    return pending <= 0 && !tapRetryBatch && !tapFlushPromise;
+  }
+  async function mutationApi(path, opts) {
+    if (!(await settlePendingTaps())) throw new Error('tap_sync_failed');
+    return stateApi(path, opts);
+  }
+  function applyServerState(next) {
+    // HTTP-ошибки наш fetch-хелпер тоже разбирает как JSON. Такой объект нельзя
+    // принимать за ClickerState: иначе временный 500 превращал весь `st` в {error}.
+    if (!next || typeof next !== 'object' || next.error) return false;
+    const revision = Number(next.revision);
+    if (Number.isFinite(revision)) {
+      if (revision < appliedStateRevision) return false;
+      appliedStateRevision = revision;
+    }
+    st = next;
+    // Сервер ещё не знает о тапах, набранных после запуска текущего запроса.
+    const currentAccount = accountStorageKey('ck_state_context');
+    const pendingCurrent = !tapAccount || tapAccount === currentAccount;
+    const pendingGain = pendingCurrent ? Number(pendingTapGain || 0) : 0;
+    const pendingEnergy = pendingCurrent ? Number(pendingTapEnergy || 0) : 0;
+    const retryCurrent = !tapRetryBatch || !tapRetryBatch.account || tapRetryBatch.account === currentAccount;
+    const retryGain = retryCurrent ? Number(tapRetryBatch && tapRetryBatch.gain || 0) : 0;
+    const retryEnergy = retryCurrent ? Number(tapRetryBatch && tapRetryBatch.energy || 0) : 0;
+    if (authed() && (pendingGain > 0 || retryGain > 0)) {
+      st.balance = Number(st.balance) + pendingGain + retryGain;
+      st.totalEarned = Number(st.totalEarned) + pendingGain + retryGain;
+      st.energy = Math.max(0, Number(st.energy) - pendingEnergy - retryEnergy);
+    }
+    return true;
+  }
   // Анти-даблтап: пока летит запрос операции этого типа — повторные тапы игнорируются
   const inflight = new Set();
   async function withLock(key, fn) { if (inflight.has(key)) return; inflight.add(key); try { return await fn(); } finally { inflight.delete(key); } }
-  let loadNetFail = false; // авторизованный юзер получил гостевой фолбэк из-за сети — скажем об этом
-  async function load() { let q = ''; try { const sp = (window.App && App.startParam && App.startParam()) || ''; const m = /^src[_-]([a-zA-Z0-9_-]{1,32})/.exec(sp); if (m) q = '?source=' + encodeURIComponent(m[1]); } catch (_) {} loadNetFail = false; st = authed() ? await api('/api/clicker' + q).catch(() => { loadNetFail = true; return guestDerive(); }) : guestDerive(); turboUntil = Date.now() + (st.turboMsLeft || 0); }
+  let loadNetFail = false, loadFailureReason = '', loadedStateAccount = '';
+  function cachedServerState(account) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(accountStorageKey('ck_server_state_v1')) || 'null');
+      return saved && saved.account === account && saved.state && !saved.state.error ? saved.state : null;
+    } catch (_) { return null; }
+  }
+  function cacheServerState(account, state) {
+    try { localStorage.setItem(accountStorageKey('ck_server_state_v1'), JSON.stringify({ account, state, savedAt: Date.now() })); } catch (_) {}
+  }
+  async function load() {
+    let q = '';
+    try { const sp = (window.App && App.startParam && App.startParam()) || ''; const m = /^src[_-]([a-zA-Z0-9_-]{1,32})/.exec(sp); if (m) q = '?source=' + encodeURIComponent(m[1]); } catch (_) {}
+    loadNetFail = false; loadFailureReason = '';
+    const account = accountStorageKey('ck_state_context');
+    if (loadedStateAccount && loadedStateAccount !== account) {
+      // revision монотонна только внутри одного профиля. Без сброса пользователь с
+      // меньшей revision мог вообще не загрузиться после смены аккаунта в WebView.
+      appliedStateRevision = -1;
+      st = null;
+      pending = 0; pendingComboBonus = 0; pendingTapGain = 0; pendingTapEnergy = 0;
+      tapRetryBatch = null; tapAccount = account;
+    }
+    let loaded = null;
+    if (authed()) {
+      loaded = await api('/api/clicker' + q).then((d) => {
+        if (!d || d.error) { loadFailureReason = String(d && d.error || 'bad_state'); return null; }
+        return d;
+      }).catch(() => null);
+      if (!loaded) {
+        loadNetFail = true;
+        // Административную блокировку нельзя обходить последним локальным снимком.
+        if (loadFailureReason === 'account_blocked') return false;
+        loaded = loadedStateAccount === account && st ? st : cachedServerState(account);
+        if (!loaded) return false;
+      } else cacheServerState(account, loaded);
+    } else loaded = guestDerive();
+    if (!applyServerState(loaded)) return false;
+    loadedStateAccount = account;
+    uiDay = irkToday(); turboUntil = Date.now() + (st.turboMsLeft || 0);
+    return true;
+  }
+  function showLoadFailure() {
+    const pop = ov && ov.querySelector('#ck-pop'); if (!pop) return;
+    const blocked = loadFailureReason === 'account_blocked';
+    pop.innerHTML = blocked
+      ? `<h3>${ICON.bolt(20)} Доступ ограничен</h3><div style="color:var(--muted);font-size:13px">Доступ к «Котик Комбат» временно ограничен администрацией.</div><button id="ck-pop-ok" style="background:rgba(255,255,255,.07);color:var(--ink);border-color:var(--line)">Закрыть</button>`
+      : `<h3>${ICON.bolt(20)} Не удалось загрузить игру</h3><div style="color:var(--muted);font-size:13px">Серверный прогресс не получен. Мы не подставляем вместо него гостевые данные, поэтому монеты и уровень останутся в безопасности.</div><button id="ck-load-retry">Повторить</button><button id="ck-pop-ok" style="background:rgba(255,255,255,.07);color:var(--ink);border-color:var(--line)">Закрыть</button>`;
+    pop.classList.add('on');
+    const retry = pop.querySelector('#ck-load-retry'); if (retry) retry.onclick = () => { pop.classList.remove('on'); close(); setTimeout(open, 0); };
+    pop.querySelector('#ck-pop-ok').onclick = close;
+  }
 
   // ── FTUE «Первый день»: чип на главной + попап-чеклист (аудит 30.07) ─────────
-  let ftueData = null;
+  let ftueData = null, ftueLoadGeneration = 0, ftueAccountKey = '';
   async function loadFtue() {
+    const account = accountStorageKey('ck_ftue_context');
+    if (ftueAccountKey !== account) {
+      ftueAccountKey = account;
+      ftueData = null;
+      renderFtueChip();
+    }
     if (!authed()) return;
-    ftueData = await api('/api/clicker/ftue').catch(() => null);
+    const generation = ++ftueLoadGeneration;
+    const session = overlaySession;
+    const next = await api('/api/clicker/ftue').catch(() => null);
+    if (generation !== ftueLoadGeneration || account !== accountStorageKey('ck_ftue_context') || !overlaySessionActive(session)) return;
+    ftueData = next && !next.error ? next : null;
     renderFtueChip();
   }
   function renderFtueChip() {
@@ -521,7 +718,7 @@
   }
   function openFtuePopup() {
     const pop = ov && ov.querySelector('#ck-pop');
-    if (!pop || !ftueData) return;
+    if (!pop || !ftueData || !ov.classList.contains('on')) return;
     window.haptic && window.haptic('light');
     const rows = ftueData.steps.map(s => `
       <div class="ck-ftue-row ${s.claimed ? 'done dim' : s.done ? 'done' : 'dim'}">
@@ -540,69 +737,140 @@
     pop.querySelectorAll('[data-ftue]').forEach(b => {
       b.onclick = async () => {
         b.disabled = true;
-        const r = await api('/api/clicker/ftue/claim', { method: 'POST', body: JSON.stringify({ step: Number(b.dataset.ftue) }) }).catch(() => null);
+        const actionSession = overlaySession;
+        const body = JSON.stringify({ step: Number(b.dataset.ftue) });
+        let r = await mutationApi('/api/clicker/ftue/claim', { method: 'POST', body }).catch(() => null);
+        let recovered = false;
+        if (!r || r.error === 'internal') {
+          r = await mutationApi('/api/clicker/ftue/claim', { method: 'POST', body }).catch(() => null);
+          recovered = !!(r && r.error === 'already');
+        }
+        if (!overlaySessionActive(actionSession)) {
+          if ((r && r.ok) || recovered) void window.ckRefreshState();
+          return;
+        }
         if (r && r.ok) {
           window.haptic && window.haptic('success'); sfxReward(); coinShower();
-          if (st) { st.balance = r.newBalance; st.totalEarned += r.reward; renderAll(); bumpBalance(); }
+          if (st) {
+            st.balance = r.newBalance;
+            st.totalEarned += r.reward;
+            if (Number.isFinite(Number(r.revision))) appliedStateRevision = Math.max(appliedStateRevision, Number(r.revision));
+            renderAll(); bumpBalance();
+          }
           await loadFtue();
           openFtuePopup(); // перерисовать чеклист поверх
-        } else { flashMsg(r && r.error === 'already' ? 'Уже забрано' : 'Шаг ещё не выполнен'); b.disabled = false; }
+        } else if (recovered) {
+          await window.ckRefreshState();
+          await loadFtue();
+          flashMsg('Награда уже зачислена — баланс обновлён', 'light');
+          openFtuePopup();
+        } else {
+          flashMsg(!r || r.error === 'internal' ? 'Нет связи — попробуй ещё раз' : r.error === 'already' ? 'Уже забрано' : 'Шаг ещё не выполнен');
+          b.disabled = false;
+        }
       };
     });
   }
   // T5: welcome-промокод новичку (первая победа). Показ 1 раз; сервер решает eligibility.
   async function maybeWelcomePromo() {
     if (!authed()) return;
+    const session = overlaySession;
     try {
       const d = await api('/api/clicker/welcome').catch(() => null);
-      if (!d || !d.promo) return;
+      if (!overlaySessionActive(session) || !d || !d.promo) return;
       const pop = ov.querySelector('#ck-pop');
       pop.innerHTML = `<h3>${ICON.gift(20)} Подарок новичку!</h3><div class="v" style="font-size:22px">${d.promo}</div><div style="color:var(--muted);font-size:13px;max-width:240px">${(d.desc || '').replace(/</g, '&lt;')}</div><div style="display:flex;gap:8px;justify-content:center;margin-top:12px"><button class="ck-card__buy" id="ck-wc-copy" style="justify-content:center">Скопировать</button><button class="ck-card__buy" id="ck-wc-order" style="justify-content:center">Заказать</button></div><button id="ck-pop-ok" style="margin-top:10px">Закрыть</button>`;
       pop.classList.add('on');
       const done = () => { pop.classList.remove('on'); api('/api/clicker/welcome/seen', { method: 'POST', body: '{}' }).catch(() => {}); };
-      const cp = pop.querySelector('#ck-wc-copy'); if (cp) cp.onclick = () => { try { navigator.clipboard && navigator.clipboard.writeText(d.promo); cp.textContent = 'Скопировано'; } catch (_) {} };
+      const cp = pop.querySelector('#ck-wc-copy'); if (cp) cp.onclick = async () => { cp.textContent = await copyText(d.promo) ? 'Скопировано' : 'Выдели код выше'; };
       const wo = pop.querySelector('#ck-wc-order'); if (wo) wo.onclick = () => { if (window.App && App.openExternal) App.openExternal('https://maria-irk.ru/'); else window.open('https://maria-irk.ru/', '_blank'); }; // внешние ссылки — через бридж (правило проекта)
       pop.querySelector('#ck-pop-ok').onclick = done;
     } catch (_) {}
   }
   async function flush() {
-    if (pending <= 0 || !authed()) return;
+    if ((!tapRetryBatch && pending <= 0) || !authed()) return;
     if (tapFlushPromise) return tapFlushPromise;
     tapFlushPromise = (async () => {
-      const n = pending, comboBonus = pendingComboBonus, sentGain = pendingTapGain, sentEnergy = pendingTapEnergy;
-      pending = 0; pendingComboBonus = 0; pendingTapGain = 0; pendingTapEnergy = 0; tapsInflight += n;
+      // Даём присвоить сам Promise до возможного раннего выхода ниже.
+      await Promise.resolve();
+      const account = accountStorageKey('ck_state_context');
+      if (tapRetryBatch && tapRetryBatch.account && tapRetryBatch.account !== account) tapRetryBatch = null;
+      if (!tapRetryBatch && tapAccount && tapAccount !== account) {
+        pending = 0; pendingComboBonus = 0; pendingTapGain = 0; pendingTapEnergy = 0;
+        tapAccount = account;
+        tapFlushPromise = null;
+        return;
+      }
+      const isRetry = !!tapRetryBatch;
+      const batch = tapRetryBatch || {
+        n: pending,
+        comboBonus: pendingComboBonus,
+        gain: pendingTapGain,
+        energy: pendingTapEnergy,
+        requestId: clientRequestId(),
+        account,
+      };
+      tapRetryBatch = null;
+      if (!isRetry) { pending = 0; pendingComboBonus = 0; pendingTapGain = 0; pendingTapEnergy = 0; }
+      const n = batch.n;
+      tapsInflight += n; tapsInflightAccount = batch.account || account;
       try {
-        const d = await api('/api/clicker/tap', { method: 'POST', body: JSON.stringify({ taps: n, comboBonus }) });
+        const d = await stateApi('/api/clicker/tap', { method: 'POST', body: JSON.stringify({ taps: n, requestId: batch.requestId }), keepalive: true });
         if (!d || d.error) throw new Error('tap_sync_failed');
+        if ((batch.account || account) !== accountStorageKey('ck_state_context')) return;
         // Пока запрос был в пути, игрок мог продолжить тапать. Ответ сервера уже
         // содержит отправленный батч, а ещё не отправленные тапы возвращаем поверх
         // него, иначе баланс визуально «откатывается» каждые 1,6 секунды.
-        st = d;
-        st.balance = Number(st.balance) + pendingTapGain;
-        st.totalEarned = Number(st.totalEarned) + pendingTapGain;
-        st.energy = Math.max(0, Number(st.energy) - pendingTapEnergy);
+        applyServerState(d);
       } catch (_) {
-        pending += n; pendingComboBonus += comboBonus; pendingTapGain += sentGain; pendingTapEnergy += sentEnergy;
+        // Не смешиваем неизвестную пачку с новыми тапами: повтор обязан уйти с тем
+        // же количеством и requestId, иначе сервер не сможет отличить хвост от дубля.
+        if ((batch.account || account) === accountStorageKey('ck_state_context')) tapRetryBatch = batch;
       } finally {
-        tapsInflight -= n; tapFlushPromise = null;
+        tapsInflight = Math.max(0, tapsInflight - n);
+        if (!tapsInflight) tapsInflightAccount = '';
+        tapFlushPromise = null;
       }
     })();
     return tapFlushPromise;
   }
+  async function flushForPageExit() {
+    // Если один батч уже летит, flush() сам вернёт его Promise и не захватит тапы,
+    // набранные позже. После него делаем ещё одну попытку для оставшегося хвоста.
+    const wasInflight = !!tapFlushPromise;
+    await flush();
+    if (wasInflight && (tapRetryBatch || pending > 0)) await flush();
+  }
 
   async function buy(type, id) {
     return withLock('buy', async () => {
+      const actionSession = overlaySession;
       const wasNoBiz = type === 'card' && !!st && !st.cardsOwned; // до покупки бизнесов не было — для коуч-хинта bizFirst
-      let ok = false, netfail = false;
-      if (authed()) { try { const d = await api('/api/clicker/buy', { method: 'POST', body: JSON.stringify({ type, id }) }); if (!d.error) { st = d; ok = true; } } catch (_) { netfail = true; } }
-      else { const s = guestBuyRaw(type, id); if (s) { st = guestDerive(); ok = true; } }
-      if (ok) { lastBought = type === 'card' ? id : null; bizCoachPending = type === 'card' && wasNoBiz; sfxBuy(); window.haptic && window.haptic('medium'); renderAll(); renderUpgrades(); } else { sfxError(); flashMsg(netfail ? 'Нет связи — попробуй ещё раз' : 'Не хватает монет'); }
+      const beforeLevel = type === 'multitap' ? Number(st && st.multitapLevel) : type === 'energy' ? Number(st && st.energyLevel) : Number((st && st.cards || []).find(c => c.id === id)?.level || 0);
+      let ok = false, netfail = false, reason = '';
+      if (authed()) {
+        try { const d = await mutationApi('/api/clicker/buy', { method: 'POST', body: JSON.stringify({ type, id }) }); if (!d.error) { applyServerState(d); ok = true; } else if (d.error === 'internal') throw new Error('internal'); else reason = d.error; }
+        catch (_) {
+          // Покупка уровня не идемпотентна: повтор мог бы купить уже СЛЕДУЮЩИЙ
+          // уровень. Сначала проверяем, успел ли первый запрос закоммититься.
+          const fresh = await stateApi('/api/clicker').catch(() => null);
+          if (fresh && !fresh.error) {
+            const currentLevel = type === 'multitap' ? Number(fresh.multitapLevel) : type === 'energy' ? Number(fresh.energyLevel) : Number((fresh.cards || []).find(c => c.id === id)?.level || 0);
+            applyServerState(fresh);
+            if (currentLevel > beforeLevel) ok = true; else netfail = true;
+          } else netfail = true;
+        }
+      }
+      else { const s = guestBuyRaw(type, id); if (s) { applyServerState(guestDerive()); ok = true; } }
+      if (!overlaySessionActive(actionSession)) return;
+      if (ok) { lastBought = type === 'card' ? id : null; bizCoachPending = type === 'card' && wasNoBiz; sfxBuy(); window.haptic && window.haptic('medium'); renderAll(); renderUpgrades(); }
+      else { sfxError(); flashMsg(netfail ? 'Нет связи — попробуй ещё раз' : reason === 'max_level' ? 'Уже максимальный уровень' : reason === 'locked' ? 'Бизнес пока закрыт по уровню' : 'Не хватает монет'); }
     });
   }
   function guestBuyRaw(type, id) {
     guestDerive(); const s = rawGet(); let cost = 0;
     if (type === 'multitap') cost = priceMultitap(s.multitapLevel); else if (type === 'energy') cost = priceEnergy(s.energyLevel);
-    else { const c = CARDS.find(x => x.id === id); const lv = s.cards[id] || 0; if (lv === 0 && c.req && leagueFor(s.totalEarned).level < c.req) return null; cost = cardPrice(c, lv); }
+    else { const c = CARDS.find(x => x.id === id); if (!c) return null; const lv = s.cards[id] || 0; if (lv >= BUSINESS_MAX_LEVEL || (lv === 0 && c.req && leagueFor(s.totalEarned).level < c.req)) return null; cost = cardPrice(c, lv); }
     if (s.balance < cost) return null; s.balance -= cost;
     if (type === 'multitap') s.multitapLevel++; else if (type === 'energy') s.energyLevel++; else {
       s.cards[id] = (s.cards[id] || 0) + 1;
@@ -613,11 +881,23 @@
   }
   async function claimDaily() {
     return withLock('daily', async () => {
+      const actionSession = overlaySession;
       let r, netfail = false;
-      if (authed()) { r = await api('/api/clicker/daily', { method: 'POST', body: '{}' }).catch(() => { netfail = true; return null; }); if (r && !r.error) st = r; }
-      else { const g = guestClaimDaily(); if (g) { r = { reward: g }; st = guestDerive(); } }
+      if (authed()) {
+        const expected = Number(st && st.dailyNext || 0);
+        r = await mutationApi('/api/clicker/daily', { method: 'POST', body: '{}' }).catch(() => null);
+        if (r && !r.error) applyServerState(r);
+        else if (!r || r.error === 'internal') {
+          const fresh = await stateApi('/api/clicker').catch(() => null);
+          if (fresh && !fresh.error && fresh.dailyAvailable === false) { applyServerState(fresh); r = { reward: expected, recovered: true }; }
+          else netfail = true;
+        }
+      }
+      else { const g = guestClaimDaily(); if (g) { r = { reward: g }; applyServerState(guestDerive()); } }
+      if (!overlaySessionActive(actionSession)) return;
       if (r && r.reward) { sfxReward(); window.haptic && window.haptic('success'); dailyPopup(r.reward, st.dailyStreak); renderAll(); bumpBalance(); }
       else if (netfail) { sfxError(); flashMsg('Нет связи — попробуй ещё раз'); }
+      else if (r && r.error) { sfxError(); flashMsg(r.error === 'already' ? 'Награда за сегодня уже получена' : 'Не получилось — попробуй ещё раз'); }
     });
   }
   function guestClaimDaily() {
@@ -628,25 +908,48 @@
   }
   async function claimCombo() {
     return withLock('combo', async () => {
+      const actionSession = overlaySession;
       let r, netfail = false;
-      if (authed()) { r = await api('/api/clicker/combo', { method: 'POST', body: '{}' }).catch(() => { netfail = true; return null; }); if (r && !r.error) st = r; else r = null; }
-      else { const g = guestClaimComboRaw(); if (g) { r = { reward: COMBO_REWARD }; st = guestDerive(); } }
+      if (authed()) {
+        r = await mutationApi('/api/clicker/combo', { method: 'POST', body: '{}' }).catch(() => null);
+        if (r && !r.error) applyServerState(r);
+        else if (!r || r.error === 'internal') {
+          const fresh = await stateApi('/api/clicker').catch(() => null);
+          if (fresh && !fresh.error && fresh.combo && fresh.combo.claimed) { applyServerState(fresh); r = { reward: COMBO_REWARD, recovered: true }; }
+          else netfail = true;
+        }
+      }
+      else { const g = guestClaimComboRaw(); if (g) { r = { reward: COMBO_REWARD }; applyServerState(guestDerive()); } }
+      if (!overlaySessionActive(actionSession)) return;
       if (r && r.reward) { sfxLevel(); window.haptic && window.haptic('success'); coinShower(); confettiBurst(); queueDoveDrop(r.pigeonDrop); dailyPopupRaw(ICON.star(20) + ' Комбо дня собрано!', r.reward); renderAll(); renderTasks(); bumpBalance(); }
-      else flashMsg(netfail ? 'Нет связи — попробуй ещё раз' : 'Комбо ещё не собрано');
+      else flashMsg(netfail ? 'Нет связи — попробуй ещё раз' : !authed() || r && r.error === 'not_ready' ? 'Комбо ещё не собрано' : r && r.error === 'already' ? 'Комбо уже забрано сегодня' : 'Не получилось — попробуй ещё раз');
     });
   }
   function guestClaimComboRaw() {
     guestDerive(); const s = rawGet(); const today = irkToday();
     if (s.comboClaimed === today) return false;
-    const combo = todaysCombo(today); const hits = s.comboDate === today ? (s.comboHits || []) : [];
+    const combo = todaysCombo(today); const recorded = s.comboDate === today ? (s.comboHits || []) : [];
+    const hits = comboHitsIncludingMaxed(combo, recorded, s.cards);
     if (!combo.every(c => hits.includes(c))) return false;
     s.balance += COMBO_REWARD; s.totalEarned += COMBO_REWARD; s.comboClaimed = today; rawSave(s); return true;
   }
   async function claimCipher(guess) {
-    let r;
-    if (authed()) { r = await api('/api/clicker/cipher', { method: 'POST', body: JSON.stringify({ guess }) }).catch(() => null); if (r && !r.error) st = r; else { flashMsg(!r ? 'Нет связи — попробуй ещё раз' : r.error === 'already' ? 'Уже разгадан сегодня' : 'Неверно, попробуй ещё'); return; } }
-    else { const g = guestClaimCipherRaw(guess); if (!g) { flashMsg('Неверно, попробуй ещё'); return; } st = guestDerive(); r = { reward: CIPHER_REWARD }; }
-    if (r && r.reward) { sfxReward(); window.haptic && window.haptic('success'); coinShower(); dailyPopupRaw(ICON.bolt(20) + ' Шифр разгадан!', r.reward); renderAll(); renderTasks(); bumpBalance(); }
+    return withLock('cipher', async () => {
+      const actionSession = overlaySession;
+      let r;
+      if (authed()) {
+        r = await mutationApi('/api/clicker/cipher', { method: 'POST', body: JSON.stringify({ guess }) }).catch(() => null);
+        if (r && !r.error) applyServerState(r);
+        else if (!r || r.error === 'internal') {
+          const fresh = await stateApi('/api/clicker').catch(() => null);
+          if (fresh && !fresh.error && fresh.cipher && fresh.cipher.claimed) { applyServerState(fresh); r = { reward: CIPHER_REWARD, recovered: true }; }
+          else { if (overlaySessionActive(actionSession)) flashMsg('Нет связи — попробуй ещё раз'); return; }
+        } else { if (overlaySessionActive(actionSession)) flashMsg(r.error === 'internal' ? 'Нет связи — попробуй ещё раз' : r.error === 'already' ? 'Уже разгадан сегодня' : 'Неверно, попробуй ещё'); return; }
+      }
+      else { const g = guestClaimCipherRaw(guess); if (!g) { if (overlaySessionActive(actionSession)) flashMsg('Неверно, попробуй ещё'); return; } applyServerState(guestDerive()); r = { reward: CIPHER_REWARD }; }
+      if (!overlaySessionActive(actionSession)) return;
+      if (r && r.reward) { sfxReward(); window.haptic && window.haptic('success'); coinShower(); dailyPopupRaw(ICON.bolt(20) + ' Шифр разгадан!', r.reward); renderAll(); renderTasks(); bumpBalance(); }
+    });
   }
   function guestClaimCipherRaw(guess) {
     guestDerive(); const s = rawGet(); const today = irkToday();
@@ -656,20 +959,33 @@
   }
   async function boost(type) {
     if (type === 'turbo' && turboOn()) { flashMsg('Турбо уже активно', 'light'); return; } // не сжигать заряд на переустановку тех же 20с
+    if (type === 'energy' && st && st.energy >= st.energyMax) { flashMsg('Энергия уже полная', 'light'); return; }
     return withLock('boost', async () => {
-      let ok = false, netfail = false;
-      if (authed()) { try { const d = await api('/api/clicker/boost', { method: 'POST', body: JSON.stringify({ type }) }); if (!d.error) { st = d; ok = true; } } catch (_) { netfail = true; } }
-      else { ok = guestBoost(type); if (ok) st = guestDerive(); }
-      if (!ok) { flashMsg(netfail ? 'Нет связи — попробуй ещё раз' : 'Бусты на сегодня кончились'); return; }
-      if (type === 'turbo') { turboUntil = Date.now() + TURBO_SEC * 1000; sfxTurbo(); }
+      const actionSession = overlaySession;
+      let ok = false, netfail = false, reason = '';
+      const beforeLeft = type === 'turbo' ? Number(st && st.boostTurboLeft) : Number(st && st.boostEnergyLeft);
+      if (authed()) {
+        try { const d = await mutationApi('/api/clicker/boost', { method: 'POST', body: JSON.stringify({ type }) }); if (!d.error) { applyServerState(d); ok = true; } else if (d.error === 'internal') throw new Error('internal'); else reason = d.error; }
+        catch (_) {
+          const fresh = await stateApi('/api/clicker').catch(() => null);
+          if (fresh && !fresh.error) {
+            const currentLeft = type === 'turbo' ? Number(fresh.boostTurboLeft) : Number(fresh.boostEnergyLeft);
+            applyServerState(fresh); ok = currentLeft < beforeLeft; netfail = !ok;
+          } else netfail = true;
+        }
+      }
+      else { ok = guestBoost(type); if (ok) applyServerState(guestDerive()); }
+      if (!overlaySessionActive(actionSession)) return;
+      if (!ok) { flashMsg(netfail ? 'Нет связи — попробуй ещё раз' : reason === 'full_energy' ? 'Энергия уже полная' : reason === 'already_active' ? 'Турбо уже активно' : 'Бусты на сегодня кончились'); return; }
+      if (type === 'turbo') { turboUntil = Date.now() + Math.max(0, Number(st && st.turboMsLeft) || TURBO_SEC * 1000); sfxTurbo(); }
       else { chord([520, 780], 0.14); }
       window.haptic && window.haptic('medium'); renderAll();
     });
   }
   function guestBoost(type) {
     guestDerive(); const s = rawGet();
-    if (type === 'energy') { if (s.bE >= DAILY_BOOSTS) return false; s.energy = energyMaxFor(s.energyLevel); s.bE++; }
-    else { if (s.bT >= DAILY_BOOSTS) return false; s.turboUntil = Date.now() + TURBO_SEC * 1000; s.bT++; }
+    if (type === 'energy') { if (s.bE >= DAILY_BOOSTS || s.energy >= energyMaxFor(s.energyLevel)) return false; s.energy = energyMaxFor(s.energyLevel); s.energyCarry = 0; s.bE++; }
+    else { if (s.bT >= DAILY_BOOSTS || Number(s.turboUntil || 0) > Date.now()) return false; s.turboUntil = Date.now() + TURBO_SEC * 1000; s.bT++; }
     rawSave(s); return true;
   }
   async function loadTop() {
@@ -694,8 +1010,7 @@
          На телефоне (≤480px) width:100% и так меньше кэпа — layout не меняется. */
       .ck-nav{width:100%;max-width:480px}
       #ck-catwrap{touch-action:none;overscroll-behavior:none}
-      .ck-x{right:max(12px,calc(50% - 228px))}
-      .ck-x{position:absolute;top:12px;right:12px;z-index:9;width:34px;height:34px;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.28);color:var(--cream);font-size:17px;cursor:pointer}
+      .ck-x{position:absolute;top:12px;right:max(12px,calc(50% - 228px));z-index:9;width:34px;height:34px;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.28);color:var(--cream);font-size:17px;cursor:pointer}
       /* Pressed-отклик на все кнопки игры + расширенные хит-зоны мелких крестиков (визуально 34px, тап 48px) */
       .ck-ov button:not(:disabled):active{transform:scale(.96)}
       .ck-nav__b:not(:disabled):active{transform:none;opacity:.72}
@@ -703,7 +1018,7 @@
       .ck-quiz__hd .x,.ck-rain__hud .x{position:relative}
       .ck-cat-chip:disabled{opacity:.45}
       .ck-i{display:inline-block;vertical-align:-.16em}.ck-coin-i{display:inline-block;vertical-align:-.18em;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4))}
-      .ck-daily{margin-top:13px;display:inline-flex;align-items:center;gap:7px;background:linear-gradient(180deg,#D4FF6A,#A8F51E);color:#12210A;font-weight:800;border:1px solid rgba(216,255,122,.7);border-radius:14px;padding:9px 18px;font-size:13px;cursor:pointer;box-shadow:0 6px 18px rgba(168,245,30,.42),inset 0 1px 0 rgba(255,255,255,.4)}
+      .ck-daily{margin-top:13px;display:inline-flex;align-items:center;gap:7px;min-height:44px;box-sizing:border-box;background:linear-gradient(180deg,#D4FF6A,#A8F51E);color:#12210A;font-weight:800;border:1px solid rgba(216,255,122,.7);border-radius:14px;padding:9px 18px;font-size:13px;cursor:pointer;box-shadow:0 6px 18px rgba(168,245,30,.42),inset 0 1px 0 rgba(255,255,255,.4)}
       .ck-lvl{margin-top:13px;color:var(--gold-l);font-family:'Nunito',sans-serif;font-weight:700;font-size:17px;letter-spacing:.2px}
       .ck-bal{display:flex;align-items:center;justify-content:center;gap:9px;margin-top:4px;font-family:'Nunito',sans-serif;font-weight:700;font-size:40px;font-variant-numeric:tabular-nums;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.45)}
       .ck-prof{margin-top:6px;display:inline-flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);padding:4px 13px;border-radius:20px;font-weight:700;font-size:12px;color:var(--gold);font-variant-numeric:tabular-nums}
@@ -827,7 +1142,7 @@
       .ck-energy{width:84%;max-width:360px;margin:0 0 16px}.ck-energy__row{display:flex;align-items:center;gap:7px;font-weight:700;font-size:13px;margin-bottom:6px;color:var(--cream);font-variant-numeric:tabular-nums}.ck-energy__row .ck-i{color:var(--gold)}.ck-energy__bar{height:11px;border-radius:8px;background:rgba(0,0,0,.34);box-shadow:inset 0 1px 2px rgba(0,0,0,.45);overflow:hidden}.ck-energy__fill{height:100%;border-radius:8px;background:linear-gradient(90deg,#8DBF20,#D8FF7A);box-shadow:0 0 7px rgba(238,191,82,.5);transition:width .25s}
       .ck-up{position:absolute;color:var(--gold-l);font-weight:800;pointer-events:none;text-shadow:0 2px 5px rgba(0,0,0,.5);z-index:7;font-variant-numeric:tabular-nums}
       .ck-coin{position:absolute;z-index:7;pointer-events:none}
-      .ck-uphd{padding:16px 16px 6px;text-align:center;width:100%;box-sizing:border-box}.ck-uphd .b{font-family:'Nunito',sans-serif;font-weight:700;font-size:24px;display:inline-flex;align-items:center;gap:8px;color:var(--cream)}.ck-uphd .b .ck-i{color:var(--gold)}.ck-uphd .p{color:var(--gold);font-weight:700;font-size:13px;margin-top:3px;display:inline-flex;align-items:center;gap:5px;font-variant-numeric:tabular-nums}
+      .ck-uphd{padding:16px 16px 6px;text-align:center;width:100%;box-sizing:border-box}.ck-uphd .b{font-family:'Nunito',sans-serif;font-weight:700;font-size:24px;display:inline-flex;align-items:center;gap:8px;color:var(--cream)}.ck-uphd .b .ck-i{color:var(--gold)}.ck-uphd .p{color:var(--gold);font-weight:700;font-size:13px;margin-top:3px;display:flex;align-items:center;justify-content:center;gap:5px;font-variant-numeric:tabular-nums}
       .ck-uplist{flex:1;overflow:auto;padding:6px 12px 16px;width:100%;box-sizing:border-box}
       /* ── Главная · обзор (hub) ── */
       .ck-hub{flex:1;overflow:auto;padding:14px 14px 18px;width:100%;box-sizing:border-box}
@@ -869,7 +1184,7 @@
       .ck-gift.ok{color:#9be7a8;background:rgba(72,187,120,.1)}
       .ck-gift.earned{justify-content:space-between}.ck-gift.earned span{display:flex;align-items:center;gap:7px;flex:1;min-width:0}.ck-gift.earned .ck-card__buy{flex:none}
       .ck-cats{display:flex;gap:7px;margin:0 0 10px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}.ck-cats::-webkit-scrollbar{display:none}
-      .ck-cat-chip{flex:none;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:18px;padding:10px 15px;font-weight:700;font-size:12.5px;cursor:pointer;white-space:nowrap}
+      .ck-cat-chip{flex:none;min-height:44px;box-sizing:border-box;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:18px;padding:10px 15px;font-weight:700;font-size:12.5px;cursor:pointer;white-space:nowrap}
       .ck-cat-chip.on{background:linear-gradient(180deg,#D4FF6A,#A8F51E 58%,#8DBF20);color:#12210A;border-color:#DFFF8F}
       .ck-biz{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:10px 12px;margin-bottom:9px;position:relative;opacity:0;animation:ckBizIn .34s ease-out forwards}
       @keyframes ckBizIn{0%{opacity:0;transform:translateY(9px)}100%{opacity:1;transform:none}}
@@ -932,13 +1247,13 @@
          на себе, снаружи .ck-ov они не каскадируются (баг «тёмный текст на тёмном») */
       .ck-tour{--gold:#C0FF33;--gold-l:#D8FF7A;--cream:#eee7dd;--ink:#f1ece6;--muted:#9aa0ab;--line:rgba(255,255,255,.14);position:fixed;inset:0;z-index:10060;pointer-events:none;font-family:'Nunito','Mulish',system-ui,-apple-system,sans-serif}
       .ck-tour__hole{position:fixed;border-radius:16px;box-shadow:0 0 0 9999px rgba(10,6,5,.72);border:2px solid var(--gold);transition:left .28s ease,top .28s ease,width .28s ease,height .28s ease}
-      .ck-tour__bub{position:fixed;pointer-events:auto;background:linear-gradient(180deg,#1B1526,#120D1C);border:1px solid var(--gold);border-radius:18px;padding:14px;box-shadow:0 16px 44px rgba(0,0,0,.55);transition:top .28s ease,left .28s ease}
+      .ck-tour__bub{position:fixed;box-sizing:border-box;pointer-events:auto;background:linear-gradient(180deg,#1B1526,#120D1C);border:1px solid var(--gold);border-radius:18px;padding:14px;box-shadow:0 16px 44px rgba(0,0,0,.55);transition:top .28s ease,left .28s ease}
       .ck-tour__head{display:flex;gap:10px;align-items:flex-start}
       .ck-tour__head img{width:46px;height:46px;object-fit:contain;flex:none;filter:drop-shadow(0 2px 6px rgba(0,0,0,.4))}
       .ck-tour__t{font-size:14.5px;font-weight:600;color:var(--cream);line-height:1.5;padding-top:3px;letter-spacing:.1px}
       .ck-tour__row{display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:10px}
-      .ck-tour__next{border:1px solid #DFFF8F;border-radius:12px;padding:9px 22px;font-weight:800;font-size:13px;background:linear-gradient(180deg,#D4FF6A,#A8F51E 56%,#8DBF20);color:#12210A;cursor:pointer}
-      .ck-tour__skip{border:none;background:none;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;padding:8px 4px}
+      .ck-tour__next{min-height:44px;box-sizing:border-box;border:1px solid #DFFF8F;border-radius:12px;padding:9px 22px;font-weight:800;font-size:13px;background:linear-gradient(180deg,#D4FF6A,#A8F51E 56%,#8DBF20);color:#12210A;cursor:pointer}
+      .ck-tour__skip{min-height:44px;box-sizing:border-box;border:none;background:none;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;padding:8px 4px}
       @media (prefers-reduced-motion:reduce){.ck-tour__hole,.ck-tour__bub{transition:none}}
       /* «Сладкий тап» + реплики Василия (вкладка Котик, 31.07) */
       .ck-sweettap{position:absolute;left:50%;top:34%;transform:translate(-50%,-50%) scale(.6);font-family:'Nunito',sans-serif;font-weight:900;font-size:34px;letter-spacing:1px;color:#D8FF7A;text-shadow:0 0 18px rgba(240,194,78,.9),0 3px 10px rgba(0,0,0,.55);pointer-events:none;z-index:6;animation:ckSweetPop 1.05s ease-out forwards}
@@ -948,6 +1263,7 @@
       @media (prefers-reduced-motion:reduce){.ck-sweettap{animation:none;opacity:1}}
       /* FTUE «Первый день»: чип-чеклист первой сессии (аудит 30.07) */
       .ck-ftue{margin-top:8px;display:inline-flex;align-items:center;gap:7px;background:rgba(0,0,0,.3);border:1px solid var(--gold);color:var(--gold-l);border-radius:12px;padding:7px 14px;font-size:12.5px;font-weight:800;cursor:pointer}
+      .ck-ftue[hidden]{display:none}
       .ck-ftue b{color:#9be7a8}
       .ck-ftue:active{transform:scale(.96)}
       .ck-ftue-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);text-align:left}
@@ -1010,8 +1326,8 @@
       .ck-empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding:30px 18px;color:var(--muted)}.ck-empty__ic{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(238,191,82,.08);border:1px solid var(--line);color:var(--gold);margin-bottom:12px}.ck-empty__ic svg{width:30px;height:30px}.ck-empty__t{font-weight:800;font-size:15px;color:var(--cream);margin-bottom:4px}.ck-empty__s{font-size:12.5px;line-height:1.5;max-width:240px}
       @media (prefers-reduced-motion:reduce){.ck-screen.on,.ck-skel::after,.ck-conf,.ck-coin,.ck-flyc,.ck-ripple,.ck-flash,.ck-balpop,.ck-bonus-fly,.ck-coach{animation:none!important}}
       /* Онбординг-туториал (показ один раз) */
-      .ck-tut{position:absolute;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;background:rgba(8,5,6,.74);backdrop-filter:blur(4px);padding:24px;animation:ckScreenIn .25s ease-out}
-      .ck-tut__card{max-width:330px;width:100%;background:linear-gradient(180deg,#1B1526,#120D1C);border:1px solid var(--line);border-radius:22px;padding:22px 20px;text-align:center;box-shadow:0 18px 50px rgba(0,0,0,.6)}
+      .ck-tut{position:absolute;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;box-sizing:border-box;background:rgba(8,5,6,.74);backdrop-filter:blur(4px);padding:24px;animation:ckScreenIn .25s ease-out}
+      .ck-tut__card{max-width:330px;width:100%;max-height:100%;overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;background:linear-gradient(180deg,#1B1526,#120D1C);border:1px solid var(--line);border-radius:22px;padding:22px 20px;text-align:center;box-shadow:0 18px 50px rgba(0,0,0,.6)}
       .ck-tut__ic{width:64px;height:64px;margin:0 auto 10px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 38% 30%,rgba(255,227,156,.28),rgba(238,191,82,.08));border:1px solid var(--line);color:var(--gold-l)}
       .ck-tut h3{margin:0 0 4px;font-family:'Nunito',sans-serif;font-weight:700;font-size:21px;color:var(--cream)}
       .ck-tut__sub{color:var(--muted);font-size:12.5px;line-height:1.45;margin-bottom:14px}
@@ -1019,6 +1335,7 @@
       .ck-tut__step .si{width:38px;height:38px;flex:none;border-radius:11px;display:flex;align-items:center;justify-content:center;background:linear-gradient(150deg,#C0FF33,#5E7B1E);color:#120D1C}
       .ck-tut__step .st{font-weight:700;font-size:13.5px;color:var(--ink)}.ck-tut__step .sd{font-size:11.5px;color:var(--muted);margin-top:1px}
       .ck-tut__go{margin-top:6px;width:100%;border:1px solid #DFFF8F;border-radius:14px;padding:13px;font-weight:800;font-size:16px;background:linear-gradient(180deg,#D4FF6A,#A8F51E 56%,#8DBF20);color:#12210A;cursor:pointer}
+      @media (max-height:620px){.ck-tut{padding:8px 12px}.ck-tut__card{padding:14px 16px}.ck-tut__ic{width:48px;height:48px;margin-bottom:7px}.ck-tut__step{padding:8px 10px;margin-bottom:7px}}
       /* Цель «следующий котик» у прогресс-бара */
       .ck-progwrap{display:flex;align-items:center;justify-content:center;gap:12px;width:84%;max-width:380px;margin-top:10px}
       .ck-progwrap .ck-prog{width:auto;flex:1;min-width:0;margin-top:0}
@@ -1067,7 +1384,8 @@
       .ck-coach__ok{display:block;margin:9px 0 0 auto;border:1px solid #DFFF8F;border-radius:10px;padding:10px 16px;font-weight:800;font-size:12px;background:linear-gradient(180deg,#D4FF6A,#A8F51E 56%,#8DBF20);color:#12210A;cursor:pointer}
       .ck-coach-glow{outline:2px solid rgba(238,191,82,.85);outline-offset:3px;border-radius:10px}
       /* Гайд «Как играть» — полный справочник по механикам, открывается кнопкой ? и из тьюториала */
-      .ck-guide-btn{position:absolute;top:12px;left:12px;z-index:9;width:34px;height:34px;border:1px solid rgba(238,191,82,.55);border-radius:50%;background:rgba(0,0,0,.28);color:var(--gold-l);font-weight:800;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+      .ck-guide-btn{position:absolute;top:12px;left:max(12px,calc(50% - 228px));z-index:9;width:34px;height:34px;border:1px solid rgba(238,191,82,.55);border-radius:50%;background:rgba(0,0,0,.28);color:var(--gold-l);font-weight:800;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+      .ck-guide-btn::after{content:'';position:absolute;inset:-7px;border-radius:50%}
       .ck-guide{position:absolute;inset:0;z-index:20000;display:none;flex-direction:column;width:100%;max-width:none;transform:none;background:linear-gradient(180deg,#1B1526,#120D1C);animation:ckGuideIn .18s ease-out}
       .ck-guide.on{display:flex}
       @keyframes ckGuideIn{from{opacity:0}to{opacity:1}}
@@ -1082,7 +1400,7 @@
       .ck-guide__b{min-width:0}
       .ck-guide__n{font-weight:800;font-size:14.5px;color:var(--ink);margin-bottom:4px}
       .ck-guide__s{font-size:13px;line-height:1.5;color:var(--cream);opacity:.88}
-      .ck-tut__guide{display:block;margin-top:10px;width:100%;border:none;background:none;color:var(--gold-l);font-weight:700;font-size:12.5px;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+      .ck-tut__guide{display:flex;align-items:center;justify-content:center;min-height:44px;box-sizing:border-box;margin-top:4px;width:100%;border:none;background:none;color:var(--gold-l);font-weight:700;font-size:12.5px;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
     `;
     document.head.appendChild(s);
   }
@@ -1092,7 +1410,7 @@
     ov = document.createElement('div'); ov.className = 'ck-ov';
     ov.innerHTML = `
       ${COIN_SPRITE}
-      <button class="ck-x" id="ck-x">×</button>
+      <button class="ck-x" id="ck-x" type="button" aria-label="Закрыть игру">×</button>
       <div class="ck-screen on" id="ck-scr-cat">
         <button class="ck-daily" id="ck-daily" style="display:none"></button>
         <div class="ck-lvl" id="ck-lvl"></div>
@@ -1104,7 +1422,7 @@
         <div class="ck-progwrap"><div class="ck-prog"><div class="ck-prog__bar"><div class="ck-prog__fill" id="ck-prog"></div></div><div class="ck-prog__t" id="ck-progt"></div></div><div class="ck-goal" id="ck-goal" hidden><div class="ck-goal__av"><img id="ck-goal-img" alt="" draggable="false"/></div><div class="ck-goal__l" id="ck-goal-l"></div></div></div>
         <button class="ck-prestige" id="ck-prestige" hidden></button>
         <div class="ck-scene" id="ck-scene"></div>
-        <div class="ck-catwrap" id="ck-catwrap"><img class="ck-cat" id="ck-cat" draggable="false"/><img class="ck-hat" id="ck-hat" draggable="false" style="display:none"/><div class="ck-combo" id="ck-combo"></div></div>
+        <div class="ck-catwrap" id="ck-catwrap" role="button" tabindex="0" aria-label="Тапнуть Василия и заработать монеты"><img class="ck-cat" id="ck-cat" draggable="false" alt="Василий"/><img class="ck-hat" id="ck-hat" draggable="false" alt="" style="display:none"/><div class="ck-combo" id="ck-combo"></div></div>
         <div class="ck-boosts">
           <button class="ck-boost" id="ck-bt-turbo">${ICON.rocket(16)} Турбо <span id="ck-bt-turbo-n"></span></button>
           <button class="ck-boost" id="ck-bt-energy">${ICON.bolt(16)} Энергия <span id="ck-bt-energy-n"></span></button>
@@ -1138,14 +1456,20 @@
     const xBtn = ov.querySelector('#ck-x');
     if (PURE) {
       // Выходить «в магазин» некуда: в Mini App крестик закрывает приложение, в госте скрыт.
-      if (window.App && App.platform !== 'guest') xBtn.onclick = () => { try { App.close(); } catch (_) {} };
+      if (window.App && App.platform !== 'guest') xBtn.onclick = () => { void flushForPageExit(); try { App.close(); } catch (_) {} };
       else xBtn.style.display = 'none';
     } else xBtn.onclick = close;
     const catWrap = ov.querySelector('#ck-catwrap');
     catWrap.addEventListener('pointerdown', onTap); // тап-зона = вся арена с глоу, не только спрайт кота
     catWrap.addEventListener('pointerup', releaseTapPointer);
     catWrap.addEventListener('pointercancel', releaseTapPointer);
+    catWrap.addEventListener('lostpointercapture', releaseTapPointer);
     catWrap.addEventListener('pointerleave', releaseTapPointer);
+    catWrap.addEventListener('keydown', (e) => {
+      if ((e.key !== 'Enter' && e.key !== ' ') || e.repeat) return;
+      const r = catWrap.getBoundingClientRect();
+      onTap({ preventDefault: () => e.preventDefault(), clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 });
+    });
     attachCatRetry(ov.querySelector('#ck-cat'));
     ov.querySelector('#ck-daily').onclick = dailyBtn;
     ov.querySelector('#ck-bt-turbo').onclick = () => boost('turbo');
@@ -1167,19 +1491,19 @@
   function guideSections() {
     const s = [
       { ic: ICON.tap(20), t: 'Тап и комбо', d: 'Тапай Василия — каждый тап приносит монеты и расходует 2 энергии. Одна единица энергии возвращается за 4 секунды. Держи темп без пауз дольше пяти тапов подряд — над котиком загорится комбо-счётчик ×N, а на каждой десятке комбо экран вспыхивает искрами.' },
-      { ic: ICON.star(20), t: 'Уровни и карьера Василия', d: 'Все монеты, что ты когда-либо заработал, двигают Василия по карьерной лестнице — девятнадцать ступеней, от Котёнка-стажёра до Императора выпечки. На каждом новом уровне у кота меняется образ и сцена вокруг — костюм, атрибуты, фон. Полоска под балансом показывает прогресс до следующего уровня, а рядом — силуэт того, кем Василий станет дальше.' },
+      { ic: ICON.star(20), t: 'Уровни и карьера Василия', d: 'Монеты, заработанные в текущем цикле карьеры, двигают Василия по лестнице из девятнадцати ступеней — от Котёнка-стажёра до Императора выпечки. После престижа счётчик цикла начинается заново, но уже открытые разделы остаются доступны. На каждом новом уровне у кота меняется образ и сцена вокруг — костюм, атрибуты, фон. Полоска под балансом показывает прогресс до следующего уровня, а рядом — силуэт того, кем Василий станет дальше.' },
       { ic: ICON.rocket(20), t: 'Бусты', d: 'Турбо и Энергия — два бесплатных буста на вкладке «Котик». Турбо на 20 секунд даёт монеты за тап ×5, Энергия сразу наполняет шкалу энергии до максимума. Каждый буст доступен до 6 раз в день, а на следующий день лимит обновляется — счётчик рядом с кнопкой показывает, сколько попыток осталось.' },
-      { ic: ICON.shop(20), t: 'Прокачка и бизнесы', d: 'В «Прокачке» — четыре направления: Производство, Маркетинг, Персонал и Сеть. Каждый бизнес, который ты завёл, дальше сам приносит монеты в час — доход капает даже когда игра закрыта, а следующий уровень бизнеса поднимает доход ещё выше. Часть бизнесов открывается только с определённого уровня игрока — до этого карточка показана силуэтом с замком. Там же можно докупить Мультитап (больше монет за тап) и Запас энергии (выше потолок энергии).' },
+      { ic: ICON.shop(20), t: 'Прокачка и бизнесы', d: 'В «Прокачке» — четыре направления: Производство, Маркетинг, Персонал и Сеть. Каждый бизнес, который ты завёл, дальше сам приносит монеты в час — после закрытия игры доход копится максимум 3 часа, а следующий уровень бизнеса поднимает доход ещё выше. Часть бизнесов открывается только с определённого уровня игрока — до этого карточка показана силуэтом с замком. Там же можно докупить Мультитап (больше монет за тап) и Запас энергии (выше потолок энергии).' },
       { ic: ICON.gift(20), t: 'Награда дня', d: 'Каждый день, когда заходишь в игру впервые, тебе доступна награда дня — забери её кнопкой сверху экрана. Награда растёт вместе со стриком: чем больше дней подряд ты заходишь, тем она весомее, а пропущенный день сбрасывает счётчик. Календарь на семь дней вперёд показывает, сколько причитается в каждый из ближайших дней.' },
-      { ic: ICON.gem(20), t: 'Комбо дня', d: 'В «Прокачке» каждый день выбираются три случайных бизнеса — прокачай (купи хотя бы один уровень) все три, и получишь бонус +12 000 монет. Забрать бонус можно на вкладке «Призы». Комбо обновляется раз в сутки.' },
+      { ic: ICON.gem(20), t: 'Комбо дня', d: 'В «Прокачке» каждый день выбираются три случайных бизнеса — прокачай (купи хотя бы один уровень) все три, и получишь бонус +12 000 монет. Бизнес на максимальном уровне засчитывается автоматически. Забрать бонус можно на вкладке «Призы». Комбо обновляется раз в сутки.' },
       { ic: ICON.chest(20), t: 'Сундук и кейс', d: 'Сундук удачи открывается бесплатно раз в день. Платный Кейс удачи стоит 100 000: в нём голуби, ранние уровни бизнесов и шанс 0,05% выиграть 10 млн. Можно сделать до 10 прокрутов в сутки; после пяти неокупившихся открытий следующая доступная попытка как минимум окупается.' },
-      { ic: ICON.paw(20), t: 'Дом Василия', d: 'В Доме Василия — четыре комнаты: Кухня, Спальня, Игровая и Двор. В каждой — своё действие (покормить, уложить спать, поиграть, погладить), которое поднимает нужную шкалу — сытость, энергию или настроение — и приносит коту немного опыта. Если заботиться о Василии каждый день подряд, раз в сутки капают монеты питомца — награда растёт с каждым днём серии и с десятого дня держится на максимуме. Во Дворе — магазин шляп для Василия: покупай их за монеты питомца, накопленные заботой.' },
+      { ic: ICON.paw(20), t: 'Дом Василия', d: 'В Доме Василия — четыре комнаты: Кухня, Спальня, Игровая и Двор. В каждой — своё действие (покормить, уложить спать, поиграть, погладить), которое поднимает нужную шкалу — сытость, энергию или настроение — и приносит коту немного опыта. Если заботиться о Василии каждый день подряд, раз в сутки начисляется награда в общих игровых монетах — она растёт с каждым днём серии и с десятого дня держится на максимуме. Во Дворе — магазин шляп для Василия: покупки тоже списываются с общего игрового баланса.' },
       { ic: ICON.dove(20), t: 'Голубятня', d: 'Каждый голубь добавляет монеты к доходу в час; звёзды и тюнинг усиливают вклад. Голубей можно отправлять на задания с таймером и шансом успеха. До трёх любимцев можно выбрать для показа рядом со своим именем в рейтинге — на силу и доход этот выбор не влияет.' },
       { ic: ICON.trophy(20), t: 'Рейтинг и команды', d: 'Рейтинг недели показывает игроков по количеству монет, заработанных с начала недели — отсчёт идёт с понедельника. В команде общий счёт складывается из очков участников, а копилка стаи наполняется общими вкладами: при достижении цели доход всей стаи умножается на ×1,25 до конца недели.' },
       { ic: ICON.users(20), t: 'Друзья', d: 'Позови друга в игру по своей ссылке — как только он присоединится, тебе начислится 30 000 монет, а другу — 2 500 монет на старт. Ссылку можно скопировать или отправить прямо из игры кнопкой «Позвать».' },
     ];
     s.push({ ic: ICON.list(20), t: 'Призы и задания', d: 'На вкладке «Призы» — простые поручения за монеты: заглянуть на сайт «Марии», оставить отзыв, пригласить друга или просто держать серию заходов и баланс. Выполнил условие — жми кнопку с наградой рядом с заданием. Ниже, в Достижениях — более долгие цели вроде количества тапов, уровня, собранных бизнесов или дней подряд, тоже с наградой в монетах.' });
-    s.push({ ic: ICON.medal(20), t: 'Награды за прогресс', d: 'Доходишь до нужного уровня, собираешь коллекцию голубей, приглашаешь друзей или заботишься о Василии подряд несколько дней — и получаешь игровые призы. Баллы на карту клуба «Мария» и купоны доступны в авторизованной игре.' });
+    s.push({ ic: ICON.medal(20), t: 'Награды за прогресс', d: 'Доходишь до нужного уровня, собираешь коллекцию бизнесов, приглашаешь друзей или заботишься о Василии подряд несколько дней — и получаешь игровые призы. Баллы на карту клуба «Мария» и купоны доступны в авторизованной игре.' });
     return s;
   }
   function guideHtml() {
@@ -1225,7 +1549,17 @@
   let doveColMounted = false;
   function mountDoveCol() {
     const col = ov.querySelector('#ck-dove-col');
-    if (col && !doveColMounted && window.CatDove) { doveColMounted = true; window.CatDove.mount(col, api); }
+    if (col && !doveColMounted && window.CatDove) {
+      // POST-запросы голубятни меняют тот же баланс, что и тапы. Ставим их в общую
+      // очередь мутаций; GET остаются параллельными, чтобы экран не грузился медленнее.
+      const doveApi = (path, opts) => opts && String(opts.method || 'GET').toUpperCase() !== 'GET' ? mutationApi(path, opts) : api(path, opts);
+      doveColMounted = true; window.CatDove.mount(col, doveApi);
+    }
+    else if (col && doveColMounted && window.CatDove && typeof window.CatDove.refresh === 'function') {
+      // Альбом меняется и вне своей вкладки: голубь может выпасть из сундука,
+      // комбо или мини-игры. При повторном входе перечитываем инвентарь/гонку.
+      void window.CatDove.refresh();
+    }
     // тур альбома при первом входе новичка — с задержкой на асинхронный монтаж CatDove
     // (якорь ещё не отрисован → мягкий выход, покажется в следующий раз)
     if (!tourSeen('col')) setTimeout(() => { if (tab === 'dove' && !tourActive) startTour('col'); }, 1100);
@@ -1250,16 +1584,23 @@
   const TAB_UNLOCK = { cat: 1, up: 1, home: 1, tasks: 2, dove: 3, top: 3 };
   const TAB_NAME = { home: 'Дом', tasks: 'Призы', dove: 'Голуби', top: 'Рейтинг' };
   const tabReq = (t) => TAB_UNLOCK[t] || 1;
-  const playerLevel = () => (st ? leagueFor(st.totalEarned).level : 1);
-  const tabLocked = (t) => playerLevel() < tabReq(t);
+  // Серверный level включает храповик при изменении порогов; локальный расчёт нужен,
+  // чтобы новый уровень появился сразу на ещё не синхронизированных тапах.
+  const playerLevel = () => st ? Math.min(LEAGUES.length, Math.max(Number(st.level) || 1, leagueFor(Number(st.totalEarned) || 0).level)) : 1;
+  const playerLeague = () => leagueForLevel(playerLevel());
+  // Престиж сбрасывает уровень цикла, но не должен снова отнимать уже освоенные
+  // разделы (и доступ к сохранённым голубям/команде/наградам).
+  const unlockLevel = () => st && Number(st.prestige || 0) > 0 ? LEAGUES.length : playerLevel();
+  const tabLocked = (t) => unlockLevel() < tabReq(t);
   let unlockedSeen = null;
   function applyTabLocks() {
     if (!ov || !st) return;
-    const lvl = playerLevel();
+    const lvl = unlockLevel();
     const nowUnlocked = new Set();
     ov.querySelectorAll('.ck-nav__b').forEach(btn => {
       const t = btn.dataset.tab, req = tabReq(t), locked = lvl < req;
       btn.classList.toggle('locked', locked);
+      btn.setAttribute('aria-disabled', locked ? 'true' : 'false');
       let lk = btn.querySelector('.ck-navlk');
       if (locked) { if (!lk) { lk = document.createElement('span'); lk.className = 'ck-navlk'; btn.appendChild(lk); } lk.textContent = 'ур.' + req; }
       else { if (lk) lk.remove(); nowUnlocked.add(t); }
@@ -1281,6 +1622,7 @@
     closeActiveCoach();
     const pop = ov && ov.querySelector('#ck-pop'); if (pop) pop.classList.remove('on'); // попап не должен висеть над чужой вкладкой
     if (t === 'home') {
+      void flushForPageExit();
       window.haptic && window.haptic('light');
       try { window.catPetOpen && window.catPetOpen(); } catch (_) {}
       // тур «Дома» — поверх пет-оверлея, при первом входе новичка
@@ -1289,6 +1631,7 @@
       return;
     }
     window.haptic && window.haptic('selection');
+    if (tab === 'cat' && t !== 'cat') void flushForPageExit();
     tab = t;
     ov.querySelector('#ck-scr-cat').classList.toggle('on', t === 'cat');
     ov.querySelector('#ck-scr-up').classList.toggle('on', t === 'up');
@@ -1296,7 +1639,12 @@
     ov.querySelector('#ck-scr-tasks').classList.toggle('on', t === 'tasks');
     ov.querySelector('#ck-scr-top').classList.toggle('on', t === 'top');
     ov.querySelector('#ck-scr-hub').classList.toggle('on', t === 'hub');
-    ov.querySelectorAll('.ck-nav__b').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+    ov.querySelectorAll('.ck-nav__b').forEach(b => {
+      const active = b.dataset.tab === t;
+      b.classList.toggle('on', active);
+      if (active) b.setAttribute('aria-current', 'page');
+      else b.removeAttribute('aria-current');
+    });
     if (t === 'hub') renderHub();
     if (t === 'up') { renderUpgrades(); coach('up', COACH.up.t, '#ck-uplist', { icon: ICON[COACH.up.icon](18) }); }
     if (t === 'dove') { mountDoveCol(); loadDoveBadge(); }
@@ -1306,11 +1654,12 @@
   }
 
   // ── Главная · обзор: «общие значения и смыслы» всей игры одним экраном ──
+  let hubGen = 0;
   function renderHub() {
+    const gen = ++hubGen;
     const body = ov && ov.querySelector('#ck-hub-body'); if (!body || !st) return;
     const catSrc = (ov.querySelector('#ck-cat') || {}).src || '';
-    const bankMult = (st.bankMult && st.bankMult > 1) ? st.bankMult : 1;
-    const profit = Math.floor((st.profitPerHour || 0) * bankMult);
+    const profit = Math.floor((st.profitPerHour || 0) * passiveIncomeMult());
     const total = CARDS.length;
     const tiles = [
       `<div class="ck-tile"><span class="ck-tile__l">Баланс</span><span class="ck-tile__v lime">${COIN(14)} ${fmt(st.balance)}</span></div>`,
@@ -1328,16 +1677,18 @@
       { tab: 'tasks', ic: ICON.gift(17), t: 'Призы', d: 'Награда дня, сундук, комбо' },
       { tab: 'top', ic: ICON.trophy(17), t: 'Рейтинг', d: 'Твоё место среди игроков' },
     ].map(r => `<button class="ck-row2" data-goto="${r.tab}"${r.id ? ` id="${r.id}"` : ''}><span class="ck-row2__ic">${r.ic}</span><span class="ck-row2__b"><b>${r.t}</b><i>${r.d}</i></span><span class="ck-row2__ch">›</span></button>`).join('');
+    const hubLevel = playerLevel();
+    const earnedLabel = Number(st.prestige || 0) > 0 ? 'в этом цикле заработано' : 'всего заработано';
     body.innerHTML =
       `<div class="ck-hub__hero"><img class="ck-hub__av" src="${catSrc}" alt="" draggable="false"/>` +
-      `<div class="ck-hub__name">Василий · Уровень ${st.level}</div>` +
-      `<div class="ck-hub__sub">${st.levelName} · всего заработано ${fmt(st.totalEarned)}</div></div>` +
+      `<div class="ck-hub__name">Василий · Уровень ${hubLevel}</div>` +
+      `<div class="ck-hub__sub">${playerLeague().name} · ${earnedLabel} ${fmt(st.totalEarned)}</div></div>` +
       `<div class="ck-bento">${tiles}</div>` +
       `<div class="ck-sect">Разделы</div><div class="ck-hubrows">${rows}</div>`;
     body.querySelectorAll('[data-goto]').forEach(b => b.onclick = () => { window.haptic && window.haptic('selection'); setTab(b.dataset.goto); });
     if (authed()) api('/api/pigeons/drag/duels').then(d => {
       const duel = d && Array.isArray(d.incoming) ? d.incoming[0] : null;
-      if (!duel || tab !== 'hub' || !body.isConnected) return;
+      if (!duel || gen !== hubGen || tab !== 'hub' || !body.isConnected || body.querySelector('.ck-duelcall')) return;
       const safeName = window.escapeHtml ? window.escapeHtml(duel.fromName || 'Друг') : 'Друг';
       body.insertAdjacentHTML('afterbegin', `<div class="ck-duelcall"><span>${ICON.flag(24)}</span><div class="ck-duelcall__b"><b>${safeName} вызывает на дуэль</b><span>${duel.stake ? 'Ставка ' + fmt(duel.stake) + ' монет' : 'Без ставки'}</span></div><button id="ck-duel-accept">Принять дуэль</button></div>`);
       const btn = body.querySelector('#ck-duel-accept'); if (btn) btn.onclick = () => {
@@ -1348,8 +1699,9 @@
     // Топ недели и копилка стаи — по сети, best-effort; до ответа «…», при неудаче «—»/«нет»
     if (authed()) {
       Promise.all([loadTop().catch(() => null), api('/api/clicker/squads').catch(() => null)]).then(([top, sq]) => {
-        const rk = ov.querySelector('#ck-hub-rank'); if (rk) rk.textContent = (top && top.myRank) ? '#' + top.myRank : '—';
-        const bk = ov.querySelector('#ck-hub-bank');
+        if (gen !== hubGen || tab !== 'hub' || !body.isConnected) return;
+        const rk = body.querySelector('#ck-hub-rank'); if (rk) rk.textContent = (top && top.myRank) ? '#' + top.myRank : '—';
+        const bk = body.querySelector('#ck-hub-bank');
         if (bk) { if (sq && sq.bank && sq.bank.target) bk.textContent = Math.min(100, Math.round(sq.bank.sum / sq.bank.target * 100)) + '%'; else bk.textContent = 'нет'; }
       });
     } else { const rk = ov.querySelector('#ck-hub-rank'); if (rk) rk.textContent = '—'; const bk = ov.querySelector('#ck-hub-bank'); if (bk) bk.textContent = 'нет'; }
@@ -1365,23 +1717,38 @@
     if (e.pointerId != null) {
       if (!activeTapPointers.has(e.pointerId) && activeTapPointers.size >= MAX_TAP_POINTERS) return;
       activeTapPointers.add(e.pointerId);
+      // pointerup может произойти уже за пределами арены. Без capture id оставался
+      // в activeTapPointers, и после нескольких таких жестов кот переставал тапаться.
+      try { e.currentTarget && e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
     }
     if (!st) return; // тап до завершения load() на медленной сети — не ронять TypeError'ом
+    const signedIn = authed();
+    const tapAccountNow = signedIn ? accountStorageKey('ck_state_context') : '';
+    if (signedIn && tapAccount && tapAccount !== tapAccountNow) {
+      pending = 0; pendingComboBonus = 0; pendingTapGain = 0; pendingTapEnergy = 0; tapRetryBatch = null;
+    }
+    if (signedIn) tapAccount = tapAccountNow;
+    // Сначала персистим активный пассив. Раньше rawSave() тапа сдвигал _ts и
+    // стирал уже показанный на экране гостевой доход с момента прошлого save.
+    if (!signedIn) st = guestDerive();
     if (st.energy < TAP_COST) { energyEmpty(); return; }
     const mult = turboOn() ? TURBO_MULT : 1;
-    const eMult = (st.event && st.event.active) ? st.event.mult : 1; // ивент ×N (зеркало сервера)
+    const eMult = (st.event && st.event.active && (!st.event.endsTs || Number(st.event.endsTs) > Date.now())) ? st.event.mult : 1; // ивент ×N (зеркало сервера)
     const bankMult = (st.bankMult && st.bankMult > 1) ? st.bankMult : 1;
     // «Сладкий тап»: номер ЭТОГО тапа в lifetime-счётчике (st.taps с последнего синка
     // + улетевшие inflight + несинканные pending + текущий). Кратен SWEET_TAP_EVERY →
     // крит ×SWEET_TAP_MULT — сервер начислит ровно столько же в батче (детерминизм).
     // authed: st.taps (последний синк) + улетевшие + несинканные; гость: st.taps ведётся
     // локально прямо тут (pending у гостя не флашится и в счёт не входит)
-    const lifetime = (authed() ? Number(st.taps || 0) + tapsInflight + pending : Number(st.taps || 0)) + 1;
+    const inflightHere = signedIn && tapsInflightAccount === tapAccountNow ? tapsInflight : 0;
+    const retryHere = signedIn && (!tapRetryBatch || !tapRetryBatch.account || tapRetryBatch.account === tapAccountNow) ? Number(tapRetryBatch && tapRetryBatch.n || 0) : 0;
+    const lifetime = (signedIn ? Number(st.taps || 0) + inflightHere + retryHere + pending : Number(st.taps || 0)) + 1;
     const sweet = lifetime % SWEET_TAP_EVERY === 0;
     const baseTapGain = Math.floor(st.perTap * mult * (st.prestigeMult || 1) * eMult * bankMult);
     const gain = baseTapGain * (sweet ? SWEET_TAP_MULT : 1);
-    st.energy -= TAP_COST; st.balance += gain; st.totalEarned += gain; pending++; pendingTapGain += gain; pendingTapEnergy += TAP_COST;
-    if (!authed()) { const s = rawGet(); s.energy -= TAP_COST; s.balance += gain; s.totalEarned += gain; s.taps = (s.taps || 0) + 1; rawSave(s); st.taps = s.taps; }
+    st.energy -= TAP_COST; st.balance += gain; st.totalEarned += gain;
+    if (signedIn) { pending++; pendingTapGain += gain; pendingTapEnergy += TAP_COST; }
+    else { const s = rawGet(); s.energy -= TAP_COST; s.balance += gain; s.totalEarned += gain; s.taps = (s.taps || 0) + 1; rawSave(s); st.taps = s.taps; }
     if (sweet) sweetTapFx(e.clientX, e.clientY, gain);
     else maybeCatSpeak();
     // комбо
@@ -1397,10 +1764,11 @@
       ripple(e.clientX, e.clientY); flyCoin(e.clientX, e.clientY);
       renderTop2();
     }
-    const comboBonus = comboBonusFor(baseTapGain);
+    const comboBonus = comboBonusFor(baseTapGain, lifetime);
     if (comboBonus > 0) {
-      st.balance += comboBonus; st.totalEarned += comboBonus; pendingComboBonus += comboBonus; pendingTapGain += comboBonus;
-      if (!authed()) { const s = rawGet(); s.balance += comboBonus; s.totalEarned += comboBonus; rawSave(s); }
+      st.balance += comboBonus; st.totalEarned += comboBonus;
+      if (signedIn) { pendingComboBonus += comboBonus; pendingTapGain += comboBonus; }
+      else { const s = rawGet(); s.balance += comboBonus; s.totalEarned += comboBonus; rawSave(s); }
       flyUp(e.clientX, e.clientY - 22, `комбо +${fmt(comboBonus)}`, 34);
     }
     if (combo >= 5 && drawTapFx) showCombo();
@@ -1421,10 +1789,10 @@
     coach('combo', COACH.combo.t, '#ck-combo', { icon: ICON[COACH.combo.icon](18) });
     if (combo >= 10 && combo % 10 === 0) comboMilestone(tier);
   }
-  function comboBonusFor(baseTapGain) {
-    if (combo < 10 || combo % 10 !== 0) return 0;
-    const tier = Math.min(5, Math.floor(combo / 10));
-    return Math.max(1, Math.floor(baseTapGain * tier));
+  function comboBonusFor(baseTapGain, lifetime) {
+    // Сервер надёжно проверяет lifetime taps: каждый 10-й даёт ещё один baseTap.
+    // Быстрая серия остаётся визуальной механикой и больше не влияет на доверие.
+    return lifetime % 10 === 0 ? Math.max(1, Math.floor(baseTapGain)) : 0;
   }
   function comboMilestone(tier) {
     window.haptic && window.haptic('medium');
@@ -1476,7 +1844,7 @@
   }
   // Простой 50с на вкладке «Котик» → Василий напоминает о себе (не чаще раза в 2 мин)
   setInterval(() => {
-    if (!ov || tab !== 'cat' || !st) return;
+    if (!ov || !ov.classList.contains('on') || tab !== 'cat' || !st) return;
     const now = Date.now();
     if (lastTapAt && now - lastTapAt > 50000 && now - speakAt > 120000) {
       speakAt = now;
@@ -1532,7 +1900,7 @@
   // kind: 'error' (дефолт, с вибро) | 'light' (нейтральные сообщения). Плашка держится ~0.8с и гаснет — раньше гасла мгновенно и терялась.
   // Топ-слой (z 30000, крепится к ov, не к #ck-fx z6): сообщение видно над хабом «Игры»,
   // оверлеями мини-игр (z 11-12) и попапами — раньше «Перемешали!» внутри gems просто терялось.
-  function flashMsg(text, kind) { const el = document.createElement('div'); el.className = 'ck-up'; el.style.color = kind === 'light' ? 'var(--gold-l)' : '#ff8a8a'; el.style.fontSize = '16px'; el.style.background = 'rgba(20,8,10,.88)'; el.style.padding = '9px 16px'; el.style.borderRadius = '13px'; el.style.maxWidth = '82%'; el.style.textAlign = 'center'; el.style.zIndex = '30000'; el.textContent = text; el.style.left = '50%'; el.style.top = '56%'; el.style.transform = 'translateX(-50%)'; el.style.transition = 'opacity .5s ease .8s'; ov.appendChild(el); window.haptic && window.haptic(kind === 'light' ? 'light' : 'error'); requestAnimationFrame(() => el.style.opacity = '0'); setTimeout(() => el.remove(), 1400); }
+  function flashMsg(text, kind) { if (!ov || !ov.classList.contains('on')) return; const el = document.createElement('div'); el.className = 'ck-up'; el.style.color = kind === 'light' ? 'var(--gold-l)' : '#ff8a8a'; el.style.fontSize = '16px'; el.style.background = 'rgba(20,8,10,.88)'; el.style.padding = '9px 16px'; el.style.borderRadius = '13px'; el.style.maxWidth = '82%'; el.style.textAlign = 'center'; el.style.zIndex = '30000'; el.textContent = text; el.style.left = '50%'; el.style.top = '56%'; el.style.transform = 'translateX(-50%)'; el.style.transition = 'opacity .5s ease .8s'; ov.appendChild(el); window.haptic && window.haptic(kind === 'light' ? 'light' : 'error'); requestAnimationFrame(() => el.style.opacity = '0'); setTimeout(() => el.remove(), 1400); }
 
   // ── Анимации (juice) ─────────────────────────────────────────────────────────
   let lastFly = 0;
@@ -1641,12 +2009,25 @@
     scheduleBonus();
   }
   async function grabBonus(el) {
+    const actionSession = overlaySession;
     const r = el.getBoundingClientRect(), fr = ov.querySelector('#ck-fx').getBoundingClientRect();
     el.remove(); confettiBurst(); window.haptic && window.haptic('light'); // мгновенный отклик на сам тап, награда догонит
 
     let amount = 0, pigeonDrop;
-    if (authed()) { const d = await api('/api/clicker/bonus', { method: 'POST', body: '{}' }).catch(() => null); if (d && !d.error) { st = d; amount = d.amount; pigeonDrop = d.pigeonDrop; } }
-    else { amount = guestBonusRaw(); if (amount) st = guestDerive(); }
+    if (authed()) {
+      const d = await mutationApi('/api/clicker/bonus', { method: 'POST', body: '{}' }).catch(() => null);
+      if (d && !d.error) { applyServerState(d); amount = d.amount; pigeonDrop = d.pigeonDrop; }
+      else {
+        // Не повторяем claim: первый запрос мог зачислиться до обрыва ответа.
+        const fresh = await stateApi('/api/clicker').catch(() => null);
+        const synced = !!(fresh && !fresh.error);
+        if (synced) { applyServerState(fresh); renderAll(); bumpBalance(); }
+        if (overlaySessionActive(actionSession)) flashMsg(!d || d.error === 'internal' ? (synced ? 'Связь прервалась — баланс обновлён' : 'Нет связи — проверь баланс после повторного входа') : 'Бонус уже забран');
+        return;
+      }
+    }
+    else { amount = guestBonusRaw(); if (amount) applyServerState(guestDerive()); }
+    if (!overlaySessionActive(actionSession)) return;
     if (amount) { sfxReward(); window.haptic && window.haptic('success'); coinShower(); queueDoveDrop(pigeonDrop); dailyPopupRaw(ICON.star(20) + ' Золотой бонус!', amount); renderAll(); bumpBalance(); }
   }
   function guestBonusRaw() {
@@ -1668,16 +2049,29 @@
     guestDerive(); const s = rawGet(); const today = irkToday(); if (s.chestDate === today) return null;
     const prize = rollChestGuest(leagueFor(s.totalEarned).level);
     if (prize.type === 'coins' || prize.type === 'jackpot') { s.balance += prize.amount; s.totalEarned += prize.amount; }
-    else if (prize.type === 'turbo') { s.turboUntil = Date.now() + TURBO_SEC * 1000; }
+    else if (prize.type === 'turbo') { s.turboUntil = Math.max(Date.now(), Number(s.turboUntil || 0)) + TURBO_SEC * 1000; }
     else if (prize.type === 'energy') { s.energy = energyMaxFor(s.energyLevel); }
     s.chestDate = today; rawSave(s); return prize;
   }
   async function openChestAct() {
     return withLock('chest', async () => {
+      const actionSession = overlaySession;
       let prize = null, pigeonDrop;
-      if (authed()) { const d = await api('/api/clicker/chest', { method: 'POST', body: '{}' }).catch(() => null); if (d && !d.error) { st = d; prize = d.prize; pigeonDrop = d.pigeonDrop; } else { flashMsg(!d ? 'Нет связи — попробуй ещё раз' : 'Сундук уже открыт'); return; } }
-      else { prize = guestOpenChestRaw(); if (!prize) { flashMsg('Сундук уже открыт'); return; } st = guestDerive(); }
+      if (authed()) {
+        const d = await mutationApi('/api/clicker/chest', { method: 'POST', body: '{}' }).catch(() => null);
+        if (d && !d.error) { applyServerState(d); prize = d.prize; pigeonDrop = d.pigeonDrop; }
+        else if (!d || d.error === 'internal') {
+          const fresh = await stateApi('/api/clicker').catch(() => null);
+          if (fresh && !fresh.error && fresh.chestAvailable === false) {
+            applyServerState(fresh); turboUntil = Date.now() + Math.max(0, Number(fresh.turboMsLeft) || 0); renderAll(); renderTasks(); bumpBalance();
+            if (overlaySessionActive(actionSession)) flashMsg('Сундук открылся — награда уже применена'); return;
+          }
+          if (overlaySessionActive(actionSession)) flashMsg('Нет связи — попробуй ещё раз'); return;
+        } else { if (overlaySessionActive(actionSession)) flashMsg(d.error === 'internal' ? 'Нет связи — попробуй ещё раз' : d.error === 'already' ? 'Сундук уже открыт' : 'Не удалось открыть сундук'); return; }
+      }
+      else { prize = guestOpenChestRaw(); if (!prize) { if (overlaySessionActive(actionSession)) flashMsg('Сундук уже открыт'); return; } applyServerState(guestDerive()); }
       turboUntil = Date.now() + (st.turboMsLeft || 0);
+      if (!overlaySessionActive(actionSession)) return;
       sfxLevel(); window.haptic && window.haptic('success'); confettiBurst(); coinShower(); queueDoveDrop(pigeonDrop); chestPopup(prize); renderAll(); renderTasks(); bumpBalance();
     });
   }
@@ -1690,14 +2084,60 @@
   }
 
   // ── Платный кейс (CS2-стиль): открытие → рил-анимация → приз ─────────────────
+  const casePendingKey = () => accountStorageKey('ck_case_pending_v2');
+  let pendingCaseRequestId = null;
+  let pendingCaseAccountKey = '';
+  let cancelCaseReel = null;
+  function syncCaseRequestAccount() {
+    const key = casePendingKey();
+    if (pendingCaseAccountKey !== key) {
+      pendingCaseAccountKey = key;
+      pendingCaseRequestId = null;
+    }
+    return key;
+  }
+  function existingCaseRequestId() {
+    const key = syncCaseRequestAccount();
+    if (pendingCaseRequestId) return pendingCaseRequestId;
+    try {
+      const saved = localStorage.getItem(key);
+      if (saved && /^[a-zA-Z0-9_-]{8,80}$/.test(saved)) pendingCaseRequestId = saved;
+    } catch (_) {}
+    return pendingCaseRequestId;
+  }
+  function caseRequestId() {
+    existingCaseRequestId();
+    if (!pendingCaseRequestId) pendingCaseRequestId = (window.crypto && typeof window.crypto.randomUUID === 'function') ? window.crypto.randomUUID().replace(/-/g, '') : (Date.now().toString(36) + '_' + Math.random().toString(36).slice(2));
+    try { localStorage.setItem(syncCaseRequestAccount(), pendingCaseRequestId); } catch (_) {}
+    return pendingCaseRequestId;
+  }
+  function clearCaseRequestId() {
+    const key = syncCaseRequestAccount();
+    pendingCaseRequestId = null;
+    try { localStorage.removeItem(key); } catch (_) {}
+  }
   async function openCaseAct() {
-    if (!authed()) { flashMsg('Кейс открывается в приложении — войди в игру'); return; }
-    if (st && Number(st.balance) < CASE_COST) { flashMsg('Не хватает монет на кейс'); return; }
+    if (!authed()) { openBotGame(); return; }
+    // Незавершённый запрос можно повторить даже если первое списание уже уменьшило
+    // баланс ниже цены: это чтение прежнего результата, а не новая покупка.
+    if (!existingCaseRequestId() && st && Number(st.balance) < CASE_COST) { flashMsg('Не хватает монет на кейс'); return; }
     return withLock('case', async () => {
-      const requestId = (window.crypto && typeof window.crypto.randomUUID === 'function') ? window.crypto.randomUUID().replace(/-/g, '') : (Date.now().toString(36) + '_' + Math.random().toString(36).slice(2));
-      const d = await api('/api/clicker/case', { method: 'POST', body: JSON.stringify({ requestId }) }).catch(() => null);
-      if (!d || d.error) { flashMsg(d && d.error === 'not_enough_coins' ? 'Не хватает монет' : d && d.error === 'case_limit' ? 'Лимит кейса на сегодня исчерпан' : 'Нет связи — попробуй ещё раз'); return; }
-      st = d; turboUntil = Date.now() + (st.turboMsLeft || 0);
+      const session = overlaySession;
+      // Один id переживает сетевой обрыв/перезапуск WebView. Сервер вернёт прежний
+      // результат по idempotency key и не спишет стоимость кейса второй раз.
+      const requestId = caseRequestId();
+      const send = () => mutationApi('/api/clicker/case', { method: 'POST', body: JSON.stringify({ requestId }) }).catch(() => null);
+      let d = await send();
+      if (!d || d.error === 'internal') d = await send();
+      if (!d || d.error) {
+        // Явный 4xx означает, что операция не состоялась; при неизвестном сетевом
+        // исходе id сохраняем и следующий тап безопасно повторит тот же запрос.
+        if (d && d.error !== 'internal') clearCaseRequestId();
+        flashMsg(d && d.error === 'not_enough_coins' ? 'Не хватает монет' : d && d.error === 'case_limit' ? 'Лимит кейса на сегодня исчерпан' : 'Нет связи — попробуй ещё раз'); return;
+      }
+      clearCaseRequestId();
+      applyServerState(d); turboUntil = Date.now() + (st.turboMsLeft || 0);
+      if (!overlaySessionActive(session)) return;
       window.haptic && window.haptic('light'); renderAll(); renderTasks(); bumpBalance();
       await runCaseReel(d.prize, d.pigeonDrop, d.balanceBefore, d.newBalance, d.cost);
     });
@@ -1738,6 +2178,16 @@
     // Рил сам показывает выпавшего голубя — отдельный dove-drop попап не нужен (не двоим).
     const close = el.querySelector('#ck-case-x'); close.disabled = true; close.style.opacity = '.35'; close.onclick = null;
     res.className = 'ck-case__res'; res.innerHTML = '';
+    let settled = false, revealTimer = 0;
+    const finish = (hide = true) => {
+      if (settled) return;
+      settled = true; clearTimeout(revealTimer);
+      if (hide) el.classList.remove('on');
+      if (cancelCaseReel === cancel) cancelCaseReel = null;
+      resolve();
+    };
+    const cancel = () => finish(true);
+    cancelCaseReel = cancel;
     const WIN = 45, N = 52; // выигрышный тайл ближе к концу ленты
     const win = { type: prize.type, amount: prize.amount, breed: prize.breed, rarity: prize.rarity, businessName: prize.businessName };
     let html = '';
@@ -1746,6 +2196,7 @@
     track.style.transition = 'none'; track.style.transform = 'translate3d(0,-50%,0)';
     el.classList.add('on');
     requestAnimationFrame(() => {
+      if (settled) return;
       const tileW = 96 + 10;                                   // ширина тайла + gap
       const reelW = el.querySelector('.ck-case__reel').clientWidth;
       const jitter = (Math.random() * 2 - 1) * 22;              // лёгкий сдвиг от центра (±22px), тайл всё равно под маркером
@@ -1754,11 +2205,11 @@
       track.style.transition = 'transform 4.4s cubic-bezier(.10,.62,.14,1)';
       track.style.transform = 'translate3d(' + target.toFixed(1) + 'px,-50%,0)';
       window.haptic && window.haptic('light');
-      setTimeout(() => revealCase(prize, res, el, balanceBefore, newBalance, cost, resolve), 4550);
+      revealTimer = setTimeout(() => { if (!settled) revealCase(prize, res, el, balanceBefore, newBalance, cost, finish); }, 4550);
     });
     });
   }
-  function revealCase(prize, res, el, balanceBefore, newBalance, cost, resolve) {
+  function revealCase(prize, res, el, balanceBefore, newBalance, cost, finish) {
     let title, sub = '';
     if (prize.type === 'coins') { title = `+${fmt(prize.amount)} ${COIN(22)}`; if (prize.amount >= 10000000) sub = 'СУПЕРДЖЕКПОТ · ШАНС 0,05%!'; else if (prize.amount >= 150000) sub = 'ДЖЕКПОТ!'; else if (prize.amount < CASE_COST) sub = 'В этот раз немного — крутани ещё'; }
     else if (prize.type === 'turbo') { title = `${ICON.rocket(22)} Турбо ×5`; sub = '20 секунд множителя за тап'; }
@@ -1773,8 +2224,6 @@
     const big = prize.type === 'business' || prize.type === 'pigeon' && (prize.rarity === 'epic' || prize.rarity === 'legendary') || (prize.type === 'coins' && prize.amount >= 150000);
     window.haptic && window.haptic(big ? 'success' : 'light');
     if (big) { sfxLevel(); confettiBurst(); coinShower(); } else sfxReward();
-    let settled = false;
-    const finish = (hide = true) => { if (settled) return; settled = true; if (hide) el.classList.remove('on'); resolve(); };
     const close = el.querySelector('#ck-case-x'); close.disabled = false; close.style.opacity = '1'; close.onclick = () => finish(true);
     res.querySelector('#ck-case-ok').onclick = () => finish(true);
     const again = res.querySelector('#ck-case-again');
@@ -1784,16 +2233,19 @@
   // ── Мини-игра «Золотой дождь» (canvas, 20с лови монеты) ───────────────────────
   function rainAvailable() { return !st || st.rainAvailable; }
   async function openRain() {
-    if (!rainAvailable()) { flashMsg('Игра будет снова ' + untilNewDay()); return; }
-    if (!(await beginGameAttempt('rain'))) return;
-    let el = ov.querySelector('#ck-rain');
-    if (!el) {
-      el = document.createElement('div'); el.id = 'ck-rain'; el.className = 'ck-rain';
-      el.innerHTML = `<div class="ck-rain__hud"><div class="t">${ICON.bolt(16)} <span id="ck-rain-t">20</span></div><div class="sp"></div><div class="s">${COIN(16)} <span id="ck-rain-s">0</span></div><button class="x" id="ck-rain-x">×</button></div><canvas id="ck-rain-cv"></canvas><div class="ck-rain__hint" id="ck-rain-hint">Лови падающие монеты! Золотые — ×3</div>`;
-      ov.appendChild(el); el.querySelector('#ck-rain-x').onclick = confirmRainExit;
-    }
-    el.querySelector('#ck-rain-s').textContent = '0'; el.querySelector('#ck-rain-t').textContent = '20'; el.querySelector('#ck-rain-hint').style.display = '';
-    el.classList.add('on'); startRain();
+    return withLock('rain-start', async () => {
+      if (gameSubmissions.size) { flashMsg('Сохраняем предыдущий результат…'); return; }
+      if (!rainAvailable()) { flashMsg('Игра будет снова ' + untilNewDay()); return; }
+      if (!(await beginGameAttempt('rain'))) return;
+      let el = ov.querySelector('#ck-rain');
+      if (!el) {
+        el = document.createElement('div'); el.id = 'ck-rain'; el.className = 'ck-rain';
+        el.innerHTML = `<div class="ck-rain__hud"><div class="t">${ICON.bolt(16)} <span id="ck-rain-t">20</span></div><div class="sp"></div><div class="s">${COIN(16)} <span id="ck-rain-s">0</span></div><button class="x" id="ck-rain-x">×</button></div><canvas id="ck-rain-cv"></canvas><div class="ck-rain__hint" id="ck-rain-hint">Лови падающие монеты! Золотые — ×3</div>`;
+        ov.appendChild(el); el.querySelector('#ck-rain-x').onclick = confirmRainExit;
+      }
+      el.querySelector('#ck-rain-s').textContent = '0'; el.querySelector('#ck-rain-t').textContent = '20'; el.querySelector('#ck-rain-hint').style.display = '';
+      el.classList.add('on'); startRain();
+    });
   }
   function startRain() {
     const el = ov.querySelector('#ck-rain'), cv = el.querySelector('#ck-rain-cv');
@@ -1832,7 +2284,7 @@
     ctx.fillStyle = '#16210A'; ctx.font = `700 ${Math.round(it.r * 1.05)}px Georgia,serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('М', 0, it.r * 0.08);
     ctx.restore();
   }
-  // × мид-гейм: набранное сгорит (попытка дня останется) — спрашиваем, поставив игру на паузу.
+  // × мид-гейм: набранное сгорит, но неподтверждённая сервером попытка не расходуется.
   function confirmRainExit() {
     const s = rainState; if (!s || s.ended) return;
     if (!s.score) { endRain(true); return; } // терять нечего — выходим сразу
@@ -1840,7 +2292,7 @@
     const el = ov.querySelector('#ck-rain');
     let c = el.querySelector('#ck-rain-cfm');
     if (!c) { c = document.createElement('div'); c.id = 'ck-rain-cfm'; c.className = 'ck-rain__cfm'; el.appendChild(c); }
-    c.innerHTML = `<div class="b"><div class="t">Выйти из игры?</div><div class="s">Собранные ${s.score} ${COIN(13)} сгорят, попытка на сегодня останется</div><div class="r"><button class="stay" id="ck-rain-stay">Доиграть</button><button class="quit" id="ck-rain-quit">Выйти</button></div></div>`;
+    c.innerHTML = `<div class="b"><div class="t">Выйти из игры?</div><div class="s">Собранные ${s.score} ${COIN(13)} сгорят, но игру можно будет начать заново</div><div class="r"><button class="stay" id="ck-rain-stay">Доиграть</button><button class="quit" id="ck-rain-quit">Выйти</button></div></div>`;
     c.querySelector('#ck-rain-stay').onclick = () => { c.remove(); const p = rainState; if (!p || p.ended) return; p.tEnd = performance.now() + p.pauseLeft; p.lastTs = performance.now(); cancelAnimationFrame(rainRAF); rainRAF = requestAnimationFrame(rainLoop); window.haptic && window.haptic('light'); };
     c.querySelector('#ck-rain-quit').onclick = () => { window.haptic && window.haptic('light'); endRain(true); };
     window.haptic && window.haptic('warning');
@@ -1849,39 +2301,67 @@
     const s = rainState; if (!s || s.ended) return; s.ended = true; cancelAnimationFrame(rainRAF);
     const el = ov.querySelector('#ck-rain'); el.classList.remove('on');
     const cfm = el.querySelector('#ck-rain-cfm'); if (cfm) cfm.remove(); // close() мог прийти при открытом confirm
-    if (aborted) { rainState = null; return; }
+    if (aborted) { clearGameAttempt('rain'); rainState = null; return; }
     submitRain(s.score); rainState = null;
   }
   async function submitRain(score) {
+    const gameSession = overlaySession;
+    gameSubmissions.add('rain'); renderGames();
     let reward = 0, netfail = false;
-    if (authed()) { const d = await api('/api/clicker/rain', { method: 'POST', body: JSON.stringify({ score, attempt: takeGameAttempt('rain') }) }).catch(() => { netfail = true; return null; }); if (d && !d.error) { st = d; reward = d.reward; } else if (d && d.error) { sfxError(); flashMsg('Результат не засчитан — запусти игру заново'); renderAll(); return; } }
-    else { const g = guestClaimRainRaw(score); if (g != null) { reward = g; st = guestDerive(); } }
-    if (netfail && !reward) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); return; } // не праздновать «+0» с конфетти
-    sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); coinShower(); dailyPopupRaw(ICON.rain(20) + ` Золотой дождь · ${score} ${plu(score, 'монета', 'монеты', 'монет')}`, reward || 0); renderAll(); renderTasks(); bumpBalance();
+    try {
+      if (authed()) {
+        const expected = Math.min(8000, 1500 + playerLeague().level * 500);
+        const d = await submitAttemptResult('/api/clicker/rain', 'rain', score, expected).catch(() => null);
+        if (!overlaySessionActive(gameSession)) return;
+        if (d && !d.error) { applyServerState(d); reward = d.reward; }
+        else if (d && d.error) { sfxError(); flashMsg('Результат не засчитан — запусти игру заново'); renderAll(); return; }
+        else netfail = true;
+      }
+      else { const g = guestClaimRainRaw(score); if (g != null) { reward = g; applyServerState(guestDerive()); } }
+      if (!overlaySessionActive(gameSession)) return;
+      if (netfail && !reward) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); return; } // не праздновать «+0» с конфетти
+      sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); coinShower(); dailyPopupRaw(ICON.rain(20) + ` Золотой дождь · ${score} ${plu(score, 'монета', 'монеты', 'монет')}`, reward || 0); renderAll(); renderTasks(); bumpBalance();
+    } finally {
+      gameSubmissions.delete('rain');
+      if (overlaySessionActive(gameSession)) renderGames();
+    }
   }
   // ── Хаб «Игры»: единый claim (clamp+гейт 1/день; для гостя — localStorage) ────
-  const GAME_CAP = { quiz_kids: { cap: 5, per: 1000 }, quiz_riddle: { cap: 4, per: 1200 }, count: { cap: 6, per: 400 }, memory: { cap: 100, per: 60 }, gems: { cap: 200, per: 45 }, tower: { cap: 200, per: 60 } };
+  const GAME_CAP = { quiz_kids: { reward: 2500 }, quiz_riddle: { reward: 2400 }, count: { reward: 1200 }, memory: { reward: 3000 }, gems: { reward: 4500 }, tower: { reward: 6000 } };
   // gamesDone приходит только в getClicker/claimGame; tap/buy его не несут → кэшируем
-  let gdCache = [];
-  function gamesDoneNow() { if (authed()) { if (st && Array.isArray(st.gamesDone)) gdCache = st.gamesDone; return gdCache; } return guestGamesDoneList(); }
+  let gdCache = [], gdCacheDay = irkToday();
+  function gamesDoneNow() {
+    if (authed()) {
+      const today = irkToday();
+      if (gdCacheDay !== today) { gdCache = []; gdCacheDay = today; }
+      if (st && Array.isArray(st.gamesDone)) { gdCache = st.gamesDone; gdCacheDay = today; }
+      return gdCache;
+    }
+    return guestGamesDoneList();
+  }
   function gameDone(g) { return gamesDoneNow().indexOf(g) >= 0; }
   function guestGamesDoneList() { const s = rawGet(); const today = irkToday(); const g = s.gamesDone || {}; return Object.keys(g).filter(k => g[k] === today); }
   function guestClaimGameRaw(game, score) {
     const cfg = GAME_CAP[game]; if (!cfg) return null; guestDerive(); const s = rawGet(); const today = irkToday();
     if (!s.gamesDone) s.gamesDone = {}; if (s.gamesDone[game] === today) return null;
-    const sc = Math.max(0, Math.min(cfg.cap, Math.floor(score || 0))); const reward = sc * cfg.per;
+    const reward = cfg.reward;
     s.balance += reward; s.totalEarned += reward; s.gamesDone[game] = today; rawSave(s); return reward;
   }
   async function submitGame(game, score) {
-    let reward = 0, pigeonDrop;
-    if (authed()) { const d = await api('/api/clicker/game', { method: 'POST', body: JSON.stringify({ game, score, attempt: takeGameAttempt(game) }) }).catch(() => null); if (d && !d.error) { st = d; reward = d.reward || 0; pigeonDrop = d.pigeonDrop; } else return null; /* сеть/попытка упала — не праздновать «+0» */ }
-    else { const g = guestClaimGameRaw(game, score); if (g != null) { reward = g; st = guestDerive(); } }
-    return { reward, pigeonDrop };
+    gameSubmissions.add(game); renderGames();
+    try {
+      let reward = 0, pigeonDrop;
+      if (authed()) { const d = await submitAttemptResult('/api/clicker/game', game, score, GAME_CAP[game]?.reward || 0).catch(() => null); if (d && !d.error) { applyServerState(d); reward = d.reward || 0; pigeonDrop = d.pigeonDrop; } else return d && d.error ? { error: d.error } : null; /* сеть/попытка упала — не праздновать «+0» */ }
+      else { const g = guestClaimGameRaw(game, score); if (g != null) { reward = g; applyServerState(guestDerive()); } else return { error: 'already' }; }
+      return { reward, pigeonDrop };
+    } finally {
+      gameSubmissions.delete(game);
+    }
   }
 
   function guestClaimRainRaw(score) {
     guestDerive(); const s = rawGet(); const today = irkToday(); if (s.rainDate === today) return 0;
-    const sc = Math.max(0, Math.min(120, Math.floor(score))); const lvl = leagueFor(s.totalEarned).level; const reward = Math.min(80000, sc * (60 + lvl * 20));
+    const lvl = leagueFor(s.totalEarned).level; const reward = Math.min(8000, 1500 + lvl * 500);
     s.balance += reward; s.totalEarned += reward; s.rainDate = today; rawSave(s); return reward;
   }
 
@@ -1894,7 +2374,7 @@
     ctx.fillStyle = '#16210A'; ctx.font = `700 ${Math.round(r * 1.15)}px Georgia,serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('М', x, y + r * 0.06);
   }
   async function shareCard() {
-    const lg = leagueFor(st.totalEarned);
+    const lg = playerLeague();
     const cv = document.createElement('canvas'); cv.width = 720; cv.height = 900; const ctx = cv.getContext('2d');
     const bg = ctx.createRadialGradient(360, -40, 80, 360, 520, 920); bg.addColorStop(0, '#4e1b26'); bg.addColorStop(.55, '#2c1017'); bg.addColorStop(1, '#180a0f'); ctx.fillStyle = bg; ctx.fillRect(0, 0, 720, 900);
     const gl = ctx.createRadialGradient(360, 430, 40, 360, 430, 300); gl.addColorStop(0, 'rgba(255,196,72,.5)'); gl.addColorStop(.5, 'rgba(255,170,48,.16)'); gl.addColorStop(1, 'rgba(255,170,48,0)'); ctx.fillStyle = gl; ctx.fillRect(0, 130, 720, 640);
@@ -1941,23 +2421,33 @@
     pop.querySelector('#ck-pp-go').onclick = () => { pop.classList.remove('on'); prestigeDo(); };
   }
   async function prestigeDo() {
-    const d = await api('/api/clicker/prestige', { method: 'POST', body: '{}' }).catch(() => null);
+    return withLock('prestige', async () => {
+    const actionSession = overlaySession;
+    const beforePrestige = Number(st && st.prestige || 0);
+    let d = await mutationApi('/api/clicker/prestige', { method: 'POST', body: '{}' }).catch(() => null);
+    if (!d || d.error === 'internal') {
+      const fresh = await stateApi('/api/clicker').catch(() => null);
+      if (fresh && !fresh.error && Number(fresh.prestige) > beforePrestige) { applyServerState(fresh); d = { ...fresh, prestige: fresh.prestige, recovered: true }; }
+    }
     if (d && !d.error) {
-      st = d; sfxLevel(); window.haptic && window.haptic('success'); flash(); confettiBurst(); coinShower();
+      applyServerState(d);
+      if (!overlaySessionActive(actionSession)) return;
+      sfxLevel(); window.haptic && window.haptic('success'); flash(); confettiBurst(); coinShower();
       const t = ov.querySelector('#ck-levelup-t'); t.innerHTML = ICON.star(22) + ' Престиж ' + d.prestige + ' · заработок ×' + (1 + d.prestige * 0.1).toFixed(1); t.classList.remove('show'); void t.offsetWidth; t.classList.add('show');
       renderAll(); renderUpgrades(); bumpBalance();
-    } else flashMsg(d && d.error === 'not_ready' ? 'Сначала дойди до макс. уровня' : d && d.error === 'max' ? 'Достигнут максимум престижа' : 'Не получилось');
+    } else if (overlaySessionActive(actionSession)) flashMsg(d && d.error === 'not_ready' ? 'Сначала дойди до макс. уровня' : d && d.error === 'max' ? 'Достигнут максимум престижа' : 'Не получилось');
+    });
   }
   function renderAll() {
     if (!ov || !st) return;
-    const lg = leagueFor(st.totalEarned);
+    const lg = playerLeague();
     ov.querySelector('#ck-bal').textContent = fmt(st.balance);
     ov.querySelector('#ck-bal2').textContent = fmt(st.balance);
     const pBadge = st.prestige > 0 ? ` <span class="ck-pbadge">${ICON.star(12)} Престиж ${st.prestige}</span>` : '';
     ov.querySelector('#ck-lvl').innerHTML = `Уровень ${lg.level} · ${lg.name}${pBadge}`;
     // Бафф копилки стаи виден там, где игрок живёт — рядом с доходом
     const bankChip = (st.bankMult && st.bankMult > 1) ? ` <span style="color:var(--gold,#D4FF6A);font-weight:800">⚔️×${st.bankMult}</span>` : '';
-    const prof = `${COIN(13)} +${fmt(st.profitPerHour * (st.bankMult > 1 ? st.bankMult : 1))} / час${bankChip}`; ov.querySelector('#ck-prof').innerHTML = prof; ov.querySelector('#ck-prof2').innerHTML = prof;
+    const prof = `${COIN(13)} +${fmt(Math.floor(st.profitPerHour * passiveIncomeMult()))} / час${bankChip}`; ov.querySelector('#ck-prof').innerHTML = prof; ov.querySelector('#ck-prof2').innerHTML = prof;
     // бейдж «Призы»: сколько бесплатного ГОТОВО забрать прямо сейчас (сундук, комбо) —
     // дискаверабилити ежедневок с любой вкладки (аудит: вкладка без индикатора)
     const tb = ov.querySelector('#ck-tasks-badge');
@@ -1965,7 +2455,7 @@
       const ready = (st.chestAvailable ? 1 : 0) + ((st.combo && st.combo.complete && !st.combo.claimed) ? 1 : 0);
       if (ready > 0 && !tabLocked('tasks')) { tb.textContent = String(ready); tb.hidden = false; } else tb.hidden = true;
     }
-    // бейдж «Дом»: Василию нужна забота (голод/сон/настроение/чистота < 30). Cross-module
+    // бейдж «Дом»: Василию нужна забота по одной из четырёх шкал (<30). Cross-module
     // сигнал из catpet.js (window.catPetAlert) — читает локальный кэш + декей, без сервера.
     // Дом теперь в «Разделах» экрана Главная (не в навбаре) — бейдж вешаем на его строку
     const hb = ov.querySelector('#ck-hubrow-home .ck-row2__b b');
@@ -1977,7 +2467,7 @@
     }
     // ивент-баннер (×N монеты)
     const evb = ov.querySelector('#ck-event');
-    if (st.event && st.event.active) { evb.hidden = false; evb.innerHTML = `${ICON.bolt(15)} <b>${st.event.name}</b> · до конца ${fmtDur(st.event.endsTs - Date.now())}`; }
+    if (st.event && st.event.active && Number(st.event.endsTs) > Date.now()) { evb.hidden = false; evb.innerHTML = `${ICON.bolt(15)} <b>${st.event.name}</b> · до конца ${fmtDur(st.event.endsTs - Date.now())}`; }
     else evb.hidden = true;
     // кнопка престижа (на макс. уровне, только для авторизованных)
     const pb = ov.querySelector('#ck-prestige');
@@ -1987,8 +2477,8 @@
     ov.querySelector('#ck-enfill').style.width = Math.min(100, st.energy / st.energyMax * 100) + '%';
     if (!energyHintFired && tab === 'cat' && st.energyMax > 0 && st.energy / st.energyMax < 0.15) { energyHintFired = true; coach('energy', COACH.energy.t, '.ck-energy', { icon: ICON[COACH.energy.icon](18) }); }
     if (!boostsHintFired && tab === 'cat' && lg.level >= 2) { boostsHintFired = true; coach('boosts', COACH.boosts.t, '.ck-boosts', { icon: ICON[COACH.boosts.icon](18) }); }
-    const nn = nextNeed(st.totalEarned), prog = ov.querySelector('#ck-prog'), progt = ov.querySelector('#ck-progt');
-    if (nn) { const pct = Math.min(100, (st.totalEarned - lg.need) / (nn - lg.need) * 100); prog.style.width = pct + '%'; progt.innerHTML = `${fmt(st.totalEarned)} / ${fmt(nn)} ${COIN(12)} до ур. ${lg.level + 1}`; }
+    const nn = nextNeedForLevel(lg.level), prog = ov.querySelector('#ck-prog'), progt = ov.querySelector('#ck-progt');
+    if (nn) { const pct = Math.max(0, Math.min(100, (st.totalEarned - lg.need) / (nn - lg.need) * 100)); prog.style.width = pct + '%'; progt.innerHTML = `${fmt(st.totalEarned)} / ${fmt(nn)} ${COIN(12)} до ур. ${lg.level + 1}`; }
     else { prog.style.width = '100%'; progt.textContent = 'Максимальный уровень!'; }
     // цель — силуэт следующего котика
     const goal = ov.querySelector('#ck-goal'), nx = LEAGUES[lg.level];
@@ -2036,14 +2526,15 @@
     let h = '<div class="ck-intro">Бизнесы приносят монеты <b>сами</b> — доход капает даже когда игра закрыта. Бусты усиливают тап и энергию.</div><div class="ck-sect">Бусты</div>';
     h += biz('boost', cardArt('multitap'), 'Мультитап', `<span class="ck-biz__lvl">+1 за тап</span><span class="ck-biz__prof">сейчас +${st.perTap}</span>`, buyBtn(st.multitapPrice, st.balance < st.multitapPrice, 'multitap'), 0);
     h += biz('boost', cardArt('energy'), 'Запас энергии', `<span class="ck-biz__lvl">+500 энергии</span><span class="ck-biz__prof">сейчас ${st.energyMax}</span>`, buyBtn(st.energyPrice, st.balance < st.energyPrice, 'energy'), 1);
-    h += '<div class="ck-sect">Бизнесы — пассивный доход</div>';
+    h += '<div class="ck-sect">Бизнесы — пассивный доход · офлайн до 3 часов</div>';
     h += '<div class="ck-cats">' + CARD_CATS.map(ct => `<button class="ck-cat-chip${ct.id === upCat ? ' on' : ''}" data-cat="${ct.id}">${ct.name}</button>`).join('') + '</div>';
     let i = 0;
     for (const c of st.cards) {
       if (c.cat !== upCat) continue;
-      if (c.locked) h += biz(c.cat + ' locked', cardArt(c.id), c.name, `<span class="ck-biz__lock">${ICON.lock(12)} с уровня ${c.req}</span>`, `<button class="ck-biz__buy" disabled>${ICON.lock(15)}</button>`, i++);
+      if (c.locked) h += biz(c.cat + ' locked', cardArt(c.id), c.name, `<span class="ck-biz__lock">${ICON.lock(12)} с уровня ${c.req}</span>`, `<button class="ck-biz__buy" disabled aria-label="Откроется с уровня ${c.req}">${ICON.lock(15)}</button>`, i++);
       else {
-        const gain = Number(c.profitGain != null ? c.profitGain : Math.max(0, c.profit - (c.currentProfit || 0)));
+        const baseGain = Number(c.profitGain != null ? c.profitGain : Math.max(0, c.profit - (c.currentProfit || 0)));
+        const gain = Math.floor(baseGain * (Number(st.albumMult) || 1) * passiveIncomeMult());
         const maxed = c.maxed || c.level >= 20;
         h += biz(c.cat, cardArt(c.id), c.name, `<span class="ck-biz__lvl">Ур. ${c.level}${maxed ? ' · максимум' : ''}</span><span class="ck-biz__prof">${maxed ? 'Прокачка завершена' : `+${fmt(gain)}/час`}</span>`, maxed ? `<button class="ck-biz__buy" disabled>MAX</button>` : buyBtn(c.price, st.balance < c.price, 'card', c.id), i++);
       }
@@ -2071,7 +2562,9 @@
     </div>`;
   }
   function emptyState(ic, title, sub) { return `<div class="ck-empty"><div class="ck-empty__ic">${ic}</div><div class="ck-empty__t">${title}</div><div class="ck-empty__s">${sub}</div></div>`; }
+  let topGen = 0;
   async function renderTop() {
+    const gen = ++topGen;
     const list = ov.querySelector('#ck-toplist'); const rank = ov.querySelector('#ck-myrank');
     const left = fmtDur(seasonEndsTs() - Date.now());
     const introTop = '<div class="ck-intro">Топ недели — по заработанным монетам, в воскресенье сезон закрывается и раздаются места. Команды складывают монеты всех участников.</div>';
@@ -2080,14 +2573,25 @@
     const brag = canBrag ? `<button class="ck-card__buy" id="ck-brag" style="width:100%;justify-content:center;margin-bottom:12px">${ICON.trophy(15)} Похвастаться карточкой</button>` : '';
     const ref = PURE ? refCard('ck-invite2') : '';
     const sq = await squadBlock();
-    const wire = () => { const bb = ov.querySelector('#ck-brag'); if (bb) bb.onclick = shareCard; const inv = ov.querySelector('#ck-invite2'); if (inv) inv.onclick = shareRef; sq.wire(); };
+    if (gen !== topGen) return;
+    const wire = () => {
+      const bb = ov.querySelector('#ck-brag'); if (bb) bb.onclick = shareCard;
+      const inv = ov.querySelector('#ck-invite2'); if (inv) inv.onclick = shareRef;
+      const retry = ov.querySelector('#ck-top-retry'); if (retry) retry.onclick = () => renderTop();
+      sq.wire();
+    };
     if (!authed()) { rank.textContent = `Сезон недели · до сброса ${left}`; list.innerHTML = introTop + brag + ref + sq.html + '<div class="ck-sect">Топ недели</div>' + emptyState(ICON.trophy(30), 'Личный рейтинг закрыт', PURE ? 'Открой игру в Telegram — копи монеты и попадай в топ недели.' : 'Войди через приложение «Мария» — копи монеты и попадай в топ недели.'); wire(); return; }
     list.innerHTML = introTop + brag + ref + sq.html + '<div class="ck-sect">Топ недели</div>' + skelRows(5); wire();
     const d = await loadTop();
+    if (gen !== topGen) return;
     const ends = d && d.seasonEndsTs ? fmtDur(d.seasonEndsTs - Date.now()) : left;
     rank.textContent = `Сезон недели · до сброса ${ends}` + (d && d.myRank ? ` · ты #${d.myRank}` : '');
     const wk = weeklyPrizeCard(d && d.weekly);
     const head = '<div class="ck-sect">Топ недели</div>';
+    if (!d || d.error || !Array.isArray(d.top)) {
+      list.innerHTML = introTop + brag + ref + sq.html + head + emptyState(ICON.bolt(30), 'Не удалось загрузить рейтинг', 'Проверь связь и попробуй ещё раз.') + '<button class="ck-card__buy" id="ck-top-retry" style="width:100%;justify-content:center">Обновить</button>';
+      wire(); return;
+    }
     if (!d || !d.top || !d.top.length) { list.innerHTML = introTop + brag + ref + wk + sq.html + head + emptyState(ICON.trophy(30), 'Сезон только начался', 'Заработай монеты и стань первым в топе недели!'); wire(); return; }
     list.innerHTML = introTop + brag + ref + wk + sq.html + head + d.top.map((r, i) => {
       // showcase/title — Task 8 (getTop), могут отсутствовать у старого закэшированного клиента.
@@ -2124,9 +2628,13 @@
     pop.innerHTML = `<h3>${ICON.users(20)} Состав стаи</h3><div id="ck-sqm-body" style="max-height:52vh;overflow:auto;text-align:left;width:100%">${skelRows(4)}</div><button id="ck-pop-ok">Закрыть</button>`;
     pop.classList.add('on');
     pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
+    const body = pop.querySelector('#ck-sqm-body');
     const d = await api('/api/clicker/squad-members').catch(() => null);
-    const body = pop.querySelector('#ck-sqm-body'); if (!body) return; // попап уже закрыли
-    if (!d || !d.inSquad) { body.innerHTML = emptyState(ICON.users(28), 'Ты не в стае', 'Вступи в команду в списке ниже.'); return; }
+    // Ответ относится именно к созданному выше узлу. После закрытия/открытия другого
+    // попапа одинаковый id больше не позволяет старому запросу испортить новый экран.
+    if (!body || !body.isConnected || !pop.classList.contains('on')) return;
+    if (!d || d.error) { body.innerHTML = emptyState(ICON.bolt(28), 'Не удалось загрузить состав', 'Проверь связь и открой состав ещё раз.'); return; }
+    if (!d.inSquad) { body.innerHTML = emptyState(ICON.users(28), 'Ты не в стае', 'Вступи в команду в списке ниже.'); return; }
     if (!d.members || !d.members.length) { body.innerHTML = emptyState(ICON.users(28), 'Пусто', 'В стае пока никого.'); return; }
     const h3 = pop.querySelector('h3'); if (h3) h3.innerHTML = `${ICON.users(20)} «${esc(d.name)}» · ${d.members.length}`;
     body.innerHTML = d.members.map((m, i) => `<div class="ck-row${m.me ? ' me' : ''}"><div class="r">${i + 1}</div><div class="n">${esc(m.name)}${m.me ? ' · ты' : ''}</div><div class="v">${COIN(12)} ${fmt(m.coins)}${m.bank ? ` · <span style="color:var(--gold-l);font-size:11px">🏦 ${fmt(m.bank)}</span>` : ''}</div></div>`).join('');
@@ -2137,7 +2645,10 @@
       return { html: `<div class="ck-sect">Команды</div><div class="ck-cats">${chips}</div><div style="color:var(--muted);font-size:12px;text-align:center;margin:2px 0 6px">${PURE ? 'Открой игру в Telegram — вступай в команду и тащи её в топ' : 'Войди через «Марию» — вступай в команду и тащи её в топ'}</div>`, wire: () => {} };
     }
     const d = await api('/api/clicker/squads').catch(() => null);
-    if (!d || !d.squads) return { html: '', wire: () => {} };
+    if (!d || d.error || !Array.isArray(d.squads)) return {
+      html: `<div class="ck-sect">Команды</div><div class="ck-card"><div class="ck-card__ic">${ICON.bolt(26)}</div><div class="ck-card__b"><div class="ck-card__n">Не удалось загрузить стаи</div><div class="ck-card__s">Проверь связь</div></div><button class="ck-card__buy" id="ck-sq-retry">Обновить</button></div>`,
+      wire: () => { const b = ov.querySelector('#ck-sq-retry'); if (b) b.onclick = () => renderTop(); },
+    };
     const my = d.mySquad;
     // Рейтинг: у своих стай (custom) кнопка «Попроситься» вместо мгновенного входа
     const rows = d.squads.map((s, i) => {
@@ -2212,33 +2723,67 @@
   function createSquadAct() {
     if (st && st.balance < SQUAD_CREATE_COST) { flashMsg(`Нужно ${fmt(SQUAD_CREATE_COST)} монет`); return; }
     squadInputPopup('Своя стая', `Придумай название (3–20 символов) · создание спишет ${fmt(SQUAD_CREATE_COST)} ${COIN(12)}`, 'Название стаи', 'Создать', async (name) => {
-      const d = await api('/api/clicker/squad-create', { method: 'POST', body: JSON.stringify({ name }) }).catch(() => null);
-      if (d && !d.error) { st = d; sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); flashMsg(`⚔️ Стая создана! Код: ${d.inviteCode}`); renderTop(); bumpBalance(); }
-      else flashMsg(!d ? 'Нет связи' : d.error === 'bad_name' ? 'Название не подходит — 3–20 букв/цифр, без грубостей' : d.error === 'name_taken' ? 'Такое название уже занято' : d.error === 'no_coins' ? `Нужно ${fmt(SQUAD_CREATE_COST)} монет` : d.error === 'already_owner' ? 'У тебя уже есть своя стая' : 'Не получилось');
+      return withLock('squad-create', async () => {
+        const actionSession = overlaySession;
+        const body = JSON.stringify({ name });
+        let d = await mutationApi('/api/clicker/squad-create', { method: 'POST', body }).catch(() => null);
+        let lost = !d || d.error === 'internal';
+        if (lost) d = await mutationApi('/api/clicker/squad-create', { method: 'POST', body }).catch(() => null);
+        if (lost && (!d || d.error === 'already_owner')) {
+          const [fresh, squads] = await Promise.all([stateApi('/api/clicker').catch(() => null), api('/api/clicker/squads').catch(() => null)]);
+          const expected = String(name).trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+          const actual = String(squads && squads.myOwn && squads.myOwn.name || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+          if (fresh && !fresh.error && squads && squads.myOwn && expected === actual) d = { ...fresh, inviteCode: squads.myOwn.inviteCode, recovered: true };
+        }
+        if (d && !d.error) {
+          applyServerState(d);
+          if (!overlaySessionActive(actionSession)) return;
+          sfxReward(); window.haptic && window.haptic('success');
+          if (!d.recovered) confettiBurst();
+          flashMsg(`⚔️ Стая создана! Код: ${d.inviteCode}`); renderTop(); bumpBalance();
+        } else if (overlaySessionActive(actionSession)) flashMsg(!d || d.error === 'internal' ? 'Нет связи' : d.error === 'bad_name' ? 'Название не подходит — 3–20 букв/цифр, без грубостей' : d.error === 'name_taken' ? 'Такое название уже занято' : d.error === 'no_coins' ? `Нужно ${fmt(SQUAD_CREATE_COST)} монет` : d.error === 'already_owner' ? 'У тебя уже есть своя стая' : 'Не получилось');
+      });
     });
   }
   function joinByCodeAct() {
     squadInputPopup('Код приглашения', 'Введи код, который прислал владелец стаи', 'Код из 6 символов', 'Вступить', async (code) => {
-      const d = await api('/api/clicker/squad-code', { method: 'POST', body: JSON.stringify({ code }) }).catch(() => null);
-      if (d && !d.error) { st = d; sfxBuy(); window.haptic && window.haptic('success'); flashMsg(`⚔️ Ты в стае «${d.squadName}»!`); renderTop(); }
-      else flashMsg(!d ? 'Нет связи' : d.error === 'full' ? 'Стая заполнена' : 'Код не найден — проверь у владельца');
+      return withLock('squad-code', async () => {
+        const actionSession = overlaySession;
+        const body = JSON.stringify({ code });
+        let d = await mutationApi('/api/clicker/squad-code', { method: 'POST', body }).catch(() => null);
+        if (!d || d.error === 'internal') d = await mutationApi('/api/clicker/squad-code', { method: 'POST', body }).catch(() => null);
+        if (d && !d.error) {
+          applyServerState(d);
+          if (!overlaySessionActive(actionSession)) return;
+          sfxBuy(); window.haptic && window.haptic('success'); flashMsg(`⚔️ Ты в стае «${d.squadName}»!`); renderTop();
+        } else if (overlaySessionActive(actionSession)) flashMsg(!d || d.error === 'internal' ? 'Нет связи' : d.error === 'owner_locked' ? 'Владелец не может покинуть свою стаю' : d.error === 'full' ? 'Стая заполнена' : 'Код не найден — проверь у владельца');
+      });
     });
   }
   async function requestJoinAct(id) {
-    const d = await api('/api/clicker/squad-request', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null);
-    if (d && !d.error) { window.haptic && window.haptic('light'); flashMsg(d.pending ? 'Заявка отправлена — владелец рассмотрит' : 'Готово'); renderTop(); }
-    else flashMsg(!d ? 'Нет связи' : d.error === 'full' ? 'Стая заполнена' : d.error === 'already_in' ? 'Ты уже в этой стае' : 'Не получилось');
+    return withLock('squad-request', async () => {
+      const actionSession = overlaySession;
+      const body = JSON.stringify({ id });
+      let d = await api('/api/clicker/squad-request', { method: 'POST', body }).catch(() => null);
+      if (!d || d.error === 'internal') d = await api('/api/clicker/squad-request', { method: 'POST', body }).catch(() => null);
+      if (!overlaySessionActive(actionSession)) return;
+      if (d && !d.error) { window.haptic && window.haptic('light'); flashMsg(d.pending ? 'Заявка отправлена — владелец рассмотрит' : 'Готово'); renderTop(); }
+      else flashMsg(!d || d.error === 'internal' ? 'Нет связи' : d.error === 'owner_locked' ? 'Владелец не может покинуть свою стаю' : d.error === 'full' ? 'Стая заполнена' : d.error === 'already_in' ? 'Ты уже в этой стае' : 'Не получилось');
+    });
   }
   function inviteToSquad(own) {
     if (!own) return;
     const link = `https://t.me/${BOT}?start=cksq_${own.inviteCode}`;
     const text = `⚔️ Вступай в мою стаю «${own.name}» в «Котик Комбат»! Тапаем вместе и делим бонусы.`;
-    if (window.App && App.share) App.share(link, text); else { try { navigator.clipboard.writeText(link + '\n' + text); } catch {} flashMsg('Ссылка скопирована'); }
+    if (window.App && App.share) App.share(link, text);
+    else void copyText(link + '\n' + text).then(ok => flashMsg(ok ? 'Ссылка скопирована' : link));
   }
   async function loadSquadRequests() {
+    const actionSession = overlaySession;
     const box = ov.querySelector('#ck-sq-reqlist');
     if (!box) return;
     const d = await api('/api/clicker/squad-requests').catch(() => null);
+    if (!overlaySessionActive(actionSession) || !box.isConnected || !ov.contains(box)) return;
     if (!d || !d.requests) { box.innerHTML = '<div class="ck-bank__sub">Не удалось загрузить</div>'; return; }
     if (!d.requests.length) { box.innerHTML = '<div class="ck-bank__sub">Заявок пока нет</div>'; return; }
     box.innerHTML = d.requests.map(r => `<div class="ck-row"><div class="n">${(r.name || 'Игрок').replace(/[<>]/g, '')} <span style="color:var(--muted);font-size:11px">· ${COIN(11)} ${fmt(r.totalEarned)}</span></div><div class="v"><button class="ck-cat-chip" data-acc="${r.chatId}" style="padding:3px 9px;font-size:11px">Принять</button><button class="ck-cat-chip" data-rej="${r.chatId}" style="padding:3px 9px;font-size:11px">✕</button></div></div>`).join('');
@@ -2246,39 +2791,102 @@
     box.querySelectorAll('[data-rej]').forEach(b => b.onclick = () => decideReq(Number(b.dataset.rej), false));
   }
   async function decideReq(chatId, accept) {
-    const d = await api('/api/clicker/squad-decide', { method: 'POST', body: JSON.stringify({ chatId, accept }) }).catch(() => null);
-    if (d && !d.error) { window.haptic && window.haptic(accept ? 'success' : 'light'); flashMsg(accept ? 'Принят в стаю!' : 'Заявка отклонена'); renderTop(); }
-    else flashMsg(!d ? 'Нет связи' : d.error === 'full' ? 'Стая заполнена' : 'Не получилось');
+    return withLock('squad-decide:' + chatId, async () => {
+      const actionSession = overlaySession;
+      const body = JSON.stringify({ chatId, accept });
+      let d = await api('/api/clicker/squad-decide', { method: 'POST', body }).catch(() => null);
+      let recovered = false;
+      if (!d || d.error === 'internal') {
+        d = await api('/api/clicker/squad-decide', { method: 'POST', body }).catch(() => null);
+        recovered = !!(d && d.error === 'no_request');
+      }
+      if (!overlaySessionActive(actionSession)) return;
+      if ((d && !d.error) || recovered) {
+        window.haptic && window.haptic(accept ? 'success' : 'light');
+        flashMsg(recovered ? 'Заявка уже обработана — список обновлён' : accept ? 'Принят в стаю!' : 'Заявка отклонена');
+        renderTop();
+      } else flashMsg(!d || d.error === 'internal' ? 'Нет связи' : d.error === 'full' ? 'Стая заполнена' : d.error === 'applicant_blocked' ? 'Игрок временно заблокирован' : 'Не получилось');
+    });
   }
+  const bankPendingKey = () => accountStorageKey('ck_squad_bank_pending_v2');
+  function bankPending(amount) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(bankPendingKey()) || 'null');
+      if (saved && Number.isSafeInteger(saved.amount) && saved.amount > 0 && /^[a-zA-Z0-9_-]{8,80}$/.test(saved.requestId || '')) return saved;
+    } catch (_) {}
+    const next = { amount, requestId: clientRequestId() };
+    try { localStorage.setItem(bankPendingKey(), JSON.stringify(next)); } catch (_) {}
+    return next;
+  }
+  function clearBankPending() { try { localStorage.removeItem(bankPendingKey()); } catch (_) {} }
   async function donateBank(amount) {
-    const d = await api('/api/clicker/squad-bank', { method: 'POST', body: JSON.stringify({ amount }) }).catch(() => null);
-    if (d && !d.error) {
-      st = d; sfxReward(); window.haptic && window.haptic('success');
-      if (d.bank && d.bank.reached) { confettiBurst(); flashMsg(`🏆 Копилка полна! Весь доход стаи ×${d.bank.mult}`); }
-      else flashMsg(`В копилку: +${fmt(d.donated)}`);
-      renderTop(); bumpBalance();
-    } else {
-      flashMsg(!d ? 'Нет связи' : d.error === 'day_cap' ? 'Дневной лимит вклада исчерпан' : d.error === 'bad_amount' ? 'Не хватает монет' : 'Не получилось');
-    }
+    return withLock('squad-bank', async () => {
+      const actionSession = overlaySession;
+      const pendingBank = bankPending(amount);
+      const send = () => mutationApi('/api/clicker/squad-bank', { method: 'POST', body: JSON.stringify(pendingBank) }).catch(() => null);
+      let d = await send();
+      if (!d || d.error === 'internal') d = await send();
+      // `internal` после COMMIT остаётся неоднозначным: сохраняем requestId и на
+      // следующем тапе перечитываем тот же результат. Явный 4xx можно забыть.
+      if (d && d.error !== 'internal') clearBankPending();
+      if (d && !d.error) {
+        applyServerState(d);
+        if (!overlaySessionActive(actionSession)) return;
+        sfxReward(); window.haptic && window.haptic('success');
+        if (d.bank && d.bank.reached) { confettiBurst(); flashMsg(`🏆 Копилка полна! Весь доход стаи ×${d.bank.mult}`); }
+        else flashMsg(`В копилку: +${fmt(d.donated)}`);
+        renderTop(); bumpBalance();
+      } else if (overlaySessionActive(actionSession)) {
+        flashMsg(!d ? 'Нет связи' : d.error === 'day_cap' ? 'Дневной лимит вклада исчерпан' : d.error === 'bad_amount' ? 'Не хватает монет' : 'Не получилось');
+      }
+    });
   }
   async function joinSquadAct(id) {
-    const d = await api('/api/clicker/squad', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null);
-    if (d && !d.error) { st = d; sfxBuy(); window.haptic && window.haptic('medium'); renderTop(); } else flashMsg('Не получилось');
+    return withLock('squad-join', async () => {
+      const actionSession = overlaySession;
+      const body = JSON.stringify({ id });
+      let d = await mutationApi('/api/clicker/squad', { method: 'POST', body }).catch(() => null);
+      if (!d || d.error === 'internal') d = await mutationApi('/api/clicker/squad', { method: 'POST', body }).catch(() => null);
+      if (d && !d.error) {
+        applyServerState(d);
+        if (!overlaySessionActive(actionSession)) return;
+        sfxBuy(); window.haptic && window.haptic('medium'); renderTop();
+      } else if (overlaySessionActive(actionSession)) flashMsg(!d || d.error === 'internal' ? 'Нет связи' : d.error === 'owner_locked' ? 'Владелец не может покинуть свою стаю' : 'Не получилось');
+      });
   }
 
   // ── Рефералы + Задания ───────────────────────────────────────────────────────
   const linkOpened = {};
   // refLink: серверная платформо-зависимая ссылка (st.refLink), иначе фолбэк t.me
   function refLink() { if (st && st.refLink) return st.refLink; const code = st && st.refCode; return code ? `https://t.me/${BOT}?start=ckref_${code}` : `https://t.me/${BOT}/app`; }
+  function openBotGame() {
+    const link = `https://t.me/${BOT}/app`;
+    if (window.App && App.openExternal) App.openExternal(link);
+    else {
+      const opened = window.open(link, '_blank');
+      if (opened) opened.opener = null;
+      else window.location.assign(link);
+    }
+  }
   function shareRef() {
+    if (!authed()) { openBotGame(); return; }
     const link = refLink();
-    const txt = `🐱 Играю в «Котик Комбат» от кондитерской «Мария» — тапай котика и качай уровни! Заходи по ссылке, нам обоим дадут монеты 🪙 ${link}`;
-    if (window.App && App.share) App.share(txt); else if (navigator.share) navigator.share({ text: txt }).catch(() => {}); else if (window.App && App.openExternal) App.openExternal(link);
+    const text = '🐱 Играю в «Котик Комбат» от кондитерской «Мария» — тапай котика и качай уровни! Заходи по ссылке, нам обоим дадут монеты 🪙';
+    const full = text + ' ' + link;
+    if (window.App && App.share) App.share(link, text);
+    else if (navigator.share) navigator.share({ url: link, text }).catch(() => copyText(full).then(ok => flashMsg(ok ? 'Ссылка скопирована' : link)));
+    else void copyText(full).then(ok => { if (ok) flashMsg('Ссылка скопирована'); else if (window.App && App.openExternal) App.openExternal(link); else flashMsg(link); });
   }
   // Карточка «Пригласи друзей». Вынесена, т.к. в PURE нужна и в Задании (скрыты),
   // и в Рейтинге (доступен) — id параметризован, чтобы избежать дубля #ck-invite
   // в DOM (оба контейнера ck-scr-tasks/ck-scr-top существуют одновременно).
   function refCard(idAttr) {
+    if (!authed()) {
+      return `<div class="ck-card" style="background:linear-gradient(90deg,rgba(238,191,82,.18),rgba(238,191,82,.05))">
+        <div class="ck-card__ic">${ICON.users(26)}</div><div class="ck-card__b"><div class="ck-card__n">Приглашения — в Telegram</div>
+        <div class="ck-card__s">Открой игру через бота: там появится личная ссылка, и бонусы будут засчитываться.</div></div>
+        <button class="ck-card__buy" id="${idAttr || 'ck-invite'}">Открыть</button></div>`;
+    }
     const refCount = (st && st.referrals) || 0;
     return `<div class="ck-card" style="background:linear-gradient(90deg,rgba(238,191,82,.18),rgba(238,191,82,.05))">
       <div class="ck-card__ic">${ICON.users(26)}</div><div class="ck-card__b"><div class="ck-card__n">Пригласи друзей</div>
@@ -2288,20 +2896,29 @@
   // Надёжная регистрация реферала: ловим код из startParam → сохраняем; флаг
   // «выполнено» ставим ТОЛЬКО после успеха сервера → при сбое повтор на след. заходе.
   // Запускается и при открытии игры, и фоном при загрузке приложения (см. низ файла).
+  function refStorageKeys() {
+    let account = 'unknown';
+    try {
+      const u = window.App && App.user && App.user();
+      if (u && Number.isFinite(Number(u.id))) account = String((App.platform || 'app')) + '_' + String(Math.floor(Number(u.id)));
+    } catch (_) {}
+    return { done: 'maria_ck_ref_done_v2_' + account, pending: 'ck_pending_ref_v2_' + account };
+  }
   async function ensureRefRegistered() {
     try {
       if (!authed()) return;                                  // гость — реф невозможен, ждём авторизации
-      if (localStorage.getItem('maria_ck_ref_done')) { try { localStorage.removeItem('ck_pending_ref'); } catch (_) {} return; }
+      const keys = refStorageKeys();
+      if (localStorage.getItem(keys.done)) { try { localStorage.removeItem(keys.pending); } catch (_) {} return; }
       let code = '';
       const sp = (window.App && App.startParam && App.startParam()) || '';
       const m = /^ckref_(\d+)$/.exec(sp);
-      if (m) { code = m[1]; try { localStorage.setItem('ck_pending_ref', code); } catch (_) {} }
-      if (!code) { try { code = localStorage.getItem('ck_pending_ref') || ''; } catch (_) {} }
+      if (m) { code = m[1]; try { localStorage.setItem(keys.pending, code); } catch (_) {} }
+      if (!code) { try { code = localStorage.getItem(keys.pending) || ''; } catch (_) {} }
       if (!code) return;
-      const d = await api('/api/clicker/ref', { method: 'POST', body: JSON.stringify({ code }) }).catch(() => null);
+      const d = await mutationApi('/api/clicker/ref', { method: 'POST', body: JSON.stringify({ code }) }).catch(() => null);
       if (d && !d.error) {                                    // успех → фиксируем, чистим pending
-        st = d;
-        try { localStorage.setItem('maria_ck_ref_done', '1'); localStorage.removeItem('ck_pending_ref'); } catch (_) {}
+        applyServerState(d);
+        try { localStorage.setItem(keys.done, '1'); localStorage.removeItem(keys.pending); } catch (_) {}
         if (d.refReward && ov && ov.classList.contains('on')) dailyPopupRaw(ICON.gift(20) + ' Бонус за приглашение', d.refReward);
       }                                                       // сбой → pending остаётся, повтор позже
     } catch (_) {}
@@ -2310,9 +2927,11 @@
   async function maybePurchaseBonus() {
     try {
       if (!authed()) return;
-      const d = await api('/api/clicker/purchase-sync', { method: 'POST', body: '{}' }).catch(() => null);
+      const actionSession = overlaySession;
+      const d = await mutationApi('/api/clicker/purchase-sync', { method: 'POST', body: '{}' }).catch(() => null);
       if (d && !d.error) {
-        if (d.balance != null) st = d;
+        if (d.balance != null) applyServerState(d);
+        if (!overlaySessionActive(actionSession)) return;
         if (Array.isArray(d.pigeonDrops) && d.pigeonDrops.length) pendingDoveSummary = d.pigeonDrops;
         if (d.bonus > 0) { sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); purchasePopup(d.bonus); }
         else if (pendingDoveSummary) { const s = pendingDoveSummary; pendingDoveSummary = null; doveDropsSummaryPopup(s); }
@@ -2320,28 +2939,23 @@
     } catch (_) {}
   }
   function purchasePopup(amount) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Спасибо за покупки!</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><div style="color:var(--muted);font-size:13px">Бонус за покупки в «Марии» — чем больше заказываешь, тем больше монет в игре 🎂</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => { pop.classList.remove('on'); advancePopupQueue(); }; }
-  // Перенос прогресса гостя на серверный аккаунт при первом входе (одна попытка).
+  // Неподписанный localStorage нельзя безопасно переносить в серверную экономику.
   async function maybeMigrateGuest() {
     try {
       if (!authed()) return;
       if (loadNetFail) return;
       if (localStorage.getItem('ck_migrated')) return;
-      const g = rawGet();
-      if (!g || (g.totalEarned || 0) < 1000) { try { localStorage.setItem('ck_migrated', '1'); } catch (_) {} return; }
-      const snap = { balance: g.balance, totalEarned: g.totalEarned, cards: g.cards, multitapLevel: g.multitapLevel, energyLevel: g.energyLevel, taps: g.taps };
-      const d = await api('/api/clicker/migrate', { method: 'POST', body: JSON.stringify(snap) }).catch(() => null);
-      if (d) { try { localStorage.setItem('ck_migrated', '1'); } catch (_) {} if (!d.error) { st = d; if (d.migrated) dailyPopupRaw(ICON.gift(20) + ' Прогресс перенесён', d.migrated); } }
+      localStorage.setItem('ck_migrated', '1');
     } catch (_) {}
   }
   function guestTaskList() {
     const s = guestDerive(); const done = (rawGet().tasksDone) || {};
-    return TASKS.map(t => {
+    return TASKS.filter(t => t.type !== 'ref').map(t => {
       let claim = false;
       if (t.type === 'link') claim = !!linkOpened[t.id];
       else if (t.type === 'level') claim = s.level >= t.target;
       else if (t.type === 'balance') claim = s.totalEarned >= t.target;
       else if (t.type === 'streak') claim = s.dailyStreak >= t.target;
-      else if (t.type === 'ref') claim = false;
       return { id: t.id, name: t.name, icon: t.icon, reward: t.reward, type: t.type, link: t.link || null, done: !!done[t.id], claimable: !done[t.id] && claim };
     });
   }
@@ -2353,7 +2967,7 @@
   }
   function guestAchList() {
     const ds = guestDerive(); const done = (rawGet().tasksDone) || {};
-    return ACHIEVEMENTS.map(a => ({ ...a, done: !!done[a.id], claimable: !done[a.id] && condMet(a, ds) }));
+    return ACHIEVEMENTS.filter(a => a.type !== 'ref').map(a => ({ ...a, done: !!done[a.id], claimable: !done[a.id] && condMet(a, ds) }));
   }
   let tasksGen = 0; // токен поколения: два конкурирующих renderTasks не перетирают вкладку друг у друга
   async function renderTasks() {
@@ -2362,7 +2976,11 @@
     if (authed()) list.innerHTML = skelRows(6);
     const refBlock = refCard();
     let tasks, tasksFail = false;
-    if (authed()) { const d = await api('/api/clicker/tasks').catch(() => null); tasks = d && d.tasks; tasksFail = !d; }
+    if (authed()) {
+      const d = await api('/api/clicker/tasks').catch(() => null);
+      tasks = d && d.tasks;
+      tasksFail = !d || !!d.error || !Array.isArray(tasks);
+    }
     else tasks = guestTaskList();
     if (gen !== tasksGen) return;
     if (!tasks) tasks = [];
@@ -2375,7 +2993,11 @@
       return `<div class="ck-card"><div class="ck-card__ic">${taskIcon(t.id)}</div><div class="ck-card__b"><div class="ck-card__n">${t.name}</div><div class="ck-card__s">Награда +${fmt(t.reward)} ${COIN(13)}</div></div>${btn}</div>`;
     }).join('');
     let achs;
-    if (authed()) { const d = await api('/api/clicker/achievements').catch(() => null); achs = d && d.achievements; }
+    if (authed()) {
+      const d = await api('/api/clicker/achievements').catch(() => null);
+      achs = d && d.achievements;
+      tasksFail = tasksFail || !d || !!d.error || !Array.isArray(achs);
+    }
     else achs = guestAchList();
     if (gen !== tasksGen) return;
     if (!achs) achs = [];
@@ -2422,19 +3044,25 @@
   async function claimMilestoneAct(id) {
     if (!authed()) { flashMsg('Войди через приложение «Мария»'); return; }
     return withLock('milestone', async () => {
-      const d = await api('/api/clicker/milestone', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null);
+      const actionSession = overlaySession;
+      const body = JSON.stringify({ id });
+      let d = await mutationApi('/api/clicker/milestone', { method: 'POST', body }).catch(() => null);
+      if (!d || d.error === 'internal') d = await mutationApi('/api/clicker/milestone', { method: 'POST', body }).catch(() => null);
+      if (!overlaySessionActive(actionSession)) return;
       if (d && !d.error) {
-        sfxLevel(); window.haptic && window.haptic('success'); confettiBurst();
-        if (d.promoCode) promoPopup(d.perkTitle, d.promoCode, d.minOrder, d.points); else giftPopup(d.points);
+        if (!d.duplicate) { sfxLevel(); window.haptic && window.haptic('success'); confettiBurst(); }
+        if (d.promoCode) promoPopup(d.perkTitle, d.promoCode, d.minOrder, d.duplicate ? 0 : d.points);
+        else if (d.duplicate) flashMsg('Награда уже получена и сохранена', 'light');
+        else giftPopup(d.points);
         renderTasks();
-      } else flashMsg(!d ? 'Нет связи — попробуй ещё раз' : d.error === 'need_phone' ? 'Сначала подтверди телефон' : d.error === 'already' ? 'Награда уже получена' : d.error === 'not_ready' ? 'Веха ещё не достигнута' : 'Не получилось, попробуй позже');
+      } else flashMsg(!d || d.error === 'internal' ? 'Нет связи — попробуй ещё раз' : d.error === 'need_phone' ? 'Сначала подтверди телефон' : d.error === 'already' ? 'Награда уже получена' : d.error === 'not_ready' ? 'Веха ещё не достигнута' : 'Не получилось, попробуй позже');
     });
   }
   function promoPopup(title, code, minOrder, points) {
     const pop = ov.querySelector('#ck-pop');
     const ptsLine = points ? `<div style="font-size:13px;color:var(--gold-l);font-weight:700;margin:6px 0">${COIN(13)} +${fmt(points)} баллов на карту тоже начислено</div>` : '';
     pop.innerHTML = `<h3>${ICON.gift(20)} Подарок!</h3><div style="font-size:18px;font-weight:800;color:var(--ink);margin:4px 0">${title || 'Подарок «Мария»'}</div>${ptsLine}<div style="margin:8px 0;font-size:13px;color:var(--muted)">Применить в корзине или назвать менеджеру${minOrder ? ` (от ${fmt(minOrder)}₽)` : ''}:</div><div class="ck-morse" style="font-size:21px;letter-spacing:2px">${code}</div><div style="font-size:12px;color:var(--muted);margin-top:6px">Код действует 30 дней · сохранён в «Мои награды»</div><div style="display:flex;gap:8px;justify-content:center;margin:10px 0 2px"><button class="ck-card__buy" id="ck-pop-copy" style="justify-content:center">Скопировать</button></div><button id="ck-pop-ok">Закрыть</button>`;
-    pop.classList.add('on'); const cp = pop.querySelector('#ck-pop-copy'); if (cp) cp.onclick = () => { const done = () => { cp.textContent = 'Скопировано'; }; if (navigator.clipboard) { navigator.clipboard.writeText(code).then(done, done); } else { done(); } }; pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
+    pop.classList.add('on'); const cp = pop.querySelector('#ck-pop-copy'); if (cp) cp.onclick = async () => { cp.textContent = await copyText(code) ? 'Скопировано' : 'Выдели код выше'; }; pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
   }
   function giftPopup(points) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Подарок на карту!</h3><div class="v">+${points} баллов</div><div style="color:var(--muted);font-size:13px">Баллы «Мария» зачислены на твою карту клуба — трать при заказе тортов 🎂</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
   function requestPhone() {
@@ -2445,9 +3073,20 @@
     if (!code || !code.trim()) return;
     if (!authed()) { flashMsg('Промокоды — при входе через «Марию»'); return; }
     return withLock('code', async () => {
-      const d = await api('/api/clicker/code', { method: 'POST', body: JSON.stringify({ code }) }).catch(() => null);
-      if (d && !d.error && d.reward != null) { st = d; sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); dailyPopupRaw(ICON.gift(20) + ' Промокод принят!', d.reward); renderAll(); renderTasks(); bumpBalance(); }
-      else flashMsg(!d ? 'Нет связи — попробуй ещё раз' : d.error === 'used' ? 'Код уже использован' : d.error === 'invalid' ? 'Неверный код' : 'Не получилось');
+      const actionSession = overlaySession;
+      const body = JSON.stringify({ code });
+      let d = await mutationApi('/api/clicker/code', { method: 'POST', body }).catch(() => null);
+      let recovered = false;
+      if (!d || d.error === 'internal') {
+        d = await mutationApi('/api/clicker/code', { method: 'POST', body }).catch(() => null);
+        recovered = !!(d && d.error === 'used');
+      }
+      if (d && !d.error && d.reward != null) applyServerState(d);
+      if (recovered) await window.ckRefreshState();
+      if (!overlaySessionActive(actionSession)) return;
+      if (d && !d.error && d.reward != null) { sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); dailyPopupRaw(ICON.gift(20) + ' Промокод принят!', d.reward); renderAll(); renderTasks(); bumpBalance(); }
+      else if (recovered) { renderTasks(); flashMsg('Код применён — баланс обновлён', 'light'); }
+      else flashMsg(!d || d.error === 'internal' ? 'Нет связи — попробуй ещё раз' : d.error === 'used' ? 'Код уже использован' : d.error === 'invalid' ? 'Неверный код' : 'Не получилось');
     });
   }
   function achDesc(a) { const m = { taps: `${fmt(a.target)} тапов`, balance: `Накопить ${fmt(a.target)}`, level: `Уровень ${a.target}`, cards: `Открыть ${a.target} ${plu(a.target, 'бизнес', 'бизнеса', 'бизнесов')}`, streak: `${a.target} ${plu(a.target, 'день', 'дня', 'дней')} подряд`, ref: `${a.target} ${plu(a.target, 'друг', 'друга', 'друзей')}` }; return m[a.type] || ''; }
@@ -2460,18 +3099,22 @@
         ? `<button class="ck-card__buy ck-claim-pulse" id="ck-combo-claim" style="width:100%;justify-content:center">Забрать +${fmt(cmb.reward)} ${COIN(14)}</button>`
         : `<button class="ck-card__buy" disabled style="width:100%;justify-content:center">Собрано ${cmb.hits.length}/3 — прокачай их в «Прокачке»</button>`;
     const comboCard = `<div class="ck-card ck-bonus">
-      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.star(26)}</div><div class="ck-card__b"><div class="ck-card__n">Комбо дня</div><div class="ck-card__s">Прокачай эти 3 бизнеса сегодня · +${fmt(cmb.reward)} ${COIN(13)}</div></div></div>
+      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.star(26)}</div><div class="ck-card__b"><div class="ck-card__n">Комбо дня</div><div class="ck-card__s">Прокачай эти 3 бизнеса сегодня; MAX уже засчитан · +${fmt(cmb.reward)} ${COIN(13)}</div></div></div>
       <div class="ck-combo3">${slots}</div>${comboBtn}</div>`;
     const chestAvail = !st || st.chestAvailable;
     const chestCard = `<div class="ck-card ck-bonus" style="background:linear-gradient(90deg,rgba(238,191,82,.16),rgba(238,191,82,.04))">
       <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.chest(26)}</div><div class="ck-card__b"><div class="ck-card__n">Сундук удачи</div><div class="ck-card__s">${chestAvail ? 'Монеты, турбо или джекпот!' : 'Новый сундук ' + untilNewDay()}</div></div>
-      ${chestAvail ? `<button class="ck-card__buy" id="ck-chest-open">Открыть</button>` : `<button class="ck-card__buy" disabled>✓ Открыт</button>`}</div>`;
+      ${chestAvail ? `<button class="ck-card__buy" id="ck-chest-open">Открыть</button>` : `<button class="ck-card__buy" disabled>✓ Открыт</button>`}</div></div>`;
     // Платный «Кейс удачи» (как кейсы CS2): платишь монетами → голубь/буст/джекпот, чем
     // реже голубь — тем ценнее. Экономика с домовым эджем (сервер src/lootbox.ts).
-    const canCase = !st || (Number(st.balance) >= CASE_COST);
+    const signedIn = authed();
+    const canCase = signedIn && (!st || Number(st.balance) >= CASE_COST);
+    const caseSub = signedIn
+      ? '0,05% на 10 млн · до 10 прокрутов в сутки · голуби и ранние уровни бизнесов · защита после 5 проигрышей'
+      : 'Кейсы и выпавшие голуби сохраняются после входа через Telegram.';
     const caseCard = `<div class="ck-card ck-bonus" style="background:linear-gradient(90deg,rgba(155,92,255,.20),rgba(155,92,255,.05));border-color:rgba(155,92,255,.4)">
-      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic" style="background:rgba(155,92,255,.2)">${ICON.chest(26)}</div><div class="ck-card__b"><div class="ck-card__n">Кейс удачи</div><div class="ck-card__s">0,05% на 10 млн · до 10 прокрутов в сутки · голуби и ранние уровни бизнесов · защита после 5 проигрышей</div></div>
-      <button class="ck-card__buy" id="ck-case-open"${canCase ? '' : ' disabled'}>${COIN(13)} ${fmt(CASE_COST)}</button></div>`;
+      <div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic" style="background:rgba(155,92,255,.2)">${ICON.chest(26)}</div><div class="ck-card__b"><div class="ck-card__n">Кейс удачи</div><div class="ck-card__s">${caseSub}</div></div>
+      <button class="ck-card__buy" id="ck-case-open"${signedIn && !canCase ? ' disabled' : ''}>${signedIn ? COIN(13) + ' ' + fmt(CASE_COST) : 'В Telegram'}</button></div></div>`;
     return '<div class="ck-sect">Бонусы дня</div>' + chestCard + caseCard + comboCard;
   }
   function wireBonus() {
@@ -2483,10 +3126,23 @@
   }
   async function claimTask(id) {
     return withLock('task', async () => {
-      let reward = 0, netfail = false;
-      if (authed()) { const d = await api('/api/clicker/task', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => { netfail = true; return null; }); if (d && !d.error) { st = d; reward = d.reward; } }
-      else { reward = guestClaimTask(id); if (reward) st = guestDerive(); }
+      const actionSession = overlaySession;
+      let reward = 0, netfail = false, recovered = false;
+      if (authed()) {
+        const body = JSON.stringify({ id });
+        let d = await mutationApi('/api/clicker/task', { method: 'POST', body }).catch(() => null);
+        if (!d || d.error === 'internal') {
+          d = await mutationApi('/api/clicker/task', { method: 'POST', body }).catch(() => null);
+          recovered = !!(d && d.error === 'already');
+        }
+        netfail = !d || d.error === 'internal';
+        if (d && !d.error) { applyServerState(d); reward = d.reward; }
+      }
+      else { reward = guestClaimTask(id); if (reward) applyServerState(guestDerive()); }
+      if (recovered) await window.ckRefreshState();
+      if (!overlaySessionActive(actionSession)) return;
       if (reward) { sfxReward(); window.haptic && window.haptic('success'); dailyPopupRaw('✅ Задание выполнено', reward); renderAll(); renderTasks(); bumpBalance(); }
+      else if (recovered) { renderTasks(); flashMsg('Награда уже зачислена — баланс обновлён', 'light'); }
       else flashMsg(netfail ? 'Нет связи — попробуй ещё раз' : 'Пока недоступно');
     });
   }
@@ -2543,15 +3199,21 @@
   function dailyPopupRaw(title, amount) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${title}</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => { pop.classList.remove('on'); advancePopupQueue(); }; }
 
   function dailyCalHtml() {
-    const streak = (st && st.dailyStreak) || 0, avail = !st || st.dailyAvailable, todayDay = avail ? streak + 1 : 0;
+    const streak = Math.max(0, Number(st && st.dailyStreak) || 0), avail = !st || st.dailyAvailable;
+    const currentDay = Math.max(1, avail ? streak + 1 : streak);
     let h = '<div class="ck-cal">';
-    for (let i = 1; i <= 7; i++) { const done = i <= streak; const today = i === todayDay; h += `<div class="ck-cal-day ${done ? 'done' : ''} ${today ? 'today' : ''}"><div class="d">${done ? '✓' : i}</div><div class="a">${fmt(dailyReward(i))}</div></div>`; }
+    for (let offset = 0; offset < 7; offset++) {
+      const day = currentDay + offset;
+      const done = !avail && offset === 0;
+      const today = avail && offset === 0;
+      h += `<div class="ck-cal-day ${done ? 'done' : ''} ${today ? 'today' : ''}"><div class="d">${done ? '✓' : day}</div><div class="a">${fmt(dailyReward(day))}</div></div>`;
+    }
     return h + '</div>';
   }
   function dailyBtn() { if (st && st.dailyAvailable) claimDaily(); else openDailyView(); }
   function openDailyView() { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Награда дня</h3>${dailyCalHtml()}<div style="color:var(--muted);font-size:13px">Заходи каждый день — приз растёт. Пропустишь — стрик сгорит!</div><button id="ck-pop-ok">Закрыть</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
   function dailyPopup(amount, streak) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} День ${streak} — награда!</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div>${dailyCalHtml()}<div style="color:var(--muted);font-size:13px">Заходи каждый день — приз растёт!</div><button id="ck-pop-ok">Ура!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
-  function passivePopup(amount) { if (!amount || amount <= 0) return; const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>Пока тебя не было</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><div style="color:var(--muted);font-size:13px">Котик работал за тебя!</div><button id="ck-pop-ok">Забрать</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
+  function passivePopup(amount) { if (!amount || amount <= 0) return; const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>Пока тебя не было</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><div style="color:var(--muted);font-size:13px">Котик работал за тебя! Офлайн-доход копится максимум 3 часа.</div><button id="ck-pop-ok">Забрать</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
 
   function loop(ts) {
     if (!ov || !ov.classList.contains('on') || document.hidden) return;
@@ -2560,10 +3222,21 @@
     if (renderAcc < LOOP_FRAME_BUDGET) { raf = requestAnimationFrame(loop); return; } // кап 30fps: тап-хендлер вне цикла, тут только пассивный доход/комбо-декей/рендер
     const dt = renderAcc; renderAcc = 0;
     if (st) {
+      // Открытая всю ночь игра тоже должна разблокировать новый сундук/игры/стрик.
+      // При неудаче сети повторяем раз в 15 секунд, а не оставляем вчерашний UI.
+      const wallNow = Date.now();
+      if (wallNow >= dayCheckAt) {
+        dayCheckAt = wallNow + 1000;
+        const today = irkToday();
+        if (today !== uiDay && wallNow >= dayRetryAt) {
+          dayRetryAt = wallNow + 15000;
+          void refreshAfterResume().then(ok => { if (ok) uiDay = today; });
+        }
+      }
       if (st.energy < st.energyMax) st.energy = Math.min(st.energyMax, st.energy + REGEN * dt);
-      if (st.profitPerHour > 0) { const inc = st.profitPerHour / 3600 * dt * (st.bankMult > 1 ? st.bankMult : 1); st.balance += inc; st.totalEarned += inc; }
+      if (st.profitPerHour > 0) { const inc = st.profitPerHour / 3600 * dt * passiveIncomeMult(); st.balance += inc; st.totalEarned += inc; }
       if (combo && performance.now() - comboT > 700) { combo = 0; ov.querySelector('#ck-combo').classList.remove('show'); }
-      syncT += dt; if (syncT > 1.6) { syncT = 0; flush(); }
+      syncT += dt; if (syncT > 1.6) { syncT = 0; if (authed()) flush(); else st = guestDerive(); }
       if (tab === 'cat') renderAll();
     }
     raf = requestAnimationFrame(loop);
@@ -2591,7 +3264,7 @@
     ],
     up: [
       { text: 'Это «Прокачка» — сердце дохода. Наверху бусты: Мультитап (+1 за тап) и Запас энергии', anchor: '#ck-uplist', anchorFn: function () { return ov.querySelector('#ck-uplist .ck-card'); }, pos: 'bottom' },
-      { text: 'Бизнесы приносят монеты САМИ, даже когда ты офлайн. «Пекарня» за 300 — отличный первый шаг', anchor: '#ck-uplist', anchorFn: function () { const b = ov.querySelector('[data-id="bakery"]'); return (b && (b.closest('.ck-biz') || b.closest('.ck-card'))) || ov.querySelector('#ck-uplist'); }, pos: 'bottom' },
+      { text: 'Бизнесы приносят монеты САМИ; после выхода они копятся до 3 часов. «Пекарня» за 300 — отличный первый шаг', anchor: '#ck-uplist', anchorFn: function () { const b = ov.querySelector('[data-id="bakery"]'); return (b && (b.closest('.ck-biz') || b.closest('.ck-card'))) || ov.querySelector('#ck-uplist'); }, pos: 'bottom' },
       { text: 'Четыре направления: Производство, Маркетинг, Персонал, Сеть. Заводи бизнесы — доход капает даже когда игра закрыта', anchor: '.ck-cats', pos: 'bottom' },
       { text: 'Чем выше уровень бизнеса, тем дороже следующий — но и доход растёт. Копи и вкладывай!', anchor: '#ck-uplist', anchorFn: function () { return ov.querySelector('#ck-uplist .ck-biz') || ov.querySelector('#ck-uplist'); }, pos: 'bottom' },
     ],
@@ -2627,7 +3300,7 @@
   const TAB_TOURS = { cat: 'cat', up: 'up', dove: 'col', tasks: 'tasks', top: 'top', hub: 'hub' };
   function tourRoot(s) { return (s && s.root === 'doc') ? document : ov; }
   function startTour(kind) {
-    if (tourActive || !ov || !TOURS[kind] || tourSeen(kind)) return;
+    if (tourActive || !ov || !ov.classList.contains('on') || !TOURS[kind] || tourSeen(kind)) return;
     closeActiveCoach();
     tourActive = true; tourKind = kind; tourStep = 0; tourTapCount = 0;
     tourEl = document.createElement('div');
@@ -2726,14 +3399,14 @@
   }
 
   function showTutorial() {
-    if (!ov) return;
+    if (!ov || !ov.classList.contains('on') || ov.querySelector('.ck-tut')) return;
     const t = document.createElement('div'); t.className = 'ck-tut';
     t.innerHTML = `<div class="ck-tut__card">
       <div class="ck-tut__ic">${ICON.paw(36)}</div>
       <h3>Котик Комбат</h3>
       <div class="ck-tut__sub">Помоги котику дорасти от подвала до тронного зала — 19 уровней, коллекции и ежедневные призы.</div>
       <div class="ck-tut__step"><div class="si">${ICON.paw(20)}</div><div><div class="st">Тапай котика</div><div class="sd">Каждый тап — монеты, лови комбо ×N</div></div></div>
-      <div class="ck-tut__step"><div class="si">${ICON.shop(20)}</div><div><div class="st">Заводи бизнесы</div><div class="sd">В «Прокачке» — монеты копятся сами, даже офлайн</div></div></div>
+      <div class="ck-tut__step"><div class="si">${ICON.shop(20)}</div><div><div class="st">Заводи бизнесы</div><div class="sd">В «Прокачке» — офлайн-монеты копятся сами, максимум 3 часа</div></div></div>
       <div class="ck-tut__step"><div class="si">${ICON.gift(20)}</div><div><div class="st">Заходи каждый день</div><div class="sd">Награды дня, комбо и новые игровые цели</div></div></div>
       <button class="ck-tut__go" id="ck-tut-go">Поехали!</button>
       <button class="ck-tut__guide" id="ck-tut-guide" type="button">Полный гайд — как всё устроено</button></div>`;
@@ -2745,12 +3418,25 @@
     t.querySelector('#ck-tut-guide').onclick = () => { markTutSeen(); t.remove(); window.haptic && window.haptic('light'); openGuide(); };
   }
   async function open() {
+    // Повторный вызов во время загрузки раньше запускал второй набор запросов и мог
+    // применить более старый ответ поверх свежего состояния.
+    if (ov && ov.classList.contains('on')) return;
     if (!ov) build();
+    const mySession = ++overlaySession;
     activeTapPointers.clear();
     ov.classList.add('on'); document.documentElement.classList.remove('ck-gamefirst'); window.scrollLock && window.scrollLock(); ac();
-    await load(); await maybeMigrateGuest(); await ensureRefRegistered(); await maybePurchaseBonus(); curLevel = leagueFor(st.totalEarned).level;
+    const loaded = await load();
+    if (!overlaySessionActive(mySession)) return;
+    if (!loaded) { showLoadFailure(); return; }
+    await maybeMigrateGuest();
+    if (!overlaySessionActive(mySession)) return;
+    await ensureRefRegistered();
+    if (!overlaySessionActive(mySession)) return;
+    await maybePurchaseBonus();
+    if (!overlaySessionActive(mySession)) return;
+    curLevel = playerLevel();
     loadFtue(); // не await — чип «Первый день» догрузится сам, старт не тормозим
-    ov.querySelector('#ck-cat').src = A(leagueFor(st.totalEarned).cat || 'idle.png');
+    ov.querySelector('#ck-cat').src = A(playerLeague().cat || 'idle.png');
     applyCatSize(ov.querySelector('#ck-cat'));
     setTab('cat'); renderAll(); spawnSparks(); applySeason(); scheduleBonus(); loadDoveBadge();
     if (loadNetFail) flashMsg('Нет связи — серверный прогресс не загрузился, попробуй обновить игру');
@@ -2803,12 +3489,13 @@
 
   function renderGames() {
     const box = ov && ov.querySelector('#ck-gameslist'); if (!box) return;
+    const saving = gameSubmissions.size > 0;
     const card = (id, icon, name, desc) => {
       const done = gameDone(id);
-      return `<div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${icon}</div><div class="ck-card__b"><div class="ck-card__n">${name}</div><div class="ck-card__s">${done ? 'Сыграно — снова ' + untilNewDay() : desc}</div></div>${done ? `<button class="ck-card__buy" disabled>✓ Сегодня</button>` : `<button class="ck-card__buy" data-game="${id}">Играть</button>`}</div></div>`;
+      return `<div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${icon}</div><div class="ck-card__b"><div class="ck-card__n">${name}</div><div class="ck-card__s">${done ? 'Сыграно — снова ' + untilNewDay() : desc}</div></div>${done ? `<button class="ck-card__buy" disabled>✓ Сегодня</button>` : saving ? `<button class="ck-card__buy" disabled>Сохраняем…</button>` : `<button class="ck-card__buy" data-game="${id}">Играть</button>`}</div></div>`;
     };
     const rainAvail = !st || st.rainAvailable;
-    const rainCard = `<div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.rain(26)}</div><div class="ck-card__b"><div class="ck-card__n">Золотой дождь</div><div class="ck-card__s">${rainAvail ? 'Лови монеты 20 секунд → бонус' : 'Сыграно — снова ' + untilNewDay()}</div></div>${rainAvail ? `<button class="ck-card__buy" id="ck-games-rain">Играть</button>` : `<button class="ck-card__buy" disabled>✓ Сегодня</button>`}</div></div>`;
+    const rainCard = `<div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.rain(26)}</div><div class="ck-card__b"><div class="ck-card__n">Золотой дождь</div><div class="ck-card__s">${rainAvail ? 'Лови монеты 20 секунд → бонус' : 'Сыграно — снова ' + untilNewDay()}</div></div>${rainAvail ? saving ? `<button class="ck-card__buy" disabled>Сохраняем…</button>` : `<button class="ck-card__buy" id="ck-games-rain">Играть</button>` : `<button class="ck-card__buy" disabled>✓ Сегодня</button>`}</div></div>`;
     // «Слово дня» — часть хаба игр (переехало из «Призов», решение юзера 31.07)
     const cph = (st && st.cipher) || { claimed: false, reward: CIPHER_REWARD };
     const cipherCard = `<div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.bolt(26)}</div><div class="ck-card__b"><div class="ck-card__n">Слово дня</div><div class="ck-card__s">${cph.claimed ? 'Разгадано — приходи завтра' : `Собери слово из букв · +${fmt(cph.reward)} ` + COIN(13)}</div></div>${cph.claimed ? `<button class="ck-card__buy" disabled>✓ Сегодня</button>` : `<button class="ck-card__buy" id="ck-games-cipher">Играть</button>`}</div></div>`;
@@ -2817,13 +3504,13 @@
     const head = `<div class="ck-games-hd">${remain > 0 ? `Сегодня доступно игр: <b>${remain}</b> из ${total} · награды ждут ${COIN(14)}` : 'Все игры на сегодня пройдены — новые ' + untilNewDay()}</div>`;
     box.innerHTML = head +
       '<div class="ck-sect">Учимся и играем · детям</div>' +
-      card('quiz_kids', ICON.quiz(26), 'Котовикторина', '5 вопросов обо всём · +до 5000 ' + COIN(13)) +
-      card('quiz_riddle', ICON.paw(26), 'Загадки', 'Отгадай 4 загадки · +до 4800 ' + COIN(13)) +
-      card('count', ICON.cupcake(26), 'Счёт конфет', 'Сложи конфеты, малышам · +до 2400 ' + COIN(13)) +
-      card('memory', ICON.cake(26), 'Собери торт', 'Найди пары на память · +до 6000 ' + COIN(13)) +
+      card('quiz_kids', ICON.quiz(26), 'Котовикторина', '5 вопросов обо всём · +2500 ' + COIN(13)) +
+      card('quiz_riddle', ICON.paw(26), 'Загадки', 'Отгадай 4 загадки · +2400 ' + COIN(13)) +
+      card('count', ICON.cupcake(26), 'Счёт конфет', 'Сложи конфеты, малышам · +1200 ' + COIN(13)) +
+      card('memory', ICON.cake(26), 'Собери торт', 'Найди пары на память · +3000 ' + COIN(13)) +
       '<div class="ck-sect">Казуальные · всем</div>' +
-      card('gems', ICON.gem(26), 'Сладкий ряд', 'Match-3: собирай 3+ конфеты в ряд · +до 9000 ' + COIN(13)) +
-      card('tower', ICON.cake(26), 'Башня тортов', 'Ставь коржи ровно, строй башню · +до 12000 ' + COIN(13)) +
+      card('gems', ICON.gem(26), 'Сладкий ряд', 'Match-3: собирай 3+ конфеты в ряд · +4500 ' + COIN(13)) +
+      card('tower', ICON.cake(26), 'Башня тортов', 'Ставь коржи ровно, строй башню · +6000 ' + COIN(13)) +
       cipherCard +
       rainCard;
     box.querySelectorAll('.ck-card__buy[data-game]').forEach(b => b.onclick = () => startGame(b.dataset.game));
@@ -2852,20 +3539,61 @@
   const gameAttempts = {};
   async function beginGameAttempt(game) {
     if (!authed()) return true;
-    if (loadNetFail) return false;
     const d = await api('/api/clicker/game-attempt', { method: 'POST', body: JSON.stringify({ game }) }).catch(() => null);
-    if (!d || d.error || !d.token) { flashMsg('Нет связи — игру не запустили'); return false; }
+    if (!d || d.error || !d.token) { flashMsg(!d || d.error === 'internal' ? 'Нет связи — игру не запустили' : 'Игру сейчас не удалось запустить'); return false; }
     gameAttempts[game] = d.token;
     return true;
   }
-  function takeGameAttempt(game) { const t = gameAttempts[game] || ''; delete gameAttempts[game]; return t; }
+  function gameAttempt(game) { return gameAttempts[game] || ''; }
+  function clearGameAttempt(game) { delete gameAttempts[game]; }
+  async function submitAttemptResult(path, game, score, fallbackReward) {
+    const attempt = gameAttempt(game);
+    if (!attempt) return null;
+    const send = () => mutationApi(path, { method: 'POST', body: JSON.stringify({ game, score, attempt }) }).catch(() => null);
+    let d = await send();
+    // Один повтор тем же подписанным токеном: если первый запрос не дошёл, он
+    // завершит claim; если ответ потерялся после commit, GET ниже восстановит UI.
+    if (!d || d.error === 'internal') d = await send();
+    if (d && !d.error) { clearGameAttempt(game); return d; }
+    if (!d || d.error === 'internal' || d.error === 'already') {
+      const fresh = await stateApi('/api/clicker').catch(() => null);
+      const recorded = fresh && !fresh.error && (game === 'rain'
+        ? fresh.rainAvailable === false
+        : Array.isArray(fresh.gamesDone) && fresh.gamesDone.indexOf(game) >= 0);
+      if (recorded) {
+        clearGameAttempt(game);
+        return { ...fresh, reward: fallbackReward, recovered: true };
+      }
+    }
+    if (d && d.error !== 'too_fast' && d.error !== 'internal') clearGameAttempt(game);
+    return d;
+  }
   async function startGame(g) {
-    if (!(await beginGameAttempt(g))) return;
-    if (g === 'memory') openMemory(); else if (g === 'tower') openTower(); else if (g === 'gems') openGems(); else openQuiz(g);
+    return withLock('game-start:' + g, async () => {
+      if (gameSubmissions.size) { flashMsg('Сохраняем предыдущий результат…'); return; }
+      if (gameDone(g)) { flashMsg('Сыграно — снова ' + untilNewDay()); return; }
+      const gameSession = overlaySession;
+      const hub = ov && ov.querySelector('#ck-games');
+      if (!(await beginGameAttempt(g))) return;
+      // Пока сервер выдавал подписанную попытку, игрок мог закрыть хаб или всю игру.
+      // Не открываем мини-игру за уже закрытым экраном и не переносим токен дальше.
+      if (!overlaySessionActive(gameSession) || !hub || !hub.classList.contains('on')) {
+        clearGameAttempt(g);
+        return;
+      }
+      if (g === 'memory') openMemory(); else if (g === 'tower') openTower(); else if (g === 'gems') openGems(); else openQuiz(g);
+    });
   }
   function openGamesHub() { if (!ov) return; window.haptic && window.haptic('light'); ov.querySelector('#ck-games').classList.add('on'); renderGames(); }
   function closeGamesHub() { const g = ov && ov.querySelector('#ck-games'); if (g) g.classList.remove('on'); if (tab === 'tasks') renderTasks(); /* обновить счётчик «доступно N из 7» на карточке */ }
   function resultPopup(title, amount, sub) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${title}</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><div style="color:var(--muted);font-size:13px">${sub || ''}</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => { pop.classList.remove('on'); advancePopupQueue(); }; }
+  function gameResultFailed(gres) {
+    if (gres && !gres.error) return false;
+    sfxError();
+    flashMsg(gres && gres.error ? 'Результат не засчитан — запусти игру заново' : 'Нет связи — результат не засчитан');
+    renderAll(); renderGames();
+    return true;
+  }
 
   // — Квизы (Котовикторина / Загадки / Счёт конфет) —
   function openQuiz(deck) {
@@ -2886,12 +3614,14 @@
     const ok = btn.textContent === q.a; const el = ov.querySelector('#ck-quiz');
     el.querySelectorAll('.ck-quiz__o').forEach(b => { b.disabled = true; if (b.textContent === q.a) b.classList.add('ok'); else if (b === btn) b.classList.add('bad'); });
     if (ok) { s.correct++; note(880, 0.12, 'triangle', 0.09, 1320); window.haptic && window.haptic('light'); } else { sfxError(); window.haptic && window.haptic('warning'); }
-    setTimeout(() => { s.i++; s.locked = false; if (s.i >= s.qs.length) finishQuiz(); else renderQuizStep(); }, 760);
+    setTimeout(() => { if (quizState !== s) return; s.i++; s.locked = false; if (s.i >= s.qs.length) finishQuiz(); else renderQuizStep(); }, 760);
   }
   async function finishQuiz() {
     const s = quizState; if (!s) return; const deck = s.deck, correct = s.correct, total = s.qs.length, meta = GAME_META[deck]; closeQuiz();
+    const gameSession = overlaySession;
     const gres = await submitGame(deck, correct);
-    if (!gres) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); renderGames(); return; }
+    if (!overlaySessionActive(gameSession)) return;
+    if (gameResultFailed(gres)) return;
     sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
     queueDoveDrop(gres.pigeonDrop);
     resultPopup(`${meta.icon()} ${correct}/${total} верно!`, gres.reward || 0, correct === total ? 'Идеально! 🌟' : 'Молодец, заходи завтра!');
@@ -2919,15 +3649,17 @@
     if (s.flipped.length === 2) {
       s.moves++; ov.querySelector('#ck-mem-moves').textContent = s.moves; s.lock = true;
       const a = s.flipped[0], b = s.flipped[1];
-      if (s.cards[a].v === s.cards[b].v) { s.cards[a].done = s.cards[b].done = true; s.matched++; setTimeout(() => { memCell(a).classList.add('match'); memCell(b).classList.add('match'); s.flipped = []; s.lock = false; note(1046, 0.12, 'triangle', 0.08, 1320); window.haptic && window.haptic('light'); if (s.matched === MEM_ICONS.length) finishMemory(); }, 340); }
-      else { setTimeout(() => { memCell(a).classList.remove('show'); memCell(b).classList.remove('show'); s.flipped = []; s.lock = false; sfxError(); }, 720); }
+      if (s.cards[a].v === s.cards[b].v) { s.cards[a].done = s.cards[b].done = true; s.matched++; setTimeout(() => { if (memState !== s) return; const ca = memCell(a), cb = memCell(b); if (ca) ca.classList.add('match'); if (cb) cb.classList.add('match'); s.flipped = []; s.lock = false; note(1046, 0.12, 'triangle', 0.08, 1320); window.haptic && window.haptic('light'); if (s.matched === MEM_ICONS.length) finishMemory(); }, 340); }
+      else { setTimeout(() => { if (memState !== s) return; const ca = memCell(a), cb = memCell(b); if (ca) ca.classList.remove('show'); if (cb) cb.classList.remove('show'); s.flipped = []; s.lock = false; sfxError(); }, 720); }
     }
   }
   async function finishMemory() {
     const s = memState; if (!s) return; const secs = (performance.now() - s.t0) / 1000; const moves = s.moves;
     const score = Math.max(20, Math.min(100, Math.round(100 - (moves - MEM_ICONS.length) * 5 - secs * 1.2))); closeMemory();
+    const gameSession = overlaySession;
     const gres = await submitGame('memory', score);
-    if (!gres) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); renderGames(); return; }
+    if (!overlaySessionActive(gameSession)) return;
+    if (gameResultFailed(gres)) return;
     sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
     queueDoveDrop(gres.pigeonDrop);
     resultPopup(`${ICON.cake(22)} Торт собран!`, gres.reward || 0, `За ${moves} ходов · ${Math.round(secs)}с`);
@@ -2997,8 +3729,10 @@
   async function finishTower() {
     const s = towerState; if (!s || s.ended) return; s.ended = true; cancelAnimationFrame(s.raf);
     const score = s.score; closeTower();
+    const gameSession = overlaySession;
     const gres = await submitGame('tower', score);
-    if (!gres) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); renderGames(); return; }
+    if (!overlaySessionActive(gameSession)) return;
+    if (gameResultFailed(gres)) return;
     sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
     queueDoveDrop(gres.pigeonDrop);
     resultPopup(`${ICON.cake(22)} Башня из ${score} коржей!`, gres.reward || 0, score >= 20 ? 'Высоченная! 🎂' : 'Неплохо — завтра выше!');
@@ -3072,45 +3806,166 @@
   async function finishGems() {
     const s = gemsState; if (!s || s.ended) return; s.ended = true; clearTimeout(s.raf);
     const score = s.score; closeGems();
+    const gameSession = overlaySession;
     const gres = await submitGame('gems', score);
-    if (!gres) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); renderGames(); return; }
+    if (!overlaySessionActive(gameSession)) return;
+    if (gameResultFailed(gres)) return;
     sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
     queueDoveDrop(gres.pigeonDrop);
     resultPopup(`${ICON.gem(22)} Собрано ${score} конфет!`, gres.reward || 0, 'Сладко! Заходи завтра');
     renderAll(); renderGames(); bumpBalance();
   }
-  function closeGems() { if (gemsState) clearTimeout(gemsState.raf); const el = ov.querySelector('#ck-gems'); if (el) el.classList.remove('on'); gemsState = null; }
+  function closeGems() { if (gemsState) { gemsState.ended = true; clearTimeout(gemsState.raf); } const el = ov.querySelector('#ck-gems'); if (el) el.classList.remove('on'); gemsState = null; }
 
-  function close() { activeTapPointers.clear(); cancelAnimationFrame(raf); clearTimeout(bonusTimer); closeActiveCoach(); if (rainState) endRain(true); if (quizState) closeQuiz(); if (memState) closeMemory(); if (towerState) closeTower(); if (gemsState) closeGems(); const gh = ov && ov.querySelector('#ck-games'); if (gh) gh.classList.remove('on'); flush(); if (ov) ov.classList.remove('on'); window.scrollUnlock && window.scrollUnlock(); }
+  function close() {
+    if (ov && ov.classList.contains('on')) overlaySession++;
+    activeTapPointers.clear(); cancelAnimationFrame(raf); clearTimeout(bonusTimer); clearTimeout(resumeRetryTimer);
+    closeActiveCoach(); if (tourActive) endTour(false);
+    if (cancelCaseReel) cancelCaseReel();
+    else { const cs = ov && ov.querySelector('#ck-case'); if (cs) cs.classList.remove('on'); }
+    closeGuide();
+    const pop = ov && ov.querySelector('#ck-pop'); if (pop) pop.classList.remove('on');
+    // Уведомление о дропе уже отражено в серверном альбоме. Не переносим старую
+    // очередь в следующую сессию, где она выглядела бы наградой за другое действие.
+    doveDropQueue.length = 0; pendingDoveSummary = null;
+    if (window.CatDove && typeof window.CatDove.closeAll === 'function') window.CatDove.closeAll();
+    if (rainState) endRain(true); if (quizState) closeQuiz(); if (memState) closeMemory();
+    if (towerState) closeTower(); if (gemsState) closeGems();
+    const gh = ov && ov.querySelector('#ck-games'); if (gh) gh.classList.remove('on');
+    void flushForPageExit(); if (ov) ov.classList.remove('on'); window.scrollUnlock && window.scrollUnlock();
+  }
   window.catClickOpen = open; window.catClickClose = close; window.catClickBonusNow = () => { if (ov && ov.classList.contains('on')) showFlyingBonus(); }; // превью/тест золотого бонуса
   // Вкладка ушла в фон — останавливаем главный rAF-цикл (жалоба «тормозит», лишние тики впустую);
   // вернулись — перезапускаем, только если игра всё ещё открыта.
+  let resumeRefresh = null;
+  async function refreshAfterResume() {
+    if (resumeRefresh) return resumeRefresh;
+    resumeRefresh = (async () => {
+      const session = overlaySession;
+      const account = accountStorageKey('ck_state_context');
+      let fresh = null;
+      if (authed()) {
+        if (!(await settlePendingTaps())) return false;
+        fresh = await stateApi('/api/clicker').catch(() => null);
+        if (account !== accountStorageKey('ck_state_context') || !overlaySessionActive(session)) return false;
+        if (fresh && fresh.error === 'account_blocked') { loadFailureReason = 'account_blocked'; showLoadFailure(); return false; }
+        if (fresh && !fresh.error) {
+          if (loadedStateAccount && loadedStateAccount !== account) { appliedStateRevision = -1; st = null; }
+          if (!applyServerState(fresh)) return false;
+          loadNetFail = false;
+          loadedStateAccount = account; cacheServerState(account, fresh);
+        }
+      } else {
+        fresh = guestDerive();
+        if (!overlaySessionActive(session)) return false;
+        applyServerState(fresh); loadedStateAccount = account;
+      }
+      if (!fresh || fresh.error || !overlaySessionActive(session)) return false;
+      uiDay = irkToday();
+      renderAll();
+      if (tab === 'up') renderUpgrades();
+      else if (tab === 'tasks') renderTasks();
+      else if (tab === 'top') renderTop();
+      else if (tab === 'hub') renderHub();
+      else if (tab === 'dove' && window.CatDove && typeof window.CatDove.refresh === 'function') void window.CatDove.refresh();
+      const games = ov.querySelector('#ck-games'); if (games && games.classList.contains('on')) renderGames();
+      return true;
+    })().finally(() => { resumeRefresh = null; });
+    return resumeRefresh;
+  }
+  let resumeRetryTimer = 0;
+  function refreshAfterResumeWithRetry(attempt = 0) {
+    clearTimeout(resumeRetryTimer);
+    void refreshAfterResume().then(ok => {
+      if (ok || attempt >= 2 || document.hidden || !ov || !ov.classList.contains('on')) return;
+      resumeRetryTimer = setTimeout(() => refreshAfterResumeWithRetry(attempt + 1), [1200, 3000, 7000][attempt] || 7000);
+    });
+  }
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { cancelAnimationFrame(raf); }
-    else if (ov && ov.classList.contains('on')) { lastTs = 0; renderAcc = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop); }
+    if (document.hidden) { clearTimeout(resumeRetryTimer); cancelAnimationFrame(raf); void flushForPageExit(); }
+    else if (ov && ov.classList.contains('on')) {
+      lastTs = 0; renderAcc = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
+      refreshAfterResumeWithRetry();
+    }
   });
+  // pagehide надёжнее beforeunload в Telegram WebView; keepalive позволяет короткому
+  // запросу с последними тапами завершиться уже во время закрытия страницы.
+  window.addEventListener('pagehide', () => { void flushForPageExit(); });
   window.ckSetTab = setTab; // для виджета «Дома кота»: открыть лестницу вех (setTab('tasks'))
   window.ckCoach = coach; window.ckCoachClose = closeActiveCoach; // экспорт для коуч-хинта «Дом» из catpet.js
   // Мост для catdove.js (сегмент «Коллекция» вкладки dove): api — тот же fetch-хелпер с
   // initData-заголовками, flashMsg — тост об ошибке, updateDoveBadge — бейдж непрочитанной
   // почты на кнопке навбара (учитывая, что мьютить его дальше будет Task 10 — почта).
-  window.ckApi = api; window.ckFlash = flashMsg; window.ckUpdateDoveBadge = updateDoveBadge;
+  window.ckApi = api; window.ckMutationApi = mutationApi; window.ckFlash = flashMsg; window.ckUpdateDoveBadge = updateDoveBadge; window.ckOpenBotGame = openBotGame;
   // Мосты для catdove: переключение вкладок (кнопка «Вступить в команду» из почты)
   // и системный шаринг (ссылка «кода дружбы»)
   window.ckSetTab = setTab;
-  window.ckShare = (txt) => { if (window.App && App.share) App.share(txt); else if (navigator.share) navigator.share({ text: txt }).catch(() => {}); };
+  window.ckShare = async (txt) => {
+    let link = 'https://t.me/' + BOT + '/app';
+    try { if (window.App && App.appLink) link = await App.appLink(); } catch (_) {}
+    if (window.App && App.share) App.share(link, txt);
+    else if (navigator.share) navigator.share({ url: link, text: txt }).catch(() => {});
+  };
   // Мост для catdrag.js (драг-заезд): читать текущий баланс/энергию для UI (дизейбл ставок
   // выше баланса и т.п.) и синхронизировать стейт кликера после серверного списания
   // энергии/ставки — иначе игрок видит устаревшие цифры, пока не откроет кликер заново.
   window.ckBalance = () => (st ? st.balance : 0);
   window.ckEnergy = () => (st ? st.energy : 0);
+  // Гостевой Дом использует тот же локальный кошелёк, что и сам кликер.
+  // Возвращает новый баланс либо null, если операция недопустима/не гостевая.
+  window.ckGuestWallet = (delta, earnedDelta) => {
+    if (authed() || !Number.isFinite(Number(delta))) return null;
+    const raw = rawGet();
+    const next = Number(raw.balance || 0) + Number(delta);
+    if (!Number.isFinite(next) || next < 0) return null;
+    raw.balance = next;
+    if (Number(earnedDelta) > 0) raw.totalEarned = Number(raw.totalEarned || 0) + Number(earnedDelta);
+    rawSave(raw);
+    applyServerState(guestDerive());
+    renderAll();
+    return Number(st && st.balance || 0);
+  };
   window.ckSyncState = (patch) => {
     if (!st || !patch) return;
-    if (typeof patch.balance === 'number') st.balance = patch.balance;
-    if (typeof patch.energy === 'number') st.energy = patch.energy;
+    // Соседние режимы меняют тот же clicker_state. Их revision не даёт позднему
+    // ответу более старого запроса главного экрана откатить баланс/энергию назад.
+    const revision = Number(patch.revision);
+    if (Number.isFinite(revision)) {
+      if (revision < appliedStateRevision) return;
+      appliedStateRevision = revision;
+      st.revision = revision;
+    }
+    // Ответ соседней механики не содержит локальные тапы, появившиеся уже после
+    // старта её запроса. Сохраняем их optimistic-overlay до следующего flush.
+    const account = accountStorageKey('ck_state_context');
+    const pendingCurrent = !tapAccount || tapAccount === account;
+    const retryCurrent = !tapRetryBatch || !tapRetryBatch.account || tapRetryBatch.account === account;
+    const pendingGain = pendingCurrent ? Number(pendingTapGain || 0) : 0;
+    const pendingEnergy = pendingCurrent ? Number(pendingTapEnergy || 0) : 0;
+    const retryGain = retryCurrent ? Number(tapRetryBatch && tapRetryBatch.gain || 0) : 0;
+    const retryEnergy = retryCurrent ? Number(tapRetryBatch && tapRetryBatch.energy || 0) : 0;
+    if (typeof patch.balance === 'number') st.balance = patch.balance + (authed() ? pendingGain + retryGain : 0);
+    if (typeof patch.energy === 'number') st.energy = Math.max(0, patch.energy - (authed() ? pendingEnergy + retryEnergy : 0));
+    if (typeof patch.totalEarnedDelta === 'number') st.totalEarned = Math.max(0, Number(st.totalEarned || 0) + patch.totalEarnedDelta);
+    if (typeof patch.profitDelta === 'number') st.profitPerHour = Math.max(0, Number(st.profitPerHour || 0) + patch.profitDelta);
     renderAll();
   };
-  window.addEventListener('resize', () => { if (ov && ov.classList.contains('on') && st) applyCostume(leagueFor(st.totalEarned)); });
+  window.ckRefreshState = async () => {
+    const account = accountStorageKey('ck_state_context');
+    if (!(await settlePendingTaps())) return null;
+    const fresh = await stateApi('/api/clicker').catch(() => null);
+    if (account !== accountStorageKey('ck_state_context')) return null;
+    if (fresh && !fresh.error) {
+      if (loadedStateAccount && loadedStateAccount !== account) { appliedStateRevision = -1; st = null; }
+      if (applyServerState(fresh)) {
+        loadNetFail = false;
+        loadedStateAccount = account; cacheServerState(account, fresh);
+      }
+      renderAll(); return fresh;
+    }
+    return null;
+  };
+  window.addEventListener('resize', () => { if (ov && ov.classList.contains('on') && st) applyCostume(playerLeague()); });
   // Реф регистрируем фоном уже при загрузке приложения (не дожидаясь открытия игры):
   // друг перешёл по ckref-ссылке → бонус начислится, даже если в игру он не зайдёт.
   function refBootstrap() { try { if (window.App && typeof App.ready === 'function') App.ready().then(() => ensureRefRegistered(), () => ensureRefRegistered()); else ensureRefRegistered(); } catch (_) { ensureRefRegistered(); } } // App.ready — функция, у неё нет .then (старый код всегда падал в else)

@@ -38,7 +38,7 @@ function writeDisk(data) {
 }
 function fetchJson(url) {
     return new Promise((resolve, reject) => {
-        const req = https_1.default.get(url, { rejectUnauthorized: false }, (r) => {
+        const req = https_1.default.get(url, (r) => {
             let body = "";
             r.on("data", (c) => (body += c));
             r.on("end", () => {

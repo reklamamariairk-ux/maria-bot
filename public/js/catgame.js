@@ -10,6 +10,28 @@
   const LIVES = 3;
   const PTS_PER_PIE = 10;
 
+  function scopedBestKey(base) {
+    let scope = 'guest';
+    try {
+      const u = window.App?.user?.();
+      if (u && u.id != null) scope = `${App.platform || 'app'}_${u.id}`;
+    } catch (_) {}
+    const key = `${base}_v2_${scope}`;
+    try {
+      if (localStorage.getItem(key) == null) {
+        const legacy = localStorage.getItem(base);
+        const ownerKey = `${base}_v2_owner`;
+        const owner = localStorage.getItem(ownerKey);
+        if (legacy != null && (!owner || owner === scope)) {
+          localStorage.setItem(ownerKey, scope);
+          localStorage.setItem(key, legacy);
+        }
+      }
+    } catch (_) {}
+    return key;
+  }
+  const BEST_KEY = scopedBestKey('cg_best');
+
   let overlay, canvas, ctx, raf;
   let opening = false;
   let catImg = null;
@@ -20,7 +42,7 @@
     catX: 0, catW: 96, catH: 116, floorY: 0,
     items: [], spawnT: 0, spawnEvery: 900, speed: 1, t0: 0, last: 0,
   };
-  try { state.best = +localStorage.getItem('cg_best') || 0; } catch (_) {}
+  try { state.best = +localStorage.getItem(BEST_KEY) || 0; } catch (_) {}
 
   // ── Загрузка ассетов ──────────────────────────────────────────────────────
   function loadImg(src) {
@@ -241,7 +263,8 @@
 
   // сигнал таймаута для fetch (5с), с фолбэком для старых webview
   function timeoutSignal(ms) {
-    if (AbortSignal.timeout) return AbortSignal.timeout(ms);
+    if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) return AbortSignal.timeout(ms);
+    if (typeof AbortController === 'undefined') return undefined;
     const c = new AbortController(); setTimeout(() => c.abort(), ms); return c.signal;
   }
 
@@ -257,6 +280,7 @@
         signal: timeoutSignal(5000),
       });
       const d = await r.json();
+      if (!r.ok || d.error) throw new Error(String(d.error || `HTTP ${r.status}`));
       let rewardLine = '';
       if (PURE) {
         // pure-режим: без клубных звёзд/CTA в UI, рекорд уже показан в тексте выше
@@ -279,7 +303,7 @@
     const isRecord = state.score > state.best;
     if (isRecord) {
       state.best = state.score;
-      try { localStorage.setItem('cg_best', String(state.best)); } catch (_) {}
+      try { localStorage.setItem(BEST_KEY, String(state.best)); } catch (_) {}
     }
     window.haptic?.(isRecord ? 'success' : 'warning');
 
@@ -301,10 +325,11 @@
     if (authed) postResult(panel);
     panel.querySelector('#cg-again').onclick = startRound;
     panel.querySelector('#cg-close2').onclick = close;
-    panel.querySelector('#cg-share').onclick = () => {
-      const link = window.App?.appLink?.() || 'https://t.me/mariatortik_bot';
-      const txt = `Я набрал ${state.score} очков в игре «Котик ловит пироги» от кондитерской «Мария» 🐱🥧 Побей мой рекорд! ${link}`;
-      if (window.App?.share) App.share(txt); else if (navigator.share) navigator.share({ text: txt }).catch(() => {});
+    panel.querySelector('#cg-share').onclick = async () => {
+      let link = 'https://t.me/mariatortik_bot';
+      try { if (window.App?.appLink) link = await App.appLink(); } catch (_) {}
+      const text = `Я набрал ${state.score} очков в игре «Котик ловит пироги» от кондитерской «Мария» 🐱🥧 Побей мой рекорд!`;
+      if (window.App?.share) App.share(link, text); else if (navigator.share) navigator.share({ url: link, text }).catch(() => {});
     };
   }
 

@@ -22,7 +22,8 @@ router.post(
   "/api/selfie-cake",
   requireTgUser,
   rateLimit(3),
-  express.json({ limit: "8mb" }),
+  // 6 МБ бинарного файла превращаются примерно в 8 МБ base64 + JSON overhead.
+  express.json({ limit: "9mb" }),
   async (req, res) => {
     const healthy = await isConceptEnabled();
     if (!healthy) {

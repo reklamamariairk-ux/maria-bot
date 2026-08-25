@@ -12,6 +12,8 @@
  */
 import crypto from "crypto";
 import type { TgUser } from "./auth";
+import { hasUniqueQueryKeys, isFreshAuthTimestamp, isValidPlatformId } from "./auth-validation";
+import { MAX_ID_OFFSET } from "./platform";
 
 const MAX_BOT_TOKEN = process.env.MAX_BOT_TOKEN ?? "";
 
@@ -19,6 +21,8 @@ export function verifyMaxInitData(initData: string): TgUser | null {
   if (!initData || !MAX_BOT_TOKEN) return null;
 
   const params = new URLSearchParams(initData);
+  // Официальная спецификация MAX требует единственности каждого параметра.
+  if (!hasUniqueQueryKeys(params)) return null;
   const hash = params.get("hash");
   if (!hash) return null;
   params.delete("hash");
@@ -34,15 +38,14 @@ export function verifyMaxInitData(initData: string): TgUser | null {
   const bHash = Buffer.from(hash);
   if (bCalc.length !== bHash.length || !crypto.timingSafeEqual(bCalc, bHash)) return null;
 
-  // Свежесть подписи — как у TG (если МАКС кладёт auth_date; нет поля → не режем)
-  const authDate = Number(params.get("auth_date") ?? 0);
-  if (authDate && Date.now() / 1000 - authDate > 86400) return null;
+  // auth_date входит в официальный InitData и обязателен: ограничиваем replay 24 часами.
+  if (!isFreshAuthTimestamp(params.get("auth_date"))) return null;
 
   const userJson = params.get("user");
   if (!userJson) return null;
   try {
     const u = JSON.parse(userJson) as TgUser;
-    return u && u.id ? u : null;
+    return u && isValidPlatformId(u.id, Number.MAX_SAFE_INTEGER - MAX_ID_OFFSET) ? u : null;
   } catch {
     return null;
   }

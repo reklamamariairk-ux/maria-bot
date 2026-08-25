@@ -169,7 +169,6 @@ function fetchHtml(url) {
                 "Accept-Language": "ru-RU,ru;q=0.9",
                 "Accept": "text/html",
             },
-            rejectUnauthorized: false, // сайт имеет проблемы с цепочкой сертификатов
         }, (res) => {
             // Обрабатываем редиректы
             if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
@@ -218,7 +217,7 @@ function parsePage(html, category) {
 // ─── Fetch JSON helper ───────────────────────────────────────────────────────
 function fetchJson(url, timeoutMs = 60000) {
     return new Promise((resolve, reject) => {
-        const req = https_1.default.get(url, { rejectUnauthorized: false }, (r) => {
+        const req = https_1.default.get(url, (r) => {
             let body = "";
             r.on("data", (c) => (body += c));
             r.on("end", () => {

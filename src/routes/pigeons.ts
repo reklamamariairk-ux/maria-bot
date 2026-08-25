@@ -10,13 +10,13 @@
  */
 import { Router } from "express";
 import {
-  getPigeonsOverview, claimSet, getTradeBoard, createTrade, acceptTrade, cancelTrade, declineTrade,
+  getPigeonsOverview, claimSet,
   feedPigeon, setShowcase,
   enterRace, getRace, getTuning, upgradeTune, BREED_BY_ID,
   getMailRecipients, getPigeonMissions, startPigeonMission, claimPigeonMission,
 } from "../pigeons";
 import type { PushService } from "../push";
-import { requireTgUser, getTgUser } from "../auth";
+import { requireTgUser, getTgUser } from "../game-auth";
 import { rateLimit } from "../middleware";
 import { log } from "../logger";
 
@@ -45,47 +45,13 @@ export function createPigeonsRouter(push: PushService): Router {
   router.post("/api/pigeons/trade/cancel", tradesDisabled);
   router.post("/api/pigeons/trade/decline", tradesDisabled);
 
-  /* Legacy handlers kept unreachable for rollback/reference during the migration. */
-  router.get("/api/pigeons/trades-legacy", requireTgUser, rateLimit(60), async (req, res) => {
-    const u = getTgUser(req)!;
-    try { res.json(await getTradeBoard(u.id)); }
-    catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/trades]"); res.status(500).json({ error: "internal" }); }
-  });
-
-  router.post("/api/pigeons/trade-legacy", requireTgUser, rateLimit(20), async (req, res) => {
-    const u = getTgUser(req)!;
-    const { give, want, to, coinDelta } = req.body as { give?: string; want?: string; to?: number; coinDelta?: number };
-    const toNum = to === undefined || to === null ? undefined : Number(to);
-    if (toNum !== undefined && !Number.isInteger(toNum)) { res.status(400).json({ error: "bad_input" }); return; }
-    // coinDelta untrusted — createTrade нормализует (normalizeCoinDelta), тут только пробрасываем число
-    const coin = coinDelta === undefined || coinDelta === null ? 0 : Number(coinDelta);
-    try {
-      const r = await createTrade(u.id, String(give || ""), String(want || ""), toNum, coin);
-      if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
-      res.json(r);
-    } catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/trade]"); res.status(500).json({ error: "internal" }); }
-  });
-
-  router.post("/api/pigeons/trade/accept-legacy", requireTgUser, rateLimit(20), async (req, res) => {
-    const u = getTgUser(req)!; const id = Number((req.body as { id?: number }).id);
-    if (!Number.isInteger(id)) { res.status(400).json({ error: "bad_input" }); return; }
-    try { const r = await acceptTrade(u.id, id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json(r); }
-    catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/trade/accept]"); res.status(500).json({ error: "internal" }); }
-  });
-
-  router.post("/api/pigeons/trade/cancel-legacy", requireTgUser, rateLimit(20), async (req, res) => {
-    const u = getTgUser(req)!; const id = Number((req.body as { id?: number }).id);
-    if (!Number.isInteger(id)) { res.status(400).json({ error: "bad_input" }); return; }
-    try { const r = await cancelTrade(u.id, id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json(r); }
-    catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/trade/cancel]"); res.status(500).json({ error: "internal" }); }
-  });
-
-  router.post("/api/pigeons/trade/decline-legacy", requireTgUser, rateLimit(20), async (req, res) => {
-    const u = getTgUser(req)!; const id = Number((req.body as { id?: number }).id);
-    if (!Number.isInteger(id)) { res.status(400).json({ error: "bad_input" }); return; }
-    try { const r = await declineTrade(u.id, id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json(r); }
-    catch (e) { log.error({ err: e, chatId: u.id }, "[pigeons/trade/decline]"); res.status(500).json({ error: "internal" }); }
-  });
+  // Старые адреса тоже должны подчиняться продуктовому выключателю. Иначе
+  // модифицированный/закэшированный клиент мог обходить скрытый интерфейс.
+  router.get("/api/pigeons/trades-legacy", tradesDisabled);
+  router.post("/api/pigeons/trade-legacy", tradesDisabled);
+  router.post("/api/pigeons/trade/accept-legacy", tradesDisabled);
+  router.post("/api/pigeons/trade/cancel-legacy", tradesDisabled);
+  router.post("/api/pigeons/trade/decline-legacy", tradesDisabled);
 
   router.get("/api/pigeons/missions", requireTgUser, rateLimit(60), async (req, res) => {
     const u = getTgUser(req)!;
@@ -196,14 +162,17 @@ export function createPigeonsRouter(push: PushService): Router {
 
   router.post("/api/pigeons/drag/duel", requireTgUser, rateLimit(20), async (req, res) => {
     const u = getTgUser(req)!;
-    const b = req.body as { friendChat?: number; breed?: string; stake?: number; tap?: { count?: number; reactionMs?: number; durationMs?: number } };
+    const b = req.body as { friendChat?: number; breed?: string; stake?: number; requestId?: string; tap?: { count?: number; reactionMs?: number; durationMs?: number } };
     try {
       const { createFriendDuel } = await import("../drag");
-      const r = await createFriendDuel(u.id, Math.floor(Number(b.friendChat) || 0), String(b.breed || ""), Number(b.stake) || 0, b.tap || null);
+      const requestId = typeof b.requestId === "string" && /^[a-zA-Z0-9_-]{8,80}$/.test(b.requestId) ? b.requestId : "";
+      const r = await createFriendDuel(u.id, Math.floor(Number(b.friendChat) || 0), String(b.breed || ""), Number(b.stake) || 0, b.tap || null, requestId);
       if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
-      const sender = String((u as any).first_name || (u as any).username || "Друг").slice(0, 24);
-      const stake = Math.max(0, Math.floor(Number(b.stake) || 0));
-      void push.sendRaw(Math.floor(Number(b.friendChat) || 0), `🏁 ${sender} вызывает тебя на дуэль в «Котик Комбат»!\nСтавка: ${stake ? stake.toLocaleString("ru-RU") + " монет" : "без ставки"}.\nОткрой игру — вызов ждёт на Главной.`);
+      if (!r.duplicate) {
+        const sender = String((u as any).first_name || (u as any).username || "Друг").slice(0, 24);
+        const stake = Math.max(0, Math.floor(Number(b.stake) || 0));
+        void push.sendRaw(Math.floor(Number(b.friendChat) || 0), `🏁 ${sender} вызывает тебя на дуэль в «Котик Комбат»!\nСтавка: ${stake ? stake.toLocaleString("ru-RU") + " монет" : "без ставки"}.\nОткрой игру — вызов ждёт на Главной.`);
+      }
       res.json(r);
     } catch (e) { log.error({ err: e, chatId: u.id }, "[drag/duel]"); res.status(500).json({ error: "internal" }); }
   });
@@ -216,6 +185,16 @@ export function createPigeonsRouter(push: PushService): Router {
       if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
       res.json(r);
     } catch (e) { log.error({ err: e, chatId: u.id }, "[drag/duel/decline]"); res.status(500).json({ error: "internal" }); }
+  });
+
+  router.post("/api/pigeons/drag/duel/cancel", requireTgUser, rateLimit(30), async (req, res) => {
+    const u = getTgUser(req)!; const id = Math.floor(Number((req.body as { id?: number }).id) || 0);
+    try {
+      const { cancelFriendDuel } = await import("../drag");
+      const r = await cancelFriendDuel(u.id, id);
+      if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
+      res.json(r);
+    } catch (e) { log.error({ err: e, chatId: u.id }, "[drag/duel/cancel]"); res.status(500).json({ error: "internal" }); }
   });
 
   router.post("/api/pigeons/drag/duel/accept", requireTgUser, rateLimit(20), async (req, res) => {
@@ -259,7 +238,7 @@ export function createPigeonsRouter(push: PushService): Router {
   });
 
   router.post("/api/pigeons/drag/race", requireTgUser, rateLimit(20), async (req, res) => {
-    const u = getTgUser(req)!; const b = req.body as { breed?: string; mode?: string; stake?: number; reactionMs?: number; skill?: { rev1?: number; rev2?: number; reactionMs?: number }; tap?: { count?: number; reactionMs?: number; durationMs?: number } };
+    const u = getTgUser(req)!; const b = req.body as { breed?: string; mode?: string; stake?: number; reactionMs?: number; requestId?: string; skill?: { rev1?: number; rev2?: number; reactionMs?: number }; tap?: { count?: number; reactionMs?: number; durationMs?: number } };
     try {
       const { runRace } = await import("../drag");
       // reactionMs — untrusted: нормализуем на границе. Math.max(0,·) ловит отрицательные
@@ -282,7 +261,8 @@ export function createPigeonsRouter(push: PushService): Router {
         durationMs: Number(b.tap.durationMs) || 5000,
       } : null;
       const legacyReact = tap ? tap.reactionMs : launch ? launch.reactionMs : reactionMs;
-      const r = await runRace(u.id, String(b.breed || ""), b.mode === "bet" ? "bet" : "training", Number(b.stake) || 0, legacyReact, launch, tap);
+      const requestId = typeof b.requestId === "string" && /^[a-zA-Z0-9_-]{8,80}$/.test(b.requestId) ? b.requestId : "";
+      const r = await runRace(u.id, String(b.breed || ""), b.mode === "bet" ? "bet" : "training", Number(b.stake) || 0, legacyReact, launch, tap, requestId);
       if (!r.ok) { log.warn({ chatId: u.id, reason: r.reason, breed: String(b.breed || ""), mode: b.mode, stake: b.stake }, "[drag/race rejected]"); res.status(400).json({ error: r.reason }); return; }
       res.json(r);
     } catch (e) { log.error({ err: e, chatId: u.id }, "[drag/race]"); res.status(500).json({ error: "internal" }); }

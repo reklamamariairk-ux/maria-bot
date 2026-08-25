@@ -113,7 +113,9 @@
 (() => {
   const $ = (s) => document.querySelector(s);
   const fmt = (n) => Number(n || 0).toLocaleString('ru-RU');
-  let TOKEN = localStorage.getItem('ck_admin_token') || '';
+  const esc = (v) => String(v ?? '').replace(/[&<>\"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&#39;' }[c]));
+  let TOKEN = sessionStorage.getItem('ck_admin_token') || '';
+  localStorage.removeItem('ck_admin_token'); // удалить токен старых версий
 
   async function api(path, opts = {}) {
     const r = await fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', 'X-User-Token': TOKEN, ...(opts.headers || {}) } });
@@ -123,7 +125,7 @@
   function askToken(force) {
     if (TOKEN && !force) return;
     TOKEN = prompt('Админ-токен:') || '';
-    localStorage.setItem('ck_admin_token', TOKEN);
+    sessionStorage.setItem('ck_admin_token', TOKEN);
   }
 
   // Вкладки
@@ -144,23 +146,23 @@
       ['Подписчики бота', t.subscribers], ['Телефоны', t.phones],
       ['Связок платформ', t.links], ['Тапов всего', fmt(t.taps)],
       ['Обменов призов', t.redemptions], ['Гонка: заявок/нед', m.raceEntrants7d],
-    ].map(([k, v]) => `<div class="kpi"><b>${v}</b><span>${k}</span></div>`).join('');
+    ].map(([k, v]) => `<div class="kpi"><b>${esc(v)}</b><span>${esc(k)}</span></div>`).join('');
 
     const days = m.daily, W = 1000, H = 150, bw = W / Math.max(1, days.length);
     const mx = Math.max(1, ...days.map((d) => Number(d.active)));
     $('#chart').setAttribute('viewBox', `0 0 ${W} ${H}`);
     $('#chart').innerHTML = days.map((d, i) => {
       const ha = Number(d.active) / mx * (H - 22), hn = Number(d.new_players) / mx * (H - 22);
-      return `<g><title>${d.d}: активных ${d.active}, новых ${d.new_players}</title>
+      return `<g><title>${esc(d.d)}: активных ${esc(d.active)}, новых ${esc(d.new_players)}</title>
         <rect class="bar" x="${i * bw + 2}" y="${H - 16 - ha}" width="${Math.max(2, bw * 0.55)}" height="${ha}" rx="2"/>
         <rect class="barNew" x="${i * bw + 2 + bw * 0.58}" y="${H - 16 - hn}" width="${Math.max(2, bw * 0.3)}" height="${hn}" rx="2"/>
-        ${i % 2 === 0 ? `<text x="${i * bw + bw / 2}" y="${H - 3}" fill="#b59a8f" font-size="9" text-anchor="middle">${d.d.slice(8)}</text>` : ''}</g>`;
+        ${i % 2 === 0 ? `<text x="${i * bw + bw / 2}" y="${H - 3}" fill="#b59a8f" font-size="9" text-anchor="middle">${esc(d.d.slice(8))}</text>` : ''}</g>`;
     }).join('');
 
     $('#events').innerHTML = '<tr><th>Событие</th><th>Раз</th></tr>' +
-      m.events.map((e) => `<tr><td>${e.event}</td><td>${fmt(e.n)}</td></tr>`).join('');
+      m.events.map((e) => `<tr><td>${esc(e.event)}</td><td>${fmt(e.n)}</td></tr>`).join('');
     $('#ftue').innerHTML = '<tr><th>Маска шагов</th><th>Игроков</th></tr>' +
-      m.ftue.map((f) => `<tr><td>${f.ftue_claimed}</td><td>${f.n}</td></tr>`).join('');
+      m.ftue.map((f) => `<tr><td>${esc(f.ftue_claimed)}</td><td>${fmt(f.n)}</td></tr>`).join('');
     if (m.push && (m.push.running || m.push.total)) {
       $('#sub').textContent = `рассылка: ${m.push.running ? 'идёт' : 'завершена'} ${m.push.sent || 0}/${m.push.total || 0}`;
     }
@@ -170,11 +172,11 @@
   async function loadUsers(q) {
     const d = await api('/api/admin/game/users?q=' + encodeURIComponent(q));
     $('#users tbody').innerHTML = d.users.map((u) => `
-      <tr data-id="${u.chat_id}">
-        <td><b>${u.first_name || u.username || u.platformId}</b> <span class="muted">${u.username ? '@' + u.username : ''}</span></td>
-        <td><span class="plat ${u.platform}">${u.platform.toUpperCase()}</span></td>
+      <tr data-id="${esc(u.chat_id)}">
+        <td><b>${esc(u.first_name || u.username || u.platformId)}</b> <span class="muted">${u.username ? '@' + esc(u.username) : ''}</span></td>
+        <td><span class="plat ${esc(u.platform)}">${esc(u.platform).toUpperCase()}</span></td>
         <td>${fmt(u.balance)}</td><td>${fmt(u.total_earned)}</td><td>${fmt(u.taps)}</td>
-        <td class="muted">${(u.updated_at || '').slice(0, 16).replace('T', ' ')}</td>
+        <td class="muted">${esc((u.updated_at || '').slice(0, 16).replace('T', ' '))}</td>
       </tr>`).join('') || '<tr><td colspan="6" class="muted">Никого не нашлось</td></tr>';
     document.querySelectorAll('#users tbody tr[data-id]').forEach((tr) => tr.onclick = () => openUser(tr.dataset.id));
   }
@@ -182,12 +184,12 @@
   $('#q').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadUsers($('#q').value.trim()); });
 
   async function openUser(id) {
-    const u = await api('/api/admin/game/user/' + id);
+    const u = await api('/api/admin/game/user/' + encodeURIComponent(id));
     const s = u.state || {};
     $('#userCard').classList.remove('hidden');
     $('#userCard').innerHTML = `
-      <h3>${u.subscriber?.first_name || 'Игрок'} <span class="plat ${u.platform}">${u.platform.toUpperCase()}</span>
-        <span class="muted">· id ${u.platformId}${u.subscriber?.phone ? ' · ' + u.subscriber.phone : ''}</span></h3>
+      <h3>${esc(u.subscriber?.first_name || 'Игрок')} <span class="plat ${esc(u.platform)}">${esc(u.platform).toUpperCase()}</span>
+        <span class="muted">· id ${esc(u.platformId)}${u.subscriber?.phone ? ' · ' + esc(u.subscriber.phone) : ''}</span></h3>
       <div class="grid">
         <div class="kpi"><b>${fmt(s.balance)}</b><span>баланс</span></div>
         <div class="kpi"><b>${fmt(s.total_earned)}</b><span>всего заработано</span></div>
@@ -196,7 +198,7 @@
         <div class="kpi"><b>${u.pigeons.reduce((a, p) => a + Number(p.count), 0)}</b><span>голубей</span></div>
         <div class="kpi"><b>${u.links.length}</b><span>связанных платформ</span></div>
       </div>
-      ${u.links.length ? `<div class="muted">Связки: ${u.links.map((l) => l.platform.toUpperCase() + ' #' + l.alias).join(', ')}</div>` : ''}
+      ${u.links.length ? `<div class="muted">Связки: ${u.links.map((l) => esc(l.platform).toUpperCase() + ' #' + esc(l.alias)).join(', ')}</div>` : ''}
       <div class="row" style="margin-top:10px">
         <input id="cdelta" placeholder="+5000 или -5000" style="max-width:150px"/>
         <input id="creason" placeholder="Причина (видна только нам)" style="max-width:260px"/>
@@ -204,14 +206,14 @@
         <span id="cres" class="muted"></span>
       </div>
       <h3 style="margin-top:14px">Последние события</h3>
-      <pre>${u.events.map((e) => `${(e.created_at || '').slice(0, 16).replace('T', ' ')}  ${e.event}  ${JSON.stringify(e.meta || {})}`).join('\n') || '—'}</pre>`;
+      <pre>${esc(u.events.map((e) => `${(e.created_at || '').slice(0, 16).replace('T', ' ')}  ${e.event}  ${JSON.stringify(e.meta || {})}`).join('\n') || '—')}</pre>`;
     $('#cgo').onclick = async () => {
       const delta = parseInt($('#cdelta').value, 10);
       if (!delta) { $('#cres').textContent = 'введи число'; return; }
       try {
         const r = await api(`/api/admin/game/user/${id}/coins`, { method: 'POST', body: JSON.stringify({ delta, reason: $('#creason').value }) });
-        $('#cres').innerHTML = r.ok ? `<span class="ok">готово, баланс ${fmt(r.balance)}${r.notified === false ? ' · уведомление не доставлено' : ''}</span>` : `<span class="bad">${r.error}</span>`;
-      } catch (e) { $('#cres').innerHTML = `<span class="bad">Ошибка API: ${e.message || e}</span>`; }
+        $('#cres').innerHTML = r.ok ? `<span class="ok">готово, баланс ${fmt(r.balance)}${r.notified === false ? ' · уведомление не доставлено' : ''}</span>` : `<span class="bad">${esc(r.error)}</span>`;
+      } catch (e) { $('#cres').innerHTML = `<span class="bad">Ошибка API: ${esc(e.message || e)}</span>`; }
     };
     $('#userCard').scrollIntoView({ behavior: 'smooth' });
   }
@@ -219,12 +221,12 @@
   // ── Рассылка ──
   $('#ptest').onclick = async () => {
     const r = await api('/api/admin/game/push', { method: 'POST', body: JSON.stringify({ text: $('#ptext').value, testChatId: Number($('#ptestid').value) }) });
-    $('#pstatus').innerHTML = r.ok ? '<span class="ok">Тест отправлен — проверь чат</span>' : `<span class="bad">Ошибка: ${r.error || 'не ушло'}</span>`;
+    $('#pstatus').innerHTML = r.ok ? '<span class="ok">Тест отправлен — проверь чат</span>' : `<span class="bad">Ошибка: ${esc(r.error || 'не ушло')}</span>`;
   };
   $('#pgo').onclick = async () => {
     if (!confirm('Отправить рассылку сегменту «' + $('#pseg').selectedOptions[0].textContent + '»?')) return;
     const r = await api('/api/admin/game/push', { method: 'POST', body: JSON.stringify({ text: $('#ptext').value, segment: $('#pseg').value }) });
-    if (!r.ok) { $('#pstatus').innerHTML = `<span class="bad">Ошибка: ${r.error}</span>`; return; }
+    if (!r.ok) { $('#pstatus').innerHTML = `<span class="bad">Ошибка: ${esc(r.error)}</span>`; return; }
     $('#pstatus').textContent = `В очереди: ${r.queued}. Обновляю статус…`;
     const t = setInterval(async () => {
       const s = await api('/api/admin/game/push');

@@ -7,7 +7,7 @@
 import { Router } from "express";
 import { getPet, doPetAction, setPetLocation, buyPetItem, equipPetItem, SHOP, type PetAction } from "../pet";
 import { rateLimit } from "../middleware";
-import { requireTgUser, getTgUser } from "../auth";
+import { requireTgUser, getTgUser } from "../game-auth";
 import { log } from "../logger";
 
 const router = Router();
@@ -39,7 +39,9 @@ router.post("/api/pet/location", requireTgUser, rateLimit(60), async (req, res) 
   const u = getTgUser(req)!;
   const location = String((req.body as { location?: string }).location || "");
   try {
-    res.json(await setPetLocation(u.id, location));
+    const r = await setPetLocation(u.id, location);
+    if (!r.ok) { res.status(400).json({ error: r.reason }); return; }
+    res.json(r.state);
   } catch (e) {
     log.error({ err: e, chatId: u.id }, "[POST /api/pet/location]");
     res.status(500).json({ error: "internal" });

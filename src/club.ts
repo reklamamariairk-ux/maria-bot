@@ -2,6 +2,7 @@ import { pool } from "./db";
 import { log } from "./logger";
 import { enqueueAccrual, bonusSyncEnabled } from "./bonus1c";
 import { registerAccountLink, type LinkResult } from "./account-link";
+import type { PoolClient } from "pg";
 
 // Иркутск = UTC+8. Все «сутки» (daily login, daily star cap) считаем
 // относительно иркутского дня — иначе на границе UTC-полуночи юзер
@@ -41,6 +42,8 @@ export async function initClubSchema() {
     );
     CREATE INDEX IF NOT EXISTS idx_point_tx_chat ON point_transactions (chat_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_point_tx_expires ON point_transactions (expires_at) WHERE expires_at IS NOT NULL;
+    ALTER TABLE point_transactions ADD COLUMN IF NOT EXISTS idem_key TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_point_tx_idem ON point_transactions (idem_key) WHERE idem_key IS NOT NULL;
 
     CREATE TABLE IF NOT EXISTS star_transactions (
       id         BIGSERIAL PRIMARY KEY,
@@ -101,6 +104,8 @@ export async function initClubSchema() {
       used_order_id TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_user_rewards_chat ON user_rewards (chat_id, created_at DESC);
+    ALTER TABLE user_rewards ADD COLUMN IF NOT EXISTS source_key TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_user_rewards_source_key ON user_rewards (source_key) WHERE source_key IS NOT NULL;
   `);
 
   // Seed rewards catalog if empty
@@ -142,6 +147,67 @@ export const BONUS_REFERRAL = 300;
 export const STAR_DAILY_CAP = 300;
 export const POINT_TTL_DAYS = 90;
 
+type ClubDb = Pick<PoolClient, "query">;
+
+interface PointAccrual {
+  id: number | null;
+  inserted: boolean;
+}
+
+async function earnPointsWithClient(
+  client: ClubDb,
+  chatId: number,
+  amount: number,
+  source: string,
+  meta: Record<string, unknown>,
+  idempotencyKey?: string,
+): Promise<PointAccrual> {
+  const ptr = await client.query(
+    `INSERT INTO point_transactions (chat_id, amount, kind, source, meta, expires_at, idem_key)
+     VALUES ($1, $2, 'earn', $3, $4, NOW() + INTERVAL '${POINT_TTL_DAYS} days', $5)
+     ON CONFLICT DO NOTHING RETURNING id`,
+    [chatId, amount, source, JSON.stringify(meta), idempotencyKey || null]
+  );
+  if (ptr.rows[0]) {
+    const id = Number(ptr.rows[0].id);
+    await client.query(
+      `INSERT INTO user_balances (chat_id, points, total_earned_points)
+       VALUES ($1, $2, $2)
+       ON CONFLICT (chat_id) DO UPDATE
+         SET points = user_balances.points + $2,
+             total_earned_points = user_balances.total_earned_points + $2,
+             updated_at = NOW()`,
+      [chatId, amount]
+    );
+    return { id, inserted: true };
+  }
+  if (!idempotencyKey) return { id: null, inserted: false };
+  const existing = await client.query(
+    `SELECT id FROM point_transactions WHERE idem_key = $1`,
+    [idempotencyKey]
+  );
+  return { id: existing.rows[0] ? Number(existing.rows[0].id) : null, inserted: false };
+}
+
+async function mirrorPointAccrual(
+  chatId: number,
+  amount: number,
+  source: string,
+  pointTransactionId: number | null,
+): Promise<void> {
+  if (pointTransactionId == null || !bonusSyncEnabled()) return;
+  try {
+    const { rows } = await pool.query(
+      `SELECT phone FROM subscribers WHERE chat_id = $1 AND phone_verified_at IS NOT NULL`,
+      [chatId]
+    );
+    const phone = rows[0]?.phone;
+    if (phone) await enqueueAccrual(phone, amount, source, `pt:${pointTransactionId}`);
+  } catch (e) {
+    log.error({ err: e, chatId }, "[bonus] mirror to 1C");
+  }
+}
+
 // ─── Balance ─────────────────────────────────────────────────────────────────
 export interface Balance {
   stars: number;
@@ -173,10 +239,10 @@ export async function earnPoints(
   chatId: number,
   amount: number,
   source: string,
-  meta: Record<string, unknown> = {}
+  meta: Record<string, unknown> = {},
+  idempotencyKey?: string,
 ): Promise<void> {
   if (amount <= 0) return;
-  const expires = `NOW() + INTERVAL '${POINT_TTL_DAYS} days'`;
   // ВАЖНО: транзакция на dedicated client. pool.query("BEGIN") не работает
   // в node-postgres — каждый pool.query берёт новый коннект, и BEGIN/COMMIT
   // не группируют операции в одну транзакцию.
@@ -184,21 +250,8 @@ export async function earnPoints(
   let ptId: number | null = null;
   try {
     await client.query("BEGIN");
-    await client.query(
-      `INSERT INTO user_balances (chat_id, points, total_earned_points)
-       VALUES ($1, $2, $2)
-       ON CONFLICT (chat_id) DO UPDATE
-         SET points = user_balances.points + $2,
-             total_earned_points = user_balances.total_earned_points + $2,
-             updated_at = NOW()`,
-      [chatId, amount]
-    );
-    const ptr = await client.query(
-      `INSERT INTO point_transactions (chat_id, amount, kind, source, meta, expires_at)
-       VALUES ($1, $2, 'earn', $3, $4, ${expires}) RETURNING id`,
-      [chatId, amount, source, JSON.stringify(meta)]
-    );
-    ptId = ptr.rows[0].id;
+    const accrual = await earnPointsWithClient(client, chatId, amount, source, meta, idempotencyKey);
+    ptId = accrual.id;
     await client.query("COMMIT");
   } catch (e) {
     await client.query("ROLLBACK").catch(() => {});
@@ -206,20 +259,8 @@ export async function earnPoints(
   } finally {
     client.release();
   }
-  // Зеркалим начисление на реальную карту в 1С (по подтверждённому телефону).
-  // idem_key = pt:<id> уникален → не задвоится. no-op, если интеграция не настроена.
-  if (ptId != null && bonusSyncEnabled()) {
-    try {
-      const { rows } = await pool.query(
-        `SELECT phone FROM subscribers WHERE chat_id = $1 AND phone_verified_at IS NOT NULL`,
-        [chatId]
-      );
-      const phone = rows[0]?.phone;
-      if (phone) await enqueueAccrual(phone, amount, source, `pt:${ptId}`);
-    } catch (e) {
-      log.error({ err: e, chatId }, "[bonus] mirror to 1C");
-    }
-  }
+  // idem_key = pt:<id> уникален → повторная постановка в outbox 1С не задвоится.
+  await mirrorPointAccrual(chatId, amount, source, ptId);
 }
 
 /**
@@ -388,48 +429,108 @@ export interface VerifyResult {
 
 export async function verifyPhone(chatId: number, phone: string): Promise<VerifyResult> {
   const cleanPhone = phone.replace(/[^\d+]/g, "");
-
-  // Атомарно определяем «первый раз»: без этого два параллельных запроса
-  // верификации оба читали phone_verified_at=null и оба начисляли BONUS_VERIFY_PHONE
-  // (реальные баллы в 1С) → 200 вместо 100. Теперь ровно один запрос ставит
-  // phone_verified_at и получает бонус (row-lock под READ COMMITTED).
-  const upd = await pool.query(
-    `UPDATE subscribers SET phone = $2, phone_verified_at = NOW()
-       WHERE chat_id = $1 AND phone_verified_at IS NULL
-     RETURNING chat_id`,
-    [chatId, cleanPhone]
-  );
-  let firstTime = (upd.rowCount ?? 0) > 0;
-
-  if (!firstTime) {
-    // Строки могло не быть вовсе — создаём её как верифицированную атомарно.
-    const ins = await pool.query(
-      `INSERT INTO subscribers (chat_id, phone, phone_verified_at)
-       VALUES ($1, $2, NOW())
-       ON CONFLICT (chat_id) DO NOTHING
-       RETURNING chat_id`,
+  const client = await pool.connect();
+  let firstTime = false;
+  let accrual: PointAccrual = { id: null, inserted: false };
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `INSERT INTO subscribers (chat_id) VALUES ($1) ON CONFLICT (chat_id) DO NOTHING`,
+      [chatId]
+    );
+    const current = await client.query(
+      `SELECT phone_verified_at FROM subscribers WHERE chat_id = $1 FOR UPDATE`,
+      [chatId]
+    );
+    firstTime = !current.rows[0]?.phone_verified_at;
+    await client.query(
+      `UPDATE subscribers
+          SET phone = $2,
+              phone_verified_at = COALESCE(phone_verified_at, NOW())
+        WHERE chat_id = $1`,
       [chatId, cleanPhone]
     );
-    if ((ins.rowCount ?? 0) > 0) {
-      firstTime = true;
+
+    // Старые версии отмечали телефон до начисления. Наличие транзакции отличает
+    // уже выплаченный бонус от прерванного и позволяет безопасно его восстановить.
+    const existing = await client.query(
+      `SELECT id FROM point_transactions
+        WHERE chat_id = $1 AND source = 'phone_verification'
+        ORDER BY id ASC LIMIT 1`,
+      [chatId]
+    );
+    if (existing.rows[0]) {
+      accrual = { id: Number(existing.rows[0].id), inserted: false };
     } else {
-      // Строка есть и уже верифицирована ранее — просто обновим телефон.
-      await pool.query(`UPDATE subscribers SET phone = $2 WHERE chat_id = $1`, [chatId, cleanPhone]);
+      accrual = await earnPointsWithClient(
+        client,
+        chatId,
+        BONUS_VERIFY_PHONE,
+        "phone_verification",
+        {},
+        `phone_verification:${chatId}`,
+      );
     }
+    await client.query("COMMIT");
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally {
+    client.release();
   }
+
+  await mirrorPointAccrual(
+    chatId, BONUS_VERIFY_PHONE, "phone_verification", accrual.id
+  );
 
   // Связка аккаунтов платформ по телефону (см. account-link.ts). Сбой связки
   // не должен ломать верификацию — она про клубные баллы.
   let link: LinkResult | undefined;
   try { link = await registerAccountLink(chatId, cleanPhone); } catch {}
 
-  if (!firstTime) return { alreadyVerified: true, bonusAwarded: 0, link };
-
-  await earnPoints(chatId, BONUS_VERIFY_PHONE, "phone_verification", { phone: cleanPhone });
-  return { alreadyVerified: false, bonusAwarded: BONUS_VERIFY_PHONE, link };
+  return {
+    alreadyVerified: !firstTime,
+    bonusAwarded: accrual.inserted ? BONUS_VERIFY_PHONE : 0,
+    link,
+  };
 }
 
 // ─── Daily login ─────────────────────────────────────────────────────────────
+async function ensureDailyAccrual(
+  client: ClubDb,
+  chatId: number,
+  day: string,
+  amount: number,
+  source: string,
+  streak: number,
+): Promise<PointAccrual> {
+  // До появления idem_key ежедневные начисления уже могли быть записаны. Сначала
+  // узнаём их по источнику и иркутскому дню, чтобы восстановление старого клейма
+  // не создало вторую выплату.
+  const existing = await client.query(
+    `SELECT id
+       FROM point_transactions
+      WHERE chat_id = $1
+        AND source = $2
+        AND created_at >= ($3::date::timestamp AT TIME ZONE 'Asia/Irkutsk')
+        AND created_at < (($3::date + 1)::timestamp AT TIME ZONE 'Asia/Irkutsk')
+      ORDER BY id DESC
+      LIMIT 1`,
+    [chatId, source, day]
+  );
+  if (existing.rows[0]) {
+    return { id: Number(existing.rows[0].id), inserted: false };
+  }
+  return earnPointsWithClient(
+    client,
+    chatId,
+    amount,
+    source,
+    { streak, day },
+    `${source}:${chatId}:${day}`,
+  );
+}
+
 export async function claimDailyLogin(chatId: number): Promise<{
   ok: boolean;
   reason?: string;
@@ -441,6 +542,10 @@ export async function claimDailyLogin(chatId: number): Promise<{
   const yesterday = yesterdayIrkutsk();
 
   let streak = 1;
+  let alreadyClaimed = false;
+  let streakBonus = 0;
+  let dailyAccrual: PointAccrual = { id: null, inserted: false };
+  let streakAccrual: PointAccrual = { id: null, inserted: false };
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -454,41 +559,58 @@ export async function claimDailyLogin(chatId: number): Promise<{
       `SELECT daily_login_claimed FROM daily_activity WHERE chat_id = $1 AND date = $2 FOR UPDATE`,
       [chatId, today]
     );
-    if (rows[0].daily_login_claimed) {
-      await client.query("ROLLBACK");
-      return { ok: false, reason: "already_claimed_today" };
-    }
+    alreadyClaimed = Boolean(rows[0].daily_login_claimed);
 
-    // Update streak
+    // Одна блокировка строки серии защищает и обычный клейм, и восстановление
+    // старого клейма, прерванного между отметкой дня и выплатой.
     const streakRes = await client.query(
-      `SELECT current_streak, last_login_date FROM user_streaks WHERE chat_id = $1`,
+      `SELECT current_streak, last_login_date FROM user_streaks WHERE chat_id = $1 FOR UPDATE`,
       [chatId]
     );
     if (streakRes.rows.length > 0) {
-      const last = streakRes.rows[0].last_login_date as Date | null;
+      const last = streakRes.rows[0].last_login_date as Date | string | null;
       const cur = streakRes.rows[0].current_streak as number;
       if (last) {
-        // last_login_date — DATE-колонка, отдаём как UTC-полночь; сравниваем как иркутскую дату.
-        const lastStr = last.toISOString().slice(0, 10);
-        if (lastStr === yesterday) streak = cur + 1;
-        else if (lastStr === today) streak = cur; // shouldn't happen given guard above
+        // pg-конфигурация может отдавать DATE и строкой, и Date.
+        const lastStr = last instanceof Date
+          ? last.toISOString().slice(0, 10)
+          : String(last).slice(0, 10);
+        if (lastStr === today) streak = cur;
+        else if (lastStr === yesterday) streak = cur + 1;
         else streak = 1;
       }
     }
 
-    await client.query(
-      `INSERT INTO user_streaks (chat_id, current_streak, longest_streak, last_login_date)
-       VALUES ($1, $2, $2, $3)
-       ON CONFLICT (chat_id) DO UPDATE
-         SET current_streak = $2,
-             longest_streak = GREATEST(user_streaks.longest_streak, $2),
-             last_login_date = $3`,
-      [chatId, streak, today]
+    if (!alreadyClaimed) {
+      await client.query(
+        `INSERT INTO user_streaks (chat_id, current_streak, longest_streak, last_login_date)
+         VALUES ($1, $2, $2, $3)
+         ON CONFLICT (chat_id) DO UPDATE
+           SET current_streak = $2,
+               longest_streak = GREATEST(user_streaks.longest_streak, $2),
+               last_login_date = $3`,
+        [chatId, streak, today]
+      );
+      await client.query(
+        `UPDATE daily_activity SET daily_login_claimed = TRUE WHERE chat_id = $1 AND date = $2`,
+        [chatId, today]
+      );
+    }
+
+    dailyAccrual = await ensureDailyAccrual(
+      client, chatId, today, BONUS_DAILY_LOGIN, "daily_login", streak
     );
-    await client.query(
-      `UPDATE daily_activity SET daily_login_claimed = TRUE WHERE chat_id = $1 AND date = $2`,
-      [chatId, today]
-    );
+    if (streak === 7) {
+      streakBonus = BONUS_STREAK_7;
+      streakAccrual = await ensureDailyAccrual(
+        client, chatId, today, BONUS_STREAK_7, "streak_7", streak
+      );
+    } else if (streak === 30) {
+      streakBonus = BONUS_STREAK_30;
+      streakAccrual = await ensureDailyAccrual(
+        client, chatId, today, BONUS_STREAK_30, "streak_30", streak
+      );
+    }
 
     await client.query("COMMIT");
   } catch (e) {
@@ -498,17 +620,13 @@ export async function claimDailyLogin(chatId: number): Promise<{
     client.release();
   }
 
-  // earnPoints открывает свою транзакцию — вызываем после COMMIT основной.
-  await earnPoints(chatId, BONUS_DAILY_LOGIN, "daily_login", { streak });
-
-  let streakBonus = 0;
-  if (streak === 7) {
-    streakBonus = BONUS_STREAK_7;
-    await earnPoints(chatId, BONUS_STREAK_7, "streak_7", { streak });
-  } else if (streak === 30) {
-    streakBonus = BONUS_STREAK_30;
-    await earnPoints(chatId, BONUS_STREAK_30, "streak_30", { streak });
+  await mirrorPointAccrual(chatId, BONUS_DAILY_LOGIN, "daily_login", dailyAccrual.id);
+  if (streakBonus > 0) {
+    const source = streak === 7 ? "streak_7" : "streak_30";
+    await mirrorPointAccrual(chatId, streakBonus, source, streakAccrual.id);
   }
+
+  if (alreadyClaimed) return { ok: false, reason: "already_claimed_today" };
 
   return {
     ok: true,
@@ -548,22 +666,23 @@ export async function recordGameResult(
   const baseStars = gameStarsForScore(game, score);
   const baseRes = await earnStars(chatId, baseStars, game, { score });
 
-  // Check personal record
-  const { rows } = await pool.query(
-    `SELECT record FROM game_records WHERE chat_id = $1 AND game = $2`,
-    [chatId, game]
-  );
-  const prev = rows[0]?.record ?? 0;
+  // Рекорд обновляем одним условным UPSERT. Раздельные SELECT+UPDATE позволяли
+  // двум одновременным финишам обоим сообщить recordBeaten=true, хотя выиграл один.
   let recordBonus = 0;
   let recordBeaten = false;
-  if (score > prev) {
-    recordBeaten = true;
-    await pool.query(
+  if (score > 0) {
+    const updated = await pool.query(
       `INSERT INTO game_records (chat_id, game, record, updated_at)
        VALUES ($1, $2, $3, NOW())
-       ON CONFLICT (chat_id, game) DO UPDATE SET record = $3, updated_at = NOW()`,
+       ON CONFLICT (chat_id, game) DO UPDATE
+         SET record = EXCLUDED.record, updated_at = NOW()
+         WHERE EXCLUDED.record > game_records.record
+       RETURNING record`,
       [chatId, game, score]
     );
+    recordBeaten = Boolean(updated.rowCount);
+  }
+  if (recordBeaten) {
     // Бонус за рекорд тоже отключён (вместе с базовыми звёздами за игры)
     // if (prev > 0) {
     //   const bonusRes = await earnStars(chatId, 50, "record_bonus", { game, score, prev });
@@ -675,7 +794,8 @@ export async function redeemReward(
  */
 export async function grantRewardByCode(
   chatId: number,
-  code: string
+  code: string,
+  idempotencyKey?: string,
 ): Promise<{ ok: boolean; reason?: string; promoCode?: string; title?: string; minOrder?: number; expiresAt?: string }> {
   const { rows } = await pool.query(
     `SELECT id, title, min_order FROM rewards_catalog WHERE code = $1`,
@@ -683,17 +803,38 @@ export async function grantRewardByCode(
   );
   if (!rows[0]) return { ok: false, reason: "reward_unavailable" };
   const rewardId = rows[0].id as number;
+  const existingByKey = async () => {
+    if (!idempotencyKey) return null;
+    const existing = await pool.query(
+      `SELECT promo_code, expires_at FROM user_rewards WHERE source_key=$1 AND chat_id=$2 AND reward_id=$3`,
+      [idempotencyKey, chatId, rewardId]
+    );
+    if (!existing.rows[0]) return null;
+    return {
+      ok: true as const,
+      promoCode: existing.rows[0].promo_code as string,
+      title: rows[0].title as string,
+      minOrder: Number(rows[0].min_order),
+      expiresAt: new Date(existing.rows[0].expires_at).toISOString(),
+    };
+  };
+  const previous = await existingByKey();
+  if (previous) return previous;
   for (let i = 0; i < 5; i++) {
     const promoCode = generatePromoCode();
     try {
       const ins = await pool.query(
-        `INSERT INTO user_rewards (chat_id, reward_id, promo_code, cost_paid, expires_at)
-         VALUES ($1, $2, $3, 0, NOW() + INTERVAL '30 days') RETURNING expires_at`,
-        [chatId, rewardId, promoCode]
+        `INSERT INTO user_rewards (chat_id, reward_id, promo_code, cost_paid, expires_at, source_key)
+         VALUES ($1, $2, $3, 0, NOW() + INTERVAL '30 days', $4) RETURNING expires_at`,
+        [chatId, rewardId, promoCode, idempotencyKey || null]
       );
       return { ok: true, promoCode, title: rows[0].title, minOrder: rows[0].min_order, expiresAt: ins.rows[0].expires_at.toISOString() };
     } catch (e) {
-      if ((e as { code?: string }).code !== "23505") throw e; // повтор только при коллизии кода
+      if ((e as { code?: string }).code !== "23505") throw e;
+      // Конкурентный повтор с тем же source_key уже мог создать купон.
+      const concurrent = await existingByKey();
+      if (concurrent) return concurrent;
+      // Иначе это редкая коллизия случайного promo_code — генерируем новый.
     }
   }
   return { ok: false, reason: "code_generation_failed" };

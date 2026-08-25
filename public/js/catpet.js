@@ -17,6 +17,7 @@
     mood:    (s) => SVG('<circle cx="12" cy="12" r="9"/><path d="M8 14a4 4 0 0 0 8 0"/><path d="M9 9h.01M15 9h.01"/>', s), // улыбка
     energy:  (s) => SVG('<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>', s),                                          // молния
     hygiene: (s) => SVG('<path d="M12 3c3 4 5 6 5 9a5 5 0 0 1-10 0c0-3 2-5 5-9z"/>', s),                       // капля
+    wash:    (s) => SVG('<path d="M12 3c3 4 5 6 5 9a5 5 0 0 1-10 0c0-3 2-5 5-9z"/><path d="M5 5h.01M19 7h.01"/>', s),
     gift:    (s) => SVG('<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/>', s), // подарок
   };
   // Пороги care-вех — зеркало src/clicker.ts MILESTONES ms_care* (менять синхронно)
@@ -34,7 +35,7 @@
     home:     'Это Дом Василия: корми, гладь и играй с ним каждый день — за заботу капают монеты',
     homePlay: 'В Игровой — мини-игры: «Накорми» и «Ловилка». Рекорды сохраняются',
     petNeeds: 'Шкалы убывают со временем — заходи ухаживать за Василием каждый день',
-    hats:     'В магазине Двора — шляпы за монеты Василия. Заработай их заботой и мини-играми',
+    hats:     'В магазине Двора — шляпы за общие игровые монеты. Заработай их в Котик Комбат, заботой и мини-играми',
   };
   // Счётчик открытий Дома (переживает сессии в localStorage) — нужен, чтобы отличить
   // первое открытие (там срабатывает хинт 'home') от второго+ (там — 'petNeeds').
@@ -45,7 +46,7 @@
     try { localStorage.setItem('ck_pet_opens', String(n)); } catch (_) {}
     return n;
   }
-  const NAV_ICON = { feed: PIC.feed, sleep: PIC.sleep, play: PIC.play, walk: PIC.pet };
+  const NAV_ICON = { feed: PIC.feed, sleep: PIC.sleep, play: PIC.play, walk: PIC.pet, wash: PIC.wash };
   const WALK = ['walk1.png', 'walk2.png', 'walk3.png', 'walk4.png'];
   const LOC = {
     kitchen:  { bg: 'bakery-bg.jpg',  name: 'Кухня',   action: 'feed',  label: PIC.feed(18) + ' Покормить',    need: 'hunger' },
@@ -58,8 +59,10 @@
     { k: 'hunger', ic: PIC.hunger, name: 'Сытость' },
     { k: 'mood',   ic: PIC.mood,   name: 'Настроение' },
     { k: 'energy', ic: PIC.energy, name: 'Энергия' },
+    { k: 'hygiene', ic: PIC.hygiene, name: 'Чистота' },
   ];
   const LS = 'maria_pet_v1';
+  const ALERT_LS = 'maria_pet_alert_v1';
   // Магазин (цены — источник правды на бэке; здесь зеркало + арт и посадка на голову)
   const SHOP = [
     { id: 'detective', name: 'Шапка сыщика',      price: 120, img: 'hat-detective.png', w: 0.66, dx: 0.02, dy: -0.02 },
@@ -128,17 +131,38 @@
     });
   }
 
-  let ov, state, loc = 'kitchen', cat = { x: 0.5, dir: 1, vx: 0.04, mode: 'walk', frame: 0, t: 0, busy: false };
+  let ov, state, stateAccount = '', loc = 'kitchen', cat = { x: 0.5, dir: 1, vx: 0.04, mode: 'walk', frame: 0, t: 0, busy: false };
   let raf, lastTs = 0, walkImgs = [], renderAcc = 0;
   const FRAME_BUDGET = 1 / 30; // кап рендера цикла «кот ходит» на 30fps — мобильный GPU не должен перерисовывать каждый natively-60fps тик
   let memState = null; // in-memory фолбэк локального состояния — переживает сломанный/недоступный localStorage
 
   // ── Состояние: сервер или localStorage ──────────────────────────────────────
   function authed() { return !!(window.App && App.isAuthed && App.isAuthed()); }
-  function localDefault() { return { hunger: 80, mood: 80, energy: 80, hygiene: 80, level: 1, xp: 0, xpNext: 100, coins: 0, location: 'kitchen', items: { owned: [], equipped: null }, care_streak: 0, care_date: null, _ts: Date.now() }; }
+  function petAccountKey() {
+    let account = 'unknown';
+    try {
+      const u = window.App && App.user && App.user();
+      if (u && Number.isFinite(Number(u.id))) account = String(App.platform || 'app') + '_' + String(Math.floor(Number(u.id)));
+    } catch (_) {}
+    return authed() ? account : 'guest';
+  }
+  function alertStorageKey() { return ALERT_LS + '_' + petAccountKey(); }
+  function petStateStorageKey() { return 'maria_pet_server_v1_' + petAccountKey(); }
+  function cachedPetState(account) {
+    try {
+      const saved = JSON.parse(lsGet(petStateStorageKey()) || 'null');
+      return saved && saved.account === account && saved.state && saved.state.items ? saved.state : null;
+    } catch (_) { return null; }
+  }
+  function localDefault() { return { hunger: 80, mood: 80, energy: 80, hygiene: 80, hungerCarry: 0, moodCarry: 0, energyCarry: 0, hygieneCarry: 0, level: 1, xp: 0, xpNext: 100, coins: 0, location: 'kitchen', items: { owned: [], equipped: null }, care_streak: 0, careStreakBest: 0, care_date: null, _ts: Date.now() }; }
   // Best-effort обёртки над localStorage — в кривых webview getItem/setItem кидают, это не должно валить игру.
   function lsGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
+  function cacheServerAlert(next) {
+    if (!authed() || !next) return;
+    lsSet(alertStorageKey(), JSON.stringify({ hunger: next.hunger, mood: next.mood, energy: next.energy, hygiene: next.hygiene, _ts: Date.now() }));
+    if (next.items) lsSet(petStateStorageKey(), JSON.stringify({ account: petAccountKey(), state: next, savedAt: Date.now() }));
+  }
   function localGet() {
     let s; try { s = JSON.parse(lsGet(LS)); } catch (_) {}
     // Хранилище недоступно/пусто/битое — берём последнее известное состояние из памяти,
@@ -147,15 +171,34 @@
     if (!s.items) s.items = { owned: [], equipped: null };
     const hrs = Math.max(0, (Date.now() - (s._ts || Date.now())) / 3600000);
     const dec = { hunger: 6, mood: 4, energy: 3, hygiene: 2.5 };
-    ['hunger', 'mood', 'energy', 'hygiene'].forEach(k => s[k] = Math.max(0, Math.min(100, Math.round(s[k] - dec[k] * hrs))));
-    s.careStreak = s.care_streak || 0;  // гостевой стрик: snake→camel для renderNeeds
+    ['hunger', 'mood', 'energy', 'hygiene'].forEach(k => {
+      const ck = k + 'Carry';
+      const rawLoss = dec[k] * hrs + Math.max(0, Number(s[ck] || 0));
+      const wholeLoss = Math.floor(rawLoss + 1e-9);
+      s[k] = Math.max(0, Math.min(100, Math.round(Number(s[k]) || 0) - wholeLoss));
+      const left = rawLoss - wholeLoss;
+      s[ck] = s[k] <= 0 ? 0 : (left < 1e-9 ? 0 : Math.min(0.999999999, left));
+    });
+    const dayKey = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+    const yKey = new Date(Date.now() + 8 * 3600 * 1000 - 86400000).toISOString().slice(0, 10);
+    s.careStreakBest = Math.max(Number(s.careStreakBest || 0), Number(s.care_streak || 0));
+    s.care_streak = (s.care_date === dayKey || s.care_date === yKey) ? (s.care_streak || 0) : 0;
+    s.careStreak = s.care_streak;
+    if (typeof window.ckGuestWallet === 'function') {
+      const shared = window.ckGuestWallet(0, 0);
+      if (typeof shared === 'number') s.coins = shared;
+    }
     s._ts = Date.now();
     memState = s; lsSet(LS, JSON.stringify(s));
     return s;
   }
   function localBuy(id) {
     const s = localGet(); const it = HAT(id); if (!it) return s;
-    if (!s.items.owned.includes(id) && s.coins >= it.price) { s.coins -= it.price; s.items.owned.push(id); }
+    if (!s.items.owned.includes(id) && s.coins >= it.price) {
+      const shared = typeof window.ckGuestWallet === 'function' ? window.ckGuestWallet(-it.price, 0) : null;
+      if (typeof shared === 'number') { s.coins = shared; s.items.owned.push(id); }
+      else if (typeof window.ckGuestWallet !== 'function') { s.coins -= it.price; s.items.owned.push(id); }
+    }
     memState = s; lsSet(LS, JSON.stringify(s)); return s;
   }
   function localEquip(id) {
@@ -164,8 +207,17 @@
   }
   function localAction(action) {
     const s = localGet();
-    const R = { feed: { hunger: 45, mood: 8 }, sleep: { energy: 55, mood: 5 }, play: { mood: 35, energy: -10 }, walk: { mood: 18, energy: -4 } }[action] || {};
-    Object.keys(R).forEach(k => s[k] = Math.max(0, Math.min(100, s[k] + R[k])));
+    const R = {
+      feed: { hunger: 45, mood: 8 },
+      sleep: { energy: 55, mood: 5 },
+      wash: { hygiene: 60, mood: 5 },
+      play: { mood: 35, energy: -10 },
+      walk: { mood: 18, energy: -4 },
+    }[action] || {};
+    Object.keys(R).forEach(k => {
+      s[k] = Math.max(0, Math.min(100, s[k] + R[k]));
+      if (s[k] === 0 || s[k] === 100) s[k + 'Carry'] = 0;
+    });
     s.xp += 12; while (s.xp >= s.xpNext) { s.xp -= s.xpNext; s.level++; s.xpNext = s.level * 100; }
     // стрик заботы — монеты только раз в день (анти-фарм)
     const dayKey = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
@@ -173,9 +225,12 @@
     let sb = 0;
     if (s.care_date !== dayKey) {
       s.care_streak = (s.care_date === yKey) ? (s.care_streak || 0) + 1 : 1;
+      s.careStreakBest = Math.max(Number(s.careStreakBest || 0), s.care_streak);
       s.care_date = dayKey;
       sb = 100 * Math.min(Math.max(1, s.care_streak), 10);
-      s.coins += sb;               // у гостя монеты локальные
+      const shared = typeof window.ckGuestWallet === 'function' ? window.ckGuestWallet(sb, sb) : null;
+      if (typeof shared === 'number') s.coins = shared;
+      else s.coins += sb;
     }
     s.careStreak = s.care_streak;  // для единообразия с сервером
     s._streakBonus = sb;
@@ -183,9 +238,17 @@
     memState = s; lsSet(LS, JSON.stringify(s)); return s;
   }
   async function api(path, opts) {
+    const method = String((opts && opts.method) || 'GET').toUpperCase();
+    // Дом использует тот же кошелёк, что Котик Комбат. POST ставим в общую
+    // очередь кликера, чтобы покупка шляпы/награда заботы не обогнала тапы.
+    if (method !== 'GET' && typeof window.ckMutationApi === 'function') {
+      const d = await window.ckMutationApi(path, opts);
+      if (d && d.error) { const e = new Error('api ' + d.error); e.body = d; throw e; }
+      return d;
+    }
     const r = await fetch(path, {
       ...opts,
-      signal: AbortSignal.timeout ? AbortSignal.timeout(10000) : undefined, // не висеть вечно в мёртвой сети
+      signal: (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? AbortSignal.timeout(10000) : undefined, // не висеть вечно в мёртвой сети
       headers: { 'Content-Type': 'application/json', ...(App.authHeader ? App.authHeader() : {}) },
     });
     if (!r.ok) {
@@ -195,31 +258,64 @@
     }
     return r.json();
   }
-  async function loadState() { state = authed() ? await api('/api/pet') : localGet(); loc = state.location && LOC[state.location] ? state.location : 'kitchen'; }
+  const apiErrorReason = (e) => String(e && e.body && e.body.error || '');
+  const blockedError = (e) => apiErrorReason(e) === 'account_blocked';
+  function syncClickerCoins(next, earnedDelta) {
+    if (!next || typeof window.ckSyncState !== 'function' || typeof next.coins !== 'number') return;
+    window.ckSyncState({ balance: next.coins, revision: next.revision, totalEarnedDelta: Number(earnedDelta || 0) });
+  }
+  let petSession = 0;
+  function petSessionActive(session) { return session === petSession && !!ov && ov.classList.contains('on'); }
+  async function loadState(session, account) {
+    const next = authed() ? await api('/api/pet') : localGet();
+    if (account !== petAccountKey() || (session != null && !petSessionActive(session))) return false;
+    state = next; stateAccount = account; needVisualAcc = 0; cacheServerAlert(state); loc = state.location && LOC[state.location] ? state.location : 'kitchen';
+    return true;
+  }
   async function doAction(action) {
+    const session = petSession;
+    const account = petAccountKey();
     let bonus = 0;
     const lvl0 = state ? state.level : null;
+    const xp0 = state ? Number(state.xp || 0) : null;
     try {
       if (authed()) {
         try {
           const resp = await api('/api/pet/action', { method: 'POST', body: JSON.stringify({ action }) });
-          state = resp; bonus = Number(resp.streakBonus || 0);
-        } catch (_) { showSyncFail(); }
+          if (account !== petAccountKey()) return;
+          state = resp; stateAccount = account; bonus = Number(resp.streakBonus || 0); syncClickerCoins(resp, bonus);
+        } catch (first) {
+          if (blockedError(first)) {
+            if (petSessionActive(session)) showToast('Доступ к «Котик Комбат» временно ограничен администрацией');
+            return;
+          }
+          // Действие могло сохраниться до обрыва ответа. Не повторяем начисление,
+          // а перечитываем питомца и общий кошелёк.
+          try {
+            const fresh = await api('/api/pet');
+            if (account !== petAccountKey()) return;
+            const applied = lvl0 != null && (Number(fresh.level || 0) !== Number(lvl0) || Number(fresh.xp || 0) !== xp0);
+            state = fresh; stateAccount = account;
+            if (typeof window.ckRefreshState === 'function') await window.ckRefreshState();
+            if (petSessionActive(session)) showToast(applied ? 'Связь прервалась, но прогресс сохранён' : 'Нет связи — прогресс не сохранён');
+          } catch (_) { if (petSessionActive(session) && account === petAccountKey()) showSyncFail(); }
+        }
       } else {
         // localAction никогда не кидает (localGet/lsSet — best-effort), но подстрахуемся ещё раз.
-        try { state = localAction(action); bonus = Number((state && state._streakBonus) || 0); }
+        try { state = localAction(action); stateAccount = account; bonus = Number((state && state._streakBonus) || 0); }
         catch (_) { state = state || memState || localDefault(); }
       }
     } finally {
+      if (account === petAccountKey() && stateAccount === account) cacheServerAlert(state);
       // Перерисовка ОБЯЗАНА произойти всегда — иначе экран замирает до следующего действия.
-      renderNeeds();
-      renderGift(state);
+      if (petSessionActive(session)) { renderNeeds(); renderGift(state); }
     }
+    if (!petSessionActive(session)) return;
     if (bonus > 0) showCareBonus(bonus, state.careStreak);
     if (lvl0 != null && state && state.level > lvl0) { showToast('Василий вырос — уровень ' + state.level + '!'); window.haptic?.('success'); }
   }
   function showToast(html) {
-    if (!ov) return;
+    if (!ov || !ov.classList.contains('on')) return;
     let t = ov.querySelector('#pet-toast');
     if (!t) { t = document.createElement('div'); t.id = 'pet-toast'; t.className = 'pet-toast'; ov.appendChild(t); }
     t.innerHTML = html;
@@ -228,28 +324,84 @@
   }
   function showCareBonus(bonus, streak) { showToast('Василий рад! Забота ' + streak + ' ' + plu(streak, 'день', 'дня', 'дней') + ' подряд · +' + bonus + ' ' + plu(bonus, 'монета', 'монеты', 'монет')); window.haptic?.('success'); }
   function showSyncFail() { showToast('Нет связи — прогресс не сохранён'); window.haptic?.('error'); }
-  async function saveLoc() { if (authed()) { api('/api/pet/location', { method: 'POST', body: JSON.stringify({ location: loc }) }).catch(() => {}); } else { const s = localGet(); s.location = loc; memState = s; lsSet(LS, JSON.stringify(s)); } }
+  let locSaveRunning = false, locSavePending = null;
+  async function saveLoc() {
+    if (!authed()) { const s = localGet(); s.location = loc; memState = s; lsSet(LS, JSON.stringify(s)); return; }
+    // Быстрые переходы по комнатам сворачиваем до последнего. Иначе ответы могли
+    // прийти в обратном порядке и на сервере сохранялась не та комната.
+    locSavePending = { location: loc, account: petAccountKey() };
+    if (locSaveRunning) return;
+    locSaveRunning = true;
+    try {
+      while (locSavePending) {
+        const target = locSavePending; locSavePending = null;
+        if (target.account !== petAccountKey()) continue;
+        const send = () => api('/api/pet/location', { method: 'POST', body: JSON.stringify({ location: target.location }), keepalive: true });
+        try { await send(); } catch (_) { try { await send(); } catch (_) {} }
+      }
+    } finally { locSaveRunning = false; }
+  }
   // Причины отказа бэка (routes/pet.ts) → человеческий текст; нет body = сеть упала
   const plu = (n, one, few, many) => { const a = Math.abs(n) % 100, b = a % 10; return (a > 10 && a < 20) ? many : (b > 1 && b < 5) ? few : (b === 1) ? one : many; };
-  const SHOP_ERR = { not_enough_coins: 'Не хватает монет', already_owned: 'Уже куплено', not_owned: 'Сначала купи эту шляпу' };
+  const SHOP_ERR = { not_enough_coins: 'Не хватает монет', already_owned: 'Уже куплено', not_owned: 'Сначала купи эту шляпу', account_blocked: 'Доступ к игре временно ограничен администрацией' };
   function shopFail(e) {
     const reason = e && e.body && e.body.error;
     showToast(reason ? (SHOP_ERR[reason] || 'Не получилось') : 'Нет связи — попробуй ещё раз');
     window.haptic?.('error');
   }
+  let shopBusy = false;
   async function buyItem(id) {
+    if (shopBusy) return;
+    shopBusy = true;
+    const session = petSession, account = petAccountKey();
+    try {
     if (authed()) {
-      try { state = await api('/api/pet/buy', { method: 'POST', body: JSON.stringify({ item: id }) }); window.haptic?.('medium'); }
-      catch (e) { shopFail(e); }
-    } else { state = localBuy(id); window.haptic?.('medium'); }
-    renderNeeds(); renderShop(); renderHat();
+      try {
+        const next = await api('/api/pet/buy', { method: 'POST', body: JSON.stringify({ item: id }) });
+        if (account !== petAccountKey()) return;
+        state = next; syncClickerCoins(state, 0); if (petSessionActive(session)) window.haptic?.('medium');
+      }
+      catch (e) {
+        const reason = e && e.body && e.body.error;
+        let recovered = false;
+        if (!reason || reason === 'internal' || reason === 'already_owned') {
+          try {
+            const fresh = await api('/api/pet');
+            if (account !== petAccountKey()) return;
+            if (fresh && fresh.items && Array.isArray(fresh.items.owned) && fresh.items.owned.includes(id)) {
+              state = fresh; syncClickerCoins(state, 0); recovered = true;
+              if (petSessionActive(session)) { window.haptic?.('medium'); if (!reason) showToast('Покупка сохранена'); }
+            }
+          } catch (_) {}
+        }
+        if (!recovered && petSessionActive(session) && account === petAccountKey()) shopFail(e);
+      }
+    } else { state = localBuy(id); if (petSessionActive(session)) window.haptic?.('medium'); }
+    if (account !== petAccountKey()) return;
+    stateAccount = account;
+    cacheServerAlert(state);
+    if (petSessionActive(session)) { renderNeeds(); renderShop(); renderHat(); }
+    } finally { shopBusy = false; }
   }
   async function equipItem(id) {
+    if (shopBusy) return;
+    shopBusy = true;
+    const session = petSession, account = petAccountKey();
+    try {
     if (authed()) {
-      try { state = await api('/api/pet/equip', { method: 'POST', body: JSON.stringify({ item: id }) }); }
-      catch (e) { shopFail(e); }
+      const send = () => api('/api/pet/equip', { method: 'POST', body: JSON.stringify({ item: id }) });
+      try {
+        const next = await send(); if (account !== petAccountKey()) return; state = next;
+      }
+      catch (first) {
+        try { const next = await send(); if (account !== petAccountKey()) return; state = next; }
+        catch (e) { if (petSessionActive(session) && account === petAccountKey()) shopFail(e || first); }
+      }
     } else state = localEquip(id);
-    renderShop(); renderHat();
+    if (account !== petAccountKey()) return;
+    stateAccount = account;
+    cacheServerAlert(state); if (petSessionActive(session)) { renderShop(); renderHat(); }
+    } finally { shopBusy = false; }
   }
 
   // ── UI ────────────────────────────────────────────────────────────────────────
@@ -273,8 +425,9 @@
       .pet-cat{position:absolute;bottom:23%;height:46%;width:auto;max-height:320px;transform-origin:bottom center;will-change:left,transform} /* тень уже запечена в кадры (rembg); filter:drop-shadow тут заставлял GPU перерастеризовывать кота каждый кадр ходьбы — жалоба «тормозит». height/max-height переопределяет setCatFrame() пер-кадрово */
       .pet-fx{position:absolute;inset:0;pointer-events:none;z-index:4}
       .pet-name{position:absolute;top:10px;left:12px;color:#fff;font-weight:900;font-size:18px;text-shadow:0 2px 5px rgba(0,0,0,.5);z-index:3}
-      .pet-action{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);z-index:5}
+      .pet-action{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);z-index:5;display:flex;gap:8px;white-space:nowrap}
       .pet-action__btn{border:none;border-radius:18px;padding:14px 30px;font-size:17px;font-weight:800;color:#12210A;background:#C0FF33;box-shadow:0 8px 20px rgba(192,255,51,.5);cursor:pointer}
+      .pet-action__btn--alt{padding-left:20px;padding-right:20px;background:#d9f8ff;box-shadow:0 8px 20px rgba(120,220,245,.35)}
       /* Панель комнат — в языке навигации игры (тёмный шоколад + золотой актив),
          чтобы «Дом» не выглядел другим приложением (аудит 30.07) */
       .pet-nav{position:relative;z-index:3;display:flex;justify-content:space-around;padding:8px 6px 14px;background:linear-gradient(0deg,rgba(11,8,20,.62),transparent)}
@@ -328,8 +481,8 @@
         </div>
       </div>
       <button class="pet-gift" id="pet-gift" style="display:none" type="button" data-haptic="light"></button>
-      <button class="pet-x" id="pet-x" data-haptic="light">×</button>
-      <button class="pet-shop-btn" id="pet-shop-btn" data-haptic="light"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.57a1 1 0 0 0 .99.84H5v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V10h1.15a1 1 0 0 0 .99-.84l.58-3.57a2 2 0 0 0-1.34-2.23z"/></svg></button>
+      <button class="pet-x" id="pet-x" type="button" aria-label="Закрыть Дом Василия" data-haptic="light">×</button>
+      <button class="pet-shop-btn" id="pet-shop-btn" type="button" aria-label="Открыть магазин нарядов" data-haptic="light"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.57a1 1 0 0 0 .99.84H5v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V10h1.15a1 1 0 0 0 .99-.84l.58-3.57a2 2 0 0 0-1.34-2.23z"/></svg></button>
       <div class="pet-stage" id="pet-stage">
         <div class="pet-name" id="pet-locname"></div>
         <img class="pet-cat" id="pet-cat" draggable="false"/>
@@ -367,16 +520,23 @@
       <div class="pet-need"><span class="pet-need__i">${n.ic(15)}</span><div class="pet-need__bar"><div class="pet-need__fill" id="need-${n.k}"></div></div></div>`).join('');
   }
 
-  let careGranted = null; // Set id забранных care-вех (authed); null = ещё не загружено
-  async function loadCareGranted() {
-    if (!authed()) { careGranted = new Set(); return; }
+  let careGranted = null, careGrantedAccount = ''; // Set id забранных care-вех (authed); null = ещё не загружено
+  async function loadCareGranted(session, account) {
+    if (!authed()) { if (account === petAccountKey()) { careGranted = new Set(); careGrantedAccount = account; } return; }
     try {
       const d = await api('/api/clicker/milestones');
+      if (account !== petAccountKey() || !petSessionActive(session)) return;
       careGranted = new Set((d && d.milestones || []).filter(m => m.granted && m.id.indexOf('ms_care') === 0).map(m => m.id));
-    } catch (_) { careGranted = new Set(); }
+      careGrantedAccount = account;
+    } catch (_) {
+      if (account === petAccountKey() && petSessionActive(session)) { careGranted = new Set(); careGrantedAccount = account; }
+    }
   }
   function renderGift(state) {
     const el = ov.querySelector('#pet-gift'); if (!el || !state) return;
+    // В чистой/гостевой версии серверные призы программы лояльности не выдаются.
+    // Не обещаем баллы и промокоды, которые на этом экране получить невозможно.
+    if (PURE || !authed()) { el.style.display = 'none'; return; }
     const best = Math.max(Number(state.careStreakBest || 0), Number(state.careStreak || 0), Number(state.care_streak || 0));
     const granted = careGranted || new Set();
     const next = CARE_MILESTONES.find(m => !granted.has('ms_care' + m.d));
@@ -404,7 +564,7 @@
     ov.querySelector('#pet-lvl').innerHTML = `Ур. ${state.level} · ${state.coins} ${plu(state.coins, 'монета', 'монеты', 'монет')}<br><span style="font-weight:600;opacity:.85">${state.xp}/${state.xpNext} XP</span>`;
     const ps = ov.querySelector('#pet-streak');
     if (ps) ps.innerHTML = (state.careStreak > 0)
-      ? PIC.pet(14) + ' Забота: ' + state.careStreak + (state.careStreak >= 5 ? ' дней' : ' дн.')
+      ? PIC.pet(14) + ' Забота: ' + state.careStreak + ' ' + plu(state.careStreak, 'день', 'дня', 'дней')
       : 'Погладь Василия!';
   }
 
@@ -413,8 +573,9 @@
     ov.querySelector('#pet-locname').innerHTML = NAV_ICON[LOC[loc].action](16) + ' ' + LOC[loc].name;
     ov.querySelectorAll('.pet-nav__b').forEach(b => b.classList.toggle('on', b.dataset.loc === loc));
     const act = ov.querySelector('#pet-action');
-    act.innerHTML = `<button class="pet-action__btn" id="pet-do">${LOC[loc].label}</button>`;
-    act.querySelector('#pet-do').onclick = onAction;
+    act.innerHTML = `<button class="pet-action__btn" id="pet-do">${LOC[loc].label}</button>${loc === 'yard' ? `<button class="pet-action__btn pet-action__btn--alt" id="pet-wash">${PIC.wash(18)} Умыть</button>` : ''}`;
+    act.querySelector('#pet-do').onclick = () => onAction();
+    const wash = act.querySelector('#pet-wash'); if (wash) wash.onclick = () => onAction('wash');
   }
 
   function goLoc(k) {
@@ -427,21 +588,25 @@
 
   // ── Действия ухода ──────────────────────────────────────────────────────────
   let actionBusy = false, poseTm = 0; // анти-даблтап + таймер возврата позы в idle
-  async function onAction() {
+  async function onAction(actionOverride) {
+    const session = petSession;
     const cfg = LOC[loc];
-    if (cfg.action === 'play') { showPlay(); return; }
+    const action = actionOverride || cfg.action;
+    if (action === 'play') { showPlay(); return; }
     if (actionBusy) return;
     actionBusy = true;
-    const btn = ov.querySelector('#pet-do'); if (btn) btn.disabled = true;
+    const buttons = Array.from(ov.querySelectorAll('#pet-action .pet-action__btn')); buttons.forEach(btn => { btn.disabled = true; });
     clearTimeout(poseTm); // старый таймер не должен сбросить позу посреди нового действия
     cat.busy = true;
     const catEl = ov.querySelector('#pet-cat');
-    if (cfg.action === 'feed') { setCatFrame(catEl, 'happy.png'); bubble('Ням!'); hearts(); }
-    else if (cfg.action === 'sleep') { setCatFrame(catEl, 'full.png'); bubble('Zzz'); }
+    if (action === 'feed') { setCatFrame(catEl, 'happy.png'); bubble('Ням!'); hearts(); }
+    else if (action === 'sleep') { setCatFrame(catEl, 'full.png'); bubble('Zzz'); }
+    else if (action === 'wash') { setCatFrame(catEl, 'happy.png'); bubble('Чистота!'); hearts(); }
     else { setCatFrame(catEl, 'happy.png'); bubble('Мур!'); hearts(); }
     window.haptic?.('medium');
-    try { await doAction(cfg.action); }
-    finally { actionBusy = false; if (btn) btn.disabled = false; }
+    try { await doAction(action); }
+    finally { actionBusy = false; if (petSessionActive(session)) buttons.forEach(btn => { if (btn.isConnected) btn.disabled = false; }); }
+    if (!petSessionActive(session)) return;
     // после действия возвращаемся в idle — иначе поза (особенно лежачая) залипала до следующей ходьбы
     poseTm = setTimeout(() => { cat.busy = false; setCatFrame(catEl, 'idle.png'); }, 1400);
   }
@@ -514,12 +679,23 @@
   }
 
   // ── Цикл «кот ходит» ─────────────────────────────────────────────────────────
+  let needVisualAcc = 0;
   function loop(ts) {
     if (!ov || !ov.classList.contains('on') || document.hidden) return;
     const dtFull = lastTs ? (ts - lastTs) / 1000 : 0.016; lastTs = ts;
     renderAcc += dtFull;
     if (renderAcc < FRAME_BUDGET) { raf = requestAnimationFrame(loop); return; } // кап 30fps: копим dt, рисуем раз в ~33мс
     const dt = renderAcc; renderAcc = 0;
+    // Шкалы должны убывать и пока Дом открыт. Это только визуальное зеркало:
+    // следующее серверное действие всё равно вернёт авторитетные значения.
+    if (state && dt > 0) {
+      state.hunger = Math.max(0, Number(state.hunger || 0) - 6 * dt / 3600);
+      state.mood = Math.max(0, Number(state.mood || 0) - 4 * dt / 3600);
+      state.energy = Math.max(0, Number(state.energy || 0) - 3 * dt / 3600);
+      state.hygiene = Math.max(0, Number(state.hygiene || 0) - 2.5 * dt / 3600);
+      needVisualAcc += dt;
+      if (needVisualAcc >= 5) { needVisualAcc = 0; renderNeeds(); }
+    }
     const catEl = ov.querySelector('#pet-cat');
     const stage = ov.querySelector('#pet-stage');
     if (!catEl || !stage) { raf = requestAnimationFrame(loop); return; }
@@ -556,9 +732,25 @@
 
   // ── Открытие/закрытие ───────────────────────────────────────────────────────
   async function open() {
+    if (ov && ov.classList.contains('on')) return;
     if (!ov) build();
+    const session = ++petSession;
+    const account = petAccountKey();
+    if (stateAccount && stateAccount !== account) state = null;
+    if (careGrantedAccount !== account) careGranted = null;
     ov.classList.add('on'); window.scrollLock?.();
-    try { await loadState(); } catch (_) { state = localGet(); if (authed()) showToast('Нет связи — показан офлайн-режим'); }
+    try {
+      if (!(await loadState(session, account))) return;
+    } catch (e) {
+      if (account !== petAccountKey() || !petSessionActive(session)) return;
+      // Административную блокировку нельзя обходить последним локальным снимком.
+      if (blockedError(e)) { state = null; showToast('Доступ к «Котик Комбат» временно ограничен администрацией'); return; }
+      const cached = authed() ? cachedPetState(account) : null;
+      if (!cached) { showToast('Не удалось загрузить серверный прогресс — закрой Дом и попробуй ещё раз'); return; }
+      state = cached; stateAccount = account; loc = state.location && LOC[state.location] ? state.location : 'kitchen';
+      showToast('Нет связи — показано последнее состояние этого аккаунта');
+    }
+    if (!petSessionActive(session)) return;
     // префетч кадров ходьбы — после loadState, чтобы префетчить вариант с надетой шляпой
     walkImgs = WALK.map(w => { const i = new Image(); i.src = A(catSrc(w)); return i; });
     // + кадры действий (покормить/уложить спать) — та же причина «дёргается» была на них,
@@ -572,14 +764,16 @@
         else window.ckCoach('petNeeds', COACH_PET.petNeeds, '#pet-do', { icon: PIC.hunger(18), root: ov });
       } catch (_) {}
     }
-    renderGift(state); loadCareGranted().then(() => renderGift(state));
+    renderGift(state); loadCareGranted(session, account).then(() => { if (petSessionActive(session) && account === petAccountKey()) renderGift(state); });
     attachImgRetry(ov.querySelector('#pet-cat'));
     setCatFrame(ov.querySelector('#pet-cat'), 'idle.png');
     cat = { x: 0.5, dir: 1, vx: 0.04, mode: 'walk', frame: 0, t: 0, busy: false };
     lastTs = 0; renderAcc = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
   }
   function close() {
-    cancelAnimationFrame(raf); clearInterval(playCheck);
+    if (ov && ov.classList.contains('on')) petSession++;
+    cancelAnimationFrame(raf); clearInterval(playCheck); clearTimeout(poseTm);
+    if (stateAccount === petAccountKey()) cacheServerAlert(state);
     if (window.ckCoachClose) { try { window.ckCoachClose(); } catch (_) {} }
     if (ov) {
       ov.classList.remove('on');
@@ -591,20 +785,46 @@
   }
   // Вкладка ушла в фон — останавливаем rAF-цикл ходьбы (жалоба «тормозит», лишние тики впустую);
   // вернулись — перезапускаем, только если Дом всё ещё открыт.
+  let resumeLoad = null;
+  async function refreshAfterResume() {
+    if (resumeLoad) return resumeLoad;
+    resumeLoad = (async () => {
+      const session = petSession;
+      const account = petAccountKey();
+      try {
+        if (!(await loadState(session, account))) return;
+        if (!petSessionActive(session)) return;
+        syncClickerCoins(state, 0);
+        renderNeeds(); renderShop(); renderHat(); renderGift(state);
+      } catch (e) {
+        if (!petSessionActive(session)) return;
+        if (blockedError(e)) { showToast('Доступ к «Котик Комбат» временно ограничен администрацией'); return; }
+        // Не подменяем авторизованный серверный снимок гостевым состоянием из
+        // localStorage: при кратком обрыве лучше оставить последнее известное.
+        if (!authed()) { state = localGet(); renderNeeds(); renderShop(); renderHat(); renderGift(state); }
+        else showToast('Не удалось обновить состояние — проверь связь');
+      }
+    })().finally(() => { resumeLoad = null; });
+    return resumeLoad;
+  }
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) { cancelAnimationFrame(raf); }
-    else if (ov && ov.classList.contains('on')) { lastTs = 0; renderAcc = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop); }
+    else if (ov && ov.classList.contains('on')) {
+      lastTs = 0; renderAcc = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
+      void refreshAfterResume();
+    }
   });
   window.catPetOpen = open;
   window.catPetClose = close;
   // Лёгкий сигнал «Василию нужна забота» для бейджа на кнопке «Дом» (catclick renderAll).
   // Читает локальный кэш + декей по времени, БЕЗ похода на сервер и без записи (чистая
   // проверка). Нет кэша (ни разу не открывали Дом) → false: новичка с полным питомцем
-  // не пугаем. Порог 30 = «пора покормить/поиграть/уложить/помыть».
+  // не пугаем. Для авторизованного игрока используем отдельный серверный снимок,
+  // чтобы старое гостевое состояние не включало ложный бейдж.
   window.catPetAlert = function () {
     try {
-      let s; try { s = JSON.parse(lsGet(LS)); } catch (_) {}
-      if (!s) s = memState;
+      let s; try { s = JSON.parse(lsGet(authed() ? alertStorageKey() : LS)); } catch (_) {}
+      if (!s && !authed()) s = memState;
       if (!s) return false;
       const hrs = Math.max(0, (Date.now() - (s._ts || Date.now())) / 3600000);
       const dec = { hunger: 6, mood: 4, energy: 3, hygiene: 2.5 };

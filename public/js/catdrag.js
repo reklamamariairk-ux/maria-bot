@@ -53,6 +53,7 @@
     no_energy: 'Не хватает энергии — подожди восстановления',
     not_enough_coins: 'Не хватает монет на ставку',
     not_friend: 'Друг не найден — обнови список друзей',
+    opponent_blocked: 'Дуэль недоступна — доступ друга к игре ограничен',
     not_found: 'Вызов уже принят или отменён',
     limit: 'Слишком много активных вызовов',
     not_owned: 'Птица не найдена',
@@ -62,12 +63,22 @@
 
   // ── состояние оверлея (модульный синглтон — открыт максимум один заезд разом) ───
   let ov = null, apiRef = null, session = 0, resizeHandler = null;
+  let sessionAccount = '';
+  function currentAccount() {
+    try { const u = window.App && App.user && App.user(); return u && Number.isFinite(Number(u.id)) ? String(Math.floor(Number(u.id))) : ''; }
+    catch (_) { return ''; }
+  }
   let curBreed = null, mode = 'training', stake = STAKE_PRESETS[0]; // mode: training | bet | qualify
   let friendRace = null, duelRace = null;
   let qualifyData = null, qualifyDone = null, qualifySucceeded = false; // отборочный полёт недельной гонки
   let myPower = null;          // мощность моего голубя из ответа /opponents (null=ещё не знаем)
   let opponentsPreview = null; // null=грузится, []=подобрать не удалось (не блокирует старт — сервер подберёт сам)
   let raceBusy = false, step = 'setup'; // setup | race | result
+  let raceRequestId = '';
+  function newRaceRequestId() {
+    try { if (crypto && crypto.randomUUID) return crypto.randomUUID().replace(/-/g, '_'); } catch (_) {}
+    return 'drag_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 12);
+  }
 
   // canvas / анимация заезда
   let canvas = null, ctx = null, raf = 0, dpr = 1, cssW = 0, cssH = 0;
@@ -327,7 +338,7 @@
     const oppUrl = friendRace ? '/api/pigeons/drag/friend-opponents' : '/api/pigeons/drag/opponents';
     const oppBody = friendRace ? { breed: curBreed, friendChat: friendRace.chat } : { breed: curBreed, mode };
     const d = await apiRef(oppUrl, { method: 'POST', body: JSON.stringify(oppBody) }).catch(() => null);
-    if (mySession !== session || !ov) return; // оверлей закрыт/переоткрыт — не трогаем DOM
+    if (mySession !== session || !ov || sessionAccount !== currentAccount()) return; // оверлей закрыт/переоткрыт/сменился аккаунт — не трогаем DOM
     opponentsPreview = (d && Array.isArray(d.opponents)) ? d.opponents : [];
     myPower = (d && typeof d.myPower === 'number') ? d.myPower : myPower;
     opponentsPreview.forEach((o) => loadFly(o.breed)); // прогреваем полётные листы к старту
@@ -337,7 +348,9 @@
   // ── старт: экран заезда (canvas) + отсчёт 3-2-1-GO ──────────────────────────────
   async function onStart() {
     if (raceBusy || step !== 'setup') return; // busy-guard: пока идёт заезд/сеттап переоткрыт — повторный клик игнорируем
+    if (sessionAccount !== currentAccount()) { flash('Аккаунт изменился — открой заезд заново'); close(); return; }
     if (!duelRace && mode === 'bet' && STAKE_PRESETS.indexOf(stake) === -1) { flash('Выбери ставку'); return; }
+    if (mode !== 'qualify' && !raceRequestId) raceRequestId = newRaceRequestId();
     haptic('medium');
     renderRaceScreen();
     startLaunch();
@@ -783,7 +796,10 @@
       if (!allDone) { raf = requestAnimationFrame(tick); return; }
       phase = 'done';
       if (num(raceData.myPlace) === 1) startConfetti();
-      setTimeout(() => { if (ov && step === 'race') renderResult(); }, 650);
+      const finishedSession = session;
+      countdownTimers.push(setTimeout(() => {
+        if (finishedSession === session && ov && step === 'race') renderResult();
+      }, 650));
       raf = requestAnimationFrame(tick);
       return;
     }
@@ -996,11 +1012,24 @@
     return { racers, myPlace: racers.find((r) => r.me).place };
   }
   async function submitQualify(mySession) {
-    const d = await apiRef('/api/pigeons/race/enter', { method: 'POST', body: JSON.stringify({ breed: curBreed, skill: launchInput }) }).catch(() => null);
-    if (mySession !== session || !ov) return;
+    const submittedDone = qualifyDone;
+    const send = () => apiRef('/api/pigeons/race/enter', { method: 'POST', body: JSON.stringify({ breed: curBreed, skill: launchInput }) }).catch(() => null);
+    let d = await send();
+    if (!d || d.error === 'internal') d = await send();
+    if (mySession !== session || !ov || sessionAccount !== currentAccount()) {
+      // Заявка могла сохраниться уже после закрытия экрана. Обновим голубятню,
+      // иначе до следующего полного входа она продолжала предлагать тот же полёт.
+      if (d && (d.ok || d.error === 'already') && typeof submittedDone === 'function') void submittedDone();
+      return;
+    }
     raceBusy = false;
     if (!d || !d.ok) {
-      flash(d && d.error === 'already' ? 'Ты уже заявлял голубя на этой неделе' : d && d.error === 'disabled' ? 'Гонка сейчас недоступна' : 'Не получилось заявить');
+      if (d && d.error === 'already') {
+        qualifySucceeded = true;
+        flash('Заявка этой недели уже принята — данные обновлены');
+      } else {
+        flash(d && d.error === 'disabled' ? 'Гонка сейчас недоступна' : !d || d.error === 'internal' ? 'Нет связи — попробуй ещё раз' : 'Не получилось заявить');
+      }
       close();
       return;
     }
@@ -1022,7 +1051,12 @@
     if (raceBusy) return; // busy-guard: не даём повторный POST, пока первый не ответил
     raceBusy = true;
     const mySession = session;
+    const myAccount = sessionAccount;
+    if (myAccount !== currentAccount()) { raceBusy = false; flash('Аккаунт изменился — открой заезд заново'); close(); return; }
     if (mode === 'qualify') { submitQualify(mySession); return; }
+    // Снимок типа заезда нужен и после await: close() очищает duelRace, пока
+    // сервер уже мог принять ставку/энергию и вернуть успешный ответ.
+    const submittedDuel = duelRace ? { ...duelRace } : null;
     // v3 «Тап-заезд»: шлём число тапов перед стартом + первый тап + длительность окна.
     // Сервер клампит (clampTapCount) и считает tap-навык со стаминой. reactionMs
     // дублируем на верхнем уровне — совместимость со старым бэком до деплоя (легаси-формула).
@@ -1030,31 +1064,45 @@
       breed: curBreed, mode: friendRace ? 'training' : mode,
       tap: { count: tapCount, reactionMs: tapFirstMs < 0 ? 3000 : tapFirstMs, durationMs: TAP_WINDOW_MS_C },
       reactionMs: tapFirstMs < 0 ? 3000 : tapFirstMs,
+      requestId: raceRequestId,
     };
     if (!friendRace && mode === 'bet') body.stake = stake;
     let d;
-    if (duelRace) {
-      const url = duelRace.role === 'accept' ? '/api/pigeons/drag/duel/accept' : '/api/pigeons/drag/duel';
-      const duelBody = duelRace.role === 'accept'
-        ? { id: duelRace.id, breed: curBreed, tap: body.tap }
-        : { friendChat: duelRace.chat, breed: curBreed, stake: duelRace.stake || 0, tap: body.tap };
+    if (submittedDuel) {
+      const url = submittedDuel.role === 'accept' ? '/api/pigeons/drag/duel/accept' : '/api/pigeons/drag/duel';
+      const duelBody = submittedDuel.role === 'accept'
+        ? { id: submittedDuel.id, breed: curBreed, tap: body.tap }
+        : { friendChat: submittedDuel.chat, breed: curBreed, stake: submittedDuel.stake || 0, tap: body.tap, requestId: raceRequestId };
       d = await apiRef(url, { method: 'POST', body: JSON.stringify(duelBody) }).catch(() => null);
+      // Создание защищено requestId, принятие — самим id дуэли и сохранённым result.
+      // Поэтому оба запроса можно безопасно повторить после потерянного ответа.
+      if (!d || d.error === 'internal') d = await apiRef(url, { method: 'POST', body: JSON.stringify(duelBody) }).catch(() => null);
     } else {
       d = await apiRef('/api/pigeons/drag/race', { method: 'POST', body: JSON.stringify(body) }).catch(() => null);
+      if (!d || d.error === 'internal') d = await apiRef('/api/pigeons/drag/race', { method: 'POST', body: JSON.stringify(body) }).catch(() => null);
     }
-    const pendingDuel = !!(duelRace && duelRace.role === 'create' && d && d.ok && d.id && !Array.isArray(d.racers));
+    const pendingDuel = !!(submittedDuel && submittedDuel.role === 'create' && d && d.ok && d.id && !Array.isArray(d.racers));
     const ok = !!(d && d.ok && Array.isArray(d.racers));
     // ВАЖНО: стейл-ответ прошлого открытия НЕ должен трогать состояние нового. Если оверлей
     // закрыли/переоткрыли, пока запрос был в полёте (mySession!==session) — не сбрасываем
     // raceBusy (это флаг уже другого, актуального запроса) и не синхронизируем баланс/энергию
     // (window.ckSyncState устаревшим снапшотом затёр бы свежий баланс кликера — тот самый баг).
-    if (mySession !== session || !ov) return;
+    if (mySession !== session || !ov || myAccount !== currentAccount()) {
+      // Окно уже закрыто: не применяем потенциально устаревший снимок, но
+      // перечитываем текущее состояние, чтобы списанные сервером энергия/ставка
+      // сразу отразились на главном экране.
+      if (d && d.ok && typeof window.ckRefreshState === 'function') void window.ckRefreshState();
+      return;
+    }
     raceBusy = false;
     // Синхронизируем баланс/энергию кликера, как только знаем ответ — деньги/энергия уже
     // списаны на сервере; актуальность проверена выше (это ответ текущего открытия).
-    if ((ok || pendingDuel) && typeof window.ckSyncState === 'function') window.ckSyncState({ balance: d.newBalance, energy: d.newEnergy });
+    if ((ok || pendingDuel) && typeof window.ckSyncState === 'function') window.ckSyncState({ balance: d.newBalance, energy: d.newEnergy, revision: d.revision });
     if (pendingDuel) { renderDuelPending(d.id); return; }
     if (!ok) {
+      // `internal` неоднозначен: транзакция могла завершиться, а ответ потеряться.
+      // Сохраняем requestId, чтобы кнопка повтора перечитала тот же заезд без списания.
+      if (d && d.error && d.error !== 'internal') raceRequestId = '';
       renderRaceError(d && d.error);
       return;
     }
@@ -1159,7 +1207,7 @@
       </div>`;
     race.appendChild(panel);
     const again = panel.querySelector('#cd-drag-again');
-    if (again) again.onclick = () => { opponentsPreview = null; renderSetup(); loadOpponents(session); };
+    if (again) again.onclick = () => { raceRequestId = ''; opponentsPreview = null; renderSetup(); loadOpponents(session); };
     const done = panel.querySelector('#cd-drag-done');
     if (done) done.onclick = close;
   }
@@ -1167,10 +1215,11 @@
   // ── публичный API ────────────────────────────────────────────────────────────
   function open(api, breed) {
     if (!api || !breed) return;
+    if (ov) return;
     apiRef = api; curBreed = breed; mode = 'training'; stake = STAKE_PRESETS[0]; friendRace = null; duelRace = null;
-    opponentsPreview = null; myPower = null; raceBusy = false; phase = 'idle'; raceData = null;
+    opponentsPreview = null; myPower = null; raceBusy = false; phase = 'idle'; raceData = null; raceRequestId = '';
     qualifyData = null; qualifyDone = null; qualifySucceeded = false;
-    session++;
+    session++; sessionAccount = currentAccount();
     const mySession = session;
     loadFly(curBreed); // полётный лист своей птицы — заранее
     styles();
@@ -1187,11 +1236,12 @@
 
   function openFriend(api, breed, friendChat, friendName) {
     if (!api || !breed || !friendChat) return;
+    if (ov) return;
     apiRef = api; curBreed = breed; mode = 'training'; stake = STAKE_PRESETS[0];
     friendRace = { chat: Number(friendChat), name: friendName || 'Друг' }; duelRace = null;
-    opponentsPreview = null; myPower = null; raceBusy = false; phase = 'idle'; raceData = null;
+    opponentsPreview = null; myPower = null; raceBusy = false; phase = 'idle'; raceData = null; raceRequestId = '';
     qualifyData = null; qualifyDone = null; qualifySucceeded = false;
-    session++;
+    session++; sessionAccount = currentAccount();
     const mySession = session;
     loadFly(curBreed);
     styles();
@@ -1207,14 +1257,15 @@
 
   function openDuelCreate(api, breed, friendChat, friendName, duelStake) {
     if (!api || !breed || !friendChat) return;
+    if (ov) return;
     const required = Math.max(0, num(duelStake));
     const balance = typeof window.ckBalance === 'function' ? num(window.ckBalance()) : 0;
     if (balance < required) { flash(`Не хватает ${fmt(required - balance)} монет на ставку`); return; }
     apiRef = api; curBreed = breed; mode = 'training'; stake = STAKE_PRESETS[0]; friendRace = null;
     duelRace = { role: 'create', chat: Number(friendChat), name: friendName || 'Друг', stake: num(duelStake) };
-    opponentsPreview = []; myPower = null; raceBusy = false; phase = 'idle'; raceData = null;
+    opponentsPreview = []; myPower = null; raceBusy = false; phase = 'idle'; raceData = null; raceRequestId = '';
     qualifyData = null; qualifyDone = null; qualifySucceeded = false;
-    session++;
+    session++; sessionAccount = currentAccount();
     loadFly(curBreed); styles();
     if (!ov) { ov = document.createElement('div'); ov.className = 'cd-drag-ov'; document.body.appendChild(ov); }
     renderSetup(); requestAnimationFrame(() => { if (ov) ov.classList.add('on'); }); haptic('light');
@@ -1225,14 +1276,15 @@
 
   function openDuelAccept(api, breed, duelId, friendName, duelStake) {
     if (!api || !breed || !duelId) return;
+    if (ov) return;
     const required = Math.max(0, num(duelStake));
     const balance = typeof window.ckBalance === 'function' ? num(window.ckBalance()) : 0;
     if (balance < required) { flash(`Не хватает ${fmt(required - balance)} монет на ставку`); return; }
     apiRef = api; curBreed = breed; mode = 'training'; stake = STAKE_PRESETS[0]; friendRace = null;
     duelRace = { role: 'accept', id: Number(duelId), name: friendName || 'Друг', stake: num(duelStake) };
-    opponentsPreview = []; myPower = null; raceBusy = false; phase = 'idle'; raceData = null;
+    opponentsPreview = []; myPower = null; raceBusy = false; phase = 'idle'; raceData = null; raceRequestId = '';
     qualifyData = null; qualifyDone = null; qualifySucceeded = false;
-    session++;
+    session++; sessionAccount = currentAccount();
     loadFly(curBreed); styles();
     if (!ov) { ov = document.createElement('div'); ov.className = 'cd-drag-ov'; document.body.appendChild(ov); }
     renderSetup(); requestAnimationFrame(() => { if (ov) ov.classList.add('on'); }); haptic('light');
@@ -1245,10 +1297,11 @@
   // голубятню). Ошибка «already»/«disabled» — flash и закрытие.
   function openQualify(api, breed, onDone) {
     if (!api || !breed) return;
+    if (ov) return;
     apiRef = api; curBreed = breed; mode = 'qualify'; stake = STAKE_PRESETS[0]; friendRace = null; duelRace = null;
-    opponentsPreview = []; myPower = null; raceBusy = false; phase = 'idle'; raceData = null;
+    opponentsPreview = []; myPower = null; raceBusy = false; phase = 'idle'; raceData = null; raceRequestId = '';
     qualifyData = null; qualifyDone = typeof onDone === 'function' ? onDone : null; qualifySucceeded = false;
-    session++;
+    session++; sessionAccount = currentAccount();
     loadFly(curBreed);
     styles();
     if (!ov) { ov = document.createElement('div'); ov.className = 'cd-drag-ov'; document.body.appendChild(ov); }
@@ -1265,10 +1318,10 @@
   function close() {
     clearTimers(); stopLoop(); stopRevLoop(); stopTapLoop(); clearDragTapPointers(); removeTapZone();
     if (resizeHandler) { window.removeEventListener('resize', resizeHandler); resizeHandler = null; }
-    session++; // инвалидирует зависшие fetch/countdown-колбэки прежнего открытия
+    session++; sessionAccount = ''; // инвалидирует зависшие fetch/countdown-колбэки прежнего открытия
     const el = ov; ov = null; canvas = null; ctx = null;
     if (el) { el.classList.remove('on'); setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 240); }
-    raceBusy = false; phase = 'idle'; step = 'setup'; raceData = null;
+    raceBusy = false; phase = 'idle'; step = 'setup'; raceData = null; raceRequestId = '';
     const cb = qualifySucceeded ? qualifyDone : null;
     qualifyData = null; qualifyDone = null; qualifySucceeded = false; mode = 'training'; friendRace = null; duelRace = null;
     if (cb) setTimeout(cb, 0);

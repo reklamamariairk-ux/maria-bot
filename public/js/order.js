@@ -203,8 +203,7 @@ async function submitOrder(e) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name, phone, description, date, portions, comment,
-        photo: photos[0] || '', // backend пока поддерживает 1 photo
-        photos, // если backend будет multiple support
+        photos,
       }),
     });
     const data = await res.json();

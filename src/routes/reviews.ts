@@ -25,14 +25,14 @@ import {
   countReviewsLast24h,
 } from "../db";
 import type { Product } from "../scraper";
-import { rateLimit, requireAdminToken } from "../middleware";
-import { requireTgUser, getTgUser, tryGetTgUser } from "../auth";
+import { rateLimit, requireAdminRole, requireAdminToken } from "../middleware";
+import { optionalUser, requireTgUser, getTgUser, tryGetTgUser } from "../auth";
 import { log } from "../logger";
 
 export function createReviewsRouter(getCatalog: () => Product[]): Router {
   const router = Router();
 
-  router.get("/api/reviews/:pid", rateLimit(60), async (req, res) => {
+  router.get("/api/reviews/:pid", optionalUser, rateLimit(60), async (req, res) => {
     const pid = Number(req.params.pid);
     if (!pid) { res.status(400).json({ error: "bad_pid" }); return; }
     const limit  = Math.min(Number(req.query.limit ?? 20), 50);
@@ -117,7 +117,7 @@ export function createReviewsRouter(getCatalog: () => Product[]): Router {
   });
 
   // Админ: скрыть/показать отзыв (модерация)
-  router.post("/api/admin/reviews/:id/hide", requireAdminToken, async (req, res) => {
+  router.post("/api/admin/reviews/:id/hide", requireAdminToken, requireAdminRole("operator"), async (req, res) => {
     const id = Number(req.params.id);
     if (!id) { res.status(400).json({ error: "bad_id" }); return; }
     const hidden = (req.body as { hidden?: boolean })?.hidden !== false; // по умолчанию hide=true

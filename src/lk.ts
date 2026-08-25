@@ -30,7 +30,7 @@ export interface LkData {
 
 function fetchJson(url: string): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { rejectUnauthorized: false }, (r) => {
+    const req = https.get(url, (r) => {
       let body = "";
       r.on("data", (c: Buffer) => (body += c));
       r.on("end", () => {

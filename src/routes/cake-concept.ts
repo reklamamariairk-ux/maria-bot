@@ -20,6 +20,17 @@ import { log } from "../logger";
 
 const router = Router();
 
+export function isAllowedConceptImageUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:"
+      && url.hostname === "image.pollinations.ai"
+      && !url.username && !url.password && !url.port;
+  } catch {
+    return false;
+  }
+}
+
 router.post("/api/cake-concept/generate", requireTgUser, rateLimit(2), async (req, res) => {
   const healthy = await isConceptEnabled();
   if (!healthy) {
@@ -58,7 +69,7 @@ router.post("/api/cake-concept/submit", requireTgUser, rateLimit(5), async (req,
   }
   // image_url должен быть с нашего AI-генератора. Иначе любой может пробросить
   // в лид Bitrix произвольную URL (через DevTools) — спам/реклама в CRM.
-  if (!b.image_url.startsWith("https://image.pollinations.ai/")) {
+  if (!isAllowedConceptImageUrl(b.image_url)) {
     res.status(400).json({ error: "bad_image_url" });
     return;
   }

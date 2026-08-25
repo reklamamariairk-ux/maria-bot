@@ -83,6 +83,18 @@ describe("auth-max.ts: verifyMaxInitData", () => {
     expect(verifyMaxInitData(initData)).toBe(null);
   });
 
+  it("далеко будущий auth_date → null", () => {
+    const initData = buildInitData({ id: 555 }, { auth_date: String(Math.floor(Date.now() / 1000) + 600) });
+    expect(verifyMaxInitData(initData)).toBe(null);
+  });
+
+  it("не принимает отсутствующий auth_date и некорректный id", () => {
+    const withoutDate = buildInitData({ id: 555 }, { auth_date: "" });
+    expect(verifyMaxInitData(withoutDate)).toBe(null);
+    expect(verifyMaxInitData(buildInitData({ id: -1 }))).toBe(null);
+    expect(verifyMaxInitData(buildInitData({ id: 1.5 }))).toBe(null);
+  });
+
   it("пустая строка → null", () => {
     expect(verifyMaxInitData("")).toBe(null);
   });

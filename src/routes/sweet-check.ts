@@ -14,7 +14,7 @@
 import { Router } from "express";
 import * as fs from "fs";
 import * as path from "path";
-import { rateLimit, requireAdminToken } from "../middleware";
+import { rateLimit, requireAdminRole, requireAdminToken } from "../middleware";
 import { log } from "../logger";
 
 const router = Router();
@@ -64,7 +64,7 @@ router.get("/api/sweet-check/active", rateLimit(60), (_req, res) => {
   });
 });
 
-router.post("/api/admin/sweet-check/reload", requireAdminToken, (_req, res) => {
+router.post("/api/admin/sweet-check/reload", requireAdminToken, requireAdminRole("operator"), (_req, res) => {
   _weeksCache = null;
   const weeks = loadSweetCheckWeeks();
   res.json({ ok: true, total: weeks.length, first: weeks[0]?.from, last: weeks.at(-1)?.to });
@@ -104,7 +104,7 @@ router.get("/api/sweet-check/prizes", rateLimit(60), (_req, res) => {
   res.json(loadSweetCheckPrizes());
 });
 
-router.post("/api/admin/sweet-check-prizes/reload", requireAdminToken, (_req, res) => {
+router.post("/api/admin/sweet-check-prizes/reload", requireAdminToken, requireAdminRole("operator"), (_req, res) => {
   _prizesCache = null;
   const cfg = loadSweetCheckPrizes();
   res.json({ ok: true, total: cfg.prizes.length, headline: cfg.headline_name });

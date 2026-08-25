@@ -124,7 +124,7 @@ function applyCartActions(cartActions, products) {
   }
 }
 
-// SSE-чат: возвращает true если успешно (даже с error event), false при сетевом сбое
+// SSE-чат: false означает, что можно безопасно повторить запрос через обычный /api/chat.
 async function streamChat(headers, typing) {
   const wrap = document.getElementById('chat-messages');
   let bubble = null;        // <div> с текстом ассистента
@@ -158,6 +158,8 @@ async function streamChat(headers, typing) {
     return false;
   }
   if (!res.ok || !res.body) {
+    // Совместимость при поэтапном деплое: старый сервер ещё может не иметь SSE route.
+    if ([404, 405, 501].includes(res.status)) return false;
     typing.remove();
     const err = await res.json().catch(() => ({}));
     appendMessage('bot', err.error ?? 'Ошибка сервера.');

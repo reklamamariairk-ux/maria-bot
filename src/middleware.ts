@@ -76,8 +76,7 @@ setInterval(() => {
 /** Проверяет `x-user-token` header или `body.token` против ADMIN_TOKEN env. */
 export function requireAdminToken(req: Request, res: Response, next: NextFunction): void {
   const token = req.header("x-user-token")
-             || (req.body as { token?: string })?.token
-             || (req.query.token as string | undefined);
+             || (req.body as { token?: string })?.token;
   const role = getAdminRole(token);
   if (!role) {
     res.status(403).json({ error: "forbidden" });

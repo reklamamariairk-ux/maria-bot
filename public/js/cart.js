@@ -247,6 +247,14 @@ function dateLabel(offset) {
   const d = new Date(Date.now() + offset * 86400000);
   return fmtDate(d);
 }
+function dateIso(offset) {
+  const d = new Date(Date.now() + offset * 86400000);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function datePickerValue(value) {
+  const m = String(value || '').match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : String(value || '');
+}
 
 function cartRenderCheckout() {
   const wrap = document.getElementById('cart-body');
@@ -359,7 +367,7 @@ function cartRenderCheckout() {
       <div class="chip-group" id="co-date-chips">
         ${dateChips.map((c) => `<button type="button" class="chip-pick${c.v === defDate ? ' chip-pick--on' : ''}" data-haptic="selection" onclick="pickDate('${c.v}',this)">${c.label}<small>${c.v.slice(0,5)}</small></button>`).join('')}
       </div>
-      <input id="co-date-picker" type="date" class="co-date-picker" value="${escAttr(defDate)}" min="${dateLabel(0)}" onchange="coPickCustomDate(this.value)" />
+      <input id="co-date-picker" type="date" class="co-date-picker" value="${escAttr(datePickerValue(defDate))}" min="${dateIso(0)}" onchange="coPickCustomDate(this.value)" />
       <input id="co-date" type="hidden" value="${escAttr(defDate)}" />
 
       <label>Время</label>
@@ -577,7 +585,8 @@ window.coAddNewAddress = coAddNewAddress;
 // Custom date picker (beyond chips)
 function coPickCustomDate(v) {
   const hidden = document.getElementById('co-date');
-  if (hidden) hidden.value = v;
+  const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (hidden) hidden.value = m ? `${m[3]}.${m[2]}.${m[1]}` : '';
   // Снимаем active со всех chip
   document.querySelectorAll('#co-date-chips .chip-pick').forEach((c) => c.classList.remove('chip-pick--on'));
   window.haptic?.('selection');
@@ -741,7 +750,11 @@ function coPickShop(name) {
 }
 window.coPickShop = coPickShop;
 
+let cartSubmitInFlight = false;
+let cartSubmitRequestId = null;
+
 async function cartSubmit() {
+  if (cartSubmitInFlight) return;
   const name    = document.getElementById('co-name')?.value?.trim() || '';
   const phone   = document.getElementById('co-phone')?.value?.trim() || '';
   const deltype = document.getElementById('co-deltype')?.value?.trim() || 'delivery';
@@ -792,6 +805,9 @@ async function cartSubmit() {
     return;
   }
 
+  cartSubmitInFlight = true;
+  cartSubmitRequestId ||= window.crypto?.randomUUID?.()
+    || `order_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
   if (status) status.innerHTML = '⏳ Отправляем заказ…';
   window.tgMain?.progress(true);
 
@@ -805,6 +821,8 @@ async function cartSubmit() {
         name, phone, address: finalAddress, items,
         delivery_date: date, delivery_time: time, comment: fullComment,
         useVerifiedPhone: !phone,
+        promo_code: applied?.code || undefined,
+        request_id: cartSubmitRequestId,
       }),
     });
     const data = await res.json();
@@ -827,17 +845,9 @@ async function cartSubmit() {
       }).filter(Boolean);
       localStorage.setItem('maria_last_order', JSON.stringify(lastOrder));
     } catch {}
-    // Регистрируем использование промокода (если применён)
-    if (window._coAppliedPromo?.code) {
-      try {
-        fetch('/api/promo/use', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...App.authHeader() },
-          body: JSON.stringify({ code: window._coAppliedPromo.code, order_id: String(data.orderId || '') }),
-        }).catch(() => {});
-      } catch {}
-      window._coAppliedPromo = null;
-    }
+    // Промокод валидирует и списывает /api/order в одной серверной операции.
+    window._coAppliedPromo = null;
+    cartSubmitRequestId = null;
     cartClear();
     window.tgMain?.hide();
     document.getElementById('cart-body').innerHTML = `
@@ -846,7 +856,7 @@ async function cartSubmit() {
         <div class="cart-success__ic">🎉</div>
         <div class="cart-success__h">Заказ${data.orderId ? ' #' + data.orderId : ''} принят!</div>
         <div class="cart-success__sub">${escHtml(data.message || 'Менеджер свяжется для подтверждения')}</div>
-        <div class="cart-total">Сумма: <b>${Number(data.total || 0).toLocaleString('ru-RU')} ₽</b></div>
+        <div class="cart-total">Сумма: <b>${Number(data.expectedTotal ?? data.total ?? 0).toLocaleString('ru-RU')} ₽</b></div>
         <button class="btn-outline" data-haptic="medium" onclick="cartRepeatLast()">↻ Повторить такой же заказ</button>
         <button class="btn-full" onclick="cartClose()">Готово</button>
       </div>`;
@@ -854,6 +864,9 @@ async function cartSubmit() {
   } catch (e) {
     if (status) status.innerHTML = `<span style="color:var(--red)">Сеть недоступна. Попробуй ещё раз.</span>`;
     window.haptic?.('error');
+    window.tgMain?.progress(false);
+  } finally {
+    cartSubmitInFlight = false;
     window.tgMain?.progress(false);
   }
 }

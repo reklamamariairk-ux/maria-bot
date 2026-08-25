@@ -2,13 +2,13 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <meta name="theme-color" content="#ffffff"/>
   <meta name="apple-mobile-web-app-title" content="Мария"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
   <link rel="manifest" href="/manifest.json"/>
-  <link rel="apple-touch-icon" href="/logo.png"/>
+  <link rel="apple-touch-icon" href="/assets/images/cat-mascot-cut.png"/>
   <meta property="og:type" content="website"/>
   <meta property="og:title" content="Мария — кондитерская"/>
   <meta property="og:description" content="Свежая выпечка каждый день. Иркутск, 33 года на рынке. Торты, пироги, пирожные."/>
@@ -29,7 +29,7 @@
   <script src="/js/icons.js"></script>
   <script src="/js/icons-3d.js"></script>
   <script src="/js/sweet-prizes.js"></script>
-  <link rel="stylesheet" href="/css/style.css"/>
+  <link rel="stylesheet" href="/css/style.css?v=2"/>
   <!-- Гейм-first вход: запуск из TG с ?startapp=game|click открывает «Котик Комбат» сразу,
        не показывая магазин. Сплэш перекрывает первый кадр магазина, снимается в catclick.js open(). -->
   <style>
@@ -58,8 +58,7 @@
 <!-- HEADER -->
 <header class="header">
   <img src="/logo.svg" class="header__logo" alt="Мария"
-       onerror="this.src='/logo.png'"
-       onerror="this.style.display='none';document.getElementById('lf').style.display='block'"/>
+       onerror="this.onerror=null;this.style.display='none';document.getElementById('lf').style.display='block'"/>
   <span class="header__name" id="lf" style="display:none">Мария</span>
   <div class="hdr-right">
     <!-- Header-counter полностью отключён — внутренние баллы/звёзды убраны.
@@ -1297,20 +1296,20 @@
 </nav>
 
 <script src="/js/app.js" defer></script>
-<script src="/js/order.js" defer></script>
+<script src="/js/order.js?v=2" defer></script>
 <script src="/js/cake-concept.js" defer></script>
 <script src="/js/onboarding.js" defer></script>
 <script src="/js/selfie-cake.js" defer></script>
 <script src="/js/game.js" defer></script>
 <script src="/js/catgame.js?v=3" defer></script>
 <script src="/js/catfeed.js?v=3" defer></script>
-<script src="/js/catpet.js?v=25" defer></script>
+<script src="/js/catpet.js?v=29" defer></script>
 <script src="/js/catlive.js" defer></script>
-<script src="/js/catdove.js?v=52" defer></script>
-<script src="/js/catdrag.js?v=25" defer></script>
-<script src="/js/catclick.js?v=186" defer></script>
+<script src="/js/catdove.js?v=55" defer></script>
+<script src="/js/catdrag.js?v=27" defer></script>
+<script src="/js/catclick.js?v=193" defer></script>
 <!-- /js/bakery.js удалён — Игры убраны до новой геймификации (см. game.js — wheel/streak/secret) -->
-<script src="/js/chat.js" defer></script>
+<script src="/js/chat.js?v=2" defer></script>
 <script src="/js/catalog.js" defer></script>
 <script src="/js/reviews.js" defer></script>
 <script src="/js/wishshare.js" defer></script>

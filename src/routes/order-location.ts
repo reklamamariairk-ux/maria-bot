@@ -3,7 +3,7 @@
  *
  * Эндпоинты:
  * - POST /api/order/location            — курьер шлёт свою позицию (Bearer DELIVERY_TOKEN)
- * - GET  /api/order/location?orderId=…  — клиент забирает последнюю позицию курьера
+ * - GET  /api/order/location?orderId=…  — клиент читает с X-Order-Tracking-Token
  *
  * Хранение — В ПАМЯТИ: только последняя точка на заказ, TTL 30 мин. GPS-крошки не
  * персистим (эфемерные, высокочастотные) — схему БД не трогаем, магазин/чекаут тоже.
@@ -11,6 +11,7 @@
  * заменить Map на Redis.
  */
 
+import crypto from "crypto";
 import { Router, type Request } from "express";
 import { rateLimit, safeEq } from "../middleware";
 import { log } from "../logger";
@@ -30,6 +31,13 @@ interface Ping {
 }
 
 const positions = new Map<string, Ping>();
+
+/** Неподделываемый capability-token для чтения координат конкретного заказа. */
+export function orderTrackingToken(orderId: string | number): string | null {
+  const secret = process.env.ORDER_TRACKING_SECRET || process.env.ORDER_TOKEN || "";
+  if (!secret) return null;
+  return crypto.createHmac("sha256", secret).update(`order-location:${String(orderId)}`).digest("hex");
+}
 
 function bearer(req: Request): string | null {
   const h = String(req.headers.authorization || "");
@@ -77,12 +85,22 @@ router.post("/api/order/location", rateLimit(30), (req, res) => {
 });
 
 // ── Клиент ← сервер (пуллинг позиции курьера) ───────────────────────────────
-// orderId должен быть неугадываемым (UUID/токен заказа), т.к. чтение по нему открыто.
-// Позже можно ужесточить: сверять с телефоном/токеном заказа владельца.
 router.get("/api/order/location", rateLimit(60), (req, res) => {
   const orderId = String(req.query.orderId ?? "").trim().slice(0, 64);
   if (!orderId) {
     res.status(400).json({ error: "order_id_required" });
+    return;
+  }
+  const expectedToken = orderTrackingToken(orderId);
+  const suppliedToken = String(req.header("x-order-tracking-token") ?? "");
+  const courierAuthorized = Boolean(process.env.DELIVERY_TOKEN)
+    && safeEq(bearer(req), process.env.DELIVERY_TOKEN);
+  if (!expectedToken) {
+    res.status(503).json({ error: "tracking_not_configured" });
+    return;
+  }
+  if (!courierAuthorized && !safeEq(suppliedToken, expectedToken)) {
+    res.status(403).json({ error: "forbidden" });
     return;
   }
 

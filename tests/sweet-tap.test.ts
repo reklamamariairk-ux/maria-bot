@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { sweetCritsIn, SWEET_TAP_EVERY, SWEET_TAP_MULT } from "../src/clicker";
+import { sweetCritsIn, SWEET_TAP_EVERY, SWEET_TAP_MULT, tapUnitGain } from "../src/clicker";
 
 describe("«Сладкий тап» — криты в батче детерминированы от lifetime-счётчика", () => {
+  it("округляет цену одного тапа до батча, точно как клиент", () => {
+    expect(tapUnitGain(1, 1, 1.1, 1.25)).toBe(1);
+    expect(tapUnitGain(3, 5, 1.2, 1.25)).toBe(22);
+  });
   it(`каждый ${SWEET_TAP_EVERY}-й тап — ровно один крит, независимо от нарезки батчей`, () => {
     expect(sweetCritsIn(0, SWEET_TAP_EVERY)).toBe(1);
     expect(sweetCritsIn(SWEET_TAP_EVERY - 1, 1)).toBe(1);   // крит последним тапом батча

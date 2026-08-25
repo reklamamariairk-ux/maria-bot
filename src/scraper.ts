@@ -182,7 +182,6 @@ function fetchHtml(url: string): Promise<string> {
           "Accept-Language": "ru-RU,ru;q=0.9",
           "Accept":          "text/html",
         },
-        rejectUnauthorized: false,  // сайт имеет проблемы с цепочкой сертификатов
       },
       (res) => {
         // Обрабатываем редиректы
@@ -242,7 +241,7 @@ function parsePage(html: string, category: string): Product[] {
 // ─── Fetch JSON helper ───────────────────────────────────────────────────────
 function fetchJson(url: string, timeoutMs = 60_000): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { rejectUnauthorized: false }, (r) => {
+    const req = https.get(url, (r) => {
       let body = "";
       r.on("data", (c: Buffer) => (body += c));
       r.on("end", () => {

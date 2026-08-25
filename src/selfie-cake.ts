@@ -15,6 +15,7 @@ import path from "path";
 import crypto from "crypto";
 
 const SELFIE_DIR = path.join("/tmp", "cake_selfies");
+const SELFIE_TTL_MS = 2 * 60 * 60 * 1000;
 
 // Создаём папку при импорте — раз и навсегда. Здесь оставляем sync — это
 // один раз на процесс, не блокирует hot path.
@@ -81,9 +82,14 @@ export async function storeSelfie(b64DataUrl: string, baseUrl: string): Promise<
   if (parsed.buf.length > 6 * 1024 * 1024) throw new Error("image_too_large");
   if (parsed.buf.length < 1024) throw new Error("image_too_small");
 
-  const id = crypto.randomBytes(8).toString("hex");
+  const id = crypto.randomBytes(16).toString("hex");
   const filename = `${id}.${parsed.ext}`;
-  await fsp.writeFile(path.join(SELFIE_DIR, filename), parsed.buf);
+  const filePath = path.join(SELFIE_DIR, filename);
+  await fsp.writeFile(filePath, parsed.buf);
+  // Основной путь удаления — персональный таймер ровно на TTL. Периодический
+  // cleanup остаётся страховкой после рестарта процесса.
+  const expiryTimer = setTimeout(() => { fsp.unlink(filePath).catch(() => {}); }, SELFIE_TTL_MS);
+  expiryTimer.unref();
   // baseUrl: абсолютный URL нашего сервиса. Pollinations стучится сюда чтобы
   // забрать селфи как conditioning image для img2img.
   const publicUrl = `${baseUrl.replace(/\/$/, "")}/api/selfie-img/${id}`;
@@ -92,10 +98,15 @@ export async function storeSelfie(b64DataUrl: string, baseUrl: string): Promise<
 
 export async function readSelfie(id: string): Promise<{ buf: Buffer; type: string } | null> {
   // Защита от path traversal
-  if (!/^[0-9a-f]{16}$/.test(id)) return null;
+  if (!/^[0-9a-f]{32}$/.test(id)) return null;
   for (const ext of ["jpeg", "png", "webp"]) {
     const fp = path.join(SELFIE_DIR, `${id}.${ext}`);
     try {
+      const st = await fsp.stat(fp);
+      if (Date.now() - st.mtimeMs >= SELFIE_TTL_MS) {
+        await fsp.unlink(fp).catch(() => {});
+        return null;
+      }
       const buf = await fsp.readFile(fp);
       return { buf, type: ext === "jpeg" ? "image/jpeg" : `image/${ext}` };
     } catch {}
@@ -115,13 +126,12 @@ export function generateSelfieCakes(publicSelfieUrl: string): SelfieCakeResult[]
 export async function cleanupOldSelfies(): Promise<void> {
   try {
     const now = Date.now();
-    const maxAge = 2 * 60 * 60 * 1000;
     const files = await fsp.readdir(SELFIE_DIR);
     for (const f of files) {
       try {
         const fp = path.join(SELFIE_DIR, f);
         const st = await fsp.stat(fp);
-        if (now - st.mtimeMs > maxAge) await fsp.unlink(fp);
+        if (now - st.mtimeMs >= SELFIE_TTL_MS) await fsp.unlink(fp);
       } catch {}
     }
   } catch {}

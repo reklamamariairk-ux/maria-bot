@@ -7,18 +7,33 @@
  */
 
 import { Router } from "express";
-import { getOrderRating, upsertOrderRating } from "../db";
+import { getOrderRating, isAppOrderOwner, upsertOrderRating } from "../db";
 import { rateLimit } from "../middleware";
 import { requireTgUser, getTgUser } from "../auth";
 import { log } from "../logger";
+import { fetchLk, type LkOrder } from "../lk";
 
 const router = Router();
 
-router.get("/api/order-rating/:orderId", requireTgUser, async (req, res) => {
+export function orderListHasId(orders: LkOrder[] | undefined, orderId: string): boolean {
+  return Array.isArray(orders) && orders.some((order) => String(order.id) === orderId);
+}
+
+async function requireOwnedOrder(chatId: number, orderId: string): Promise<"owned" | "missing" | "unavailable"> {
+  if (await isAppOrderOwner(chatId, orderId)) return "owned";
+  const lk = await fetchLk(chatId);
+  if (!lk.ok || !lk.data?.configured) return "unavailable";
+  return orderListHasId(lk.data.orders, orderId) ? "owned" : "missing";
+}
+
+router.get("/api/order-rating/:orderId", requireTgUser, rateLimit(30), async (req, res) => {
   const u = getTgUser(req)!;
   const orderId = String(req.params.orderId || "").trim().slice(0, 64);
   if (!orderId) { res.status(400).json({ error: "bad_order_id" }); return; }
   try {
+    const ownership = await requireOwnedOrder(u.id, orderId);
+    if (ownership === "unavailable") { res.status(503).json({ error: "orders_unavailable" }); return; }
+    if (ownership === "missing") { res.status(404).json({ error: "order_not_found" }); return; }
     const rating = await getOrderRating(u.id, orderId);
     res.json({ rating });
   } catch (e) {
@@ -38,6 +53,9 @@ router.post("/api/order-rating", requireTgUser, rateLimit(5), async (req, res) =
     res.status(400).json({ error: "rating_must_be_1_to_5" }); return;
   }
   try {
+    const ownership = await requireOwnedOrder(u.id, orderId);
+    if (ownership === "unavailable") { res.status(503).json({ error: "orders_unavailable" }); return; }
+    if (ownership === "missing") { res.status(404).json({ error: "order_not_found" }); return; }
     const saved = await upsertOrderRating(u.id, orderId, rating, text);
     res.json({ ok: true, rating: saved });
   } catch (e) {

@@ -91,10 +91,10 @@ export function createWishlistRouter(getCatalog: () => Product[]): Router {
     }
   });
 
-  router.post("/api/wishlist/sync", requireTgUser, async (req, res) => {
+  router.post("/api/wishlist/sync", requireTgUser, rateLimit(30), async (req, res) => {
     const u = getTgUser(req)!;
     const ids = Array.isArray(req.body?.ids)
-      ? (req.body.ids as unknown[]).map((x) => Number(x)).filter((n) => Number.isFinite(n) && n > 0)
+      ? [...new Set((req.body.ids as unknown[]).map(Number).filter((n) => Number.isInteger(n) && n > 0))].slice(0, 500)
       : [];
     try {
       await wishlistSync(u.id, ids);

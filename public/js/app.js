@@ -634,7 +634,7 @@ const STORIES_DATA = {
     title: 'Торт месяца',
     sub: 'Загрузка…',
     ctaText: 'Заказать →',
-    ctaAction: 'switchTab("menu");setTimeout(()=>catShowProducts?.("Торты"),200)',
+    ctaAction: () => { switchTab("menu"); setTimeout(() => window.catShowProducts?.("Торты"), 200); },
   },
   sweet: {
     emoji: '📱',
@@ -642,28 +642,28 @@ const STORIES_DATA = {
     title: 'Сладкий чек',
     sub: 'Каждый чек — билет в розыгрыш.',
     ctaText: 'Узнать про Сладкий чек',
-    ctaAction: 'switchTab("club")',
+    ctaAction: () => switchTab("club"),
   },
   club: {
     emoji: '💎',
     title: 'Кэшбэк до 10%',
     sub: 'Друзья 5% · Лучшие друзья 7% · Семья 10%. Оплачивай до 30% заказа баллами. День рождения −5% / −10% детям.',
     ctaText: 'Открыть клуб',
-    ctaAction: 'switchTab("club")',
+    ctaAction: () => switchTab("club"),
   },
   partners: {
     emoji: '🤝',
     title: '14 партнёров со скидками',
     sub: 'ЛукаЛаб −35% · Окулария −10% · Деница · Пряников и другие. Скидки для участников клуба.',
     ctaText: 'Посмотреть',
-    ctaAction: 'switchTab("club");setTimeout(()=>document.querySelector(".club-partners")?.scrollIntoView({behavior:"smooth"}),300)',
+    ctaAction: () => { switchTab("club"); setTimeout(() => document.querySelector(".club-partners")?.scrollIntoView({ behavior: "smooth" }), 300); },
   },
   cafes: {
     emoji: '🏬',
     title: '17 кафе по Иркутску',
     sub: 'Свежая выпечка каждый день. Заказ на самовывоз без доставки. Откуда удобно вам.',
     ctaText: 'Карта кафе',
-    ctaAction: 'openShopsModal()',
+    ctaAction: () => openShopsModal(),
   },
 };
 const STORIES_ORDER = ['promo','sweet','club','partners','cafes'];
@@ -741,7 +741,7 @@ function renderStory() {
     <div class="story-viewer__sub">${escapeHtml(sub)}</div>`;
   const cta = document.getElementById('story-cta');
   cta.textContent = data.ctaText;
-  cta.onclick = () => { closeStory(); setTimeout(() => { try { eval(data.ctaAction); } catch (e) { console.error(e); } }, 200); };
+  cta.onclick = () => { closeStory(); setTimeout(() => { try { data.ctaAction(); } catch (e) { console.error(e); } }, 200); };
   // Auto-advance через 5 сек
   clearTimeout(_storyTimer);
   _storyTimer = setTimeout(() => storyNext(), 5000);

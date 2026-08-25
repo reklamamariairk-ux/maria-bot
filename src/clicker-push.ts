@@ -15,6 +15,7 @@ import { pool } from "./db";
 import type { PushService } from "./push";
 import { miniAppLink } from "./links";
 import { log } from "./logger";
+import { energyMaxFor, settleEnergyRegeneration } from "./clicker";
 
 const irkToday = (): string => new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
 const irkYesterday = (): string => new Date(Date.now() + 8 * 3600 * 1000 - 86400000).toISOString().slice(0, 10);
@@ -47,10 +48,12 @@ export async function runClickerRetentionPush(push: PushService): Promise<{ stre
   const today = irkToday(), yesterday = irkYesterday();
   // Кандидаты: «уснули» 16ч…4д назад. Тянем минимум полей.
   const { rows } = await pool.query(
-    `SELECT chat_id, daily_date, daily_streak
-       FROM clicker_state
+    `SELECT chat_id, daily_date, daily_streak, energy, energy_limit_level,
+            energy_carry, energy_updated_at
+      FROM clicker_state
       WHERE updated_at < NOW() - INTERVAL '16 hours'
-        AND updated_at > NOW() - INTERVAL '4 days'`
+        AND updated_at > NOW() - INTERVAL '4 days'
+        AND admin_blocked=FALSE`
   );
   let streak = 0, energy = 0, skipped = 0;
   for (const r of rows) {
@@ -67,6 +70,12 @@ export async function runClickerRetentionPush(push: PushService): Promise<{ stre
         + `Зайди в «Котика Комбат» за наградой дня — иначе серия сгорит в полночь.\n\n`
         + `[Забрать награду](${miniAppLink(chatId, "click")})`;
     } else {
+      const max = energyMaxFor(Number(r.energy_limit_level) || 0);
+      const elapsed = Math.max(0, (Date.now() - new Date(r.energy_updated_at).getTime()) / 1000);
+      const regenerated = settleEnergyRegeneration(Number(r.energy), max, elapsed, Number(r.energy_carry || 0));
+      // Большой лимит энергии может восстанавливаться дольше 16 часов. Не обещаем
+      // «полную энергию», пока серверная формула действительно не дошла до max.
+      if (regenerated.energy < max) { skipped++; continue; }
       trigger = "energy";
       text = `⚡ *Котик отдохнул!*\n\n`
         + `Энергия восстановилась — самое время тапать и копить монеты на награды «Марии».\n\n`
@@ -75,7 +84,9 @@ export async function runClickerRetentionPush(push: PushService): Promise<{ stre
 
     // VK-сендер сам снимает Markdown и сохраняет URL из [текст](url) — отдельная
     // ссылка для VK не нужна. parse_mode Markdown — для TG.
-    const ok = await push.sendPushSafely(chatId, "marketing_game", text);
+    const ok = await push.sendPushSafely(chatId, "marketing_game", text, {
+      dedupeKey: `clicker-retention:${today}`,
+    });
     if (ok) {
       await pool.query(
         `INSERT INTO clicker_push_log (chat_id, trigger, day) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,

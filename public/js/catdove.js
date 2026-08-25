@@ -74,6 +74,17 @@
   function haptic(k) { window.haptic && window.haptic(k); }
 
   let container = null, apiRef = null, data = null, busy = false, missionTimer = null, mountReady = null;
+  let dataLoadGeneration = 0;
+  function markDataMutation() { dataLoadGeneration++; }
+  let dataAccount = '';
+  function currentAccount() {
+    try { const u = window.App && App.user && App.user(); return u && Number.isFinite(Number(u.id)) ? String(Math.floor(Number(u.id))) : ''; }
+    catch (_) { return ''; }
+  }
+  function resetAccountCaches(account) {
+    dataAccount = account; data = null; race = null; recipients = null; tradesCache = null; mailCache = null;
+    incomingTrades = 0; tradesBadgeInit = false; tcState = null; msState = null; tradeTargetFriend = null;
+  }
   // ── доп. состояние: гонка (грузится вместе с альбомом), обмены/рецепиенты
   // (лениво, при первом открытии соответствующей страницы), мастера создания
   // предложения/письма (шаг за шагом переиспользуют #cd-sheet). needsRerenderOnClose —
@@ -81,6 +92,7 @@
   // сделать несколько действий подряд, не закрываясь на каждой — render() пересобирает
   // #cd-scrim/#cd-sheet и убил бы открытый шит, поэтому откладываем его до closeSheet().
   let race = null, recipients = null, tradesCache = null, tradesTab = 'toMe', mailCache = null;
+  let refreshReady = null;
   // Бейдж входящих обменов на кнопке «Обмены» + флаг «создаю обмен с доски» (для нумерации шагов).
   let incomingTrades = 0, tradesBadgeInit = false, tradeFromBoard = false;
   let tcState = null, msState = null, needsRerenderOnClose = false, tradeTargetFriend = null;
@@ -238,6 +250,7 @@
       .cd-empty__ic{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(192,255,51,.08);border:1px solid var(--line);color:var(--gold);margin-bottom:12px}
       .cd-empty__t{font-weight:800;font-size:15px;color:var(--cream);margin-bottom:4px}
       .cd-empty__s{font-size:12.5px;line-height:1.5;max-width:240px}
+      .cd-empty__cta{display:inline-flex;align-items:center;justify-content:center;min-height:44px;box-sizing:border-box;margin-top:14px;border:1px solid #DFFF8F;border-radius:12px;padding:10px 18px;background:linear-gradient(180deg,#D4FF6A,#A8F51E 56%,#8DBF20);color:#12210A;font-weight:800;font-size:13px;cursor:pointer;text-decoration:none}
       .cd-skrow{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:7px}
       .cd-sk{position:relative;overflow:hidden;background:rgba(255,255,255,.05);border-radius:8px}
       .cd-sk::after{content:'';position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(255,255,255,.10),transparent);animation:cdShim 1.2s ease-in-out infinite}
@@ -326,8 +339,8 @@
     document.head.appendChild(s);
   }
 
-  function emptyState(title, sub) {
-    return `<div class="cd-empty"><div class="cd-empty__ic">${DOVE_ICON(28)}</div><div class="cd-empty__t">${title}</div><div class="cd-empty__s">${sub}</div></div>`;
+  function emptyState(title, sub, actionHtml) {
+    return `<div class="cd-empty"><div class="cd-empty__ic">${DOVE_ICON(28)}</div><div class="cd-empty__t">${title}</div><div class="cd-empty__s">${sub}</div>${actionHtml || ''}</div>`;
   }
   function skeleton() {
     let rows = '';
@@ -337,17 +350,24 @@
 
   // ── данные ────────────────────────────────────────────────────────────────
   async function load() {
-    if (!apiRef || !authed()) { data = null; race = null; return; }
+    const generation = ++dataLoadGeneration;
+    const account = currentAccount();
+    if (account !== dataAccount) resetAccountCaches(account);
+    if (!apiRef || !authed()) { data = null; race = null; return false; }
     const [d, r] = await Promise.all([
       apiRef('/api/pigeons').catch(() => null),
       apiRef('/api/pigeons/race').catch(() => null),
     ]);
-    if (!d || !Array.isArray(d.inventory)) { data = null; return; }
+    if (generation !== dataLoadGeneration || account !== currentAccount()) return false;
+    // При временном сбое сохраняем последний корректный снимок. На первом входе
+    // data ещё null, поэтому скелетон всё равно сменится понятной ошибкой.
+    if (!d || !Array.isArray(d.inventory)) return false;
     const invMap = {};
     d.inventory.forEach((row) => { invMap[row.breed] = { count: num(row.count), stars: num(row.stars) || 1, showcase: num(row.showcase), speed: num(row.tune_speed), stamina: num(row.tune_stamina), luck: num(row.tune_luck), passivePerHour: num(row.passivePerHour) }; });
-    data = { sets: Array.isArray(d.sets) ? d.sets : [], invMap, weekBreed: d.weekBreed || null, unreadMail: num(d.unreadMail), passivePerHour: num(d.passivePerHour) };
+    data = { sets: Array.isArray(d.sets) ? d.sets : [], invMap, weekBreed: d.weekBreed || null, unreadMail: num(d.unreadMail), passivePerHour: num(d.passivePerHour), albumDone: !!d.albumDone };
     // race — за флагом PIGEON_RACE_ENABLED на сервере; секция рисуется только когда enabled=true.
     race = (r && typeof r.enabled === 'boolean') ? r : null;
+    return true;
   }
 
   function showcaseOrder() {
@@ -434,7 +454,14 @@
     if (!authed()) {
       container.innerHTML = emptyState('Альбом закрыт', PURE()
         ? 'Войди через Telegram — собирай породы голубей и получай награды за сеты.'
-        : 'Войди через приложение «Мария» — собирай породы голубей и получай награды за сеты.');
+        : 'Войди через приложение «Мария» — собирай породы голубей и получай награды за сеты.',
+        `<button class="cd-empty__cta" id="cd-open-game" type="button">${PURE() ? 'Открыть в Telegram' : 'Войти в приложение'}</button>`);
+      const openGame = container.querySelector('#cd-open-game');
+      if (openGame) openGame.onclick = () => {
+        haptic('light');
+        if (window.ckOpenBotGame) window.ckOpenBotGame();
+        else window.open('https://t.me/mariatortik_bot/app', '_blank', 'noopener');
+      };
       return;
     }
     if (!data) {
@@ -462,9 +489,9 @@
       <div class="cd-pop-scrim" id="cd-pop-scrim"><div class="cd-pop" id="cd-pop"></div></div>
     </div>`;
     wire();
-    // Бейдж входящих обменов — один фоновый запрос при первом рендере альбома
-    // (после действий с обменами обновляется точечно через refreshTradesBadge).
-    if (authed() && !tradesBadgeInit) { tradesBadgeInit = true; refreshTradesBadge(); }
+    // Обмены продуктово отключены: не дёргаем скрытый endpoint на каждом первом
+    // открытии альбома и не тратим лимит запросов на гарантированный ответ 410.
+    tradesBadgeInit = true;
   }
   // Точечно обновляет бейдж «Обмены» (число входящих) без полного ре-рендера альбома.
   function updateTradesBadgeDom() {
@@ -511,6 +538,27 @@
     if (sh) { sh.classList.remove('on'); sh.innerHTML = ''; }
     if (needsRerenderOnClose) { needsRerenderOnClose = false; render(); }
   }
+  // Уникальный DOM-якорь текущего содержимого шита. После «Назад» или перехода
+  // в другой подраздел старый якорь отсоединяется, и запоздалый async-ответ не
+  // имеет права закрывать/перерисовывать уже новый экран.
+  function sheetViewToken() { const sh = container && container.querySelector('#cd-sheet'); return sh && sh.firstElementChild; }
+  function sheetViewActive(token) {
+    const sh = container && container.querySelector('#cd-sheet');
+    return !!(token && token.isConnected && sh && sh.classList.contains('on') && sh.contains(token));
+  }
+  function refreshMainWhenSheetAllows() {
+    const sh = container && container.querySelector('#cd-sheet');
+    if (sh && sh.classList.contains('on')) needsRerenderOnClose = true;
+    else { needsRerenderOnClose = false; render(); }
+  }
+  function closeAll() {
+    if (missionTimer) { clearInterval(missionTimer); missionTimer = null; }
+    const sc = container && container.querySelector('#cd-scrim'), sh = container && container.querySelector('#cd-sheet');
+    if (sc) sc.classList.remove('on');
+    if (sh) { sh.classList.remove('on'); sh.innerHTML = ''; }
+    const ps = container && container.querySelector('#cd-pop-scrim'); if (ps) ps.classList.remove('on');
+    tcState = null; msState = null; tradeTargetFriend = null; tradeFromBoard = false;
+  }
 
   function openSheet(breedId) {
     const b = BY_ID.get(breedId), inv = data.invMap[breedId];
@@ -527,7 +575,6 @@
     const curShowcase = showcaseOrder();
     const showcaseFull = curShowcase.length >= MAX_SHOWCASE && !isShown;
     const showLabel = isShown ? 'Не показывать в рейтинге' : (showcaseFull ? `Уже выбрано ${MAX_SHOWCASE}/${MAX_SHOWCASE}` : 'Показывать в рейтинге');
-    const canTrade = inv.count > 1; // обмен отдаёт только дубликат — как feed
     const duplicatePrice = b.id === 'champion' ? null : PIGEON_PRICE[b.rarity];
     const duplicateBalance = pigeonBuyBalance();
     const canBuyDuplicate = duplicatePrice != null && duplicateBalance >= duplicatePrice;
@@ -547,7 +594,6 @@
       <div class="cd-sheet__hint" style="margin:-6px 0 10px">Скорость · выносливость · удача — решают исход заезда</div>
       <button class="cd-sheet__act" id="cd-drag-one">${FLAG_ICON(15)} Драг-заезд</button>
       <div class="cd-sheet__hint" style="margin:-6px 0 10px">Быстрый заезд именно на этом голубе — тренировка или ставка</div>
-      ${canTrade ? `<button class="cd-sheet__act" id="cd-trade-start">${SWAP_ICON(15)} Предложить обмен</button>` : ''}
     `;
     sc.classList.add('on');
     requestAnimationFrame(() => sh.classList.add('on'));
@@ -562,8 +608,6 @@
     if (tuneBtn) tuneBtn.onclick = () => openTune(breedId);
     const dragBtn = sh.querySelector('#cd-drag-one');
     if (dragBtn) dragBtn.onclick = () => { closeSheet(); if (window.CatDrag) window.CatDrag.open(apiRef, breedId); };
-    const tradeBtn = sh.querySelector('#cd-trade-start');
-    if (tradeBtn) tradeBtn.onclick = () => { tradeFromBoard = false; openTradeWant(breedId); };
   }
 
   // ── Шит закрытой породы: характеристики до получения (имя не раскрываем —
@@ -609,9 +653,11 @@
 
   // ── Задания голубей: один полёт на птицу, результат забирается после таймера ──
   const MISSION_REASON = { bird_busy: 'Этот голубь уже на задании', not_owned: 'Птица не найдена', unknown_mission: 'Задание не найдено', mission_locked: 'Сначала повысь звёзды или тюнинг голубя', not_ready: 'Голубь ещё в пути', not_found: 'Задание уже получено' };
+  let missionClockOffset = 0;
+  const missionNow = () => Date.now() + missionClockOffset;
   const durationText = (sec) => sec < 3600 ? `${Math.round(sec / 60)} мин` : `${Math.round(sec / 3600)} ч`;
   const leftText = (date) => {
-    const s = Math.max(0, Math.ceil((new Date(date).getTime() - Date.now()) / 1000));
+    const s = Math.max(0, Math.ceil((new Date(date).getTime() - missionNow()) / 1000));
     if (!s) return 'готово';
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
     return h ? `${h} ч ${m} мин` : `${m}:${String(x).padStart(2, '0')}`;
@@ -623,7 +669,9 @@
     sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Задания голубей</div></div><div id="cd-missions-body" style="padding:4px 0">Загрузка…</div>`;
     sc.classList.add('on'); requestAnimationFrame(() => sh.classList.add('on'));
     sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+    const view = sheetViewToken();
     await renderMissions();
+    if (!sheetViewActive(view)) return;
     let introSeen = false; try { introSeen = localStorage.getItem('cd_missions_tutorial_v4') === '1'; } catch (_) {}
     if (!introSeen) missionHelpPopup(true);
     if (missionTimer) clearInterval(missionTimer);
@@ -633,7 +681,7 @@
   function updateMissionTimers() {
     if (!container) return;
     container.querySelectorAll('[data-completes]').forEach(el => {
-      const ready = new Date(el.dataset.completes).getTime() <= Date.now();
+      const ready = new Date(el.dataset.completes).getTime() <= missionNow();
       el.textContent = ready ? 'Забрать награду' : `В пути · ${leftText(el.dataset.completes)}`;
       el.disabled = !ready;
     });
@@ -644,6 +692,8 @@
     const sheetTitle = container.querySelector('.cd-sheet__t'); if (sheetTitle) sheetTitle.textContent = 'Задания голубей';
     const d = await apiRef('/api/pigeons/missions').catch(() => null);
     if (!d || !Array.isArray(d.pigeons)) { body.innerHTML = '<div class="cd-sheet__hint">Не удалось загрузить задания</div>'; return; }
+    const serverNow = Date.parse(d.serverNow || '');
+    if (Number.isFinite(serverNow)) missionClockOffset = serverNow - Date.now();
     const defs = new Map((d.missions || []).map(m => [m.id, m]));
     const active = new Map((d.active || []).map(m => [m.breed, m]));
     const cards = d.pigeons.map(p => {
@@ -706,22 +756,34 @@
 
   async function startMissionAct(breed, btn, missionId) {
     if (busy || !missionId) return;
-    busy = true; btn.disabled = true;
+    busy = true; btn.disabled = true; const view = sheetViewToken();
     try {
       const d = await apiRef('/api/pigeons/missions/start', { method: 'POST', body: JSON.stringify({ breed, missionId }) }).catch(() => null);
-      if (d && d.ok) { haptic('medium'); flash('Голубь отправлен!'); await renderMissions(); }
+      let recovered = false;
+      if (!d || d.error === 'internal') {
+        const fresh = await apiRef('/api/pigeons/missions').catch(() => null);
+        recovered = !!(fresh && Array.isArray(fresh.active) && fresh.active.some(m => m.breed === breed && m.mission_id === missionId));
+      }
+      if (!sheetViewActive(view)) return;
+      if ((d && d.ok) || recovered) { haptic('medium'); flash('Голубь отправлен!'); await renderMissions(); }
       else { flash(MISSION_REASON[d && d.error] || 'Не удалось отправить'); btn.disabled = false; }
     } finally { busy = false; }
   }
 
   async function claimMissionAct(id, btn) {
-    if (busy || btn.disabled) return; busy = true; btn.disabled = true;
+    if (busy || btn.disabled) return; busy = true; btn.disabled = true; const view = sheetViewToken();
     try {
-      const d = await apiRef('/api/pigeons/missions/claim', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null);
+      const send = () => apiRef('/api/pigeons/missions/claim', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null);
+      let d = await send();
+      if (!d || d.error === 'internal') d = await send();
+      if (!sheetViewActive(view)) {
+        if (d && d.ok && typeof window.ckRefreshState === 'function') void window.ckRefreshState();
+        return;
+      }
       if (d && d.ok) {
         haptic(d.success ? 'success' : 'medium');
         flash(d.success ? `Задание выполнено: +${fmt(d.reward)}` : `Задание провалено, но голубь привёз +${fmt(d.reward)}`);
-        if (typeof window.ckSyncState === 'function') window.ckSyncState({ balance: num(d.newBalance) });
+        if (typeof window.ckSyncState === 'function') window.ckSyncState({ balance: num(d.newBalance), revision: d.revision });
         await renderMissions();
       } else { flash(MISSION_REASON[d && d.error] || 'Не удалось забрать'); btn.disabled = false; }
     } finally { busy = false; }
@@ -745,7 +807,7 @@
     await renderTune(breedId);
   }
 
-  async function renderTune(breedId, updatedTuning) {
+  async function renderTune(breedId, updatedTuning, updatedRevision) {
     const body = container.querySelector('#cd-tune-body'); if (!body) return;
     const t = updatedTuning || await apiRef('/api/pigeons/tune?breed=' + encodeURIComponent(breedId)).catch(() => null);
     if (!t || t.error) {
@@ -758,9 +820,17 @@
       return;
     }
     if (!t.owned) { body.innerHTML = `<div style="color:var(--muted);font-size:12.5px;text-align:center;padding:10px 0">Птица не найдена</div>`; return; }
-    const balance = num(t.balance);
+    if (updatedTuning) markDataMutation();
+    // На первом GET учитываем оптимистичные тапы, которые общая очередь ещё только
+    // отправляет. После покупки берём строго серверный баланс из ответа, иначе старое
+    // клиентское значение могло повторно включить уже недоступную кнопку.
+    const balance = updatedTuning
+      ? num(t.balance)
+      : Math.max(num(t.balance), typeof window.ckBalance === 'function' ? num(window.ckBalance()) : 0);
+    let passiveDelta = 0;
     if (data && data.invMap[breedId]) {
-      data.passivePerHour += num(t.passivePerHour) - num(data.invMap[breedId].passivePerHour);
+      passiveDelta = num(t.passivePerHour) - num(data.invMap[breedId].passivePerHour);
+      data.passivePerHour += passiveDelta;
       data.invMap[breedId].passivePerHour = num(t.passivePerHour);
       data.invMap[breedId].speed = num(t.speed); data.invMap[breedId].stamina = num(t.stamina); data.invMap[breedId].luck = num(t.luck);
     }
@@ -789,33 +859,80 @@
         <div class="cd-setrow__p">рейтинг силы ${pr}/30 — сумма уровней тюнинга</div>
       </div>
     </div>${rows}`;
+    if (updatedTuning && window.ckSyncState) window.ckSyncState({ balance, revision: updatedRevision, profitDelta: passiveDelta * (data && data.albumDone ? 1.05 : 1) });
     body.querySelectorAll('button[data-stat]').forEach(btn => { btn.onclick = () => tuneAct(breedId, btn.dataset.stat, btn); });
   }
 
   async function tuneAct(breedId, stat, btn) {
-    if (busy) return; busy = true; if (btn) btn.disabled = true;
+    if (busy) return; busy = true; if (btn) btn.disabled = true; const view = sheetViewToken();
     try {
       const d = await apiRef('/api/pigeons/tune', { method: 'POST', body: JSON.stringify({ breed: breedId, stat }) }).catch(() => null);
       // Сервер возвращает авторитетное состояние после покупки: повторный GET больше
       // не нужен и длинная серия прокачек не упирается в лимит чтения.
-      if (d && d.ok) { haptic('medium'); await renderTune(breedId, d.tuning); }
-      else { flash(TUNE_REASON[d && d.error] || 'Не получилось прокачать'); if (btn) btn.disabled = false; }
+      if (d && d.ok) {
+        if (!sheetViewActive(view)) {
+          // Пользователь уже открыл другой лист. Не рисуем ответ старого голубя в
+          // новом #cd-tune-body; перечитываем общий альбом только в памяти.
+          markDataMutation();
+          const previous = data;
+          await load();
+          if (!data) data = previous;
+          if (typeof window.ckRefreshState === 'function') await window.ckRefreshState();
+          refreshMainWhenSheetAllows();
+          return;
+        }
+        haptic('medium'); await renderTune(breedId, d.tuning, d.revision);
+      }
+      else if (!d || d.error === 'internal') {
+        // Покупка могла закоммититься до обрыва ответа: не повторяем списание,
+        // а перечитываем авторитетные уровень и баланс.
+        if (typeof window.ckRefreshState === 'function') await window.ckRefreshState();
+        markDataMutation();
+        if (sheetViewActive(view)) {
+          await renderTune(breedId);
+          flash('Связь прервалась — проверь текущий уровень перед повтором');
+        } else {
+          const previous = data;
+          await load();
+          if (!data) data = previous;
+          refreshMainWhenSheetAllows();
+        }
+      } else if (sheetViewActive(view)) { flash(TUNE_REASON[d.error] || 'Не получилось прокачать'); if (btn) btn.disabled = false; }
     } finally { busy = false; }
   }
 
   const FEED_REASON = { not_owned: 'Птица не найдена', max_stars: 'Максимум звёзд', not_enough_dupes: 'Не хватает запасных дублей' };
   async function feedAct(breedId, btn) {
-    if (busy) return; busy = true; if (btn) btn.disabled = true;
+    if (busy) return; busy = true; if (btn) btn.disabled = true; const view = sheetViewToken();
     try {
       const d = await apiRef('/api/pigeons/feed', { method: 'POST', body: JSON.stringify({ breed: breedId }) }).catch(() => null);
       if (d && d.ok) {
+        markDataMutation();
+        const oldPassive = num(data.invMap[breedId].passivePerHour);
+        if (typeof window.ckSyncState === 'function' && typeof d.newBalance === 'number') window.ckSyncState({ balance: num(d.newBalance), revision: d.revision });
         data.invMap[breedId].stars = num(d.stars) || data.invMap[breedId].stars;
         data.invMap[breedId].count -= num(d.spent) || 0;
+        if (typeof d.passivePerHour === 'number') {
+          const passiveDelta = num(d.passivePerHour) - oldPassive;
+          data.invMap[breedId].passivePerHour = num(d.passivePerHour);
+          data.passivePerHour += passiveDelta;
+          if (typeof window.ckSyncState === 'function') window.ckSyncState({ profitDelta: passiveDelta * (data.albumDone ? 1.05 : 1) });
+        }
+        if (!sheetViewActive(view)) { refreshMainWhenSheetAllows(); return; }
         haptic('medium');
         closeSheet();
         render();
-      } else {
-        flash(FEED_REASON[d && d.error] || 'Не получилось скормить дубли');
+      } else if (!d || d.error === 'internal') {
+        const previous = data;
+        await load();
+        if (!data) data = previous;
+        if (typeof window.ckRefreshState === 'function') await window.ckRefreshState();
+        const viewWasActive = sheetViewActive(view);
+        if (viewWasActive) { closeSheet(); render(); }
+        else refreshMainWhenSheetAllows();
+        if (viewWasActive) flash('Связь прервалась — проверь звёзды и дубли перед повтором');
+      } else if (sheetViewActive(view)) {
+        flash(FEED_REASON[d.error] || 'Не получилось скормить дубли');
         if (btn) btn.disabled = false;
       }
     } finally { busy = false; }
@@ -823,19 +940,23 @@
 
   const SHOW_REASON = { bad_input: 'Можно выбрать не больше трёх голубей', unknown_breed: 'Неизвестная порода', not_owned: 'Птица не найдена' };
   async function showcaseAct(breedId, wasShown, btn) {
-    if (busy) return; busy = true; if (btn) btn.disabled = true;
+    if (busy) return; busy = true; if (btn) btn.disabled = true; const view = sheetViewToken();
     try {
       let breeds = showcaseOrder();
       if (wasShown) breeds = breeds.filter(id => id !== breedId);
       else { if (breeds.length >= MAX_SHOWCASE) { flash(`Для рейтинга уже выбрано ${MAX_SHOWCASE}/${MAX_SHOWCASE}`); return; } breeds = breeds.concat([breedId]); }
-      const d = await apiRef('/api/pigeons/showcase', { method: 'POST', body: JSON.stringify({ breeds }) }).catch(() => null);
+      const send = () => apiRef('/api/pigeons/showcase', { method: 'POST', body: JSON.stringify({ breeds }) }).catch(() => null);
+      let d = await send();
+      if (!d || d.error === 'internal') d = await send(); // абсолютный список пород: повтор идемпотентен
       if (d && d.ok) {
+        markDataMutation();
         Object.keys(data.invMap).forEach(id => { data.invMap[id].showcase = 0; });
         breeds.forEach((id, i) => { if (data.invMap[id]) data.invMap[id].showcase = i + 1; });
+        if (!sheetViewActive(view)) { refreshMainWhenSheetAllows(); return; }
         haptic('light');
         closeSheet();
         render();
-      } else {
+      } else if (sheetViewActive(view)) {
         flash(SHOW_REASON[d && d.error] || 'Не получилось обновить выбор');
         if (btn) btn.disabled = false;
       }
@@ -866,7 +987,9 @@
   }
   async function loadRecipients() {
     if (recipients) return recipients;
+    const account = currentAccount();
     const d = await apiRef('/api/pigeons/recipients').catch(() => null);
+    if (account !== currentAccount()) return { friends: [], squad: [], refs: [], friendLink: '' };
     recipients = (d && Array.isArray(d.squad) && Array.isArray(d.refs))
       ? { friends: Array.isArray(d.friends) ? d.friends : [], squad: d.squad, refs: d.refs, friendLink: d.friendLink || '' }
       : { friends: [], squad: [], refs: [], friendLink: '' };
@@ -890,9 +1013,9 @@
     sh.querySelector('#cd-sheet-x').onclick = closeSheet;
     const inviteBtn = sh.querySelector('#cd-fr-invite');
     if (inviteBtn) inviteBtn.onclick = () => shareFriendLink(recipients);
-    const rec = await refreshRecipients();
     const list = sh.querySelector('#cd-fr-list');
-    if (!list) return;
+    const rec = await refreshRecipients();
+    if (!list || !list.isConnected) return;
     const friends = Array.isArray(rec.friends) ? rec.friends : [];
     list.innerHTML = friends.length
       ? friends.map(r => `<div class="cd-reciperow cd-friend-open" data-chat="${r.chat}"><span>${esc(r.name)}</span><small>${r.username ? '@' + esc(r.username) + ' · ' : ''}нажми, чтобы открыть друга</small></div>`).join('')
@@ -912,7 +1035,11 @@
       <button class="cd-sheet__act" id="cd-friend-duel">${FLAG_ICON(15)} Вызвать на дуэль</button>
       <div class="cd-sheet__hint" style="margin-top:2px">Здесь можно написать другу в Telegram или вызвать его на дуэль. Обмен породами отключён.</div>`;
     sh.querySelector('#cd-sheet-x').onclick = openFriendsPage;
-    const tg = sh.querySelector('#cd-friend-tg'); if (tg) tg.onclick = () => { window.open('https://t.me/' + encodeURIComponent(username), '_blank'); };
+    const tg = sh.querySelector('#cd-friend-tg'); if (tg) tg.onclick = () => {
+      const url = 'https://t.me/' + encodeURIComponent(username);
+      if (window.App && App.openExternal) App.openExternal(url);
+      else window.open(url, '_blank');
+    };
     sh.querySelector('#cd-friend-duel').onclick = () => openFriendRaceStakePicker(friend);
   }
 
@@ -1062,25 +1189,47 @@
   let buyBusy = false;
   function pigeonBuyBalance() { return typeof window.ckBalance === 'function' ? num(window.ckBalance()) : 0; }
   async function buyPigeonAct(breed, redraw) {
-    if (buyBusy) return; buyBusy = true;
+    if (buyBusy) return; buyBusy = true; const view = sheetViewToken();
+    try {
     const b = BY_ID.get(breed);
-    const d = await apiRef('/api/pigeons/buy', { method: 'POST', body: JSON.stringify({ breed }) }).catch(() => null);
-    buyBusy = false;
+    const beforeCount = num(data && data.invMap[breed] && data.invMap[breed].count);
+    let d = await apiRef('/api/pigeons/buy', { method: 'POST', body: JSON.stringify({ breed }) }).catch(() => null);
+    let recovered = false;
+    if (!d || d.error === 'internal') {
+      const previous = data;
+      await load();
+      if (!data) data = previous;
+      recovered = num(data && data.invMap[breed] && data.invMap[breed].count) > beforeCount;
+      if (typeof window.ckRefreshState === 'function') await window.ckRefreshState();
+      if (recovered) d = { ok: true, isNew: beforeCount === 0 };
+    }
     if (!d || d.error) {
-      flash(d && d.error === 'not_enough_coins' ? 'Не хватает монет' : d && d.error === 'not_buyable' ? 'Эту породу не купить' : 'Не получилось купить');
+      if (!sheetViewActive(view)) return;
+      flash(!d ? 'Связь прервалась — открой альбом заново и проверь покупку' : d.error === 'not_enough_coins' ? 'Не хватает монет' : d.error === 'not_buyable' ? 'Эту породу не купить' : 'Не получилось купить');
       return;
     }
-    haptic('success');
+    markDataMutation();
     // Обновляем инвентарь с сервера: покупка может закрыть сет, а sets.owned/claimed живут в /api/pigeons.
-    const inv = data.invMap[breed] || { count: 0, stars: 1, showcase: 0 };
-    inv.count = num(inv.count) + 1; data.invMap[breed] = inv;
-    if (typeof window.ckSyncState === 'function' && typeof d.newBalance === 'number') window.ckSyncState({ balance: d.newBalance });
+    if (!recovered) {
+      const inv = data.invMap[breed] || { count: 0, stars: 1, showcase: 0 };
+      inv.count = num(inv.count) + 1; data.invMap[breed] = inv;
+    }
+    if (typeof window.ckSyncState === 'function' && typeof d.newBalance === 'number') window.ckSyncState({ balance: d.newBalance, revision: d.revision });
+    const previous = data;
     await load();
+    if (!data) data = previous;
+    // Новая порода может закрыть сет/альбом и изменить общий пассив не только на
+    // вкладке голубей, поэтому забираем точный ClickerState с сервера даже если
+    // исходный лист за время покупки уже закрыли.
+    if (typeof window.ckRefreshState === 'function') await window.ckRefreshState();
+    if (!sheetViewActive(view)) { refreshMainWhenSheetAllows(); return; }
     needsRerenderOnClose = true;
     const ready = (data.sets || []).find(s => num(s.owned) >= 4 && !s.claimed);
     const bought = data.invMap[breed];
+    haptic('success');
     flash(ready ? 'Сет собран — забери награду!' : d.isNew ? (b ? b.name : 'Голубь') + ' теперь твой! Гоняй в Драг-заезде' : `Дубль добавлен · запасных: ${Math.max(0, num(bought && bought.count) - 1)}`);
     if (redraw) redraw();
+    } finally { buyBusy = false; }
   }
 
   // ── Обмены: доска (Мне/Доска/Мои) ───────────────────────────────────────────
@@ -1346,7 +1495,7 @@
     const link = (rec && rec.friendLink) || fallbackFriendLink();
     if (!link) { flash('Ссылка дружбы недоступна'); return; }
     haptic('light');
-    const text = '🕊️ Добавь меня в друзья в «Котик Комбат» — будем слать друг другу голубей и устраивать дуэли!';
+    const text = '🕊️ Добавь меня в друзья в «Котик Комбат» — будем устраивать голубиные дуэли!';
     const full = `${text} ${link}`;
     if (window.App && App.share) { App.share(link, text); return; }
     if (navigator.share) { navigator.share({ url: link, text }).catch(() => copyFriendLink(full)); return; }
@@ -1543,17 +1692,18 @@
     sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Дуэли с друзьями</div></div><div id="cd-friend-race-list">${skeletonRows(3)}</div>`;
     sc.classList.add('on'); requestAnimationFrame(() => sh.classList.add('on'));
     sh.querySelector('#cd-sheet-x').onclick = openRacePage;
+    const box = sh.querySelector('#cd-friend-race-list');
     const rec = await loadRecipients();
     const duels = await apiRef('/api/pigeons/drag/duels').catch(() => ({ incoming: [], outgoing: [], done: [] }));
     const friends = Array.isArray(rec.friends) ? rec.friends : [];
     const incoming = Array.isArray(duels.incoming) ? duels.incoming : [];
     const outgoing = Array.isArray(duels.outgoing) ? duels.outgoing : [];
-    const box = sh.querySelector('#cd-friend-race-list'); if (!box) return;
+    if (!box || !box.isConnected) return;
     const incomingHtml = incoming.length
       ? `<div class="cd-sect-t">Тебя вызвали</div>${incoming.map(d => `<div class="cd-reciperow"><div class="cd-duel-in" data-id="${num(d.id)}" style="flex:1;min-width:0"><span>${esc(d.fromName || 'Друг')} · ${d.stake ? fmt(d.stake) + ' монет' : 'без ставки'}</span><small>нажми, чтобы принять и выбрать голубя</small></div><button class="cd-tbtn cd-tbtn--ghost cd-duel-decline" data-id="${num(d.id)}">Отказать</button></div>`).join('')}`
       : '';
     const outgoingHtml = outgoing.length
-      ? `<div class="cd-sect-t">Ждут ответа</div>${outgoing.map(d => `<div class="cd-reciperow"><span>${esc(d.fromName || d.toName || 'Друг')} · ${fmt(d.stake || 0)}</span><small>друг ещё не выбрал голубя</small></div>`).join('')}`
+      ? `<div class="cd-sect-t">Ждут ответа</div>${outgoing.map(d => `<div class="cd-reciperow"><div style="flex:1;min-width:0"><span>${esc(d.fromName || d.toName || 'Друг')} · ${d.stake ? fmt(d.stake) + ' монет' : 'без ставки'}</span><small>друг ещё не выбрал голубя</small></div><button class="cd-tbtn cd-tbtn--ghost cd-duel-cancel" data-id="${num(d.id)}">Отменить</button></div>`).join('')}`
       : '';
     const friendsHtml = friends.length
       ? `<div class="cd-sect-t">Создать дуэль</div>${friends.map(r => `<div class="cd-reciperow cd-duel-new" data-chat="${num(r.chat)}" data-name="${esc(r.name)}"><span>${esc(r.name)}</span><small>только вы вдвоём · можно со ставкой</small></div>`).join('')}`
@@ -1563,16 +1713,37 @@
     const byId = new Map(incoming.map(d => [num(d.id), d]));
     box.querySelectorAll('.cd-duel-in').forEach(el => { el.onclick = () => openFriendRaceAcceptBreedPicker(byId.get(num(el.dataset.id))); });
     box.querySelectorAll('.cd-duel-decline').forEach(el => { el.onclick = () => declineDuelAct(num(el.dataset.id), el); });
+    box.querySelectorAll('.cd-duel-cancel').forEach(el => { el.onclick = () => cancelDuelAct(num(el.dataset.id), el); });
     box.querySelectorAll('.cd-duel-new').forEach(el => { el.onclick = () => openFriendRaceStakePicker({ chat: num(el.dataset.chat), name: el.dataset.name || 'Друг' }); });
     const btn = box.querySelector('#cd-friend-race-link'); if (btn) btn.onclick = shareFriendLink;
   }
 
   async function declineDuelAct(id, btn) {
-    if (busy) return; busy = true; if (btn) btn.disabled = true;
+    if (busy) return; busy = true; if (btn) btn.disabled = true; const view = sheetViewToken();
     try {
-      const d = await apiRef('/api/pigeons/drag/duel/decline', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null);
+      const send = () => apiRef('/api/pigeons/drag/duel/decline', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null);
+      let d = await send();
+      if (!d || d.error === 'internal') d = await send();
+      if (!sheetViewActive(view)) return;
       if (d && d.ok) { haptic('light'); flash('Ты отказался от дуэли'); openFriendRaceFriendPicker(); }
       else { flash('Вызов уже недоступен'); if (btn) btn.disabled = false; }
+    } finally { busy = false; }
+  }
+
+  async function cancelDuelAct(id, btn) {
+    if (busy) return; busy = true; if (btn) btn.disabled = true; const view = sheetViewToken();
+    try {
+      const send = () => apiRef('/api/pigeons/drag/duel/cancel', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => null);
+      let d = await send();
+      if (!d || d.error === 'internal') d = await send();
+      if (!sheetViewActive(view)) {
+        if (d && d.ok && typeof window.ckRefreshState === 'function') void window.ckRefreshState();
+        return;
+      }
+      if (d && d.ok) {
+        if (typeof window.ckSyncState === 'function' && typeof d.newBalance === 'number') window.ckSyncState({ balance: d.newBalance, revision: d.revision });
+        haptic('light'); flash('Вызов отменён, ставка возвращена'); openFriendRaceFriendPicker();
+      } else { flash('Вызов уже недоступен'); if (btn) btn.disabled = false; }
     } finally { busy = false; }
   }
 
@@ -1700,18 +1871,25 @@
     p.querySelector('#cd-pop-ok').onclick = closeRewardPopup;
   }
   async function claimSetAct(setId, btn) {
-    if (busy) return; busy = true; if (btn) btn.disabled = true;
+    if (busy) return; busy = true;
+    const account = currentAccount();
+    const anchor = btn || (container && container.querySelector('#cd-hint-cta')); if (anchor) anchor.disabled = true;
     try {
-      const d = await apiRef('/api/pigeons/set-claim', { method: 'POST', body: JSON.stringify({ set: setId }) }).catch(() => null);
+      const send = () => apiRef('/api/pigeons/set-claim', { method: 'POST', body: JSON.stringify({ set: setId }) }).catch(() => null);
+      let d = await send();
+      if (!d || d.error === 'internal') d = await send();
+      if (account !== currentAccount()) return;
       if (d && d.ok) {
+        markDataMutation();
         const s = data.sets.find(x => x.id === setId); if (s) s.claimed = true;
-        if (typeof window.ckSyncState === 'function' && typeof d.newBalance === 'number') window.ckSyncState({ balance: d.newBalance });
+        if (typeof window.ckSyncState === 'function' && typeof d.newBalance === 'number') window.ckSyncState({ balance: d.newBalance, revision: d.revision });
+        if (anchor && (!anchor.isConnected || !container.contains(anchor))) return;
         haptic('medium');
         render();
         rewardPopup(d.reward);
-      } else {
+      } else if (anchor && anchor.isConnected && container.contains(anchor)) {
         flash(CLAIM_REASON[d && d.error] || 'Не получилось забрать награду');
-        if (btn) btn.disabled = false;
+        if (anchor) anchor.disabled = false;
       }
     } finally { busy = false; }
   }
@@ -1732,6 +1910,14 @@
     if (!api || !authed()) return;
     const d = await api('/api/pigeons').catch(() => null);
     if (d && window.ckUpdateDoveBadge) window.ckUpdateDoveBadge(num(d.unreadMail));
+  }
+
+  async function refresh() {
+    if (mountReady) await mountReady;
+    if (!container) return;
+    if (refreshReady) return refreshReady;
+    refreshReady = (async () => { await load(); render(); })();
+    try { await refreshReady; } finally { refreshReady = null; }
   }
 
   // Публичный хелпер для лидерборда (catclick.js::renderTop) — рендерит до 3 мини-иконок
@@ -1760,5 +1946,5 @@
     openFriendRaceAcceptBreedPicker(duel);
   }
 
-  window.CatDove = { mount, refreshBadge, miniIconsHtml, openIncomingDuel, openDuels: openFriendRaceFriendPicker };
+  window.CatDove = { mount, refresh, refreshBadge, miniIconsHtml, openIncomingDuel, openDuels: openFriendRaceFriendPicker, closeAll };
 })();

@@ -1,10 +1,11 @@
-import { Pool } from "pg";
+import crypto from "crypto";
+import { Pool, type PoolClient } from "pg";
 
 // SSL нужен только внешним managed-БД (Neon); локальный postgres в docker-сети без TLS.
 const needSsl = /neon\.tech|sslmode=require/.test(process.env.DATABASE_URL || "");
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: needSsl ? { rejectUnauthorized: false } : undefined,
+  ssl: needSsl ? { rejectUnauthorized: true } : undefined,
   max: 10,
 });
 
@@ -68,7 +69,12 @@ export async function initDb() {
       kind      TEXT   NOT NULL,
       sent_at   TIMESTAMPTZ DEFAULT NOW()
     );
+    ALTER TABLE notification_log ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'sent';
+    ALTER TABLE notification_log ADD COLUMN IF NOT EXISTS reservation_id TEXT;
+    ALTER TABLE notification_log ADD COLUMN IF NOT EXISTS dedupe_key TEXT;
     CREATE INDEX IF NOT EXISTS notification_log_chat_idx ON notification_log (chat_id, sent_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS notification_log_reservation_idx ON notification_log (reservation_id) WHERE reservation_id IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS notification_log_dedupe_idx ON notification_log (chat_id, dedupe_key) WHERE dedupe_key IS NOT NULL;
 
     CREATE TABLE IF NOT EXISTS notification_prefs (
       chat_id           BIGINT PRIMARY KEY,
@@ -188,6 +194,31 @@ export async function initDb() {
     );
     CREATE INDEX IF NOT EXISTS promo_uses_code_idx ON promo_uses (code, used_at DESC);
     CREATE INDEX IF NOT EXISTS promo_uses_chat_idx ON promo_uses (chat_id, code);
+
+    -- Идемпотентность оформления заказа: повторный клик/повтор сети с тем же
+    -- ключом возвращает уже созданный заказ, а не создаёт второй.
+    CREATE TABLE IF NOT EXISTS order_requests (
+      idempotency_key TEXT PRIMARY KEY,
+      owner_key       TEXT NOT NULL,
+      request_hash    TEXT NOT NULL,
+      status          TEXT NOT NULL DEFAULT 'pending',
+      response        JSONB,
+      created_at      TIMESTAMPTZ DEFAULT NOW(),
+      updated_at      TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS order_requests_created_idx ON order_requests (created_at DESC);
+
+    -- Локальная привязка заказов, созданных Mini App, к владельцу. Нужна для
+    -- безопасной оценки заказа до того, как он появится в истории внешнего LK.
+    CREATE TABLE IF NOT EXISTS app_order_owners (
+      order_id   TEXT NOT NULL,
+      chat_id    BIGINT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (order_id, chat_id)
+    );
+
+    DELETE FROM order_requests
+      WHERE status='succeeded' AND created_at < NOW() - INTERVAL '30 days';
   `);
   console.log("[DB] Tables ready");
 }
@@ -476,27 +507,40 @@ export async function markHolidayPushSent(chatId: number, holidayId: string, yea
 
 // Referral codes
 export async function getOrCreateReferralCode(chatId: number, firstName?: string | null): Promise<string> {
-  const { rows } = await pool.query(`SELECT code FROM referral_codes WHERE owner_chat = $1 LIMIT 1`, [chatId]);
-  if (rows[0]?.code) return rows[0].code as string;
-  // Генерация кода: MARIA-{first_name uppercase ASCII или короткий hash}
-  const cleanName = (firstName || "")
-    .toUpperCase()
-    .replace(/[^A-ZА-Я0-9]/g, "")
-    .slice(0, 8);
-  const tail = cleanName.length >= 2 ? cleanName : chatId.toString(36).toUpperCase().slice(-5);
-  let code = `MARIA-${tail}`;
-  // Проверка уникальности — если занято, добавим суффикс
-  for (let i = 0; i < 5; i++) {
-    const taken = await pool.query(`SELECT 1 FROM referral_codes WHERE code = $1`, [code]);
-    if (taken.rows.length === 0) break;
-    code = `MARIA-${tail}${i + 2}`;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    // Сериализуем создание кода одного владельца: без этого два параллельных
+    // запроса могли выдать разные коды или вернуть код чужого владельца.
+    await client.query(`SELECT pg_advisory_xact_lock($1::bigint)`, [chatId]);
+    const existing = await client.query(`SELECT code FROM referral_codes WHERE owner_chat=$1 ORDER BY created_at LIMIT 1`, [chatId]);
+    if (existing.rows[0]?.code) {
+      await client.query("COMMIT");
+      return String(existing.rows[0].code);
+    }
+    const cleanName = (firstName || "").toUpperCase().replace(/[^A-ZА-Я0-9]/g, "").slice(0, 8);
+    const tail = cleanName.length >= 2 ? cleanName : chatId.toString(36).toUpperCase().slice(-6);
+    const ownerSuffix = chatId.toString(36).toUpperCase().slice(-6);
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const suffix = attempt === 0 ? "" : `-${ownerSuffix}${attempt === 1 ? "" : attempt}`;
+      const code = `MARIA-${tail}${suffix}`;
+      const inserted = await client.query(
+        `INSERT INTO referral_codes (code, owner_chat) VALUES ($1,$2)
+         ON CONFLICT (code) DO NOTHING RETURNING code`,
+        [code, chatId],
+      );
+      if (inserted.rows[0]?.code) {
+        await client.query("COMMIT");
+        return String(inserted.rows[0].code);
+      }
+    }
+    throw new Error("referral_code_collision");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
   }
-  await pool.query(
-    `INSERT INTO referral_codes (code, owner_chat) VALUES ($1, $2)
-     ON CONFLICT (code) DO NOTHING`,
-    [code, chatId]
-  );
-  return code;
 }
 
 export async function getReferralOwner(code: string): Promise<number | null> {
@@ -530,8 +574,152 @@ export interface NotificationPrefs {
   marketing_rewards: boolean;
   marketing_game: boolean;
 }
-export async function getNotificationPrefs(chatId: number): Promise<NotificationPrefs> {
+
+/** Проверка лимитов и запись использования выполняются под одной DB-блокировкой. */
+export async function recordPromoUseGuarded(
+  code: string,
+  chatId: number | null,
+  orderId: string | null,
+  maxUsesTotal: number | null,
+  onePerUser: boolean,
+): Promise<{ ok: boolean; reason?: "login_required" | "already_used" | "max_uses_reached" }> {
+  if (onePerUser && !chatId) return { ok: false, reason: "login_required" };
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [String(code).toUpperCase()]);
+    if (orderId) {
+      const duplicate = await client.query(
+        `SELECT 1 FROM promo_uses WHERE code=$1 AND order_id=$2 LIMIT 1`,
+        [String(code).toUpperCase(), orderId],
+      );
+      if (duplicate.rowCount) {
+        await client.query("COMMIT");
+        return { ok: true };
+      }
+    }
+    if (onePerUser && chatId) {
+      const used = await client.query(
+        `SELECT 1 FROM promo_uses WHERE chat_id=$1 AND code=$2 LIMIT 1`,
+        [chatId, String(code).toUpperCase()],
+      );
+      if (used.rowCount) {
+        await client.query("ROLLBACK");
+        return { ok: false, reason: "already_used" };
+      }
+    }
+    if (maxUsesTotal != null) {
+      const count = await client.query(
+        `SELECT COUNT(*)::int AS cnt FROM promo_uses WHERE code=$1`,
+        [String(code).toUpperCase()],
+      );
+      if (Number(count.rows[0]?.cnt ?? 0) >= maxUsesTotal) {
+        await client.query("ROLLBACK");
+        return { ok: false, reason: "max_uses_reached" };
+      }
+    }
+    await client.query(
+      `INSERT INTO promo_uses (code, chat_id, order_id) VALUES ($1, $2, $3)`,
+      [String(code).toUpperCase(), chatId, orderId],
+    );
+    await client.query("COMMIT");
+    return { ok: true };
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function releasePromoUse(code: string, orderRef: string): Promise<void> {
+  await pool.query(`DELETE FROM promo_uses WHERE code=$1 AND order_id=$2`, [String(code).toUpperCase(), orderRef]);
+}
+
+export async function finalizePromoUseOrder(code: string, orderRef: string, orderId: string): Promise<void> {
+  await pool.query(
+    `UPDATE promo_uses SET order_id=$3 WHERE code=$1 AND order_id=$2`,
+    [String(code).toUpperCase(), orderRef, orderId],
+  );
+}
+
+export type OrderRequestClaim =
+  | { state: "claimed" }
+  | { state: "pending" }
+  | { state: "conflict" }
+  | { state: "succeeded"; response: Record<string, unknown> };
+
+export async function lookupOrderRequest(
+  idempotencyKey: string,
+  ownerKey: string,
+  requestHash: string,
+): Promise<OrderRequestClaim | null> {
   const { rows } = await pool.query(
+    `SELECT owner_key, request_hash, status, response FROM order_requests WHERE idempotency_key=$1`,
+    [idempotencyKey],
+  );
+  const row = rows[0];
+  if (!row) return null;
+  if (row.owner_key !== ownerKey || row.request_hash !== requestHash) return { state: "conflict" };
+  if (row.status === "succeeded" && row.response && typeof row.response === "object") {
+    return { state: "succeeded", response: row.response as Record<string, unknown> };
+  }
+  return { state: "pending" };
+}
+
+export async function claimOrderRequest(
+  idempotencyKey: string,
+  ownerKey: string,
+  requestHash: string,
+): Promise<OrderRequestClaim> {
+  const inserted = await pool.query(
+    `INSERT INTO order_requests (idempotency_key, owner_key, request_hash)
+     VALUES ($1,$2,$3) ON CONFLICT (idempotency_key) DO NOTHING
+     RETURNING idempotency_key`,
+    [idempotencyKey, ownerKey, requestHash],
+  );
+  if (inserted.rowCount) return { state: "claimed" };
+  const { rows } = await pool.query(
+    `SELECT owner_key, request_hash, status, response FROM order_requests WHERE idempotency_key=$1`,
+    [idempotencyKey],
+  );
+  const row = rows[0];
+  if (!row || row.owner_key !== ownerKey || row.request_hash !== requestHash) return { state: "conflict" };
+  if (row.status === "succeeded" && row.response && typeof row.response === "object") {
+    return { state: "succeeded", response: row.response as Record<string, unknown> };
+  }
+  return { state: "pending" };
+}
+
+export async function completeOrderRequest(idempotencyKey: string, response: Record<string, unknown>): Promise<void> {
+  await pool.query(
+    `UPDATE order_requests SET status='succeeded', response=$2::jsonb, updated_at=NOW()
+     WHERE idempotency_key=$1 AND status='pending'`,
+    [idempotencyKey, JSON.stringify(response)],
+  );
+}
+
+export async function releaseOrderRequest(idempotencyKey: string): Promise<void> {
+  await pool.query(`DELETE FROM order_requests WHERE idempotency_key=$1 AND status='pending'`, [idempotencyKey]);
+}
+
+export async function recordAppOrderOwner(chatId: number, orderId: string): Promise<void> {
+  await pool.query(
+    `INSERT INTO app_order_owners (order_id, chat_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+    [orderId, chatId],
+  );
+}
+
+export async function isAppOrderOwner(chatId: number, orderId: string): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `SELECT 1 FROM app_order_owners WHERE order_id=$1 AND chat_id=$2 LIMIT 1`,
+    [orderId, chatId],
+  );
+  return Boolean(rowCount);
+}
+type QueryDb = Pick<PoolClient, "query">;
+export async function getNotificationPrefs(chatId: number, db: QueryDb = pool): Promise<NotificationPrefs> {
+  const { rows } = await db.query(
     `SELECT marketing_promo, marketing_rewards, marketing_game FROM notification_prefs WHERE chat_id = $1`,
     [chatId]
   );
@@ -693,6 +881,20 @@ export async function recordSpin(chatId: number): Promise<{ prize: SpinPrize; al
 }
 
 // ─── Visit Streaks ───────────────────────────────────────────────────────────
+export function advanceVisitStreak(
+  current: number,
+  longest: number,
+  consecutiveDay: boolean,
+): { current: number; longest: number; reachedReward: boolean } {
+  const reached = consecutiveDay ? Math.max(0, Math.floor(current)) + 1 : 1;
+  const nextLongest = Math.max(Math.max(0, Math.floor(longest)), reached);
+  return {
+    current: reached >= 7 ? 0 : reached,
+    longest: nextLongest,
+    reachedReward: reached >= 7,
+  };
+}
+
 export async function touchVisitStreak(chatId: number): Promise<{ currentStreak: number; longestStreak: number; reachedReward: boolean }> {
   const now = new Date();
   const toIrk = (d: Date) => new Date(d.getTime() + 8 * 3600_000);
@@ -726,23 +928,18 @@ export async function touchVisitStreak(chatId: number): Promise<{ currentStreak:
       await client.query("COMMIT");
       return { currentStreak: cur, longestStreak: longest, reachedReward: false };
     }
-    if (lastIrk === yesterdayIrk) {
-      cur += 1;
-    } else {
-      cur = 1; // streak обнулён
-    }
-    let reachedReward = false;
-    if (cur >= 7) {
+    const advanced = advanceVisitStreak(cur, longest, lastIrk === yesterdayIrk);
+    cur = advanced.current;
+    longest = advanced.longest;
+    const reachedReward = advanced.reachedReward;
+    if (reachedReward) {
       // Награда! Сбрасываем streak.
       await client.query(
         `INSERT INTO earned_rewards (chat_id, kind, value, source)
          VALUES ($1, 'free_dessert', '1', 'streak_7')`,
         [chatId]
       );
-      reachedReward = true;
-      cur = 0; // новый цикл — пусть сбросится
     }
-    longest = Math.max(longest, cur);
     await client.query(
       `UPDATE visit_streaks SET current_streak = $2, longest_streak = $3, last_visit_date = $4::date WHERE chat_id = $1`,
       [chatId, cur, longest, todayIrk]
@@ -796,13 +993,16 @@ export async function getUnusedRewards(chatId: number): Promise<{ id: number; ki
   return rows;
 }
 
-export async function consumeRewards(chatId: number): Promise<{ id: number; kind: string; value: string; source: string }[]> {
-  // Атомарно помечаем все unused награды юзера как используемые и возвращаем их
+export async function consumeRewards(chatId: number, rewardIds: number[]): Promise<{ id: number; kind: string; value: string; source: string }[]> {
+  const ids = [...new Set(rewardIds.filter((id) => Number.isInteger(id) && id > 0))];
+  if (ids.length === 0) return [];
+  // Помечаем только тот снимок наград, который реально попал в заказ. Награда,
+  // заработанная параллельно во время оформления, останется неиспользованной.
   const { rows } = await pool.query(
     `UPDATE earned_rewards SET used_at = NOW()
-     WHERE chat_id = $1 AND used_at IS NULL
+     WHERE chat_id = $1 AND id = ANY($2::bigint[]) AND used_at IS NULL
      RETURNING id, kind, value, source`,
-    [chatId]
+    [chatId, ids]
   );
   return rows;
 }
@@ -821,14 +1021,14 @@ function isQuietHours(): boolean {
   return irkHour >= 22 || irkHour < 9;
 }
 
-export async function canSendNotification(chatId: number, kind: NotificationKind): Promise<{ ok: boolean; reason?: string }> {
+export async function canSendNotification(chatId: number, kind: NotificationKind, db: QueryDb = pool): Promise<{ ok: boolean; reason?: string }> {
   const isMarketing = kind === "marketing" || kind === "marketing_promo" || kind === "marketing_rewards" || kind === "marketing_game";
   if (isMarketing && isQuietHours()) {
     return { ok: false, reason: "quiet_hours" };
   }
   // User-prefs check
   if (kind === "marketing_promo" || kind === "marketing_rewards" || kind === "marketing_game") {
-    const prefs = await getNotificationPrefs(chatId);
+    const prefs = await getNotificationPrefs(chatId, db);
     if (kind === "marketing_promo"   && !prefs.marketing_promo)   return { ok: false, reason: "promo_disabled" };
     if (kind === "marketing_rewards" && !prefs.marketing_rewards) return { ok: false, reason: "rewards_disabled" };
     if (kind === "marketing_game"    && !prefs.marketing_game)    return { ok: false, reason: "game_disabled" };
@@ -836,9 +1036,11 @@ export async function canSendNotification(chatId: number, kind: NotificationKind
   // Недельный лимит маркетинга (1/нед) — НЕ распространяется на игровые пуши:
   // у них своя частота (1/день максимум, контролируется крон-джобом).
   if (isMarketing && kind !== "marketing_game") {
-    const { rows } = await pool.query(
+    const { rows } = await db.query(
       `SELECT COUNT(*)::int AS cnt FROM notification_log
-       WHERE chat_id = $1 AND kind LIKE 'marketing%' AND kind <> 'marketing_game' AND sent_at > NOW() - INTERVAL '7 days'`,
+       WHERE chat_id = $1 AND kind LIKE 'marketing%' AND kind <> 'marketing_game'
+         AND sent_at > NOW() - INTERVAL '7 days'
+         AND (status='sent' OR sent_at > NOW() - INTERVAL '15 minutes')`,
       [chatId]
     );
     if ((rows[0]?.cnt ?? 0) >= RATE_RULES.marketing.maxPerWeek) {
@@ -846,9 +1048,10 @@ export async function canSendNotification(chatId: number, kind: NotificationKind
     }
   }
   // Глобальный лимит — max 5 push за сутки на юзера
-  const { rows: total } = await pool.query(
+  const { rows: total } = await db.query(
     `SELECT COUNT(*)::int AS cnt FROM notification_log
-     WHERE chat_id = $1 AND sent_at > NOW() - INTERVAL '24 hours'`,
+     WHERE chat_id = $1 AND sent_at > NOW() - INTERVAL '24 hours'
+       AND (status='sent' OR sent_at > NOW() - INTERVAL '15 minutes')`,
     [chatId]
   );
   if ((total[0]?.cnt ?? 0) >= 5) {
@@ -862,6 +1065,68 @@ export async function logNotification(chatId: number, kind: NotificationKind) {
     `INSERT INTO notification_log (chat_id, kind) VALUES ($1, $2)`,
     [chatId, kind]
   );
+}
+
+export interface NotificationReservation { ok: boolean; token?: string; reason?: string }
+
+/** Атомарно резервирует место в push-квоте до внешней отправки. Advisory lock
+ * сериализует все виды уведомлений одного пользователя между процессами. */
+export async function reserveNotification(
+  chatId: number,
+  kind: NotificationKind,
+  dedupeKey?: string,
+): Promise<NotificationReservation> {
+  const client = await pool.connect();
+  const token = crypto.randomUUID();
+  try {
+    await client.query("BEGIN");
+    await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [`notification:${chatId}`]);
+    await client.query(
+      `DELETE FROM notification_log WHERE chat_id=$1 AND status='pending' AND sent_at < NOW() - INTERVAL '15 minutes'`,
+      [chatId]
+    );
+    const gate = await canSendNotification(chatId, kind, client);
+    if (!gate.ok) { await client.query("ROLLBACK"); return gate; }
+    if (dedupeKey) {
+      const duplicate = await client.query(
+        `SELECT 1 FROM notification_log WHERE chat_id=$1 AND dedupe_key=$2 LIMIT 1`,
+        [chatId, dedupeKey]
+      );
+      if (duplicate.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "duplicate" }; }
+    }
+    await client.query(
+      `INSERT INTO notification_log (chat_id, kind, status, reservation_id, dedupe_key)
+       VALUES ($1,$2,'pending',$3,$4)`,
+      [chatId, kind, token, dedupeKey || null]
+    );
+    await client.query("COMMIT");
+    return { ok: true, token };
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally { client.release(); }
+}
+
+/** Завершает резерв: успешный становится историей, неуспешный освобождает квоту
+ * и dedupe-key, чтобы временную ошибку можно было повторить. */
+export async function completeNotificationReservation(token: string, sent: boolean): Promise<void> {
+  if (sent) {
+    await pool.query(
+      `UPDATE notification_log SET status='sent', sent_at=NOW() WHERE reservation_id=$1 AND status='pending'`,
+      [token]
+    );
+  } else {
+    await pool.query(`DELETE FROM notification_log WHERE reservation_id=$1 AND status='pending'`, [token]);
+  }
+}
+
+export async function wasNotificationSent(chatId: number, dedupeKey: string): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `SELECT 1 FROM notification_log
+      WHERE chat_id=$1 AND dedupe_key=$2 AND status='sent' LIMIT 1`,
+    [chatId, dedupeKey],
+  );
+  return Boolean(rowCount);
 }
 
 export async function recordReferralUse(usedByChat: number, code: string): Promise<{ ok: boolean; ownerChat?: number; reason?: string }> {
@@ -898,16 +1163,30 @@ export async function wishlistUnsubscribe(chatId: number, productId: number) {
 }
 
 export async function wishlistSync(chatId: number, productIds: number[]) {
-  // Полная синхронизация: продукты в массиве остаются, остальное удаляется
-  await pool.query(`DELETE FROM wishlist_subs WHERE chat_id = $1 AND product_id <> ALL($2::int[])`,
-    [chatId, productIds.length > 0 ? productIds : [0]]);
-  if (productIds.length > 0) {
-    const values = productIds.map((_, i) => `($1, $${i + 2})`).join(", ");
-    await pool.query(
-      `INSERT INTO wishlist_subs (chat_id, product_id) VALUES ${values}
-       ON CONFLICT DO NOTHING`,
-      [chatId, ...productIds]
+  const ids = [...new Set(productIds.filter((id) => Number.isInteger(id) && id > 0))].slice(0, 500);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    // DELETE и INSERT — одна транзакция: ошибка вставки больше не оставляет
+    // пользователя с наполовину очищенным wishlist.
+    await client.query(
+      `DELETE FROM wishlist_subs WHERE chat_id=$1 AND product_id <> ALL($2::int[])`,
+      [chatId, ids],
     );
+    if (ids.length) {
+      await client.query(
+        `INSERT INTO wishlist_subs (chat_id, product_id)
+         SELECT $1, input.product_id FROM UNNEST($2::int[]) AS input(product_id)
+         ON CONFLICT DO NOTHING`,
+        [chatId, ids],
+      );
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
   }
 }
 
@@ -1034,10 +1313,27 @@ export async function findUserReward(chatId: number, code: string): Promise<
   return rows[0] ?? null;
 }
 
-export async function markUserRewardUsed(code: string, chatId: number, orderId: string | null): Promise<void> {
-  await pool.query(
+export async function markUserRewardUsed(code: string, chatId: number, orderId: string | null): Promise<boolean> {
+  const result = await pool.query(
     `UPDATE user_rewards SET used_at = NOW(), used_order_id = $3
       WHERE promo_code = $1 AND chat_id = $2 AND used_at IS NULL`,
     [String(code).toUpperCase(), chatId, orderId]
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
+export async function releaseUserReward(code: string, chatId: number, orderRef: string): Promise<void> {
+  await pool.query(
+    `UPDATE user_rewards SET used_at=NULL, used_order_id=NULL
+      WHERE promo_code=$1 AND chat_id=$2 AND used_order_id=$3`,
+    [String(code).toUpperCase(), chatId, orderRef],
+  );
+}
+
+export async function finalizeUserRewardOrder(code: string, chatId: number, orderRef: string, orderId: string): Promise<void> {
+  await pool.query(
+    `UPDATE user_rewards SET used_order_id=$4
+      WHERE promo_code=$1 AND chat_id=$2 AND used_order_id=$3`,
+    [String(code).toUpperCase(), chatId, orderRef, orderId],
   );
 }

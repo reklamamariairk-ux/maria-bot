@@ -24,6 +24,12 @@ export interface OrderRequest {
   delivery_time?: string;
   comment?: string;
   email?: string;
+  /** Серверный ключ повтора — upstream также может использовать его для дедупликации. */
+  request_id?: string;
+  /** Промокод и сумма передаются только после серверной проверки каталога и лимитов. */
+  promo_code?: string;
+  promo_discount?: number;
+  expected_total?: number;
   /** Платформа заказчика — для SOURCE_DESCRIPTION в Bitrix24 (default tg). */
   platform?: "tg" | "vk" | "max";
 }
@@ -40,6 +46,8 @@ export interface OrderResult {
   orderId?: number;
   accountNumber?: string;
   total?: number;
+  discount?: number;
+  expectedTotal?: number;
   currency?: string;
   message?: string;
   error?: string;
@@ -108,7 +116,7 @@ function callJsonPost(url: string, body: unknown): Promise<unknown> {
         "Content-Type":   "application/json",
         "Content-Length": Buffer.byteLength(payload),
       },
-      rejectUnauthorized: false,
+      rejectUnauthorized: true,
     };
     const httpReq = https.request(opts, (r) => {
       let d = "";
@@ -159,6 +167,10 @@ async function pushToBitrix24(req: OrderRequest, sale: OrderResult, siteDown = f
     lines.push("");
   }
   lines.push(`Сумма заказа: ${sale.total ?? '?'} ₽`);
+  if (req.promo_code && req.promo_discount) {
+    lines.push(`Промокод: ${req.promo_code} (-${req.promo_discount.toLocaleString("ru-RU")} ₽)`);
+    if (req.expected_total != null) lines.push(`Итого после скидки: ${req.expected_total.toLocaleString("ru-RU")} ₽`);
+  }
   lines.push(`☎ Телефон: ${phoneFmt}`);
   if (req.email)         lines.push(`✉ Email: ${req.email}`);
   if (req.address)       lines.push(`▼ Адрес: ${req.address}`);
@@ -186,7 +198,7 @@ async function pushToBitrix24(req: OrderRequest, sale: OrderResult, siteDown = f
     COMMENTS:           comments,
     SOURCE_ID:          "WEB",
     SOURCE_DESCRIPTION: req.platform === "vk" ? "VK Mini App" : req.platform === "max" ? "МАКС Mini App" : "Telegram Mini App",
-    OPPORTUNITY:        sale.total ?? 0,
+    OPPORTUNITY:        req.expected_total ?? sale.total ?? 0,
     CURRENCY_ID:        "RUB",
   };
   if (req.email)   fields.EMAIL = [{ VALUE: req.email, VALUE_TYPE: "WORK" }];

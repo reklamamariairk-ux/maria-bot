@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>drag harness</title><style>body{margin:0;background:#111}</style></head>
+<body>
+<script>
+window.ckFlash = (m) => console.log('flash:', m);
+window.haptic = () => {};
+window.ckBalance = () => 50000;
+window.ckEnergy = () => 5000;
+window.ckSyncState = () => {};
+const OPP = [{ breed: 'shoko', power: 142 }, { breed: 'pochtar', power: 188, bot: true }, { breed: 'sizar', power: 96 }];
+const RACERS = [
+  { breed: 'sizar', me: true, finishT: 2.2, place: 2 },
+  { breed: 'shoko', finishT: 2.05, place: 1 },
+  { breed: 'pochtar', finishT: 2.6, place: 3 },
+  { breed: 'zolotoy', finishT: 2.9, place: 4 },
+];
+window.stubApi = (url) => {
+  if (url.includes('/race/enter')) return Promise.resolve({ ok: true, score: 167, division: 'gold', myPlace: 1, total: 4, weekEndsTs: Date.now() + 2 * 86400000, standings: [
+    { breed: 'zolotoy', score: 167, me: true }, { breed: 'pochtar', score: 158 }, { breed: 'shoko', score: 149 }, { breed: 'karamel', score: 121 },
+  ] });
+  if (url.includes('/opponents')) return Promise.resolve({ opponents: OPP, myPower: 171 });
+  if (url.includes('/race')) return Promise.resolve({ ok: true, racers: RACERS, myPlace: 2, reward: 2000, newBalance: 52000, newEnergy: 4750, mySkill: { taps: 38, tapAcc: 0.83, react: 0.9, reactionMs: 240, total: 0.88 } });
+  return Promise.resolve({});
+};
+</script>
+<script src="/js/catdrag.js"></script>
+<script>window.addEventListener('load', () => { window.CatDrag.open(window.stubApi, 'sizar'); });</script>
+</body></html>

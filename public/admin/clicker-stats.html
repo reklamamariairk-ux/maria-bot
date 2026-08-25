@@ -75,18 +75,20 @@
 <script>
 const $ = (s,r=document)=>r.querySelector(s);
 const fmt = (n)=> new Intl.NumberFormat('ru-RU').format(Math.round(n||0));
+const esc = (v)=>String(v??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
 const root = $('#root');
 const TOKKEY = 'ck_stats_token';
-$('#tok').value = localStorage.getItem(TOKKEY) || '';
+$('#tok').value = sessionStorage.getItem(TOKKEY) || '';
+localStorage.removeItem(TOKKEY);
 
 async function load(){
   const tok = $('#tok').value.trim();
   if(!tok){ $('#st').textContent='Введите токен'; return; }
-  localStorage.setItem(TOKKEY, tok);
+  sessionStorage.setItem(TOKKEY, tok);
   $('#st').textContent='Загрузка…'; root.innerHTML='';
   let d;
   try{
-    const r = await fetch('/api/clicker/stats?token='+encodeURIComponent(tok));
+    const r = await fetch('/api/clicker/stats', {headers:{'X-User-Token':tok}});
     if(r.status===403){ $('#st').textContent='Неверный токен'; return; }
     if(!r.ok){ $('#st').textContent='Ошибка '+r.status; return; }
     d = await r.json();
@@ -103,12 +105,12 @@ function chart(series){
   const cols = series.map(s=>{
     const dh = Math.round(s.dau/maxD*100), th = Math.round(s.taps/maxT*100);
     const dd = s.day.slice(8)+'.'+s.day.slice(5,7);
-    return `<div class="col" title="${s.day}\nDAU: ${fmt(s.dau)}\nТапы: ${fmt(s.taps)}\nНовых: ${fmt(s.newUsers)}">
+    return `<div class="col" title="${esc(s.day)}\nDAU: ${fmt(s.dau)}\nТапы: ${fmt(s.taps)}\nНовых: ${fmt(s.newUsers)}">
       <div style="flex:1;display:flex;align-items:flex-end;gap:2px;width:100%">
         <div class="bk" style="height:${dh}%"></div>
         <div class="bk t" style="height:${th}%"></div>
       </div>
-      <div class="dd">${dd}</div></div>`;
+      <div class="dd">${esc(dd)}</div></div>`;
   }).join('');
   return `<div class="chart">${cols}</div>
     <div class="legend"><span><i style="background:linear-gradient(180deg,#f0c24e,#c2882a)"></i>DAU</span>
@@ -119,7 +121,7 @@ function hrows(items, total){
   const max = Math.max(1, ...items.map(i=>i.count));
   return `<div class="rows">`+items.map(i=>{
     const pct = total ? Math.round(i.count/total*100) : null;
-    return `<div class="row"><div class="n" title="${i.name}">${i.name}</div>
+    return `<div class="row"><div class="n" title="${esc(i.name)}">${esc(i.name)}</div>
       <div class="track"><div class="fill" style="width:${Math.round(i.count/max*100)}%"></div></div>
       <div class="val">${fmt(i.count)}${pct!=null?` <small>${pct}%</small>`:''}</div></div>`;
   }).join('')+`</div>`;
@@ -169,7 +171,7 @@ function render(d){
     <div class="sect">События · 7 дней</div>
     <div class="panel">
       ${d.events7d.length ? `<table><thead><tr><th>Событие</th><th style="text-align:right">Кол-во</th></tr></thead><tbody>
-        ${d.events7d.map(e=>`<tr><td>${EVT[e.event]||e.event}</td><td class="num">${fmt(e.count)}</td></tr>`).join('')}
+        ${d.events7d.map(e=>`<tr><td>${esc(EVT[e.event]||e.event)}</td><td class="num">${fmt(e.count)}</td></tr>`).join('')}
       </tbody></table>` : '<div class="muted">Пока нет событий за период</div>'}
     </div>
   `;

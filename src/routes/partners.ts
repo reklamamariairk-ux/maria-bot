@@ -7,7 +7,7 @@
 
 import { Router } from "express";
 import { getPartners, getPartnersMeta, syncPartners } from "../partners";
-import { rateLimit, requireAdminToken } from "../middleware";
+import { rateLimit, requireAdminRole, requireAdminToken } from "../middleware";
 
 const router = Router();
 
@@ -15,7 +15,7 @@ router.get("/api/partners", rateLimit(60), (_req, res) => {
   res.json({ partners: getPartners(), meta: getPartnersMeta() });
 });
 
-router.post("/api/partners/sync", requireAdminToken, async (_req, res) => {
+router.post("/api/partners/sync", requireAdminToken, requireAdminRole("operator"), async (_req, res) => {
   const result = await syncPartners();
   res.json(result);
 });

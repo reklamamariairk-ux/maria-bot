@@ -15,7 +15,8 @@ import { linksOf } from "../account-link";
 import { trackEvent } from "../analytics";
 import type { PushService } from "../push";
 import { log } from "../logger";
-import { resetClickerProgress } from "../clicker";
+import { _clearSquadBankCache, resetClickerProgress } from "../clicker";
+import { clearGameAccessCache } from "../game-auth";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -37,12 +38,12 @@ type Segment = "all" | "active7" | "active30" | "tg" | "vk" | "max";
 
 function segmentWhere(seg: Segment): string {
   switch (seg) {
-    case "active7":  return `WHERE s.updated_at > NOW() - INTERVAL '7 days'`;
-    case "active30": return `WHERE s.updated_at > NOW() - INTERVAL '30 days'`;
-    case "tg":  return `WHERE s.chat_id < 2e12`;
-    case "vk":  return `WHERE s.chat_id >= 2e12 AND s.chat_id < 4e12`;
-    case "max": return `WHERE s.chat_id >= 4e12`;
-    default: return "";
+    case "active7":  return `WHERE s.admin_blocked=FALSE AND s.updated_at > NOW() - INTERVAL '7 days'`;
+    case "active30": return `WHERE s.admin_blocked=FALSE AND s.updated_at > NOW() - INTERVAL '30 days'`;
+    case "tg":  return `WHERE s.admin_blocked=FALSE AND s.chat_id < 2e12`;
+    case "vk":  return `WHERE s.admin_blocked=FALSE AND s.chat_id >= 2e12 AND s.chat_id < 4e12`;
+    case "max": return `WHERE s.admin_blocked=FALSE AND s.chat_id >= 4e12`;
+    default: return "WHERE s.admin_blocked=FALSE";
   }
 }
 
@@ -186,6 +187,7 @@ export default function adminGameRouter(push: PushService): Router {
         `UPDATE clicker_state
             SET balance = GREATEST(0, balance + $2),
                 total_earned = total_earned + GREATEST(0, $2),
+                state_revision = state_revision + 1,
                 updated_at = NOW()
           WHERE chat_id = $1
         RETURNING balance`, [id, delta]);
@@ -205,15 +207,22 @@ export default function adminGameRouter(push: PushService): Router {
 
   router.post("/api/admin/game/user/:id/block", requireAdminToken, requireAdminRole("operator"), rateLimit(20), async (req, res) => {
     const id = Number(req.params.id);
-    const blocked = Boolean((req.body as { blocked?: unknown })?.blocked);
+    const blockedRaw = (req.body as { blocked?: unknown })?.blocked;
     const reason = String((req.body as { reason?: unknown })?.reason || "Административное решение").trim().slice(0, 200);
     if (!Number.isSafeInteger(id) || id <= 0) { res.status(400).json({ error: "bad_id" }); return; }
+    if (typeof blockedRaw !== "boolean") { res.status(400).json({ error: "bad_blocked" }); return; }
+    const blocked = blockedRaw;
     try {
       const { rows } = await pool.query(
         `UPDATE clicker_state SET admin_blocked=$2, admin_block_reason=$3,
-                admin_blocked_at=CASE WHEN $2 THEN NOW() ELSE NULL END, updated_at=NOW()
+                admin_blocked_at=CASE WHEN $2 THEN NOW() ELSE NULL END,
+                state_revision=state_revision+1, updated_at=NOW()
           WHERE chat_id=$1 RETURNING balance`, [id, blocked, blocked ? reason : null]);
       if (!rows[0]) { res.status(404).json({ error: "not_found" }); return; }
+      // Блокировка меняет состав допустимых вкладчиков: не держим до минуты
+      // устаревший множитель копилки в process-cache.
+      _clearSquadBankCache();
+      clearGameAccessCache(id);
       trackEvent(id, blocked ? "admin_block" : "admin_unblock", { reason });
       const message = blocked
         ? `🔒 Доступ к «Котик Комбат» временно ограничен администрацией.\nПричина: ${reason}`

@@ -1,8 +1,19 @@
 // src/drag.ts — драг-рейсинг: физика заезда (чистые функции) + подбор соперников + резолв.
 // Спека: docs/superpowers/specs/2026-07-15-drag-race-design.md
 import type { Rarity } from "./pigeons";
+import type { PoolClient } from "pg";
 import { pool } from "./db";
 import { PIGEON_BREEDS, BREED_BY_ID, TUNE_MAX } from "./pigeons";
+
+type Queryable = Pick<PoolClient, "query">;
+const DUEL_MUTATION_LOCK_KEY = "pigeon-duels-mutation-v1";
+
+async function lockDuelMutations(db: Queryable): Promise<void> {
+  // Дуэль затрагивает две строки кошелька и одну строку вызова. Единый короткий
+  // advisory-lock исключает циклические локи встречных дуэлей и гонку со
+  // сбросом/удалением профиля, не сериализуя обычные заезды и тапы.
+  await db.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [DUEL_MUTATION_LOCK_KEY]);
+}
 
 export const DRAG_ENERGY_COST = 250;
 export const DUEL_STAKE_MAX = 1_000_000;
@@ -271,14 +282,14 @@ export function hardenBetField(opps: Racer[], target: number): Racer[] {
 // n соперников для игрока chatId под целевую мощность targetPower: сперва реальные голуби
 // других игроков в коридоре ±POWER_BAND (ближайшие по |power-target|), при нехватке —
 // добивка синтетическими ботами под target.
-export async function pickOpponents(chatId: number, targetPower: number, n: number): Promise<Racer[]> {
+export async function pickOpponents(chatId: number, targetPower: number, n: number, db: Queryable = pool): Promise<Racer[]> {
   // LIMIT 200 + random(): не полный скан таблицы на каждый заезд (масштабируемость);
   // .filter(BREED_BY_ID.has) — не роняем роут 500-й, если в чужом инвентаре осталась
   // переименованная/удалённая порода (как guard в dragTargetPower).
-  const rows = (await pool.query(
+  const rows = (await db.query(
     `SELECT pi.breed, pi.stars, pi.tune_speed, pi.tune_stamina, pi.tune_luck, cs.race_reaction_ms
-       FROM pigeon_inventory pi JOIN clicker_state cs ON cs.chat_id = pi.chat_id
-      WHERE pi.chat_id <> $1 AND pi.count > 0
+      FROM pigeon_inventory pi JOIN clicker_state cs ON cs.chat_id = pi.chat_id
+      WHERE pi.chat_id <> $1 AND pi.count > 0 AND cs.admin_blocked=FALSE
       ORDER BY random() LIMIT 200`, [chatId])).rows;
   const real: Racer[] = rows.filter((r: any) => BREED_BY_ID.has(r.breed)).map((r: any) => {
     const b = BREED_BY_ID.get(r.breed)!;
@@ -293,11 +304,11 @@ export async function pickOpponents(chatId: number, targetPower: number, n: numb
   return real;
 }
 
-export async function pickOpponentsV3(chatId: number, targetCruise: number, n: number): Promise<Racer[]> {
-  const rows = (await pool.query(
+export async function pickOpponentsV3(chatId: number, targetCruise: number, n: number, db: Queryable = pool): Promise<Racer[]> {
+  const rows = (await db.query(
     `SELECT pi.breed, pi.stars, pi.tune_speed, pi.tune_stamina, pi.tune_luck, cs.race_reaction_ms
-       FROM pigeon_inventory pi JOIN clicker_state cs ON cs.chat_id = pi.chat_id
-      WHERE pi.chat_id <> $1 AND pi.count > 0
+      FROM pigeon_inventory pi JOIN clicker_state cs ON cs.chat_id = pi.chat_id
+      WHERE pi.chat_id <> $1 AND pi.count > 0 AND cs.admin_blocked=FALSE
       ORDER BY random() LIMIT 200`, [chatId])).rows;
   const real: Racer[] = rows.filter((r: any) => BREED_BY_ID.has(r.breed)).map((r: any) => {
     const b = BREED_BY_ID.get(r.breed)!;
@@ -315,7 +326,7 @@ export async function pickOpponentsV3(chatId: number, targetCruise: number, n: n
 }
 
 export async function pickFriendOpponents(chatId: number, friendChat: number, targetCruise: number, n: number): Promise<Racer[] | null> {
-  if (!Number.isInteger(friendChat) || friendChat <= 0 || friendChat === chatId) return null;
+  if (!Number.isSafeInteger(friendChat) || friendChat <= 0 || friendChat === chatId) return null;
   const a = Math.min(chatId, friendChat);
   const b = Math.max(chatId, friendChat);
   const rel = await pool.query(`SELECT 1 FROM pigeon_friends WHERE chat_a=$1 AND chat_b=$2 LIMIT 1`, [a, b]);
@@ -325,7 +336,7 @@ export async function pickFriendOpponents(chatId: number, friendChat: number, ta
        FROM pigeon_inventory pi
        JOIN clicker_state cs ON cs.chat_id = pi.chat_id
        LEFT JOIN subscribers s ON s.chat_id = pi.chat_id
-      WHERE pi.chat_id=$1 AND pi.count > 0 AND pi.breed <> 'champion'
+      WHERE pi.chat_id=$1 AND pi.count > 0 AND pi.breed <> 'champion' AND cs.admin_blocked=FALSE
       ORDER BY random() LIMIT 100`, [friendChat])).rows;
   const friendRacers: Racer[] = rows.filter((r: any) => BREED_BY_ID.has(r.breed)).map((r: any) => {
     const breed = BREED_BY_ID.get(r.breed)!;
@@ -357,14 +368,18 @@ function normalizeDuelTap(tap: any): DuelTapInput {
   };
 }
 async function assertDuelFriend(client: any, chatId: number, friendChat: number): Promise<boolean> {
-  if (!Number.isInteger(friendChat) || friendChat <= 0 || friendChat === chatId) return false;
+  if (!Number.isSafeInteger(friendChat) || friendChat <= 0 || friendChat === chatId) return false;
+  const active = await client.query(
+    `SELECT COUNT(*)::int AS n FROM clicker_state WHERE chat_id IN ($1,$2) AND admin_blocked=FALSE`,
+    [chatId, friendChat]);
+  if (Number(active.rows[0]?.n || 0) !== 2) return false;
   const a = Math.min(chatId, friendChat), b = Math.max(chatId, friendChat);
   const rel = await client.query(`SELECT 1 FROM pigeon_friends WHERE chat_a=$1 AND chat_b=$2 LIMIT 1`, [a, b]);
   if (rel.rowCount) return true;
   // Рефералы и однокомандники также отображаются в «Друзьях»: разрешаем им дуэли.
   const known = await client.query(
     `SELECT 1 FROM clicker_state me JOIN clicker_state other ON other.chat_id=$2
-      WHERE me.chat_id=$1 AND (
+      WHERE me.chat_id=$1 AND me.admin_blocked=FALSE AND other.admin_blocked=FALSE AND (
         me.referred_by=$2 OR other.referred_by=$1 OR
         (me.squad IS NOT NULL AND me.squad=other.squad)
       ) LIMIT 1`, [chatId, friendChat]);
@@ -441,51 +456,110 @@ export async function listFriendDuels(chatId: number): Promise<{ incoming: any[]
   return { incoming: mapRows(incoming.rows), outgoing: mapRows(outgoing.rows), done: mapRows(done.rows) };
 }
 
-export async function createFriendDuel(chatId: number, friendChat: number, breed: string, stakeRaw: number, tapRaw: any): Promise<{ ok: boolean; id?: number; newBalance?: number; newEnergy?: number; reason?: string }> {
+export async function createFriendDuel(chatId: number, friendChat: number, breed: string, stakeRaw: number, tapRaw: any, requestId = ""): Promise<{ ok: boolean; id?: number; newBalance?: number; newEnergy?: number; revision?: number; reason?: string; duplicate?: boolean }> {
   const stake = normalizeDuelStake(stakeRaw);
   if (stake == null) return { ok: false, reason: "bad_stake" };
   if (!BREED_BY_ID.has(breed)) return { ok: false, reason: "not_owned" };
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    await lockDuelMutations(client);
+    // Сериализуем создание дуэлей одного отправителя. Иначе два запроса могли
+    // одновременно увидеть count<limit и оба вставить новую открытую дуэль.
+    await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [`pigeon-duel:${chatId}`]);
+    if (requestId) {
+      const previous = await client.query(
+        `SELECT d.id, s.balance, s.energy, s.state_revision FROM pigeon_duels d LEFT JOIN clicker_state s ON s.chat_id=d.from_chat
+          WHERE d.from_chat=$1 AND d.request_id=$2`, [chatId, requestId]);
+      if (previous.rowCount) {
+        await client.query("ROLLBACK");
+        return {
+          ok: true, duplicate: true, id: Number(previous.rows[0].id),
+          newBalance: previous.rows[0].balance == null ? undefined : Number(previous.rows[0].balance),
+          newEnergy: previous.rows[0].energy == null ? undefined : Number(previous.rows[0].energy),
+          revision: previous.rows[0].state_revision == null ? undefined : Number(previous.rows[0].state_revision),
+        };
+      }
+    }
+    // Сначала фиксируем/блокируем общий кошелёк, и только затем читаем голубя и
+    // создаём дуэль. Иначе параллельный админ-сброс мог удалить инвентарь после
+    // getDuelStats(), а запрос затем создавал вызов от уже несуществующей птицы.
+    const { refreshEnergyFor } = await import("./clicker");
+    const st = await refreshEnergyFor(client, chatId);
     if (!(await assertDuelFriend(client, chatId, friendChat))) { await client.query("ROLLBACK"); return { ok: false, reason: "not_friend" }; }
     const open = await client.query(`SELECT COUNT(*)::int AS n FROM pigeon_duels WHERE from_chat=$1 AND status='open'`, [chatId]);
     if (Number(open.rows[0].n) >= DUEL_OPEN_LIMIT) { await client.query("ROLLBACK"); return { ok: false, reason: "limit" }; }
     const stats = await getDuelStats(client, chatId, breed);
     if (!stats) { await client.query("ROLLBACK"); return { ok: false, reason: "not_owned" }; }
-    const { refreshEnergyFor } = await import("./clicker");
-    const st = await refreshEnergyFor(client, chatId);
     if (st.energy < DRAG_ENERGY_COST) { await client.query("ROLLBACK"); return { ok: false, reason: "no_energy" }; }
     if (st.balance < stake) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
     const energyLeft = st.energy - DRAG_ENERGY_COST;
     const balance = st.balance - stake;
     const tap = normalizeDuelTap(tapRaw);
-    await client.query(`UPDATE clicker_state SET energy=$2, balance=$3, race_reaction_ms=$4, updated_at=NOW(), energy_updated_at=NOW() WHERE chat_id=$1`, [chatId, energyLeft, balance, clampReact(tap.reactionMs)]);
+    const updated = await client.query(`UPDATE clicker_state SET energy=$2, balance=$3, race_reaction_ms=$4, energy_carry=$5, state_revision=state_revision+1, updated_at=NOW(), energy_updated_at=NOW() WHERE chat_id=$1 RETURNING state_revision`, [chatId, energyLeft, balance, clampReact(tap.reactionMs), st.energyCarry]);
     const ins = await client.query(
-      `INSERT INTO pigeon_duels (from_chat,to_chat,stake,from_breed,from_tap,from_stats) VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb) RETURNING id`,
-      [chatId, friendChat, stake, breed, JSON.stringify(tap), JSON.stringify(stats)]);
+      `INSERT INTO pigeon_duels (from_chat,to_chat,stake,from_breed,from_tap,from_stats,request_id) VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7) RETURNING id`,
+      [chatId, friendChat, stake, breed, JSON.stringify(tap), JSON.stringify(stats), requestId || null]);
     await client.query("COMMIT");
-    return { ok: true, id: Number(ins.rows[0].id), newBalance: balance, newEnergy: energyLeft };
+    return { ok: true, id: Number(ins.rows[0].id), newBalance: balance, newEnergy: energyLeft, revision: Number(updated.rows[0]?.state_revision || 0) };
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;
   } finally { client.release(); }
 }
 
-export async function declineFriendDuel(chatId: number, duelId: number): Promise<{ ok: boolean; newBalance?: number; reason?: string }> {
+export async function declineFriendDuel(chatId: number, duelId: number): Promise<{ ok: boolean; newBalance?: number; reason?: string; duplicate?: boolean }> {
   if (!Number.isSafeInteger(duelId) || duelId <= 0) return { ok: false, reason: "bad_input" };
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const d = await client.query(`SELECT from_chat, stake FROM pigeon_duels WHERE id=$1 AND to_chat=$2 AND status='open' FOR UPDATE`, [duelId, chatId]);
+    await lockDuelMutations(client);
+    const d = await client.query(`SELECT from_chat, stake, status FROM pigeon_duels WHERE id=$1 AND to_chat=$2 FOR UPDATE`, [duelId, chatId]);
     if (!d.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "not_found" }; }
+    if (d.rows[0].status === "declined") {
+      const current = await client.query(`SELECT balance FROM clicker_state WHERE chat_id=$1`, [chatId]);
+      await client.query("ROLLBACK");
+      return { ok: true, duplicate: true, newBalance: current.rows[0] ? Number(current.rows[0].balance) : undefined };
+    }
+    if (d.rows[0].status !== "open") { await client.query("ROLLBACK"); return { ok: false, reason: "not_found" }; }
     const fromChat = Number(d.rows[0].from_chat), stake = Number(d.rows[0].stake) || 0;
     await client.query(`UPDATE pigeon_duels SET status='declined', closed_at=NOW() WHERE id=$1`, [duelId]);
-    if (stake > 0) await client.query(`UPDATE clicker_state SET balance=balance+$2, updated_at=NOW() WHERE chat_id=$1`, [fromChat, stake]);
+    if (stake > 0) await client.query(`UPDATE clicker_state SET balance=balance+$2, state_revision=state_revision+1, updated_at=NOW() WHERE chat_id=$1`, [fromChat, stake]);
     const bal = await client.query(`SELECT balance FROM clicker_state WHERE chat_id=$1`, [chatId]);
     await client.query("COMMIT");
     return { ok: true, newBalance: bal.rows[0] ? Number(bal.rows[0].balance) : undefined };
   } catch (e) { await client.query("ROLLBACK"); throw e; }
+  finally { client.release(); }
+}
+
+/** Отправитель может снять неотвеченный вызов и вернуть ставку из эскроу. */
+export async function cancelFriendDuel(chatId: number, duelId: number): Promise<{ ok: boolean; newBalance?: number; revision?: number; reason?: string; duplicate?: boolean }> {
+  if (!Number.isSafeInteger(duelId) || duelId <= 0) return { ok: false, reason: "bad_input" };
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await lockDuelMutations(client);
+    const d = await client.query(
+      `SELECT stake, status FROM pigeon_duels WHERE id=$1 AND from_chat=$2 FOR UPDATE`,
+      [duelId, chatId]);
+    if (!d.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "not_found" }; }
+    if (d.rows[0].status === "cancelled") {
+      const current = await client.query(`SELECT balance, state_revision FROM clicker_state WHERE chat_id=$1`, [chatId]);
+      await client.query("ROLLBACK");
+      return { ok: true, duplicate: true, newBalance: current.rows[0] ? Number(current.rows[0].balance) : undefined, revision: current.rows[0] ? Number(current.rows[0].state_revision || 0) : undefined };
+    }
+    if (d.rows[0].status !== "open") { await client.query("ROLLBACK"); return { ok: false, reason: "not_found" }; }
+    const stake = Number(d.rows[0].stake) || 0;
+    await client.query(`UPDATE pigeon_duels SET status='cancelled', closed_at=NOW() WHERE id=$1`, [duelId]);
+    if (stake > 0) {
+      await client.query(
+        `UPDATE clicker_state SET balance=balance+$2, state_revision=state_revision+1, updated_at=NOW() WHERE chat_id=$1`,
+        [chatId, stake]);
+    }
+    const bal = await client.query(`SELECT balance, state_revision FROM clicker_state WHERE chat_id=$1`, [chatId]);
+    await client.query("COMMIT");
+    return { ok: true, newBalance: bal.rows[0] ? Number(bal.rows[0].balance) : undefined, revision: bal.rows[0] ? Number(bal.rows[0].state_revision || 0) : undefined };
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; }
   finally { client.release(); }
 }
 
@@ -494,9 +568,36 @@ export async function acceptFriendDuel(chatId: number, duelId: number, breed: st
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const d = await client.query(`SELECT * FROM pigeon_duels WHERE id=$1 AND to_chat=$2 AND status='open' FOR UPDATE`, [duelId, chatId]);
+    await lockDuelMutations(client);
+    const d = await client.query(`SELECT * FROM pigeon_duels WHERE id=$1 AND to_chat=$2 FOR UPDATE`, [duelId, chatId]);
     if (!d.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "not_found" }; }
     const duel = d.rows[0];
+    // Идентификатор дуэли сам служит idempotency-key: если commit прошёл, а ответ
+    // потерялся, повтор возвращает сохранённый результат и ничего не списывает снова.
+    if (duel.status === "done" && duel.result && duel.winner_chat != null) {
+      const current = await client.query(`SELECT balance, energy, state_revision FROM clicker_state WHERE chat_id=$1`, [chatId]);
+      await client.query("ROLLBACK");
+      const state = current.rows[0];
+      return {
+        ...duelResultFor(duel.result, chatId, Number(duel.stake) || 0, Number(duel.winner_chat), state ? Number(state.balance) : undefined),
+        newEnergy: state ? Number(state.energy) : undefined,
+        revision: state ? Number(state.state_revision || 0) : undefined,
+        duplicate: true,
+      };
+    }
+    if (duel.status !== "open") { await client.query("ROLLBACK"); return { ok: false, reason: "not_found" }; }
+    const opponent = await client.query(`SELECT admin_blocked FROM clicker_state WHERE chat_id=$1`, [Number(duel.from_chat)]);
+    if (!opponent.rowCount || opponent.rows[0].admin_blocked) {
+      const stake = Number(duel.stake) || 0;
+      await client.query(`UPDATE pigeon_duels SET status='cancelled', closed_at=NOW() WHERE id=$1`, [duelId]);
+      if (stake > 0 && opponent.rowCount) {
+        await client.query(
+          `UPDATE clicker_state SET balance=balance+$2, state_revision=state_revision+1, updated_at=NOW() WHERE chat_id=$1`,
+          [Number(duel.from_chat), stake]);
+      }
+      await client.query("COMMIT");
+      return { ok: false, reason: "opponent_blocked" };
+    }
     const stats = await getDuelStats(client, chatId, breed);
     if (!stats) { await client.query("ROLLBACK"); return { ok: false, reason: "not_owned" }; }
     const { refreshEnergyFor } = await import("./clicker");
@@ -513,13 +614,13 @@ export async function acceptFriendDuel(chatId: number, duelId: number, breed: st
     let balance = st.balance - stake;
     const bank = stake * 2;
     if (resolved.winnerChat === chatId) balance += bank;
-    await client.query(`UPDATE clicker_state SET energy=$2, balance=$3, race_reaction_ms=$4, updated_at=NOW(), energy_updated_at=NOW() WHERE chat_id=$1`, [chatId, energyLeft, balance, clampReact(tap.reactionMs)]);
-    if (resolved.winnerChat !== chatId && bank > 0) await client.query(`UPDATE clicker_state SET balance=balance+$2 WHERE chat_id=$1`, [Number(duel.from_chat), bank]);
+    const updated = await client.query(`UPDATE clicker_state SET energy=$2, balance=$3, race_reaction_ms=$4, energy_carry=$5, state_revision=state_revision+1, updated_at=NOW(), energy_updated_at=NOW() WHERE chat_id=$1 RETURNING state_revision`, [chatId, energyLeft, balance, clampReact(tap.reactionMs), st.energyCarry]);
+    if (resolved.winnerChat !== chatId && bank > 0) await client.query(`UPDATE clicker_state SET balance=balance+$2, state_revision=state_revision+1, updated_at=NOW() WHERE chat_id=$1`, [Number(duel.from_chat), bank]);
     await client.query(
       `UPDATE pigeon_duels SET status='done', to_breed=$2, to_tap=$3::jsonb, to_stats=$4::jsonb, winner_chat=$5, result=$6::jsonb, closed_at=NOW() WHERE id=$1`,
       [duelId, breed, JSON.stringify(tap), JSON.stringify(stats), resolved.winnerChat, JSON.stringify(resolved)]);
     await client.query("COMMIT");
-    return { ...duelResultFor(resolved, chatId, stake, resolved.winnerChat, balance), newEnergy: energyLeft };
+    return { ...duelResultFor(resolved, chatId, stake, resolved.winnerChat, balance), newEnergy: energyLeft, revision: Number(updated.rows[0]?.state_revision || 0) };
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;
@@ -538,6 +639,7 @@ export function cacheOpponents(chatId: number, breed: string, mode: "training" |
   if (oppCache.size > 5000) { // защита от разрастания: чистим протухшее при переполнении
     const now = Date.now();
     for (const [k, v] of oppCache) if (now - v.ts > OPP_CACHE_TTL_MS) oppCache.delete(k);
+    if (oppCache.size > 5000) oppCache.delete(oppCache.keys().next().value!);
   }
 }
 // Забираем и удаляем (one-shot): повторный заезд без нового превью подберёт свежих.
@@ -580,14 +682,32 @@ export async function dragTargetProfile(chatId: number, breed: string): Promise<
 // Всё под FOR UPDATE clicker_state (внутри refreshEnergyFor): реген энергии → проверки
 // (владение породой/энергия/ставка) → подбор соперников → резолв мест → списание энергии
 // + расчёт/начисление ставки → фиксация race_reaction_ms (для будущего pickOpponents).
-export async function runRace(chatId: number, breed: string, mode: "training" | "bet", stake: number, reactionMs: number, launch?: LaunchInput | null, tap?: TapInput | null):
-  Promise<{ ok: boolean; racers?: any[]; myPlace?: number; reward?: number; newBalance?: number; newEnergy?: number; mySkill?: any; reason?: string }> {
+export async function runRace(chatId: number, breed: string, mode: "training" | "bet", stake: number, reactionMs: number, launch?: LaunchInput | null, tap?: TapInput | null, requestId = ""):
+  Promise<{ ok: boolean; racers?: any[]; myPlace?: number; reward?: number; newBalance?: number; newEnergy?: number; revision?: number; mySkill?: any; reason?: string; duplicate?: boolean }> {
   if (!BREED_BY_ID.has(breed)) return { ok: false, reason: "not_owned" };
   if (mode !== "training" && mode !== "bet") return { ok: false, reason: "bad_mode" };
   if (mode === "bet" && !STAKE_PRESETS.includes(stake)) return { ok: false, reason: "bad_stake" };
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    if (requestId) {
+      // Один и тот же заезд после сетевого таймаута должен вернуть прежний результат,
+      // а не второй раз списать энергию/ставку. Advisory-lock закрывает параллельный дубль.
+      await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [`pigeon-drag:${chatId}:${requestId}`]);
+      const previous = await client.query(`SELECT response FROM pigeon_drag_runs WHERE chat_id=$1 AND request_id=$2`, [chatId, requestId]);
+      if (previous.rowCount) {
+        // Исход гонки неизменен, но сохранённые тогда balance/energy уже могли
+        // устареть из-за последующих действий. Повтор возвращает текущий кошелёк.
+        const current = await client.query(`SELECT balance, energy, state_revision FROM clicker_state WHERE chat_id=$1`, [chatId]);
+        await client.query("ROLLBACK");
+        return {
+          ...(previous.rows[0].response || {}), ok: true, duplicate: true,
+          newBalance: current.rows[0] ? Number(current.rows[0].balance) : undefined,
+          newEnergy: current.rows[0] ? Number(current.rows[0].energy) : undefined,
+          revision: current.rows[0] ? Number(current.rows[0].state_revision || 0) : undefined,
+        };
+      }
+    }
     // Энергия/баланс с регеном — та же строка clicker_state, что и в кликере, взятая
     // FOR UPDATE в этой же транзакции, чтобы не словить гонку с параллельным тапом/заездом.
     const { refreshEnergyFor } = await import("./clicker");
@@ -601,7 +721,8 @@ export async function runRace(chatId: number, breed: string, mode: "training" | 
     const myMatch = dragMatchPowerV3(b.rarity, inv.rows[0].stars, inv.rows[0].tune_speed);
     // «Кого показали в превью — с тем и гонимся»: берём закэшированный набор старта; если его
     // нет (заезд без превью / истёк TTL) — подбираем свежий как раньше.
-    const picked = takeCachedOpponents(chatId, breed, mode) ?? await (tap ? pickOpponentsV3(chatId, myMatch, 3) : pickOpponents(chatId, myPower, 3));
+    const picked = takeCachedOpponents(chatId, breed, mode)
+      ?? await (tap ? pickOpponentsV3(chatId, myMatch, 3, client) : pickOpponents(chatId, myPower, 3, client));
     const react = clampReact(Math.round(tap ? tap.reactionMs : launch ? launch.reactionMs : reactionMs));
     // Один рандомный «luck»-ролл на гонщика, зафиксированный ДО резолва — места и finishT
     // ниже должны использовать один и тот же r по индексу, иначе места и показанное
@@ -685,12 +806,18 @@ export async function runRace(chatId: number, breed: string, mode: "training" | 
     }
     // updated_at=NOW() сбрасывает базу регена — иначе следующий refresh() в кликере досчитает
     // энергию ещё раз за те же секунды, что уже учёл refreshEnergyFor выше (двойной реген).
-    await client.query(
-      `UPDATE clicker_state SET energy=$2, balance=$3, race_reaction_ms=$4, updated_at=NOW(), energy_updated_at=NOW() WHERE chat_id=$1`,
-      [chatId, energyLeft, balance, react]
+    const updated = await client.query(
+      `UPDATE clicker_state SET energy=$2, balance=$3, race_reaction_ms=$4, energy_carry=$5, state_revision=state_revision+1, updated_at=NOW(), energy_updated_at=NOW() WHERE chat_id=$1 RETURNING state_revision`,
+      [chatId, energyLeft, balance, react, st.energyCarry]
     );
+    const result = { ok: true, racers, myPlace, reward, newBalance: balance, newEnergy: energyLeft, revision: Number(updated.rows[0]?.state_revision || 0), mySkill: mySkillOut };
+    if (requestId) {
+      await client.query(
+        `INSERT INTO pigeon_drag_runs (chat_id, request_id, response) VALUES ($1,$2,$3::jsonb)`,
+        [chatId, requestId, JSON.stringify(result)]);
+    }
     await client.query("COMMIT");
-    return { ok: true, racers, myPlace, reward, newBalance: balance, newEnergy: energyLeft, mySkill: mySkillOut };
+    return result;
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;

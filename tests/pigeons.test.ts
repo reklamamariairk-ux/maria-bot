@@ -14,7 +14,7 @@ import {
   tuneCost, raceDivision, TUNE_MAX,
   createTrade, sendMail, thankMail, setShowcase, claimSet, enterRace,
   pigeonPrice, PIGEON_PRICE, normalizeCoinDelta, TRADE_COIN_CAP,
-  pigeonPassiveValue, pigeonCollectionPassiveBonus, PIGEON_SET_PASSIVE_BONUS,
+  pigeonPassiveValue, pigeonCollectionPassiveBonus, PIGEON_SET_PASSIVE_BONUS, hasCompletePigeonAlbum,
   pigeonMissionChance, pigeonMissionPower, pigeonMissionRank, PIGEON_MISSIONS,
 } from "../src/pigeons";
 
@@ -30,6 +30,12 @@ describe("pigeon passive income — голуби и коллекции дают 
   it("закрытый сет даёт отдельный бонус коллекции", () => {
     const city = new Set(["sizar", "belobok", "ryaboy", "chubaty"]);
     expect(pigeonCollectionPassiveBonus(city)).toBe(PIGEON_SET_PASSIVE_BONUS.city);
+  });
+
+  it("полный альбом требует все актуальные породы — legacy-id не заменяет пропущенную", () => {
+    const ids = PIGEON_BREEDS.map(b => b.id);
+    expect(hasCompletePigeonAlbum(ids)).toBe(true);
+    expect(hasCompletePigeonAlbum([...ids.slice(0, -1), "legacy_champion"])).toBe(false);
   });
 });
 
@@ -304,6 +310,7 @@ describe("guard'ы обменов/почты — отвечают до похо�
 
   it("setShowcase: больше 3 пород → bad_input, неизвестная порода → unknown_breed", async () => {
     expect((await setShowcase(1, ["sizar", "vanil", "shoko", "ryaboy"])).reason).toBe("bad_input");
+    expect((await setShowcase(1, ["sizar", "sizar"])).reason).toBe("bad_input");
     expect((await setShowcase(1, ["kotopyos"])).reason).toBe("unknown_breed");
   });
 

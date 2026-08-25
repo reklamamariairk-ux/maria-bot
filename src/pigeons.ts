@@ -30,6 +30,13 @@ export const PIGEON_BREEDS: Breed[] = [
   { id: "zolotoy",  name: "Золотой голубь Василия", set: "fest", rarity: "legendary" },
 ];
 export const BREED_BY_ID = new Map(PIGEON_BREEDS.map(b => [b.id, b]));
+const ALBUM_BREED_IDS = PIGEON_BREEDS.map(b => b.id);
+
+/** Полный альбом — именно все текущие 16 пород, а не любые 16 legacy-id из БД. */
+export function hasCompletePigeonAlbum(ownedBreeds: Iterable<string>): boolean {
+  const owned = ownedBreeds instanceof Set ? ownedBreeds : new Set(ownedBreeds);
+  return ALBUM_BREED_IDS.every(id => owned.has(id));
+}
 
 // Обёртка ключа недели по Иркутску — единственный источник истины: weekKey() в clicker.ts
 // (используется closeWeeklySeason). Не дублируем реализацию здесь.
@@ -231,19 +238,22 @@ export function pigeonPrice(breed: string): number | null {
 // Покупка: атомарно списываем баланс кликера (условный UPDATE, как в upgradeTune) и в той
 // же транзакции выдаём голубя. Дубль уже имеющейся породы = «запаска» под скорм на звёзды.
 export async function buyPigeon(chatId: number, breed: string):
-  Promise<{ ok: boolean; spent?: number; breed?: string; isNew?: boolean; newBalance?: number; reason?: string }> {
+  Promise<{ ok: boolean; spent?: number; breed?: string; isNew?: boolean; newBalance?: number; revision?: number; reason?: string }> {
   const price = pigeonPrice(breed);
   if (price == null) return { ok: false, reason: "not_buyable" };
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    const { settleClickerBeforeIncomeChange } = await import("./clicker");
+    await settleClickerBeforeIncomeChange(client, chatId);
     const pay = await client.query(
-      `UPDATE clicker_state SET balance = balance - $2 WHERE chat_id=$1 AND balance >= $2 RETURNING balance`,
+      `UPDATE clicker_state SET balance = balance - $2, state_revision=state_revision+1, updated_at=NOW()
+        WHERE chat_id=$1 AND balance >= $2 RETURNING balance, state_revision`,
       [chatId, price]);
     if (!pay.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
     const g = await grantPigeon(chatId, breed, client);
     await client.query("COMMIT");
-    return { ok: true, spent: price, breed, isNew: g.isNew, newBalance: Number(pay.rows[0].balance) };
+    return { ok: true, spent: price, breed, isNew: g.isNew, newBalance: Number(pay.rows[0].balance), revision: Number(pay.rows[0].state_revision) };
   } catch (e) { await client.query("ROLLBACK"); throw e; }
   finally { client.release(); }
 }
@@ -309,6 +319,13 @@ export async function initPigeonSchema(): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), closed_at TIMESTAMPTZ);
     CREATE INDEX IF NOT EXISTS pigeon_duels_to_open ON pigeon_duels (to_chat, status, created_at DESC);
     CREATE INDEX IF NOT EXISTS pigeon_duels_from_open ON pigeon_duels (from_chat, status, created_at DESC);
+    ALTER TABLE pigeon_duels ADD COLUMN IF NOT EXISTS request_id TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS pigeon_duels_request ON pigeon_duels (from_chat, request_id) WHERE request_id IS NOT NULL;
+    CREATE TABLE IF NOT EXISTS pigeon_drag_runs (
+      chat_id BIGINT NOT NULL, request_id TEXT NOT NULL, response JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (chat_id, request_id));
+    CREATE INDEX IF NOT EXISTS pigeon_drag_runs_created ON pigeon_drag_runs (created_at);
     CREATE TABLE IF NOT EXISTS pigeon_race_entries (
       week TEXT NOT NULL, chat_id BIGINT NOT NULL, breed TEXT NOT NULL,
       score INT, entered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -324,6 +341,7 @@ export async function initPigeonSchema(): Promise<void> {
     CREATE UNIQUE INDEX IF NOT EXISTS pigeon_missions_one_active_bird
       ON pigeon_missions (chat_id, breed) WHERE status='active';
     CREATE INDEX IF NOT EXISTS pigeon_missions_player ON pigeon_missions (chat_id, status, completes_at);
+    DELETE FROM pigeon_drag_runs WHERE created_at < NOW() - INTERVAL '14 days';
   `);
   // Кэш перка «полный альбом» (+5% к пассиву, ALBUM_PASSIVE_BONUS) на clicker_state —
   // выставляется в grantPigeon при 16/16 пород, читается в clicker.ts::refresh без
@@ -340,10 +358,12 @@ export async function initPigeonSchema(): Promise<void> {
   await pool.query(`ALTER TABLE pigeon_trades ADD COLUMN IF NOT EXISTS coin_delta BIGINT NOT NULL DEFAULT 0`);
   // Стартовый голубь: флаг одноразовой выдачи Сизаря новому игроку (см. refresh в clicker.ts).
   await pool.query(`ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS starter_pigeon BOOLEAN NOT NULL DEFAULT FALSE`);
-  // Храповик уровня (max_level не откатывается при ужесточении порогов, 15.07). Грандфазер:
-  // одноразово фиксируем уровень существующих игроков по СТАРЫМ порогам, чтобы новая (более
-  // крутая) кривая никого не понизила. GREATEST идемпотентен — повтор на буте безвреден.
+  // Храповик уровня (max_level не откатывается при ужесточении порогов, 15.07). Грандфазер
+  // должен выполняться ровно один раз для существовавших на момент миграции строк.
+  // Раньше UPDATE шёл на каждом запуске и новые игроки тоже получали старые, более низкие
+  // пороги. Default меняем на TRUE только после обработки legacy-строк.
   await pool.query(`ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS max_level SMALLINT NOT NULL DEFAULT 1`);
+  await pool.query(`ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS legacy_level_migrated BOOLEAN NOT NULL DEFAULT FALSE`);
   // Драг-рейсинг: реакция игрока (мс) для подбора соперников (pickOpponents в drag.ts) — снапшот
   // последнего заезда; NULL для тех, кто ещё не гонял (тогда используем synthReaction).
   await pool.query(`ALTER TABLE clicker_state ADD COLUMN IF NOT EXISTS race_reaction_ms SMALLINT`);
@@ -356,7 +376,22 @@ export async function initPigeonSchema(): Promise<void> {
       WHEN total_earned >= 200000 THEN 9 WHEN total_earned >= 120000 THEN 8
       WHEN total_earned >= 70000 THEN 7 WHEN total_earned >= 38000 THEN 6
       WHEN total_earned >= 18000 THEN 5 WHEN total_earned >= 8000 THEN 4
-      WHEN total_earned >= 3000 THEN 3 WHEN total_earned >= 1000 THEN 2 ELSE 1 END)`);
+      WHEN total_earned >= 3000 THEN 3 WHEN total_earned >= 1000 THEN 2 ELSE 1 END),
+      max_level_prestige=prestige, legacy_level_migrated=TRUE
+      WHERE legacy_level_migrated=FALSE`);
+  await pool.query(`ALTER TABLE clicker_state ALTER COLUMN legacy_level_migrated SET DEFAULT TRUE`);
+  // Исправляем кэш у старых данных: неизвестная/удалённая порода не должна заменять
+  // одну из актуальных пород и ошибочно включать бонус полного альбома.
+  await pool.query(
+    `UPDATE clicker_state c
+        SET album_bonus = ((SELECT COUNT(DISTINCT i.breed)
+                              FROM pigeon_inventory i
+                             WHERE i.chat_id=c.chat_id AND i.count>0 AND i.breed=ANY($1::text[])) = $2)
+      WHERE c.album_bonus IS DISTINCT FROM ((SELECT COUNT(DISTINCT i.breed)
+                                               FROM pigeon_inventory i
+                                              WHERE i.chat_id=c.chat_id AND i.count>0 AND i.breed=ANY($1::text[])) = $2)`,
+    [ALBUM_BREED_IDS, ALBUM_BREED_IDS.length]
+  );
 }
 
 // ── Инвентарь ──────────────────────────────────────────────────────────────
@@ -380,9 +415,9 @@ export async function grantPigeon(chatId: number, breedId: string, client?: Pool
 export async function hasFullAlbum(chatId: number, client?: PoolClient): Promise<boolean> {
   const q = client ?? pool;
   const r = await q.query(
-    `SELECT COUNT(DISTINCT breed) AS n FROM pigeon_inventory WHERE chat_id=$1 AND count>0 AND breed<>'champion'`,
-    [chatId]);
-  return Number(r.rows[0].n) >= 16;
+    `SELECT COUNT(DISTINCT breed) AS n FROM pigeon_inventory WHERE chat_id=$1 AND count>0 AND breed=ANY($2::text[])`,
+    [chatId, ALBUM_BREED_IDS]);
+  return Number(r.rows[0].n) === ALBUM_BREED_IDS.length;
 }
 
 export async function getPigeonsOverview(chatId: number) {
@@ -404,7 +439,7 @@ export async function getPigeonsOverview(chatId: number) {
   return {
     inventory, sets,
     passivePerHour: inventory.reduce((sum: number, r: any) => sum + Number(r.passivePerHour), 0) + pigeonCollectionPassiveBonus(owned),
-    albumDone: [...owned].filter(b => b !== "champion").length >= 16,
+    albumDone: hasCompletePigeonAlbum(owned),
     unreadMail: 0,
     weekBreed: breedOfWeek(await currentWeekKey()),
   };
@@ -438,66 +473,95 @@ export async function startPigeonMission(chatId: number, missionId: string, bree
   const def = PIGEON_MISSIONS.find(m => m.id === missionId);
   if (!def) return { ok: false, reason: "unknown_mission" };
   if (!BREED_BY_ID.has(breed)) return { ok: false, reason: "not_owned" };
-  const owned = await pool.query(
-    `SELECT stars, tune_speed, tune_stamina, tune_luck FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 AND count>0`,
-    [chatId, breed]);
-  if (!owned.rowCount) return { ok: false, reason: "not_owned" };
-  const r = owned.rows[0];
-  const power = pigeonMissionPower(breed, Number(r.stars), Number(r.tune_speed), Number(r.tune_stamina), Number(r.tune_luck));
-  if (power < def.minPower) return { ok: false, reason: "mission_locked" };
-  const progress = await pool.query(
-    `SELECT COUNT(*)::int AS completed FROM pigeon_missions WHERE chat_id=$1 AND breed=$2 AND status='claimed'`,
-    [chatId, breed]);
-  const rank = pigeonMissionRank(Number(progress.rows[0]?.completed || 0));
-  const chance = pigeonMissionChance(breed, Number(r.stars), Number(r.tune_speed), Number(r.tune_stamina), Number(r.tune_luck), def.difficulty);
-  const succeeds = Math.random() * 100 < chance;
-  const reward = Math.round(def.reward * rank.rewardMult);
-  const consolation = Math.max(1, Math.floor(reward * 0.2));
+  const client = await pool.connect();
   try {
-    const created = await pool.query(
+    await client.query("BEGIN");
+    // Один порядок со reset/delete: сначала профиль, затем голубятня и миссия.
+    // Иначе сброс мог уже удалить миссии, застрять на inventory и пропустить
+    // новый INSERT, оставив «призрачное» задание без птицы.
+    const profile = await client.query(
+      `SELECT admin_blocked FROM clicker_state WHERE chat_id=$1 FOR UPDATE`, [chatId]);
+    if (!profile.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "not_owned" }; }
+    if (profile.rows[0].admin_blocked) { await client.query("ROLLBACK"); return { ok: false, reason: "account_blocked" }; }
+    const owned = await client.query(
+      `SELECT stars, tune_speed, tune_stamina, tune_luck FROM pigeon_inventory
+        WHERE chat_id=$1 AND breed=$2 AND count>0 FOR UPDATE`,
+      [chatId, breed]);
+    if (!owned.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "not_owned" }; }
+    const r = owned.rows[0];
+    const power = pigeonMissionPower(breed, Number(r.stars), Number(r.tune_speed), Number(r.tune_stamina), Number(r.tune_luck));
+    if (power < def.minPower) { await client.query("ROLLBACK"); return { ok: false, reason: "mission_locked" }; }
+    const progress = await client.query(
+      `SELECT COUNT(*)::int AS completed FROM pigeon_missions WHERE chat_id=$1 AND breed=$2 AND status='claimed'`,
+      [chatId, breed]);
+    const rank = pigeonMissionRank(Number(progress.rows[0]?.completed || 0));
+    const chance = pigeonMissionChance(breed, Number(r.stars), Number(r.tune_speed), Number(r.tune_stamina), Number(r.tune_luck), def.difficulty);
+    const succeeds = Math.random() * 100 < chance;
+    const reward = Math.round(def.reward * rank.rewardMult);
+    const consolation = Math.max(1, Math.floor(reward * 0.2));
+    const created = await client.query(
       `INSERT INTO pigeon_missions (chat_id, breed, mission_id, chance, reward, consolation, succeeds, completes_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,NOW() + $8 * INTERVAL '1 second')
        RETURNING id, breed, mission_id, chance, reward, consolation, started_at, completes_at`,
       [chatId, breed, def.id, chance, reward, consolation, succeeds, def.durationSec]);
+    await client.query("COMMIT");
     return { ok: true, mission: created.rows[0] };
   } catch (e: any) {
+    await client.query("ROLLBACK").catch(() => {});
     if (e?.code === "23505") return { ok: false, reason: "bird_busy" };
     throw e;
-  }
+  } finally { client.release(); }
 }
 
 export async function claimPigeonMission(chatId: number, id: number):
-  Promise<{ ok: boolean; success?: boolean; reward?: number; newBalance?: number; reason?: string }> {
+  Promise<{ ok: boolean; success?: boolean; reward?: number; newBalance?: number; revision?: number; reason?: string; duplicate?: boolean }> {
   if (!Number.isSafeInteger(id) || id <= 0) return { ok: false, reason: "bad_input" };
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // reset/delete блокируют clicker_state до удаления миссий. Берём тот же лок
+    // первым, чтобы исключить deadlock «миссия → кошелёк» против
+    // «кошелёк → удаление миссии» и не начислить награду в сброшенный профиль.
+    const { settleClickerBeforeIncomeChange } = await import("./clicker");
+    await settleClickerBeforeIncomeChange(client, chatId);
     const found = await client.query(
-      `SELECT id, succeeds, reward, consolation, completes_at FROM pigeon_missions
-       WHERE id=$1 AND chat_id=$2 AND status='active' FOR UPDATE`, [id, chatId]);
+      `SELECT id, succeeds, reward, consolation, completes_at, status FROM pigeon_missions
+       WHERE id=$1 AND chat_id=$2 FOR UPDATE`, [id, chatId]);
     if (!found.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "not_found" }; }
     const mission = found.rows[0];
-    if (new Date(mission.completes_at).getTime() > Date.now()) { await client.query("ROLLBACK"); return { ok: false, reason: "not_ready" }; }
     const success = Boolean(mission.succeeds);
     const reward = Number(success ? mission.reward : mission.consolation);
+    // Повтор после потерянного HTTP-ответа возвращает прежний исход без второй выплаты.
+    if (mission.status === "claimed") {
+      const balance = await client.query(`SELECT balance, state_revision FROM clicker_state WHERE chat_id=$1`, [chatId]);
+      await client.query("ROLLBACK");
+      return { ok: true, success, reward, newBalance: Number(balance.rows[0]?.balance || 0), revision: Number(balance.rows[0]?.state_revision || 0), duplicate: true };
+    }
+    if (mission.status !== "active") { await client.query("ROLLBACK"); return { ok: false, reason: "not_found" }; }
+    if (new Date(mission.completes_at).getTime() > Date.now()) { await client.query("ROLLBACK"); return { ok: false, reason: "not_ready" }; }
     await client.query(`UPDATE pigeon_missions SET status='claimed', claimed_at=NOW() WHERE id=$1`, [id]);
     const { addClickerBalance } = await import("./clicker");
     await addClickerBalance(chatId, reward, client);
-    const balance = await client.query(`SELECT balance FROM clicker_state WHERE chat_id=$1`, [chatId]);
+    const balance = await client.query(`SELECT balance, state_revision FROM clicker_state WHERE chat_id=$1`, [chatId]);
     await client.query("COMMIT");
-    return { ok: true, success, reward, newBalance: Number(balance.rows[0].balance) };
+    return { ok: true, success, reward, newBalance: Number(balance.rows[0].balance), revision: Number(balance.rows[0].state_revision || 0) };
   } catch (e) { await client.query("ROLLBACK"); throw e; }
   finally { client.release(); }
 }
 
 // claimSet: строка-мьютекс + монеты в одной транзакции (паттерн clicker_gifts).
 export async function claimSet(chatId: number, setId: string):
-  Promise<{ ok: boolean; reward?: number; newBalance?: number; reason?: string }> {
+  Promise<{ ok: boolean; reward?: number; newBalance?: number; revision?: number; reason?: string; duplicate?: boolean }> {
   const set = PIGEON_SETS.find(s => s.id === setId);
   if (!set) return { ok: false, reason: "unknown_set" };
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // Единый порядок с resetClickerProgress: сначала clicker_state, затем строки
+    // голубятни. Так сброс не может вклиниться после проверки полного сета и
+    // оставить награду/claim в уже очищенном профиле.
+    const { settleClickerBeforeIncomeChange } = await import("./clicker");
+    await settleClickerBeforeIncomeChange(client, chatId);
     const owned = await client.query(
       `SELECT COUNT(*) AS n FROM pigeon_inventory WHERE chat_id=$1 AND count>0 AND breed = ANY($2)`,
       [chatId, PIGEON_BREEDS.filter(b => b.set === setId).map(b => b.id)]);
@@ -505,7 +569,11 @@ export async function claimSet(chatId: number, setId: string):
     const mutex = await client.query(
       `INSERT INTO pigeon_sets_claimed (chat_id, set_id) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING 1`,
       [chatId, setId]);
-    if (!mutex.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "already" }; }
+    if (!mutex.rowCount) {
+      const bal = await client.query(`SELECT balance, state_revision FROM clicker_state WHERE chat_id=$1`, [chatId]);
+      await client.query("ROLLBACK");
+      return { ok: true, duplicate: true, reward: set.reward, newBalance: Number(bal.rows[0]?.balance ?? 0), revision: Number(bal.rows[0]?.state_revision || 0) };
+    }
     // Динамический импорт вместо статического: по конвенции модулей все связи clicker↔pigeons
     // ленивые (await import с обеих сторон) — статический импорт addClickerBalance здесь нарушил
     // бы эту конвенцию. await import(...) при module="commonjs" компилируется в Promise-обёртку
@@ -513,21 +581,23 @@ export async function claimSet(chatId: number, setId: string):
     // полностью инициализированы, цикла нет в принципе.
     const { addClickerBalance } = await import("./clicker");
     await addClickerBalance(chatId, set.reward, client);
-    const bal = await client.query(`SELECT balance FROM clicker_state WHERE chat_id=$1`, [chatId]);
+    const bal = await client.query(`SELECT balance, state_revision FROM clicker_state WHERE chat_id=$1`, [chatId]);
     await client.query("COMMIT");
-    return { ok: true, reward: set.reward, newBalance: Number(bal.rows[0]?.balance ?? 0) };
+    return { ok: true, reward: set.reward, newBalance: Number(bal.rows[0]?.balance ?? 0), revision: Number(bal.rows[0]?.state_revision || 0) };
   } catch (e) { await client.query("ROLLBACK"); throw e; }
   finally { client.release(); }
 }
 
 // feedPigeon: скормить дубли до следующей звезды целиком (starTarget штук за раз).
 export async function feedPigeon(chatId: number, breedId: string):
-  Promise<{ ok: boolean; stars?: number; spent?: number; reason?: string }> {
+  Promise<{ ok: boolean; stars?: number; spent?: number; passivePerHour?: number; newBalance?: number; revision?: number; reason?: string }> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    const { settleClickerBeforeIncomeChange } = await import("./clicker");
+    const settled = await settleClickerBeforeIncomeChange(client, chatId);
     const r = await client.query(
-      `SELECT count, stars FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 FOR UPDATE`, [chatId, breedId]);
+      `SELECT count, stars, tune_speed, tune_stamina, tune_luck FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 FOR UPDATE`, [chatId, breedId]);
     if (!r.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "not_owned" }; }
     const { count, stars } = r.rows[0];
     const need = starTarget(stars);
@@ -536,18 +606,33 @@ export async function feedPigeon(chatId: number, breedId: string):
     await client.query(
       `UPDATE pigeon_inventory SET count = count - $3, stars = stars + 1 WHERE chat_id=$1 AND breed=$2`,
       [chatId, breedId, need]);
+    const revision = await client.query(
+      `UPDATE clicker_state SET state_revision=state_revision+1, updated_at=NOW() WHERE chat_id=$1 RETURNING state_revision`,
+      [chatId]);
     await client.query("COMMIT");
-    return { ok: true, stars: stars + 1, spent: need };
+    return {
+      ok: true,
+      stars: stars + 1,
+      spent: need,
+      newBalance: settled.balance,
+      revision: Number(revision.rows[0]?.state_revision || 0),
+      passivePerHour: pigeonPassiveValue(breedId, Number(stars) + 1, Number(r.rows[0].tune_speed), Number(r.rows[0].tune_stamina), Number(r.rows[0].tune_luck)),
+    };
   } catch (e) { await client.query("ROLLBACK"); throw e; }
   finally { client.release(); }
 }
 
 export async function setShowcase(chatId: number, breeds: string[]): Promise<{ ok: boolean; reason?: string }> {
   if (!Array.isArray(breeds) || breeds.length > 3) return { ok: false, reason: "bad_input" };
+  if (new Set(breeds).size !== breeds.length) return { ok: false, reason: "bad_input" };
   if (breeds.some(b => !BREED_BY_ID.has(b))) return { ok: false, reason: "unknown_breed" };
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // Абсолютный список должен применяться целиком. Без пользовательского лока
+    // два WebView могли обнулить витрину одновременно, а затем записать смесь
+    // двух списков (вплоть до нескольких голубей с одинаковым порядком).
+    await client.query(`SELECT 1 FROM clicker_state WHERE chat_id=$1 FOR UPDATE`, [chatId]);
     await client.query(`UPDATE pigeon_inventory SET showcase=0 WHERE chat_id=$1 AND showcase>0`, [chatId]);
     for (let i = 0; i < breeds.length; i++) {
       const u = await client.query(
@@ -592,6 +677,10 @@ export async function createTrade(chatId: number, give: string, want: string, to
     const cnt = await client.query(
       `SELECT COUNT(*) AS n FROM pigeon_trades WHERE from_chat=$1 AND status='open'`, [chatId]);
     if (Number(cnt.rows[0].n) >= MAX_OPEN_TRADES) { await client.query("ROLLBACK"); return { ok: false, reason: "limit" }; }
+    // Единый порядок: clicker_state → pigeon_inventory. acceptTrade использует тот
+    // же порядок, поэтому встречные операции не образуют AB-BA дедлок.
+    const { settleClickerBeforeIncomeChange } = await import("./clicker");
+    await settleClickerBeforeIncomeChange(client, chatId);
     // эскроу: списать дубликат (count>1!)
     const esc = await client.query(
       `UPDATE pigeon_inventory SET count = count - 1 WHERE chat_id=$1 AND breed=$2 AND count>1 RETURNING 1`,
@@ -627,13 +716,20 @@ export async function acceptTrade(chatId: number, tradeId: number):
     const tr = t.rows[0];
     if (Number(tr.from_chat) === chatId) { await client.query("ROLLBACK"); return { ok: false, reason: "own" }; }
     if (tr.to_chat != null && Number(tr.to_chat) !== chatId) { await client.query("ROLLBACK"); return { ok: false, reason: "not_addressed" }; }
+    // Обе новые породы могут увеличить пассив. Сначала фиксируем старую ставку
+    // обоих игроков и берём clicker-локи в стабильном порядке, затем инвентарь.
+    const creatorId = Number(tr.from_chat);
+    const { settleClickerBeforeIncomeChange } = await import("./clicker");
+    for (const id of [chatId, creatorId].sort((a, b) => a - b)) {
+      await settleClickerBeforeIncomeChange(client, id);
+    }
     // канонический порядок блокировок инвентаря — против AB-BA дедлока встречных обменов
     await client.query(
       `SELECT 1 FROM pigeon_inventory
         WHERE (chat_id, breed) IN (($1,$2),($1,$3),($4,$5))
         ORDER BY chat_id, breed
           FOR UPDATE`,
-      [chatId, tr.want, tr.give, Number(tr.from_chat), tr.want]);
+      [chatId, tr.want, tr.give, creatorId, tr.want]);
     // акцептор отдаёт want (тоже только дубликат)
     const pay = await client.query(
       `UPDATE pigeon_inventory SET count = count - 1 WHERE chat_id=$1 AND breed=$2 AND count>1 RETURNING 1`,
@@ -647,7 +743,7 @@ export async function acceptTrade(chatId: number, tradeId: number):
     if (coin !== 0) {
       await client.query(
         `SELECT 1 FROM clicker_state WHERE chat_id IN ($1,$2) ORDER BY chat_id FOR UPDATE`,
-        [chatId, Number(tr.from_chat)]);
+        [chatId, creatorId]);
       if (coin > 0) {
         const cr = await client.query(`UPDATE clicker_state SET balance = balance + $2 WHERE chat_id=$1 RETURNING balance`, [chatId, coin]);
         if (cr.rowCount) newBalance = Number(cr.rows[0].balance);
@@ -658,11 +754,11 @@ export async function acceptTrade(chatId: number, tradeId: number):
           [chatId, owe]);
         if (!dp.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
         newBalance = Number(dp.rows[0].balance);
-        await client.query(`UPDATE clicker_state SET balance = balance + $2 WHERE chat_id=$1`, [Number(tr.from_chat), owe]);
+        await client.query(`UPDATE clicker_state SET balance = balance + $2 WHERE chat_id=$1`, [creatorId, owe]);
       }
     }
     await grantPigeon(chatId, tr.give, client);               // акцептору — эскроу-птица
-    await grantPigeon(Number(tr.from_chat), tr.want, client); // создателю — want
+    await grantPigeon(creatorId, tr.want, client); // создателю — want
     await client.query(
       `UPDATE pigeon_trades SET status='done', closed_at=NOW(), closed_by=$2 WHERE id=$1`, [tradeId, chatId]);
     await client.query("COMMIT");
@@ -858,17 +954,17 @@ export async function sendMail(
       [chatId, breed]);
     if (!esc.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "need_duplicate" }; }
     await grantPigeon(toChat, breed, client);
-    await client.query(
-      `INSERT INTO pigeon_mail (from_chat, to_chat, breed, sticker) VALUES ($1,$2,$3,$4)`,
+    const mail = await client.query(
+      `INSERT INTO pigeon_mail (from_chat, to_chat, breed, sticker) VALUES ($1,$2,$3,$4) RETURNING id`,
       [chatId, toChat, breed, sticker]);
+    const mailId = Number(mail.rows[0].id);
     await client.query("COMMIT");
 
     // Пуш получателю — неблокирующий: почта уже доставлена и закоммичена, ошибка
     // пуша не должна портить успешный ответ sendMail. Канал переиспользован из
     // clicker-push.ts/pet-push.ts: push.sendPushSafely(chatId, "marketing_game", text)
-    // уже реализует дедуп/тихие часы/квоты (kind=marketing_game — тот же, что у
-    // игровых пушей возврата). Своей записи дедупа здесь не нужно: sendPushSafely
-    // сама режет через canSendNotification (общий кап 5/сутки, тихие часы 22–9 Иркутск).
+    // уже реализует тихие часы/квоты. dedupeKey по id письма не даст двум
+    // параллельным обработчикам отправить уведомление об одном письме дважды.
     if (push) {
       void (async () => {
         try {
@@ -881,7 +977,9 @@ export async function sendMail(
           const breedName = BREED_BY_ID.get(breed)!.name;
           const text = `🕊 Тебе прилетел голубь! ${safeName} отправил тебе «${breedName}» — загляни в голубятню.`
             + `\n\n[Открыть голубятню](${miniAppLink(toChat, "click")})`;
-          await push.sendPushSafely(toChat, "marketing_game", text);
+          await push.sendPushSafely(toChat, "marketing_game", text, {
+            dedupeKey: `pigeon-mail:${mailId}`,
+          });
         } catch (e) {
           log.warn({ err: e, chatId, toChat }, "[pigeon mail push]");
         }
@@ -945,12 +1043,32 @@ export async function addFriend(chatId: number, otherId: number):
   if (!Number.isInteger(otherId) || otherId <= 0) return { ok: false, reason: "bad_input" };
   if (otherId === chatId) return { ok: false, reason: "self" };
   const a = Math.min(chatId, otherId), b = Math.max(chatId, otherId);
-  const cnt = await pool.query(
-    `SELECT COUNT(*)::int AS n FROM pigeon_friends WHERE chat_a=$1 OR chat_b=$1`, [chatId]);
-  if (Number(cnt.rows[0].n) >= FRIENDS_LIMIT) return { ok: false, reason: "limit" };
-  const ins = await pool.query(
-    `INSERT INTO pigeon_friends (chat_a, chat_b) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING 1`, [a, b]);
-  return { ok: true, already: !ins.rowCount };
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    // Берём локи в стабильном порядке для обоих участников: связь взаимная,
+    // поэтому лимит должен соблюдаться у каждого даже при параллельных запросах.
+    await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [`pigeon-friend:${a}`]);
+    await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [`pigeon-friend:${b}`]);
+    const existing = await client.query(
+      `SELECT 1 FROM pigeon_friends WHERE chat_a=$1 AND chat_b=$2`, [a, b]);
+    if (existing.rowCount) { await client.query("COMMIT"); return { ok: true, already: true }; }
+    const counts = await client.query(
+      `SELECT COUNT(*) FILTER (WHERE chat_a=$1 OR chat_b=$1)::int AS a_count,
+              COUNT(*) FILTER (WHERE chat_a=$2 OR chat_b=$2)::int AS b_count
+         FROM pigeon_friends`, [a, b]);
+    if (Number(counts.rows[0].a_count) >= FRIENDS_LIMIT || Number(counts.rows[0].b_count) >= FRIENDS_LIMIT) {
+      await client.query("ROLLBACK");
+      return { ok: false, reason: "limit" };
+    }
+    const ins = await client.query(
+      `INSERT INTO pigeon_friends (chat_a, chat_b) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING 1`, [a, b]);
+    await client.query("COMMIT");
+    return { ok: true, already: !ins.rowCount };
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally { client.release(); }
 }
 
 export async function getMailRecipients(chatId: number):
@@ -967,7 +1085,8 @@ export async function getMailRecipients(chatId: number):
     const r = await pool.query(
       `SELECT c.chat_id, s.first_name, s.username
          FROM clicker_state c LEFT JOIN subscribers s ON s.chat_id = c.chat_id
-        WHERE c.squad=$1 AND c.chat_id<>$2 AND c.updated_at > NOW() - INTERVAL '${MAIL_ACTIVE_WINDOW}'
+        WHERE c.squad=$1 AND c.chat_id<>$2 AND c.admin_blocked=FALSE
+          AND c.updated_at > NOW() - INTERVAL '${MAIL_ACTIVE_WINDOW}'
         LIMIT 20`, [squad, chatId]);
     squadRows = r.rows;
   }
@@ -978,13 +1097,15 @@ export async function getMailRecipients(chatId: number):
     `SELECT c.chat_id, s.first_name, s.username
        FROM clicker_state c LEFT JOIN subscribers s ON s.chat_id = c.chat_id
       WHERE (c.referred_by=$1 OR c.chat_id = (SELECT referred_by FROM clicker_state WHERE chat_id=$1))
-        AND c.chat_id<>$1 AND c.updated_at > NOW() - INTERVAL '${MAIL_ACTIVE_WINDOW}'
+        AND c.chat_id<>$1 AND c.admin_blocked=FALSE
+        AND c.updated_at > NOW() - INTERVAL '${MAIL_ACTIVE_WINDOW}'
       LIMIT 20`, [chatId]);
   // Друзья по «коду дружбы» — без окна активности (дружба явная, не протухает в списке)
   const frR = await pool.query(
     `SELECT f.other AS chat_id, s.first_name, s.username
        FROM (SELECT CASE WHEN chat_a=$1 THEN chat_b ELSE chat_a END AS other
                FROM pigeon_friends WHERE chat_a=$1 OR chat_b=$1) f
+       JOIN clicker_state c ON c.chat_id=f.other AND c.admin_blocked=FALSE
        LEFT JOIN subscribers s ON s.chat_id = f.other
       LIMIT 50`, [chatId]);
   const explicit = mapRows(frR.rows);
@@ -1030,21 +1151,35 @@ function tuningState(breed: string, row: PigeonTuningRow | undefined, balance: n
 }
 
 export async function getTuning(chatId: number, breed: string): Promise<PigeonTuning> {
-  const [inv, bal] = await Promise.all([
-    pool.query(`SELECT stars, tune_speed, tune_stamina, tune_luck FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 AND count>0`, [chatId, breed]),
-    pool.query(`SELECT balance FROM clicker_state WHERE chat_id=$1`, [chatId]),
-  ]);
-  return tuningState(breed, inv.rows[0] as PigeonTuningRow | undefined, bal.rows[0] ? Number(bal.rows[0].balance) : 0);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    // Экран тюнинга должен видеть тот же баланс, что главный экран, включая ещё
+    // не сохранённый пассив. Иначе доступная прокачка выглядела заблокированной.
+    const { settleClickerBeforeIncomeChange } = await import("./clicker");
+    const settled = await settleClickerBeforeIncomeChange(client, chatId);
+    const inv = await client.query(
+      `SELECT stars, tune_speed, tune_stamina, tune_luck FROM pigeon_inventory
+        WHERE chat_id=$1 AND breed=$2 AND count>0`,
+      [chatId, breed]);
+    await client.query("COMMIT");
+    return tuningState(breed, inv.rows[0] as PigeonTuningRow | undefined, settled.balance);
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally { client.release(); }
 }
 
 // Прокачка одной характеристики: списание монет + инкремент уровня в одной транзакции.
 export async function upgradeTune(chatId: number, breed: string, stat: string):
-  Promise<{ ok: boolean; level?: number; spent?: number; tuning?: PigeonTuning; reason?: string }> {
+  Promise<{ ok: boolean; level?: number; spent?: number; tuning?: PigeonTuning; revision?: number; reason?: string }> {
   if (!TUNE_STATS.includes(stat as TuneStat)) return { ok: false, reason: "bad_stat" };
   const col = STAT_COL[stat as TuneStat];
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    const { settleClickerBeforeIncomeChange } = await import("./clicker");
+    await settleClickerBeforeIncomeChange(client, chatId);
     const inv = await client.query(
       `SELECT ${col} AS lvl, stars, tune_speed, tune_stamina, tune_luck
          FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 AND count>0 FOR UPDATE`,
@@ -1055,7 +1190,8 @@ export async function upgradeTune(chatId: number, breed: string, stat: string):
     if (cost == null) { await client.query("ROLLBACK"); return { ok: false, reason: "max_level" }; }
     // списываем монеты только если хватает (атомарно через условный UPDATE баланса)
     const pay = await client.query(
-      `UPDATE clicker_state SET balance = balance - $2 WHERE chat_id=$1 AND balance >= $2 RETURNING balance`,
+      `UPDATE clicker_state SET balance = balance - $2, state_revision=state_revision+1, updated_at=NOW()
+        WHERE chat_id=$1 AND balance >= $2 RETURNING balance, state_revision`,
       [chatId, cost]);
     if (!pay.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "not_enough_coins" }; }
     const updated = await client.query(
@@ -1064,7 +1200,7 @@ export async function upgradeTune(chatId: number, breed: string, stat: string):
       [chatId, breed]);
     const tuning = tuningState(breed, updated.rows[0] as PigeonTuningRow, Number(pay.rows[0].balance));
     await client.query("COMMIT");
-    return { ok: true, level: Number(level) + 1, spent: cost, tuning };
+    return { ok: true, level: Number(level) + 1, spent: cost, tuning, revision: Number(pay.rows[0].state_revision) };
   } catch (e) { await client.query("ROLLBACK"); throw e; }
   finally { client.release(); }
 }
@@ -1084,11 +1220,17 @@ export const RACE_SKILL_PTS = 12;
 async function divisionStandings(week: string, division: Division, chatId: number) {
   const [top, all] = await Promise.all([
     pool.query(
-      `SELECT chat_id, breed, score FROM pigeon_race_entries WHERE week=$1 AND division=$2
-       ORDER BY score DESC, entered_at ASC LIMIT 10`, [week, division]),
+      `SELECT e.chat_id, e.breed, e.score
+         FROM pigeon_race_entries e
+         JOIN clicker_state c ON c.chat_id=e.chat_id AND c.admin_blocked=FALSE
+        WHERE e.week=$1 AND e.division=$2
+        ORDER BY e.score DESC, e.entered_at ASC, e.chat_id ASC LIMIT 10`, [week, division]),
     pool.query(
-      `SELECT chat_id, score FROM pigeon_race_entries WHERE week=$1 AND division=$2
-       ORDER BY score DESC, entered_at ASC`, [week, division]),
+      `SELECT e.chat_id, e.score
+         FROM pigeon_race_entries e
+         JOIN clicker_state c ON c.chat_id=e.chat_id AND c.admin_blocked=FALSE
+        WHERE e.week=$1 AND e.division=$2
+        ORDER BY e.score DESC, e.entered_at ASC, e.chat_id ASC`, [week, division]),
   ]);
   const myIdx = all.rows.findIndex((r: any) => Number(r.chat_id) === chatId);
   return {
@@ -1109,25 +1251,54 @@ async function raceWeekEndsTs(): Promise<number> {
 // одна заявка на неделю (PK week,chat_id). skill01 — качество отборочного полёта (0..1),
 // прилетает из клиента через launchSkill (клампы серверные, см. роут).
 export async function enterRace(chatId: number, breed: string, skill01 = 0):
-  Promise<{ ok: boolean; reason?: string; score?: number; division?: Division; standings?: any[]; myPlace?: number | null; total?: number; weekEndsTs?: number }> {
+  Promise<{ ok: boolean; reason?: string; score?: number; division?: Division; standings?: any[]; myPlace?: number | null; total?: number; weekEndsTs?: number; duplicate?: boolean }> {
   if (!RACE_ENABLED) return { ok: false, reason: "disabled" };
   if (!BREED_BY_ID.has(breed)) return { ok: false, reason: "unknown_breed" };
-  const inv = await pool.query(
-    `SELECT stars, tune_speed, tune_stamina, tune_luck FROM pigeon_inventory WHERE chat_id=$1 AND breed=$2 AND count>0`,
-    [chatId, breed]);
-  if (!inv.rowCount) return { ok: false, reason: "not_owned" };
-  const { stars, tune_speed, tune_stamina, tune_luck } = inv.rows[0];
-  const skillPts = Math.round(Math.min(1, Math.max(0, Number(skill01) || 0)) * RACE_SKILL_PTS);
-  const score = raceScore(breed, stars, tune_speed, tune_stamina, tune_luck, Math.random()) + skillPts;
-  const division = raceDivision(tune_speed + tune_stamina + tune_luck);
   const week = await currentWeekKey();
-  const ins = await pool.query(
-    `INSERT INTO pigeon_race_entries (week, chat_id, breed, score, division) VALUES ($1,$2,$3,$4,$5)
-     ON CONFLICT (week, chat_id) DO NOTHING RETURNING 1`,
-    [week, chatId, breed, score, division]);
-  if (!ins.rowCount) return { ok: false, reason: "already" };
+  const client = await pool.connect();
+  let score: number;
+  let division: Division;
+  let duplicate = false;
+  try {
+    await client.query("BEGIN");
+    const profile = await client.query(
+      `SELECT admin_blocked FROM clicker_state WHERE chat_id=$1 FOR UPDATE`, [chatId]);
+    if (!profile.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "not_owned" }; }
+    if (profile.rows[0].admin_blocked) { await client.query("ROLLBACK"); return { ok: false, reason: "account_blocked" }; }
+    const inv = await client.query(
+      `SELECT stars, tune_speed, tune_stamina, tune_luck FROM pigeon_inventory
+        WHERE chat_id=$1 AND breed=$2 AND count>0 FOR UPDATE`, [chatId, breed]);
+    if (!inv.rowCount) { await client.query("ROLLBACK"); return { ok: false, reason: "not_owned" }; }
+    const { stars, tune_speed, tune_stamina, tune_luck } = inv.rows[0];
+    const skillPts = Math.round(Math.min(1, Math.max(0, Number(skill01) || 0)) * RACE_SKILL_PTS);
+    score = raceScore(breed, stars, tune_speed, tune_stamina, tune_luck, Math.random()) + skillPts;
+    division = raceDivision(tune_speed + tune_stamina + tune_luck);
+    const ins = await client.query(
+      `INSERT INTO pigeon_race_entries (week, chat_id, breed, score, division) VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (week, chat_id) DO NOTHING RETURNING 1`,
+      [week, chatId, breed, score, division]);
+    if (!ins.rowCount) {
+      // Повтор после потерянного ответа восстанавливает зафиксированный результат.
+      const previous = await client.query(
+        `SELECT breed, score, division FROM pigeon_race_entries WHERE week=$1 AND chat_id=$2`,
+        [week, chatId]);
+      if (!previous.rowCount || String(previous.rows[0].breed) !== breed) {
+        await client.query("ROLLBACK");
+        return { ok: false, reason: "already" };
+      }
+      score = Number(previous.rows[0].score);
+      division = previous.rows[0].division as Division;
+      duplicate = true;
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
   const st = await divisionStandings(week, division, chatId);
-  return { ok: true, score, division, ...st, weekEndsTs: await raceWeekEndsTs() };
+  return { ok: true, ...(duplicate ? { duplicate: true } : {}), score, division, ...st, weekEndsTs: await raceWeekEndsTs() };
 }
 
 export async function getRace(chatId: number) {
@@ -1135,7 +1306,7 @@ export async function getRace(chatId: number) {
   const [mine, last, entrants] = await Promise.all([
     pool.query(`SELECT breed, division, score FROM pigeon_race_entries WHERE week=$1 AND chat_id=$2`, [week, chatId]),
     pool.query(`SELECT results FROM pigeon_race_winners ORDER BY week DESC LIMIT 1`),
-    pool.query(`SELECT COUNT(*) AS n FROM pigeon_race_entries WHERE week=$1`, [week]),
+    pool.query(`SELECT COUNT(*) AS n FROM pigeon_race_entries e JOIN clicker_state c ON c.chat_id=e.chat_id AND c.admin_blocked=FALSE WHERE e.week=$1`, [week]),
   ]);
   const my = mine.rows[0];
   const st = my ? await divisionStandings(week, my.division as Division, chatId) : null;
@@ -1152,7 +1323,7 @@ export async function getRace(chatId: number) {
 }
 
 // Закрытие прошедшей недели. Заявки группируются по дивизиону, в каждом — свой топ-3
-// с призами DIVISION_PRIZES; порода «Чемпион» — только победителю Золота. Идемпотентно:
+// с призами DIVISION_PRIZES. Идемпотентно:
 // мьютекс-строка в pigeon_race_winners (INSERT ... ON CONFLICT DO NOTHING RETURNING 1)
 // гарантирует, что только один параллельный прогон крона реально начислит призы.
 export async function closeRaceWeek(): Promise<{ week: string; entries: number; closed: boolean }> {
@@ -1163,23 +1334,33 @@ export async function closeRaceWeek(): Promise<{ week: string; entries: number; 
     const mutex = await client.query(
       `INSERT INTO pigeon_race_winners (week, results) VALUES ($1,'{}'::jsonb) ON CONFLICT DO NOTHING RETURNING 1`, [prevWeek]);
     if (!mutex.rowCount) { await client.query("ROLLBACK"); return { week: prevWeek, entries: 0, closed: false }; }
+    const entryCount = await client.query(
+      `SELECT COUNT(*)::int AS n FROM pigeon_race_entries WHERE week=$1`, [prevWeek]);
     const { addClickerBalance } = await import("./clicker");
     const results: Record<Division, any[]> = { bronze: [], silver: [], gold: [] };
-    let total = 0;
+    const awards: { chatId: number; prize: number }[] = [];
     for (const div of ["bronze", "silver", "gold"] as Division[]) {
       const top = await client.query(
-        `SELECT chat_id, breed, score FROM pigeon_race_entries WHERE week=$1 AND division=$2
-         ORDER BY score DESC, entered_at ASC LIMIT 3`, [prevWeek, div]);
+        `SELECT e.chat_id, e.breed, e.score
+           FROM pigeon_race_entries e
+           JOIN clicker_state c ON c.chat_id=e.chat_id AND c.admin_blocked=FALSE
+          WHERE e.week=$1 AND e.division=$2
+          ORDER BY e.score DESC, e.entered_at ASC, e.chat_id ASC LIMIT 3`, [prevWeek, div]);
       const prizes = DIVISION_PRIZES[div];
       for (let i = 0; i < top.rows.length; i++) {
-        await addClickerBalance(Number(top.rows[i].chat_id), prizes[i], client);
-        results[div].push({ place: i + 1, chat: Number(top.rows[i].chat_id), breed: top.rows[i].breed, score: top.rows[i].score, prize: prizes[i] });
+        const chatId = Number(top.rows[i].chat_id);
+        awards.push({ chatId, prize: prizes[i] });
+        results[div].push({ place: i + 1, chat: chatId, breed: top.rows[i].breed, score: top.rows[i].score, prize: prizes[i] });
       }
-      total += top.rows.length;
     }
+    // Несколько кошельков всегда блокируем по chat_id. Иначе закрытие гонки
+    // (порядок по очкам) могло войти в deadlock с реферальной наградой
+    // (порядок по id) и отложить выдачу до следующего catch-up.
+    awards.sort((a, b) => a.chatId - b.chatId);
+    for (const award of awards) await addClickerBalance(award.chatId, award.prize, client);
     await client.query(`UPDATE pigeon_race_winners SET results=$2 WHERE week=$1`, [prevWeek, JSON.stringify(results)]);
     await client.query("COMMIT");
-    return { week: prevWeek, entries: total, closed: true };
+    return { week: prevWeek, entries: Number(entryCount.rows[0]?.n || 0), closed: true };
   } catch (e) { await client.query("ROLLBACK"); throw e; }
   finally { client.release(); }
 }

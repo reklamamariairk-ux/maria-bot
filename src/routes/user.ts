@@ -29,6 +29,7 @@ import { rateLimit } from "../middleware";
 import { requireTgUser, getTgUser, getUser } from "../auth";
 import { toPlatformId } from "../platform";
 import { log } from "../logger";
+import { isValidIsoDate } from "../date-utils";
 
 const router = Router();
 
@@ -48,7 +49,7 @@ router.post("/api/birthday", requireTgUser, rateLimit(5), async (req, res) => {
   const u = getTgUser(req)!;
   const body = req.body as { birthday?: string };
   const bday = String(body.birthday ?? "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(bday)) {
+  if (!isValidIsoDate(bday)) {
     res.status(400).json({ ok: false, error: "Неверный формат даты" });
     return;
   }

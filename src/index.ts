@@ -4,10 +4,11 @@ import cors from "cors";
 import helmet from "helmet";
 import path from "path";
 import https from "https";
+import crypto from "crypto";
 import cron from "node-cron";
 import { Bot, webhookCallback, InlineKeyboard, Keyboard } from "grammy";
-import { log, requestLogger, sentryExpressErrorHandler, captureError } from "./logger";
-import { rateLimit, requireAdminToken, safeEq } from "./middleware";
+import { log, requestLogger, sentryExpressErrorHandler } from "./logger";
+import { rateLimit, requireAdminRole, requireAdminToken, safeEq } from "./middleware";
 import sweetCheckRouter, { loadSweetCheckPrizes } from "./routes/sweet-check";
 import holidaysRouter from "./routes/holidays";
 import { createCatalogRouter } from "./routes/catalog";
@@ -16,7 +17,7 @@ import clubRouter from "./routes/club";
 import lkRouter from "./routes/lk";
 import promoRouter from "./routes/promo";
 import orderRatingRouter from "./routes/order-rating";
-import orderLocationRouter from "./routes/order-location";
+import orderLocationRouter, { orderTrackingToken } from "./routes/order-location";
 import cakeConceptRouter from "./routes/cake-concept";
 import selfieCakeRouter from "./routes/selfie-cake";
 import { createWishlistRouter } from "./routes/wishlist";
@@ -28,7 +29,7 @@ import { createPushService } from "./push";
 import { createVkSender } from "./vk/sender";
 import { createVkCallbackRouter } from "./vk/callback";
 import { createVkRouter } from "./routes/vk";
-import { miniAppLink, withAppLinkForVk, clickerReferralLink } from "./links";
+import { miniAppLink, withAppLinkForVk } from "./links";
 import { createReferralRouter } from "./routes/referral";
 import { createWheelStreakRouter } from "./routes/wheel-streak";
 import { createPigeonsRouter } from "./routes/pigeons";
@@ -49,33 +50,52 @@ import { initClickerPushSchema, runClickerRetentionPush } from "./clicker-push";
 import { runPetHungryPush, runPetEnergyPush } from "./pet-push";
 import { initBonusSchema, startBonusWorker } from "./bonus1c";
 import cartRouter from "./routes/cart";
-import { scrapeCatalog, loadCatalog, searchCatalog, catalogAge, fetchProductById, reloadDietaryOverrides, detectDietary, Product } from "./scraper";
-import { initDb, addSubscriber, setSubscriberSourceOnce, getAllSubscribers, setUserBirthday, getTodayBirthdays, markBirthdayNotified, touchSubscriber, getSubscriberInfo, wishlistSync, getWishlistSubsForProducts, getOrCreateReferralCode, recordReferralUse, getOrderStatusMap, setOrderStatus, canSendNotification, logNotification, NotificationKind, getNotificationPrefs, setNotificationPrefs, saveCartSnapshot, clearCartSnapshot, getAbandonedCarts, markCartAbandonedPushed, getSpinStatus, recordSpin, WHEEL_PRIZES, touchVisitStreak, setSecretOfDay, getSecretOfDay, getUnusedRewards, consumeRewards, hasHolidayPushSent, markHolidayPushSent, getReviewsForProduct, getReviewStats, getReviewStatsBatch, getMyReview, upsertReview, deleteMyReview, setReviewHidden, countReviewsLast24h, createWishlistShare, getWishlistShare, incrementWishlistShareOpens, countWishlistSharesLast24h, getOrderRating, upsertOrderRating, hasRatingPromptSent, markRatingPromptSent, countPromoUses, hasUserUsedPromo, recordPromoUse } from "./db";
+import { scrapeCatalog, loadCatalog, catalogAge, reloadDietaryOverrides, detectDietary, Product } from "./scraper";
+import {
+  initDb,
+  addSubscriber,
+  setSubscriberSourceOnce,
+  getAllSubscribers,
+  setUserBirthday,
+  getTodayBirthdays,
+  markBirthdayNotified,
+  getSubscriberInfo,
+  getWishlistSubsForProducts,
+  recordReferralUse,
+  getOrderStatusMap,
+  setOrderStatus,
+  clearCartSnapshot,
+  getAbandonedCarts,
+  markCartAbandonedPushed,
+  setSecretOfDay,
+  getSecretOfDay,
+  getUnusedRewards,
+  consumeRewards,
+  hasHolidayPushSent,
+  markHolidayPushSent,
+  getOrderRating,
+  hasRatingPromptSent,
+  markRatingPromptSent,
+  countPromoUses,
+  hasUserUsedPromo,
+} from "./db";
+import { claimOrderRequest, lookupOrderRequest, completeOrderRequest, releaseOrderRequest, recordAppOrderOwner, findUserReward, markUserRewardUsed, releaseUserReward, finalizeUserRewardOrder, recordPromoUseGuarded, releasePromoUse, finalizePromoUseOrder, wasNotificationSent } from "./db";
 import {
   initClubSchema,
   getBalance,
   isPhoneVerified,
   verifyPhone,
-  claimDailyLogin,
-  convertStars,
-  getRewardsCatalog,
-  redeemReward,
-  getMyRewards,
-  recordGameResult,
-  getHistory,
-  getDailyStatus,
-  CONVERSION_TIERS,
   earnPoints,
   getExpiringPointsUsers,
 } from "./club";
-import { requireTgUser, getTgUser, tryGetTgUser, tryGetUser } from "./auth";
-import { getPartners, getPartnersMeta, syncPartners } from "./partners";
+import { getTgUser, tryGetUser, optionalUser } from "./auth";
+import { getPartnersMeta, syncPartners } from "./partners";
 import { fetchLk, getVerifiedPhone } from "./lk";
 import { createOrder, OrderRequest } from "./order";
-import { getNextHoliday, getHolidaysToPushToday, HOLIDAYS } from "./holidays";
-import { validatePromoSync, reloadPromoCodes, findPromo } from "./promo";
-import { generateCakeConcepts, isConceptEnabled } from "./cake-concept";
-import { storeSelfie, readSelfie, generateSelfieCakes, cleanupOldSelfies } from "./selfie-cake";
+import { getHolidaysToPushToday, HOLIDAYS } from "./holidays";
+import { validatePromoSync, reloadPromoCodes } from "./promo";
+import { cleanupOldSelfies } from "./selfie-cake";
+import { isValidDayMonth, normalizeDeliveryDate } from "./date-utils";
 
 // ─── Env ────────────────────────────────────────────────────────────────────
 const BOT_TOKEN    = process.env.BOT_TOKEN    ?? "";
@@ -211,7 +231,7 @@ async function pushOrderRatingPrompts() {
       // Отправляем push с deep-link на rating-форму (платформа получателя)
       const link = miniAppLink(s.chat_id, `rate_${orderId}`);
       const msg = `⭐ *Как тебе заказ №${orderId}?*\n\nОцени за 5 секунд — поможешь нам стать лучше. И получишь персональную подсказку, что попробовать в следующий раз 🍰\n\n[Открыть форму](${link})`;
-      const ok = await sendPushSafely(s.chat_id, "marketing_promo", msg);
+      const ok = await sendPushSafely(s.chat_id, "marketing_promo", msg, { dedupeKey: `rating:${orderId}` });
       if (ok) {
         sent++;
         await markRatingPromptSent(s.chat_id, orderId).catch(() => {});
@@ -231,10 +251,15 @@ async function pushCartAbandonments() {
     const cnt = Number(snap.item_count) || 0;
     const pluralItem = cnt === 1 ? "товар" : cnt < 5 ? "товара" : "товаров";
     const msg = `🛒 *Не забыл?*\n\nУ тебя в корзине ${cnt} ${pluralItem} на ${sum.toLocaleString("ru-RU")} ₽.\n\nЗабери до конца дня — открой Mini App.`;
-    const ok = await sendPushSafely(snap.chat_id, "marketing_promo", withAppLinkForVk(snap.chat_id, msg));
-    if (ok) sent++;
-    // Помечаем как pushed чтобы не дёргать повторно
-    await markCartAbandonedPushed(snap.chat_id).catch(() => {});
+    const snapshotKey = new Date(snap.snapshot_at).toISOString();
+    const ok = await sendPushSafely(snap.chat_id, "marketing_promo", withAppLinkForVk(snap.chat_id, msg), {
+      dedupeKey: `cart-abandoned:${snapshotKey}`,
+    });
+    if (ok) {
+      sent++;
+      // Тихие часы/сбой сети не должны навсегда запрещать повторную попытку.
+      await markCartAbandonedPushed(snap.chat_id).catch(() => {});
+    }
   }
   if (sent > 0) console.log(`[CART ABANDON] notified ${sent} subscribers`);
 }
@@ -259,6 +284,7 @@ function pluralRu(n: number, one: string, few: string, many: string): string {
   if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
   return many;
 }
+const pushDayIrk = () => new Date(Date.now() + 8 * 3_600_000).toISOString().slice(0, 10);
 
 // T2 — пуш «баллы сгорают»: реальные points, истекающие ≤ FUNNEL_EXPIRE_DAYS дней.
 async function pushExpiringPoints() {
@@ -270,7 +296,7 @@ async function pushExpiringPoints() {
     const daysLeft = Math.max(1, Math.ceil((u.soonest.getTime() - Date.now()) / 86_400_000));
     const msg = `⏳ *Баллы скоро сгорают*\n\nУ тебя ${u.amount.toLocaleString("ru-RU")} бонусных ${pluralRu(u.amount, "балл", "балла", "баллов")} сгорят через ${daysLeft} ${pluralRu(daysLeft, "день", "дня", "дней")}. 1 балл = 1 ₽ — потрать их в заказе на maria-irk.ru, чтобы не потерять 🍰`;
     if (!FUNNEL_RETENTION_ENABLED) { dry++; continue; }
-    const ok = await sendPushSafely(u.chatId, "marketing_promo", withAppLinkForVk(u.chatId, msg));
+    const ok = await sendPushSafely(u.chatId, "marketing_promo", withAppLinkForVk(u.chatId, msg), { dedupeKey: `points-expiry:${pushDayIrk()}` });
     if (ok) { sent++; await markFunnelSent(u.chatId, "points_expiry"); }
   }
   console.log(`[FUNNEL expiry] users=${users.length} sent=${sent} dry=${dry} skipped=${skipped} enabled=${FUNNEL_RETENTION_ENABLED}`);
@@ -286,7 +312,7 @@ async function pushReactivation() {
     const msg = `🐱 *Василий скучает!*\n\nДавно тебя не было в «Котик Комбат» — бизнес заскучал. Загляни, забери накопленные монеты и открой новых голубей-помощников!`;
     if (!FUNNEL_RETENTION_ENABLED) { dry++; continue; }
     const full = withAppLinkForVk(chatId, `${msg}\n\n${miniAppLink(chatId, "click")}`);
-    const ok = await sendPushSafely(chatId, "marketing_game", full);
+    const ok = await sendPushSafely(chatId, "marketing_game", full, { dedupeKey: `reactivation:${pushDayIrk()}` });
     if (ok) { sent++; await markFunnelSent(chatId, "reactivation"); }
   }
   console.log(`[FUNNEL reactivate] dormant=${dormant.length} sent=${sent} dry=${dry} skipped=${skipped} enabled=${FUNNEL_RETENTION_ENABLED}`);
@@ -310,11 +336,12 @@ async function checkReferralFirstOrders() {
     checked++;
     if (!hasCompleted) continue;
     if (!FUNNEL_REF_BONUS_ENABLED) { dry++; continue; }
-    // Помечаем ДО начисления — атомарный дедуп (никогда не задвоим реальные баллы).
-    const claimed = await markRefOrderRewarded(invitee).catch(() => false);
-    if (!claimed) continue;
     try {
-      await earnPoints(referrer, FUNNEL_REF_ORDER_POINTS, "referral_first_order", { invitee });
+      // Сначала идемпотентное начисление, затем флаг. Если процесс упадёт между ними,
+      // следующий проход повторит тот же ключ без двойных баллов и завершит выдачу.
+      await earnPoints(referrer, FUNNEL_REF_ORDER_POINTS, "referral_first_order", { invitee }, `referral-first-order:${invitee}`);
+      const claimed = await markRefOrderRewarded(invitee);
+      if (!claimed) continue; // другой параллельный проход уже отправит уведомление
       trackEvent(referrer, "referral_order", { invitee });
       const msg = `🎉 *Твой друг сделал первый заказ!*\n\nСпасибо, что привёл друга в «Марию» — тебе начислено ${FUNNEL_REF_ORDER_POINTS} бонусных ${pluralRu(FUNNEL_REF_ORDER_POINTS, "балл", "балла", "баллов")} (1 балл = 1 ₽). Потрать их в следующем заказе 🎂`;
       await sendPushSafely(referrer, "marketing_rewards", withAppLinkForVk(referrer, msg));
@@ -404,12 +431,18 @@ async function checkOrderStatusChanges() {
       // Статус изменился — пушим
       const emoji = statusEmoji(status);
       const msg = `${emoji} *Заказ №${orderId}* — ${status}`;
-      const ok = await sendPushSafely(s.chat_id, "transactional", msg);
-      if (ok) pushed++;
-      await setOrderStatus(s.chat_id, orderId, status).catch(() => {});
-      // T6: событие воронки — заказ дошёл до завершённого (не отменённого) статуса.
-      if (isTerminalStatus(status) && !/отмен/.test(status.toLowerCase())) {
-        trackEvent(s.chat_id, "order_completed", { orderId });
+      const statusDedupeKey = `order-status:${orderId}:${status}`;
+      const ok = await sendPushSafely(s.chat_id, "transactional", msg, {
+        dedupeKey: statusDedupeKey,
+      });
+      const delivered = ok || await wasNotificationSent(s.chat_id, statusDedupeKey).catch(() => false);
+      if (delivered) {
+        if (ok) pushed++;
+        await setOrderStatus(s.chat_id, orderId, status).catch(() => {});
+        // T6: событие воронки — заказ дошёл до завершённого (не отменённого) статуса.
+        if (isTerminalStatus(status) && !/отмен/.test(status.toLowerCase())) {
+          trackEvent(s.chat_id, "order_completed", { orderId });
+        }
       }
     }
   }
@@ -458,6 +491,10 @@ function runCleanup() {
 }
 setInterval(runCleanup, 6 * 60 * 60 * 1000); // каждые 6 часов
 setTimeout(runCleanup, 5 * 60 * 1000);       // первая через 5 минут после старта
+// Селфи имеют обещанный TTL 2 часа; частая отдельная страховка нужна после
+// рестарта, когда персональные таймеры старого процесса уже потеряны.
+setInterval(() => cleanupOldSelfies().catch(() => {}), 10 * 60 * 1000);
+setTimeout(() => cleanupOldSelfies().catch(() => {}), 1_000);
 
 // ─── Telegram Bot ───────────────────────────────────────────────────────────
 // В preview-режиме (staging без BOT_TOKEN) создаём бот с dummy-токеном —
@@ -600,8 +637,7 @@ bot.command("start", async (ctx) => {
       }
     }
     // «Код дружбы» голубятни: /start ckfr_<internalId владельца ссылки>. Клик =
-    // взаимное согласие — связываем пару в pigeon_friends, оба видят друг друга
-    // в адресатах голубиных обменов.
+    // взаимное согласие — связываем пару в pigeon_friends для дружеских дуэлей.
     if (payload && payload.startsWith("ckfr_")) {
       const ownerId = Number(payload.slice(5));
       if (Number.isFinite(ownerId) && ownerId !== ctx.from.id) {
@@ -609,10 +645,10 @@ bot.command("start", async (ctx) => {
         const r = await addFriend(ctx.from.id, ownerId).catch(() => null);
         if (r?.ok && !r.already) {
           const userName = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" ") || "Новый друг";
-          await sendRaw(ownerId, `🕊️ *${userName}* принял твой код дружбы! Теперь он появится в Голубятне → Друзья — можно отправлять друг другу голубей и вызывать друг друга на дуэль.`, { parse_mode: "Markdown" }).catch(() => {});
-          await ctx.reply(`🕊️ Вы теперь друзья! Открывай Голубятню → Друзья: отправляйте друг другу голубей или вызывайте друг друга на дуэль.`, { reply_markup: gameButton() }).catch(() => {});
+          await sendRaw(ownerId, `🕊️ *${userName}* принял твой код дружбы! Теперь он появится в Голубятне → Друзья — можно вызывать друг друга на дуэль.`, { parse_mode: "Markdown" }).catch(() => {});
+          await ctx.reply(`🕊️ Вы теперь друзья! Открывай Голубятню → Друзья и вызывай друга на дуэль.`, { reply_markup: gameButton() }).catch(() => {});
         } else {
-          await ctx.reply(r?.already ? `🕊️ Вы уже друзья! Открывай голубятню и шли голубей.` : `Не получилось добавить в друзья — попробуй позже.`, { reply_markup: gameButton() }).catch(() => {});
+          await ctx.reply(r?.already ? `🕊️ Вы уже друзья! Открывай Голубятню → Друзья и устраивай дуэль.` : `Не получилось добавить в друзья — попробуй позже.`, { reply_markup: gameButton() }).catch(() => {});
         }
         return;
       }
@@ -670,13 +706,18 @@ bot.on(":contact", async (ctx) => {
     }
     if (appLoginDone) {
       await ctx.reply(
-        `✅ Готово! Вход подтверждён — вернитесь в приложение «Мария».${result.alreadyVerified ? "" : `
+        `✅ Готово! Вход подтверждён — вернитесь в приложение «Мария».${result.bonusAwarded <= 0 ? "" : `
 
 💎 Бонус: +${result.bonusAwarded} баллов за подтверждение номера.`}`,
         { reply_markup: { remove_keyboard: true } }
       );
     } else if (result.alreadyVerified) {
       await ctx.reply("✅ Номер уже подтверждён");
+    } else if (result.bonusAwarded <= 0) {
+      await ctx.reply(
+        "✅ Номер подтверждён. Бонус за подтверждение уже был получен ранее.",
+        { reply_markup: webAppButton("") }
+      );
     } else {
       await ctx.reply(
         `✅ Номер подтверждён!\n\n💎 Тебе начислено +${result.bonusAwarded} баллов на счёт.\nОткрой Mini App, чтобы продолжить 👇`,
@@ -728,6 +769,10 @@ bot.command("birthday", async (ctx) => {
     return;
   }
   const [, day, month] = match;
+  if (!isValidDayMonth(Number(day), Number(month))) {
+    await ctx.reply("Такой даты не существует. Проверьте день и месяц.");
+    return;
+  }
   const birthday = `2000-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
   if (!ctx.from) return;
   await setUserBirthday(ctx.from.id, birthday);
@@ -787,7 +832,15 @@ app.use(
   })
 );
 app.use(cors());
-app.use(express.json({ limit: "1mb" }));
+// Фото передаются как base64: selfie до 6 МБ и до трёх референсов заказа.
+// Выбираем parser ДО общего 1 МБ parser, иначе route-level limit уже не работает.
+const regularJsonParser = express.json({ limit: "1mb" });
+const imageJsonParser = express.json({ limit: "20mb" });
+app.use((req, res, next) => {
+  const largeImageBody = req.method === "POST"
+    && (req.path === "/api/lead" || req.path === "/api/selfie-cake");
+  return (largeImageBody ? imageJsonParser : regularJsonParser)(req, res, next);
+});
 // Structured request log — reqId + duration + status, /health пропускается
 app.use(requestLogger());
 
@@ -819,7 +872,7 @@ app.get("/support", (_req, res) => {
 // Прокси логотипа
 function proxyAsset(url: string, contentType: string) {
   return (_req: express.Request, res: express.Response) => {
-    https.get(url, { headers: { "User-Agent": "Mozilla/5.0" }, rejectUnauthorized: false }, (r) => {
+    https.get(url, { headers: { "User-Agent": "Mozilla/5.0" } }, (r) => {
       res.setHeader("Content-Type", contentType);
       res.setHeader("Cache-Control", "public, max-age=86400");
       r.pipe(res);
@@ -862,6 +915,11 @@ const imgCache = new Map<string, CachedImg>();
 let imgCacheBytes = 0;
 const inflight = new Map<string, Promise<CachedImg | null>>();
 
+function safeRasterContentType(value: string): string | null {
+  const type = value.split(";", 1)[0].trim().toLowerCase();
+  return /^(image\/(jpeg|png|webp|gif|avif))$/.test(type) ? type : null;
+}
+
 function imgKey(u: string): string {
   return require("crypto").createHash("md5").update(u).digest("hex");
 }
@@ -870,7 +928,8 @@ function imgDiskGet(u: string): CachedImg | null {
   try {
     const buf  = fsSync.readFileSync(path.join(IMG_CACHE_DIR, k));
     const meta = fsSync.readFileSync(path.join(IMG_CACHE_DIR, k + ".meta"), "utf8");
-    return { buf, type: meta.trim() || "image/jpeg" };
+    const type = safeRasterContentType(meta);
+    return type ? { buf, type } : null;
   } catch { return null; }
 }
 function imgDiskPut(u: string, v: CachedImg) {
@@ -907,11 +966,12 @@ function fetchUpstream(u: string): Promise<CachedImg | null> {
       hostname: url.hostname,
       path: url.pathname + url.search,
       headers: { "User-Agent": "MariaBot/1.0 ImgProxy" },
-      rejectUnauthorized: false,
+      rejectUnauthorized: true,
     };
     const req = https.request(opts, (r) => {
       if ((r.statusCode ?? 0) >= 400) { r.resume(); resolve(null); return; }
-      const type = String(r.headers["content-type"] ?? "image/jpeg");
+      const type = safeRasterContentType(String(r.headers["content-type"] ?? ""));
+      if (!type) { r.resume(); resolve(null); return; }
       const chunks: Buffer[] = [];
       let total = 0; let oversize = false;
       r.on("data", (c: Buffer) => {
@@ -1165,6 +1225,34 @@ type StreamEvent =
 
 type ChatMode = "cake" | "confessor";
 
+function publicChatFailure(error: GroqErr): { status: number; message: string } {
+  if (error.rateLimited) {
+    return { status: 429, message: "ИИ временно занят. Подожди 10–20 секунд и попробуй ещё раз." };
+  }
+  if (error.status === 0 || /timeout/i.test(error.message)) {
+    return { status: 504, message: "ИИ не ответил вовремя. Попробуй ещё раз через минуту." };
+  }
+  return { status: 502, message: "ИИ временно недоступен. Попробуй через минуту или позвони +7 (3952) 50-40-80." };
+}
+
+/** История с браузера может содержать только обычные user/assistant сообщения.
+ * system/tool сообщения формирует сам сервер; ограничение длины защищает Groq
+ * quota и не позволяет клиенту подменить служебную историю. */
+function sanitizeClientChatMessages(value: unknown): ChatMessage[] | null {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 50) return null;
+  const out: ChatMessage[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") return null;
+    const role = (item as { role?: unknown }).role;
+    const content = (item as { content?: unknown }).content;
+    if ((role !== "user" && role !== "assistant") || typeof content !== "string") return null;
+    const clean = content.trim();
+    if (!clean || clean.length > 4_000) return null;
+    out.push({ role, content: clean });
+  }
+  return out;
+}
+
 // Системный prompt для основного режима (поиск/заказ торта)
 function cakeSystemPrompt(catalogLen: number): string {
   return `Ты — Маша, тёплый AI-помощник кондитерской «Мария» в Иркутске. Каталог: ${catalogLen} товаров.
@@ -1297,7 +1385,7 @@ async function* chatAgentStream(
           iter--; continue;
         }
       }
-      yield { type: "error", message: e.message };
+      yield { type: "error", message: publicChatFailure(e).message };
       return;
     }
 
@@ -1352,7 +1440,7 @@ async function* chatAgentStream(
       cart_actions: ctx.cartActions,
     };
   } catch (e) {
-    yield { type: "error", message: (e as Error).message };
+    yield { type: "error", message: publicChatFailure(e as GroqErr).message };
   }
 }
 
@@ -1475,9 +1563,58 @@ async function chatAgent(
   };
 }
 
-app.post("/api/chat", rateLimit(40), async (req, res) => {
-  const { messages, mode } = req.body as { messages: ChatMessage[]; mode?: string };
-  if (!Array.isArray(messages) || messages.length === 0) {
+app.post("/api/chat-stream", optionalUser, rateLimit(40), async (req, res) => {
+  const { mode } = req.body as { mode?: string };
+  const messages = sanitizeClientChatMessages((req.body as { messages?: unknown }).messages);
+  if (!messages) {
+    res.status(400).json({ error: "messages array is required" });
+    return;
+  }
+
+  const chatMode: ChatMode = mode === "confessor" ? "confessor" : "cake";
+  const tgUser = getTgUser(req);
+  const ctx: ToolContext = {
+    chatId: tgUser?.id ?? 0,
+    catalog,
+    surfacedProducts: new Map(),
+    cartActions: [],
+  };
+
+  res.status(200);
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+
+  let closed = false;
+  req.on("aborted", () => { closed = true; });
+  res.on("close", () => { if (!res.writableEnded) closed = true; });
+  const send = (event: StreamEvent) => {
+    if (!closed && !res.writableEnded) res.write(`data: ${JSON.stringify(event)}\n\n`);
+  };
+
+  try {
+    for await (const event of chatAgentStream(messages, ctx, chatMode)) {
+      if (closed) break;
+      send(event);
+    }
+  } catch (err) {
+    const e = err as GroqErr;
+    console.error(`[CHAT-STREAM] err: status=${e.status} msg=${e.message}`);
+    send({ type: "error", message: publicChatFailure(e).message });
+  } finally {
+    if (!closed && !res.writableEnded) {
+      res.write("data: [DONE]\n\n");
+      res.end();
+    }
+  }
+});
+
+app.post("/api/chat", optionalUser, rateLimit(40), async (req, res) => {
+  const { mode } = req.body as { mode?: string };
+  const messages = sanitizeClientChatMessages((req.body as { messages?: unknown }).messages);
+  if (!messages) {
     res.status(400).json({ error: "messages array is required" });
     return;
   }
@@ -1499,13 +1636,8 @@ app.post("/api/chat", rateLimit(40), async (req, res) => {
   } catch (err) {
     const e = err as GroqErr;
     console.error(`[CHAT] err: status=${e.status} msg=${e.message}`);
-    if (e.rateLimited) {
-      res.status(429).json({ error: "ИИ временно занят (превышен лимит запросов). Подожди 10-20 секунд и попробуй ещё раз." });
-    } else if (e.status === 0 || /timeout/i.test(e.message)) {
-      res.status(504).json({ error: "ИИ не ответил вовремя. Попробуй ещё раз через минуту." });
-    } else {
-      res.status(502).json({ error: "ИИ временно недоступен. Попробуй через минуту или позвони +7 (3952) 50-40-80." });
-    }
+    const failure = publicChatFailure(e);
+    res.status(failure.status).json({ error: failure.message });
   }
 });
 
@@ -1521,7 +1653,7 @@ app.get("/api/subscribers/count", requireAdminToken, async (_req, res) => {
 });
 
 // Рассылка через API (для будущей админ-панели)
-app.post("/api/broadcast", requireAdminToken, async (req, res) => {
+app.post("/api/broadcast", requireAdminToken, requireAdminRole("operator"), async (req, res) => {
   const { text } = req.body as { text?: string };
   if (!text?.trim()) {
     res.status(400).json({ error: "text required" });
@@ -1540,7 +1672,7 @@ app.post("/api/broadcast", requireAdminToken, async (req, res) => {
 
 // Ручное обновление каталога (admin-only — раньше любой мог дёргать рефреш
 // → нагрузка на CATALOG_API maria-irk.ru через unauth-юзеров).
-app.post("/api/refresh-catalog", requireAdminToken, async (_req, res) => {
+app.post("/api/refresh-catalog", requireAdminToken, requireAdminRole("operator"), async (_req, res) => {
   res.json({ status: "started" });
   await refreshCatalog();
 });
@@ -1582,14 +1714,14 @@ app.use(holidaysRouter);
 
 // Админ: руками триггернуть pushHolidayPreorder (для тестов).
 // Остаётся в index.ts т.к. push-функция здесь же; перенесём с push-волной.
-app.post("/api/admin/holidays/push", requireAdminToken, async (_req, res) => {
+app.post("/api/admin/holidays/push", requireAdminToken, requireAdminRole("operator"), async (_req, res) => {
   pushHolidayPreorder().catch((e) => log.error({ err: e }, "[HOLIDAY MANUAL]"));
   res.json({ ok: true, status: "scheduled" });
 });
 
 // Админ: ручной прогон пушей-возвратов «Котик Комбат» (для теста; обычно крон 17:00 Иркутск).
 // Дедуп по дню действует — повторный вызов в тот же день не задвоит.
-app.post("/api/admin/clicker/push", requireAdminToken, async (_req, res) => {
+app.post("/api/admin/clicker/push", requireAdminToken, requireAdminRole("operator"), async (_req, res) => {
   try { const r = await runClickerRetentionPush(_pushService); res.json({ ok: true, ...r }); }
   catch (e) { log.error({ err: e }, "[CLICKER PUSH MANUAL]"); res.status(500).json({ error: "internal" }); }
 });
@@ -1597,39 +1729,39 @@ app.post("/api/admin/clicker/push", requireAdminToken, async (_req, res) => {
 // Админ: ручные триггеры напоминаний о питомце (для теста — см. pet-push.ts).
 // ⚠️ Флаг PET_REMINDERS_ENABLED здесь НЕ проверяется — эти эндпоинты шлют
 // пуши по-настоящему реальным кандидатам. Не дёргать вне теста.
-app.post("/api/admin/pet/remind-hungry", requireAdminToken, async (_req, res) => {
+app.post("/api/admin/pet/remind-hungry", requireAdminToken, requireAdminRole("operator"), async (_req, res) => {
   try { const r = await runPetHungryPush(_pushService); res.json({ ok: true, ...r }); }
   catch (e) { log.error({ err: e }, "[PET HUNGRY PUSH MANUAL]"); res.status(500).json({ error: "internal" }); }
 });
-app.post("/api/admin/pet/remind-energy", requireAdminToken, async (_req, res) => {
+app.post("/api/admin/pet/remind-energy", requireAdminToken, requireAdminRole("operator"), async (_req, res) => {
   try { const r = await runPetEnergyPush(_pushService); res.json({ ok: true, ...r }); }
   catch (e) { log.error({ err: e }, "[PET ENERGY PUSH MANUAL]"); res.status(500).json({ error: "internal" }); }
 });
 
 // Админ: ручные триггеры вороночных кронов (T2/T3/T4) — для теста.
 // В dry-run (флаги OFF) считают и логируют, но не шлют/не начисляют.
-app.post("/api/admin/funnel/expiry", requireAdminToken, async (_req, res) => {
+app.post("/api/admin/funnel/expiry", requireAdminToken, requireAdminRole("operator"), async (_req, res) => {
   try { await pushExpiringPoints(); res.json({ ok: true, enabled: FUNNEL_RETENTION_ENABLED }); }
   catch (e) { log.error({ err: e }, "[FUNNEL EXPIRY MANUAL]"); res.status(500).json({ error: "internal" }); }
 });
-app.post("/api/admin/funnel/reactivate", requireAdminToken, async (_req, res) => {
+app.post("/api/admin/funnel/reactivate", requireAdminToken, requireAdminRole("operator"), async (_req, res) => {
   try { await pushReactivation(); res.json({ ok: true, enabled: FUNNEL_RETENTION_ENABLED }); }
   catch (e) { log.error({ err: e }, "[FUNNEL REACTIVATE MANUAL]"); res.status(500).json({ error: "internal" }); }
 });
-app.post("/api/admin/funnel/ref-orders", requireAdminToken, async (_req, res) => {
+app.post("/api/admin/funnel/ref-orders", requireAdminToken, requireAdminRole("operator"), async (_req, res) => {
   try { await checkReferralFirstOrders(); res.json({ ok: true, enabled: FUNNEL_REF_BONUS_ENABLED }); }
   catch (e) { log.error({ err: e }, "[FUNNEL REF-ORDER MANUAL]"); res.status(500).json({ error: "internal" }); }
 });
 
 // Админ: ручное закрытие недельного сезона + пуш победителям (для теста).
-app.post("/api/admin/clicker/weekly-close", requireAdminToken, async (_req, res) => {
+app.post("/api/admin/clicker/weekly-close", requireAdminToken, requireAdminRole("operator"), async (_req, res) => {
   try { const close = await closeWeeklySeason(); const push = await pushWeeklyWinners(_pushService); res.json({ ok: true, ...close, pushed: push.sent }); }
   catch (e) { log.error({ err: e }, "[WEEKLY CLOSE MANUAL]"); res.status(500).json({ error: "internal" }); }
 });
 
 // Админ: перезагрузить data/dietary-overrides.json и переразметить in-memory каталог
 // без рестарта (для оперативной коррекции false-positive)
-app.post("/api/admin/dietary/reload", requireAdminToken, (_req, res) => {
+app.post("/api/admin/dietary/reload", requireAdminToken, requireAdminRole("operator"), (_req, res) => {
   reloadDietaryOverrides();
   let tagged = 0;
   for (const p of catalog) {
@@ -1668,7 +1800,7 @@ app.use(createWishlistRouter(() => catalog));
 
 
 // Hot-reload data/promo-codes.json без рестарта
-app.post("/api/admin/promo/reload", requireAdminToken, (_req, res) => {
+app.post("/api/admin/promo/reload", requireAdminToken, requireAdminRole("operator"), (_req, res) => {
   const total = reloadPromoCodes();
   res.json({ ok: true, total });
 });
@@ -1754,7 +1886,7 @@ function maskPhone(p: string | undefined | null): string {
 }
 
 app.get("/api/_debug-orders", (req, res) => {
-  if (!process.env.ORDER_TOKEN || !safeEq(String(req.query.token ?? ""), process.env.ORDER_TOKEN)) {
+  if (!process.env.ORDER_TOKEN || !safeEq(req.header("x-order-debug-token"), process.env.ORDER_TOKEN)) {
     res.status(403).json({ error: "forbidden" });
     return;
   }
@@ -1784,9 +1916,15 @@ function translateOrderError(err: string | undefined): string {
   return map[err ?? ""] ?? `Не удалось создать заказ. Позвоните +7 (3952) 50-40-80 для оформления.`;
 }
 
-app.post("/api/order", rateLimit(15), async (req, res) => {
+app.post("/api/order", optionalUser, rateLimit(15), async (req, res) => {
   const tg = tryGetUser(req); // optional, без блокировки (AppUser: platform + platformId)
   const body = req.body as Partial<OrderRequest> & { useVerifiedPhone?: boolean };
+  const rawRequestId = String(body.request_id ?? req.header("idempotency-key") ?? "").trim();
+  if (rawRequestId && !/^[A-Za-z0-9:_-]{16,128}$/.test(rawRequestId)) {
+    res.status(400).json({ ok: false, error: "bad_request_id", message: "Некорректный ключ запроса" });
+    return;
+  }
+  const requestId = rawRequestId || null;
 
   let phone = String(body.phone ?? "").trim();
   let lkData: Record<string, unknown> | null = null;
@@ -1802,20 +1940,38 @@ app.post("/api/order", rateLimit(15), async (req, res) => {
       lkData = lk.ok ? (lk.data as unknown as Record<string, unknown>) : null;
     } catch {}
   }
+  phone = phone.slice(0, 32);
+  const customerName = String(body.name ?? "").trim().slice(0, 120);
+  const orderAddress = String(body.address ?? "").trim().slice(0, 500);
+  const rawOrderDate = String(body.delivery_date ?? "").trim().slice(0, 32);
+  const orderDate = rawOrderDate ? normalizeDeliveryDate(rawOrderDate) : "";
+  if (rawOrderDate && !orderDate) {
+    res.status(400).json({ ok: false, error: "bad_delivery_date", message: "Укажите корректную дату доставки" });
+    return;
+  }
+  const orderTime = String(body.delivery_time ?? "").trim().slice(0, 32);
+  const customerComment = String(body.comment ?? "").trim().slice(0, 2_000);
+  const customerEmail = String(body.email ?? "").trim().slice(0, 254);
 
-  const items = Array.isArray(body.items)
-    ? body.items.filter((i) => i && Number(i.id) > 0 && Number(i.qty) > 0)
-        .map((i) => ({ id: Number(i.id), qty: Number(i.qty) }))
-    : [];
+  const itemMap = new Map<number, number>();
+  if (Array.isArray(body.items)) {
+    for (const item of body.items) {
+      const id = Number(item?.id);
+      const qty = Number(item?.qty);
+      if (!Number.isInteger(id) || id <= 0 || !Number.isInteger(qty) || qty <= 0 || qty > 99) continue;
+      itemMap.set(id, Math.min(99, (itemMap.get(id) ?? 0) + qty));
+    }
+  }
+  const items = [...itemMap].map(([id, qty]) => ({ id, qty }));
 
   // Снимок body для логирования (без чувствительных данных)
   const bodySnap = {
-    phone:          phone || undefined,
-    name:           body.name ? String(body.name) : undefined,
+    phone:          phone ? maskPhone(phone) : undefined,
+    name:           customerName || undefined,
     itemsCount:     items.length,
     itemIds:        items.slice(0, 10).map((i) => i.id),
-    hasAddress:     !!body.address,
-    hasComment:     !!body.comment,
+    hasAddress:     !!orderAddress,
+    hasComment:     !!customerComment,
     useVerifiedPhone: !!body.useVerifiedPhone,
   };
   const ts = new Date().toISOString();
@@ -1831,7 +1987,7 @@ app.post("/api/order", rateLimit(15), async (req, res) => {
     res.status(400).json(r);
     return;
   }
-  if (!body.name) {
+  if (!customerName) {
     const r = { ok: false, error: "name_required", message: "Укажите имя" };
     logOrderAttempt({ ...baseAttempt, status: 400, error: r.error, message: r.message });
     res.status(400).json(r);
@@ -1857,7 +2013,8 @@ app.post("/api/order", rateLimit(15), async (req, res) => {
   // Собираем максимум контекста о клиенте — чтобы менеджер видел в Sale-заказе.
   // Используем BMP-only символы (Bitrix MySQL utf8 не держит 4-байтные эмодзи).
   const ctx: string[] = [];
-  if (body.comment) ctx.push(`Комментарий: ${body.comment}`);
+  let rewardIds: number[] = [];
+  if (customerComment) ctx.push(`Комментарий: ${customerComment}`);
   if (tg?.id) {
     // ⚠️ Наружу (менеджеру в Bitrix) — только родной id платформы, не internal
     const displayName = [tg.first_name, tg.last_name].filter(Boolean).join(" ") || null;
@@ -1922,6 +2079,7 @@ app.post("/api/order", rateLimit(15), async (req, res) => {
     try {
       const rewards = await getUnusedRewards(tg.id);
       if (rewards.length > 0) {
+        rewardIds = rewards.map((reward) => Number(reward.id));
         const REWARD_LABEL: Record<string, (v: string) => string> = {
           discount_coupon: (v) => `🎫 Купон -${v}%`,
           points:          (v) => `💎 +${v} баллов`,
@@ -1939,8 +2097,6 @@ app.post("/api/order", rateLimit(15), async (req, res) => {
       }
     } catch {}
   }
-  const richComment = ctx.join("\n");
-
   // Имена/цены позиций из кэша каталога — для B24-fallback, когда шлюз сайта лежит
   // (обычный путь берёт их из ответа PHP, fallback-путь иначе показал бы «Товар #id»)
   const itemsInfo = items.map((i) => {
@@ -1948,19 +2104,194 @@ app.post("/api/order", rateLimit(15), async (req, res) => {
     return { id: i.id, name: p?.name ?? `Товар #${i.id}`, price: p?.priceNumber ?? 0, qty: i.qty };
   });
 
-  const result = await createOrder({
-    phone,
-    name:          String(body.name).trim(),
-    platform:      tg?.platform,
-    items,
-    address:       body.address       ? String(body.address).trim()       : undefined,
-    delivery_date: body.delivery_date ? String(body.delivery_date).trim() : undefined,
-    delivery_time: body.delivery_time ? String(body.delivery_time).trim() : undefined,
-    comment:       richComment,
-    email:         body.email         ? String(body.email).trim()         : undefined,
-  }, itemsInfo);
+  const missingProduct = items.find((item) => !catalog.some((product) => product.id === item.id));
+  if (missingProduct) {
+    const r = { ok: false, error: "product_not_found", message: `Товар #${missingProduct.id} больше недоступен. Обновите корзину.` };
+    logOrderAttempt({ ...baseAttempt, status: 400, error: r.error, message: r.message });
+    res.status(400).json(r);
+    return;
+  }
+
+  // Цену и скидку считаем только по серверному каталогу. cart_total/discount из
+  // браузера никогда не участвуют в создании заказа.
+  const subtotal = itemsInfo.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const promoCode = String(body.promo_code ?? "").trim().toUpperCase();
+  if (promoCode.length > 64) {
+    res.status(400).json({ ok: false, error: "promo_code_too_long", message: "Некорректный промокод" });
+    return;
+  }
+  const effectiveRequestId = requestId ?? crypto.randomUUID();
+  const requestHash = crypto.createHash("sha256").update(JSON.stringify({
+    phone: phoneDigits.slice(-10), name: customerName, items,
+    address: orderAddress, delivery_date: orderDate,
+    delivery_time: orderTime, email: customerEmail,
+    comment: customerComment, promoCode,
+  })).digest("hex");
+  const ownerKey = tg?.id
+    ? `user:${tg.id}`
+    : `phone:${crypto.createHash("sha256").update(phoneDigits.slice(-10)).digest("hex")}`;
+
+  // Проверяем уже завершённый запрос ДО проверки one_per_user: иначе сетевой
+  // повтор успешного заказа видел бы уже списанный промокод и получал 409.
+  if (requestId) {
+    const existing = await lookupOrderRequest(requestId, ownerKey, requestHash);
+    if (existing?.state === "succeeded") { res.json(existing.response); return; }
+    if (existing?.state === "pending") {
+      res.status(409).json({ ok: false, error: "order_in_progress", message: "Этот заказ уже оформляется. Подождите несколько секунд." });
+      return;
+    }
+    if (existing?.state === "conflict") {
+      res.status(409).json({ ok: false, error: "request_id_reused", message: "Ключ запроса уже использован для другого заказа" });
+      return;
+    }
+  }
+  let appliedPromo: {
+    code: string;
+    discount: number;
+    source: "catalog" | "user_reward";
+    maxUsesTotal: number | null;
+    onePerUser: boolean;
+  } | null = null;
+  if (promoCode) {
+    const sync = validatePromoSync({ code: promoCode, cart_total: subtotal });
+    if (sync.result.ok && sync.promo) {
+      if (sync.promo.one_per_user && !tg?.id) {
+        res.status(401).json({ ok: false, error: "promo_login_required", message: "Для этого промокода нужно войти в аккаунт" });
+        return;
+      }
+      if (tg?.id && sync.promo.one_per_user && await hasUserUsedPromo(tg.id, sync.promo.code)) {
+        res.status(409).json({ ok: false, error: "promo_already_used", message: "Этот промокод уже использован" });
+        return;
+      }
+      if (sync.promo.max_uses_total != null && await countPromoUses(sync.promo.code) >= sync.promo.max_uses_total) {
+        res.status(409).json({ ok: false, error: "promo_limit_reached", message: "Лимит активаций промокода исчерпан" });
+        return;
+      }
+      appliedPromo = {
+        code: sync.promo.code,
+        discount: Number(sync.result.discount ?? 0),
+        source: "catalog",
+        maxUsesTotal: sync.promo.max_uses_total,
+        onePerUser: sync.promo.one_per_user,
+      };
+    } else if (sync.result.reason === "not_found" && tg?.id) {
+      const reward = await findUserReward(tg.id, promoCode).catch(() => null);
+      const todayIrk = new Date(Date.now() + 8 * 3_600_000).toISOString().slice(0, 10);
+      if (!reward || reward.used_at) {
+        res.status(409).json({ ok: false, error: reward ? "promo_already_used" : "promo_not_found", message: reward ? "Награда уже использована" : "Промокод не найден" });
+        return;
+      }
+      if (new Date(reward.expires_at).toISOString().slice(0, 10) < todayIrk) {
+        res.status(409).json({ ok: false, error: "promo_expired", message: "Срок действия промокода истёк" });
+        return;
+      }
+      if (reward.reward_type !== "percent" && reward.reward_type !== "amount") {
+        res.status(409).json({ ok: false, error: "promo_cashier_only", message: "Эту награду нужно показать кассиру" });
+        return;
+      }
+      if (reward.min_order && subtotal < reward.min_order) {
+        res.status(409).json({ ok: false, error: "promo_min_order", message: `Минимальная сумма заказа: ${reward.min_order.toLocaleString("ru-RU")} ₽` });
+        return;
+      }
+      const value = Number(reward.discount_value ?? 0);
+      appliedPromo = {
+        code: promoCode,
+        discount: reward.reward_type === "percent" ? Math.floor(subtotal * value / 100) : Math.min(value, subtotal),
+        source: "user_reward",
+        maxUsesTotal: null,
+        onePerUser: true,
+      };
+    } else {
+      const messages: Record<string, string> = {
+        expired: "Срок действия промокода истёк",
+        min_order_not_met: sync.promo?.min_order ? `Минимальная сумма заказа: ${sync.promo.min_order.toLocaleString("ru-RU")} ₽` : "Недостаточная сумма заказа",
+        not_found: "Промокод не найден",
+      };
+      res.status(409).json({ ok: false, error: `promo_${sync.result.reason ?? "invalid"}`, message: messages[sync.result.reason ?? ""] ?? "Промокод нельзя применить" });
+      return;
+    }
+  }
+
+  const expectedTotal = Math.max(0, subtotal - (appliedPromo?.discount ?? 0));
+  if (appliedPromo) {
+    ctx.push(`Промокод проверен сервером: ${appliedPromo.code} · скидка ${appliedPromo.discount.toLocaleString("ru-RU")} ₽ · итого ${expectedTotal.toLocaleString("ru-RU")} ₽`);
+  }
+  const richComment = ctx.join("\n");
+  let idempotencyClaimed = false;
+  if (requestId) {
+    const claim = await claimOrderRequest(requestId, ownerKey, requestHash);
+    if (claim.state === "succeeded") {
+      res.json(claim.response);
+      return;
+    }
+    if (claim.state === "pending") {
+      res.status(409).json({ ok: false, error: "order_in_progress", message: "Этот заказ уже оформляется. Подождите несколько секунд." });
+      return;
+    }
+    if (claim.state === "conflict") {
+      res.status(409).json({ ok: false, error: "request_id_reused", message: "Ключ запроса уже использован для другого заказа" });
+      return;
+    }
+    idempotencyClaimed = true;
+  }
+
+  const promoReservationRef = `pending:${effectiveRequestId}`;
+  let promoReserved = false;
+  if (appliedPromo) {
+    try {
+      if (appliedPromo.source === "catalog") {
+        const reserved = await recordPromoUseGuarded(
+          appliedPromo.code, tg?.id ?? null, promoReservationRef,
+          appliedPromo.maxUsesTotal, appliedPromo.onePerUser,
+        );
+        promoReserved = reserved.ok;
+      } else if (tg?.id) {
+        promoReserved = await markUserRewardUsed(appliedPromo.code, tg.id, promoReservationRef);
+      }
+    } catch (error) {
+      log.error({ err: error, code: appliedPromo.code }, "[order] promo reservation");
+    }
+    if (!promoReserved) {
+      if (idempotencyClaimed) await releaseOrderRequest(effectiveRequestId).catch(() => {});
+      res.status(409).json({ ok: false, error: "promo_no_longer_available", message: "Промокод уже использован или его лимит исчерпан" });
+      return;
+    }
+  }
+
+  let result: Awaited<ReturnType<typeof createOrder>>;
+  try {
+    result = await createOrder({
+      phone,
+      name:          customerName,
+      platform:      tg?.platform,
+      items,
+      address:       orderAddress || undefined,
+      delivery_date: orderDate || undefined,
+      delivery_time: orderTime || undefined,
+      comment:       richComment,
+      email:         customerEmail || undefined,
+      request_id:    effectiveRequestId,
+      promo_code:    appliedPromo?.code,
+      promo_discount: appliedPromo?.discount,
+      expected_total: appliedPromo ? expectedTotal : undefined,
+    }, itemsInfo);
+  } catch (error) {
+    if (appliedPromo && promoReserved) {
+      if (appliedPromo.source === "catalog") await releasePromoUse(appliedPromo.code, promoReservationRef).catch(() => {});
+      else if (tg?.id) await releaseUserReward(appliedPromo.code, tg.id, promoReservationRef).catch(() => {});
+    }
+    if (idempotencyClaimed) await releaseOrderRequest(effectiveRequestId).catch(() => {});
+    log.error({ err: error, requestId: effectiveRequestId }, "[order] unexpected create failure");
+    res.status(502).json({ ok: false, error: "order_failed", message: translateOrderError(undefined) });
+    return;
+  }
 
   if (!result.ok) {
+    if (appliedPromo && promoReserved) {
+      if (appliedPromo.source === "catalog") await releasePromoUse(appliedPromo.code, promoReservationRef).catch(() => {});
+      else if (tg?.id) await releaseUserReward(appliedPromo.code, tg.id, promoReservationRef).catch(() => {});
+    }
+    if (idempotencyClaimed) await releaseOrderRequest(effectiveRequestId).catch(() => {});
     console.error(`[ORDER] PHP error: ${result.error} for phone=${maskPhone(phone)} items=${JSON.stringify(bodySnap.itemIds)}`);
     const userMsg = translateOrderError(result.error);
     logOrderAttempt({ ...baseAttempt, outcome: "php_error", status: 502, error: result.error, message: userMsg });
@@ -1970,11 +2301,38 @@ app.post("/api/order", rateLimit(15), async (req, res) => {
   console.log(`[ORDER] created ${result.leadOnly ? "B24-lead (сайт недоступен)" : `#${result.orderId}`} for ${maskPhone(phone)}`);
   logOrderAttempt({ ...baseAttempt, outcome: "success", status: 200, orderId: result.orderId });
 
+  const finalOrderRef = String(result.orderId ?? effectiveRequestId);
+  if (tg?.id && result.orderId) {
+    await recordAppOrderOwner(tg.id, String(result.orderId)).catch((error) => {
+      log.error({ err: error, chatId: tg.id, orderId: result.orderId }, "[order] owner mapping");
+    });
+  }
+  if (appliedPromo && promoReserved) {
+    if (appliedPromo.source === "catalog") await finalizePromoUseOrder(appliedPromo.code, promoReservationRef, finalOrderRef).catch(() => {});
+    else if (tg?.id) await finalizeUserRewardOrder(appliedPromo.code, tg.id, promoReservationRef, finalOrderRef).catch(() => {});
+  }
+  const finalExpectedTotal = appliedPromo ? expectedTotal : Number(result.total ?? subtotal);
+  const responseResult: Record<string, unknown> = {
+    ...result,
+    discount: appliedPromo?.discount ?? 0,
+    expectedTotal: finalExpectedTotal,
+    ...(result.orderId && orderTrackingToken(result.orderId)
+      ? { trackingToken: orderTrackingToken(result.orderId) }
+      : {}),
+  };
+  if (idempotencyClaimed) {
+    await completeOrderRequest(effectiveRequestId, responseResult).catch((error) => {
+      // Заказ уже существует во внешней системе: клиент всё равно должен
+      // получить успех, а pending-запись не даст случайно создать дубль.
+      log.error({ err: error, requestId: effectiveRequestId }, "[order] idempotency completion");
+    });
+  }
+
   // Корзина превратилась в заказ — снимаем snapshot чтобы не пушить abandonment
   if (tg?.id) {
     clearCartSnapshot(tg.id).catch(() => {});
-    // Атомарно консьюмим все награды (они уже в richComment, теперь mark used_at=NOW())
-    consumeRewards(tg.id).catch(() => {});
+    // Списываем ровно тот снимок наград, который вошёл в комментарий заказа.
+    consumeRewards(tg.id, rewardIds).catch(() => {});
   }
 
   // Push confirmation в TG-чат (если есть chat_id юзера)
@@ -1982,10 +2340,10 @@ app.post("/api/order", rateLimit(15), async (req, res) => {
   if (tg?.id) {
     const itemsLine = items.slice(0, 3).map((it) => `${it.qty}× #${it.id}`).join(", ");
     const moreLine = items.length > 3 ? ` +${items.length - 3}` : "";
-    const dateLine = body.delivery_date && body.delivery_time
-      ? `\n📅 ${body.delivery_date} · ${body.delivery_time}`
+    const dateLine = orderDate && orderTime
+      ? `\n📅 ${orderDate} · ${orderTime}`
       : "";
-    const addrLine = body.address ? `\n📍 ${String(body.address).slice(0, 80)}` : "";
+    const addrLine = orderAddress ? `\n📍 ${orderAddress.slice(0, 80)}` : "";
     const msg = `✅ *Заявка ${result.orderId ? `№${result.orderId} ` : ""}принята!*
 
 🛒 ${itemsLine}${moreLine}${dateLine}${addrLine}
@@ -1997,17 +2355,17 @@ _Узнать статус: напишите боту_`;
     });
 
     // Если есть delivery_date — schedule напоминание за 2 часа до
-    if (body.delivery_date && body.delivery_time) {
+    if (orderDate && orderTime) {
       try {
-        const [dd, mm, yyyy] = String(body.delivery_date).split(".");
-        const [hh] = String(body.delivery_time).split(":");
+        const [dd, mm, yyyy] = orderDate.split(".");
+        const [hh] = orderTime.split(":");
         if (dd && mm && yyyy && hh) {
           const target = new Date(`${yyyy}-${mm.padStart(2,"0")}-${dd.padStart(2,"0")}T${hh.padStart(2,"0")}:00:00+08:00`);
           const reminderTime = target.getTime() - 2 * 60 * 60 * 1000;
           const delay = reminderTime - Date.now();
           if (delay > 0 && delay < 30 * 24 * 60 * 60 * 1000) { // только если в пределах 30 дней
             setTimeout(() => {
-              sendRaw(tg.id, `🔔 Через 2 часа ваш заказ №${result.orderId} будет готов!\n\n${body.delivery_time} · ${body.delivery_date}`).catch(() => {});
+              sendRaw(tg.id, `🔔 Через 2 часа ваш заказ №${result.orderId} будет готов!\n\n${orderTime} · ${orderDate}`).catch(() => {});
             }, delay);
           }
         }
@@ -2015,7 +2373,7 @@ _Узнать статус: напишите боту_`;
     }
   }
 
-  res.json(result);
+  res.json(responseResult);
 });
 
 // /api/partners/sync вынесен в src/routes/partners.ts
@@ -2107,7 +2465,7 @@ app.get("/api/shops", rateLimit(60), async (_req, res) => {
       const sep = SHOPS_API.includes("?") ? "&" : "?";
       const url = `${SHOPS_API}${sep}token=${encodeURIComponent(SHOPS_TOKEN)}`;
       const raw = await new Promise<unknown>((resolve, reject) => {
-        const req = https.get(url, { rejectUnauthorized: false }, (r) => {
+        const req = https.get(url, (r) => {
           let body = ""; r.on("data", (c: Buffer) => body += c);
           r.on("end", () => { try { resolve(JSON.parse(body)); } catch (e) { reject(e); } });
         });
@@ -2137,7 +2495,7 @@ app.get("/api/shops", rateLimit(60), async (_req, res) => {
 });
 
 // Сброс кеша адресов кафе — следующий /api/shops подтянет свежее с сайта
-app.post("/api/admin/shops/reload", requireAdminToken, (_req, res) => {
+app.post("/api/admin/shops/reload", requireAdminToken, requireAdminRole("operator"), (_req, res) => {
   _shopsCache = null;
   res.json({ ok: true, cleared: true });
 });
@@ -2289,6 +2647,19 @@ async function main() {
     if (RACE_ENABLED) closeRaceWeek().catch((e) => log.error({ err: e }, "[RACE CLOSE CRON]"));
   });
   console.log(`[STARTUP] Weekly-season close cron scheduled (Mon 00:02 Irkutsk; race=${RACE_ENABLED})`);
+  // Catch-up после cold start/deploy: единственный понедельничный тик мог быть
+  // пропущен, пока Render спал. Оба close идемпотентны по ключу недели.
+  setTimeout(() => {
+    void (async () => {
+      try {
+        await closeWeeklySeason();
+        if (RACE_ENABLED) await closeRaceWeek();
+        await pushWeeklyWinners(_pushService);
+      } catch (e) {
+        log.error({ err: e }, "[WEEKLY STARTUP CATCHUP]");
+      }
+    })();
+  }, 12_000);
 
   // Голубиная почта: возврат эскроу протухших офферов доски — ежедневно 00:10 Иркутск
   // (16:10 UTC). Помимо ленивого expireTrades() при чтении доски (getTradeBoard),

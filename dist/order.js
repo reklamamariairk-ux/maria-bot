@@ -13,7 +13,7 @@ const https_1 = __importDefault(require("https"));
 const ORDER_API = process.env.ORDER_API ?? ""; // https://www.maria-irk.ru/api/order-create.php
 const ORDER_TOKEN = process.env.ORDER_TOKEN ?? ""; // shared
 const B24_WEBHOOK = process.env.BITRIX_WEBHOOK ?? ""; // https://b24.maria-irk.ru/rest/USER_ID/HASH/
-async function createOrder(req) {
+async function createOrder(req, itemsInfo) {
     if (!ORDER_API || !ORDER_TOKEN) {
         return { ok: false, error: "order_api_not_configured" };
     }
@@ -23,6 +23,24 @@ async function createOrder(req) {
     // 1) Создание заказа в Bitrix Sale (b_sale_order)
     const saleResult = await callJsonPost(`${ORDER_API}${ORDER_API.includes("?") ? "&" : "?"}token=${encodeURIComponent(ORDER_TOKEN)}`, req);
     if (!saleResult.ok) {
+        // Шлюз сайта лежит (HTML вместо JSON / таймаут / сеть) — заказ НЕ должен теряться:
+        // создаём сделку напрямую в B24 (менеджер оформит вручную), клиенту — «принято».
+        // Семантические ошибки PHP (валидация и т.п.) сюда не попадают — там шлюз жив.
+        const errStr = String(saleResult.error ?? "");
+        const upstreamDown = errStr.startsWith("bad_response:") || errStr === "timeout"
+            || /ECONN|ENOTFOUND|EAI_AGAIN|socket|TLS|certificate/i.test(errStr);
+        if (upstreamDown && B24_WEBHOOK) {
+            const enriched = itemsInfo && itemsInfo.length ? itemsInfo : undefined;
+            const total = enriched ? enriched.reduce((s, i) => s + i.price * i.qty, 0) : undefined;
+            const leadId = await pushToBitrix24(req, { ok: false, total, items: enriched }, true).catch((e) => {
+                console.error("[B24] fallback failed:", e.message);
+                return null;
+            });
+            if (leadId) {
+                console.error(`[ORDER] site API down (${errStr}) — заказ ушёл ТОЛЬКО лидом в B24 #${leadId}`);
+                return { ok: true, total, leadOnly: true };
+            }
+        }
         return saleResult;
     }
     // 2) Параллельно — создание deal в Bitrix24 CRM (для менеджера)
@@ -47,7 +65,7 @@ function callJsonPost(url, body) {
                 "Content-Type": "application/json",
                 "Content-Length": Buffer.byteLength(payload),
             },
-            rejectUnauthorized: false,
+            rejectUnauthorized: true,
         };
         const httpReq = https_1.default.request(opts, (r) => {
             let d = "";
@@ -67,7 +85,7 @@ function callJsonPost(url, body) {
         httpReq.end();
     });
 }
-async function pushToBitrix24(req, sale) {
+async function pushToBitrix24(req, sale, siteDown = false) {
     const tail = (req.phone || "").replace(/\D/g, "").slice(-10);
     const phoneFmt = tail ? `+7 (${tail.slice(0, 3)}) ${tail.slice(3, 6)}-${tail.slice(6, 8)}-${tail.slice(8, 10)}` : req.phone;
     const nameParts = (req.name || "").trim().split(/\s+/);
@@ -79,7 +97,9 @@ async function pushToBitrix24(req, sale) {
         ? sale.items
         : req.items.map((i) => ({ id: i.id, name: `Товар #${i.id}`, price: 0, qty: i.qty }));
     // Используем BMP-only символы (Bitrix MySQL utf8 не держит 4-байтные эмодзи)
-    const title = `★ Заказ #${sale.orderId ?? '—'} · ${req.name}`;
+    const title = siteDown
+        ? `⚠ Заказ из Mini App (сайт недоступен) · ${req.name}`
+        : `★ Заказ #${sale.orderId ?? '—'} · ${req.name}`;
     // Состав заказа — человеческое описание
     const itemsList = items.map((i) => {
         const sum = (i.price * i.qty).toLocaleString("ru-RU");
@@ -88,7 +108,17 @@ async function pushToBitrix24(req, sale) {
     }).join("\n");
     // Структурированный комментарий — менеджер видит всё подряд в правой панели лида
     const lines = [];
+    if (siteDown) {
+        lines.push("!!! /api сайта недоступен — заказ НЕ создан в Bitrix Sale.");
+        lines.push("Оформите заказ вручную и перезвоните клиенту.");
+        lines.push("");
+    }
     lines.push(`Сумма заказа: ${sale.total ?? '?'} ₽`);
+    if (req.promo_code && req.promo_discount) {
+        lines.push(`Промокод: ${req.promo_code} (-${req.promo_discount.toLocaleString("ru-RU")} ₽)`);
+        if (req.expected_total != null)
+            lines.push(`Итого после скидки: ${req.expected_total.toLocaleString("ru-RU")} ₽`);
+    }
     lines.push(`☎ Телефон: ${phoneFmt}`);
     if (req.email)
         lines.push(`✉ Email: ${req.email}`);
@@ -106,8 +136,10 @@ async function pushToBitrix24(req, sale) {
         lines.push("ⓘ Контекст клиента:");
         lines.push(req.comment);
     }
-    lines.push("");
-    lines.push(`→ Заказ в Sale: https://www.maria-irk.ru/bitrix/admin/sale_order_view.php?ID=${sale.orderId ?? ''}`);
+    if (!siteDown) {
+        lines.push("");
+        lines.push(`→ Заказ в Sale: https://www.maria-irk.ru/bitrix/admin/sale_order_view.php?ID=${sale.orderId ?? ''}`);
+    }
     const comments = lines.join("\n");
     const fields = {
         TITLE: title,
@@ -116,8 +148,8 @@ async function pushToBitrix24(req, sale) {
         PHONE: [{ VALUE: req.phone, VALUE_TYPE: "WORK" }],
         COMMENTS: comments,
         SOURCE_ID: "WEB",
-        SOURCE_DESCRIPTION: "Telegram Mini App",
-        OPPORTUNITY: sale.total ?? 0,
+        SOURCE_DESCRIPTION: req.platform === "vk" ? "VK Mini App" : req.platform === "max" ? "МАКС Mini App" : "Telegram Mini App",
+        OPPORTUNITY: req.expected_total ?? sale.total ?? 0,
         CURRENCY_ID: "RUB",
     };
     if (req.email)
@@ -127,10 +159,10 @@ async function pushToBitrix24(req, sale) {
     // 1) Создаём лид
     const addUrl = B24_WEBHOOK.endsWith("/") ? B24_WEBHOOK + "crm.lead.add.json" : B24_WEBHOOK + "/crm.lead.add.json";
     const created = await callJsonPost(addUrl, { fields });
-    console.log(`[B24] lead for #${sale.orderId} →`, JSON.stringify(created).substring(0, 300));
+    console.log(`[B24] lead for #${sale.orderId ?? (siteDown ? 'SITE_DOWN' : '—')} →`, JSON.stringify(created).substring(0, 300));
     const leadId = created?.result;
     if (!leadId)
-        return;
+        return null;
     // 2) Прикрепляем товары к лиду — отображаются в B24 как полноценный список
     // (а не только текстом в COMMENTS). Поле PRODUCT_ID опускаем — товары
     // в Bitrix24 CRM каталоге могут быть не синхронизированы с маркет-каталогом сайта;
@@ -143,4 +175,5 @@ async function pushToBitrix24(req, sale) {
     const rowsUrl = B24_WEBHOOK.endsWith("/") ? B24_WEBHOOK + "crm.lead.productrows.set.json" : B24_WEBHOOK + "/crm.lead.productrows.set.json";
     const rowsRes = await callJsonPost(rowsUrl, { id: leadId, rows: productrows });
     console.log(`[B24] productrows lead=${leadId} (${productrows.length}) →`, JSON.stringify(rowsRes).substring(0, 200));
+    return leadId;
 }
