@@ -37,12 +37,13 @@ const express_1 = require("express");
 const auth_1 = require("../auth");
 const middleware_1 = require("../middleware");
 const game_auth_1 = require("../game-auth");
+const club_1 = require("../club");
 const purchase1c_1 = require("../purchase1c");
 const router = (0, express_1.Router)();
 router.get("/api/clicker/purchase-tasks", game_auth_1.requireGameUser, (0, middleware_1.rateLimit)(60), async (req, res) => {
     const user = (0, auth_1.getTgUser)(req);
     try {
-        res.json({ tasks: await (0, purchase1c_1.getPurchaseTasks)(user.id), claims: await (0, purchase1c_1.getPurchaseTaskClaims)(user.id) });
+        res.json({ tasks: await (0, purchase1c_1.getPurchaseTasks)(user.id), claims: await (0, purchase1c_1.getPurchaseTaskClaims)(user.id), phoneVerified: await (0, club_1.isPhoneVerified)(user.id) });
     }
     catch {
         res.status(500).json({ error: "internal" });

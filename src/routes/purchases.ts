@@ -2,13 +2,14 @@ import { Router } from "express";
 import { getTgUser } from "../auth";
 import { rateLimit, requireAdminToken } from "../middleware";
 import { requireGameUser as requireTgUser } from "../game-auth";
+import { isPhoneVerified } from "../club";
 import { getPurchaseTasks, getPurchaseTaskClaims, syncPurchases } from "../purchase1c";
 
 const router = Router();
 
 router.get("/api/clicker/purchase-tasks", requireTgUser, rateLimit(60), async (req, res) => {
   const user = getTgUser(req)!;
-  try { res.json({ tasks: await getPurchaseTasks(user.id), claims: await getPurchaseTaskClaims(user.id) }); }
+  try { res.json({ tasks: await getPurchaseTasks(user.id), claims: await getPurchaseTaskClaims(user.id), phoneVerified: await isPhoneVerified(user.id) }); }
   catch { res.status(500).json({ error: "internal" }); }
 });
 

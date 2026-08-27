@@ -2976,7 +2976,7 @@
     const list = ov.querySelector('#ck-taskslist');
     if (authed()) list.innerHTML = skelRows(6);
     const refBlock = refCard();
-    let tasks, tasksFail = false, purchaseTasks = [], purchaseClaims = [];
+    let tasks, tasksFail = false, purchaseTasks = [], purchaseClaims = [], purchasePhoneVerified = true;
     if (authed()) {
       const d = await api('/api/clicker/tasks').catch(() => null);
       tasks = d && d.tasks;
@@ -2984,6 +2984,7 @@
       const pd = await api('/api/clicker/purchase-tasks').catch(() => null);
       if (pd && Array.isArray(pd.tasks)) purchaseTasks = pd.tasks;
       if (pd && Array.isArray(pd.claims)) purchaseClaims = pd.claims;
+      if (pd && typeof pd.phoneVerified === 'boolean') purchasePhoneVerified = pd.phoneVerified;
     }
     else tasks = guestTaskList();
     if (gen !== tasksGen) return;
@@ -3011,6 +3012,7 @@
           : `<button class="ck-card__buy" disabled>+${fmt(a.reward)}</button>`;
       return `<div class="ck-card"${a.done ? ' style="opacity:.6"' : ''}><div class="ck-card__ic">${achIcon(a.icon)}</div><div class="ck-card__b"><div class="ck-card__n">${a.name}</div><div class="ck-card__s">${achDesc(a)}</div></div>${btn}</div>`;
     }).join('');
+    const purchasePhoneRow = purchaseTasks.length && !purchasePhoneVerified ? `<div class="ck-card"><div class="ck-card__ic">${ICON.phone ? ICON.phone(22) : ICON.wallet(22)}</div><div class="ck-card__b"><div class="ck-card__n">Подтверди номер для покупок</div><div class="ck-card__s">Открой бота «Мария» и нажми «Поделиться телефоном». Так мы найдём твой чек и начислим награду.</div></div><button class="ck-card__buy" id="ck-purchase-phone">Как подтвердить</button></div>` : '';
     const purchaseRows = purchaseTasks.map(t => {
       const claimed = t.status === 'confirmed';
       const period = t.endsAt ? `до ${new Date(t.endsAt).toLocaleDateString('ru-RU')}` : 'без срока';
@@ -3026,8 +3028,9 @@
     const failCard = tasksFail ? `<div class="ck-card"><div class="ck-card__ic">${ICON.bolt(26)}</div><div class="ck-card__b"><div class="ck-card__n">Не всё загрузилось</div><div class="ck-card__s">Проверь связь</div></div><button class="ck-card__buy" id="ck-tasks-retry">Обновить</button></div>` : '';
     // Промокод убран из вкладки «Призы» по решению юзера (15.07). redeemCodeAct/эндпоинт живы —
     // при возврате секции достаточно вернуть promoCard в innerHTML ниже.
-    list.innerHTML = '<div class="ck-intro">Забирай бесплатное: награда дня, сундук удачи, комбо дня. Ниже — задания и достижения за монеты.</div>' + todayStatusHtml() + failCard + bonusBlock() + (purchaseRows ? '<div class="ck-sect">🛍 Покупки в Марии</div>' + purchaseRows : '') + (progRows ? `<div class="ck-sect">${ICON.gift(13)} Награды за прогресс</div>` + progRows : '') + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows + '<div class="ck-sect">Достижения</div>' + achRows;
+    list.innerHTML = '<div class="ck-intro">Забирай бесплатное: награда дня, сундук удачи, комбо дня. Ниже — задания и достижения за монеты.</div>' + todayStatusHtml() + failCard + bonusBlock() + (purchaseRows ? '<div class="ck-sect">🛍 Покупки в Марии</div>' + purchasePhoneRow + purchaseRows : '') + (progRows ? `<div class="ck-sect">${ICON.gift(13)} Награды за прогресс</div>` + progRows : '') + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows + '<div class="ck-sect">Достижения</div>' + achRows;
     const rtb = list.querySelector('#ck-tasks-retry'); if (rtb) rtb.onclick = () => renderTasks();
+    const pp = list.querySelector('#ck-purchase-phone'); if (pp) pp.onclick = () => requestPhone();
     ov.querySelector('#ck-invite').onclick = shareRef;
     list.querySelectorAll('[data-open]').forEach(b => b.onclick = () => { const id = b.dataset.open, link = b.dataset.link; if (link) { if (window.App && App.openExternal) App.openExternal(link); else window.open(link, '_blank'); } linkOpened[id] = true; setTimeout(renderTasks, 400); });
     list.querySelectorAll('[data-claim]').forEach(b => b.onclick = () => claimTask(b.dataset.claim));
