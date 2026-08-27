@@ -88,6 +88,8 @@ const clicker_push_1 = require("./clicker-push");
 const pet_push_1 = require("./pet-push");
 const bonus1c_1 = require("./bonus1c");
 const cart_1 = __importDefault(require("./routes/cart"));
+const purchases_1 = __importDefault(require("./routes/purchases"));
+const purchase1c_1 = require("./purchase1c");
 const scraper_1 = require("./scraper");
 const db_2 = require("./db");
 const db_3 = require("./db");
@@ -1700,6 +1702,7 @@ app.use(pet_1.default);
 app.use("/api/app", app_auth_1.default);
 // Кликер «Котик Комбат» → src/routes/clicker.ts
 app.use(clicker_1.default);
+app.use(purchases_1.default);
 // Админка игры: метрики/игроки/рассылка (UI: /admin/game.html, гейт ADMIN_TOKEN)
 app.use((0, admin_game_1.default)(_pushService));
 app.use((0, admin_system_1.default)());
@@ -2550,11 +2553,18 @@ async function main() {
     await (0, analytics_1.initAnalyticsSchema)();
     await (0, clicker_push_1.initClickerPushSchema)();
     await (0, bonus1c_1.initBonusSchema)();
+    await (0, purchase1c_1.initPurchaseSchema)();
     await (0, app_auth_1.initAppAuthSchema)();
     await (0, account_link_1.initAccountLinkSchema)();
     await (0, clicker_2.initSquadBankSchema)();
     await (0, clicker_2.initCustomSquadSchema)();
     (0, bonus1c_1.startBonusWorker)();
+    // Импорт чеков физических точек через защищённый прокси sales-dashboard.
+    // До настройки PURCHASE_SALES_API/KEY задача безопасно ничего не делает.
+    node_cron_1.default.schedule("*/15 * * * *", () => {
+        (0, purchase1c_1.runPurchaseSync)().catch((e) => logger_1.log.error({ err: e }, "[PURCHASE SYNC CRON]"));
+    });
+    console.log("[STARTUP] Purchase-task sync scheduled (every 15 min)");
     // Sentry error handler — после всех routes, до listen
     app.use((0, logger_1.sentryExpressErrorHandler)());
     logger_1.log.info({

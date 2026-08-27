@@ -50,6 +50,8 @@ import { initClickerPushSchema, runClickerRetentionPush } from "./clicker-push";
 import { runPetHungryPush, runPetEnergyPush } from "./pet-push";
 import { initBonusSchema, startBonusWorker } from "./bonus1c";
 import cartRouter from "./routes/cart";
+import purchasesRouter from "./routes/purchases";
+import { initPurchaseSchema, runPurchaseSync } from "./purchase1c";
 import { scrapeCatalog, loadCatalog, catalogAge, reloadDietaryOverrides, detectDietary, Product } from "./scraper";
 import {
   initDb,
@@ -1704,6 +1706,7 @@ app.use("/api/app", appAuthRouter);
 
 // Кликер «Котик Комбат» → src/routes/clicker.ts
 app.use(clickerRouter);
+app.use(purchasesRouter);
 
 // Админка игры: метрики/игроки/рассылка (UI: /admin/game.html, гейт ADMIN_TOKEN)
 app.use(adminGameRouter(_pushService));
@@ -2553,11 +2556,19 @@ async function main() {
   await initAnalyticsSchema();
   await initClickerPushSchema();
   await initBonusSchema();
+  await initPurchaseSchema();
   await initAppAuthSchema();
   await initAccountLinkSchema();
   await initSquadBankSchema();
   await initCustomSquadSchema();
   startBonusWorker();
+
+  // Импорт чеков физических точек через защищённый прокси sales-dashboard.
+  // До настройки PURCHASE_SALES_API/KEY задача безопасно ничего не делает.
+  cron.schedule("*/15 * * * *", () => {
+    runPurchaseSync().catch((e) => log.error({ err: e }, "[PURCHASE SYNC CRON]"));
+  });
+  console.log("[STARTUP] Purchase-task sync scheduled (every 15 min)");
 
   // Sentry error handler — после всех routes, до listen
   app.use(sentryExpressErrorHandler());
