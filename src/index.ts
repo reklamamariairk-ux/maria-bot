@@ -590,9 +590,9 @@ const QR_WELCOME = `
 Жмите «Играть» 👇
 `.trim();
 
-async function sendPhonePrompt(ctx: any) {
+async function sendPhonePrompt(ctx: any, force = false) {
   if (!ctx.from) return;
-  if (await isPhoneVerified(ctx.from.id).catch(() => false)) {
+  if (!force && await isPhoneVerified(ctx.from.id).catch(() => false)) {
     await ctx.reply("✅ Номер уже подтверждён — возвращайся в Mini App.", { reply_markup: webAppButton("") }).catch(() => {});
     return;
   }
@@ -706,9 +706,10 @@ bot.command("start", async (ctx) => {
   // Явно показываем системную кнопку Telegram для привязки телефона.
   // Раньше она была только запланирована в UX, поэтому новый пользователь
   // не мог найти подтверждение номера из Mini App.
-  if (ctx.from && !(await isPhoneVerified(ctx.from.id).catch(() => false))) {
-    await sendPhonePrompt(ctx);
-  }
+  // Всегда показываем кнопку в обычном /start: Telegram может сохранить
+  // старый статус чата, а пользователь должен иметь понятный способ повторить
+  // подтверждение номера в любой момент.
+  if (ctx.from) await sendPhonePrompt(ctx, true);
 });
 
 bot.command("phone", async (ctx) => { await sendPhonePrompt(ctx); });
