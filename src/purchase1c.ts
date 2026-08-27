@@ -11,6 +11,8 @@ type SaleRow = {
 const SALES_API = (process.env.PURCHASE_SALES_API ?? "").trim();
 const SALES_KEY = (process.env.PURCHASE_SALES_API_KEY ?? "").trim();
 export function purchaseSyncConfigured(): boolean { return Boolean(SALES_API && SALES_KEY); }
+let purchaseNotifier: ((chatId: number, text: string) => Promise<unknown>) | null = null;
+export function setPurchaseNotifier(fn: (chatId: number, text: string) => Promise<unknown>): void { purchaseNotifier = fn; }
 
 export async function initPurchaseSchema(): Promise<void> {
   await pool.query(`
@@ -142,6 +144,7 @@ async function reverseEvent(eventId: number, phone: string, cardCode: string, pr
 async function settleEvent(chatId: number, eventId: number, product: string, row: SaleRow): Promise<number> {
   const qty = asNumber(row.qty); const amount = asNumber(row.sum);
   const client = await pool.connect();
+  const notifications: string[] = [];
   try {
     await client.query("BEGIN");
     const { rows: tasks } = await client.query<any>(
@@ -168,9 +171,12 @@ async function settleEvent(chatId: number, eventId: number, product: string, row
         const { rows: p } = await client.query(`SELECT phone FROM subscribers WHERE chat_id=$1 AND phone_verified_at IS NOT NULL`, [chatId]);
         if (p[0]?.phone) await enqueueAccrual(p[0].phone, Number(task.loyalty_points), `purchase_task:${task.id}`, `purchase:${task.id}:${eventId}:${chatId}`);
       }
+      const rewardText = [Number(task.reward_coins) > 0 ? `+${Number(task.reward_coins).toLocaleString('ru-RU')} монет` : '', Number(task.loyalty_points) > 0 ? `+${Number(task.loyalty_points).toLocaleString('ru-RU')} баллов лояльности` : ''].filter(Boolean).join(' и ');
+      notifications.push(`🎉 Покупка засчитана!\n\n${task.title}\nНаграда: ${rewardText}.`);
       count++;
     }
     await client.query("COMMIT");
+    if (purchaseNotifier) for (const text of notifications) await purchaseNotifier(chatId, text).catch(() => {});
     return count;
   } catch (e) { await client.query("ROLLBACK"); throw e; } finally { client.release(); }
 }

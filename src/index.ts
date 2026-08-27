@@ -51,7 +51,7 @@ import { runPetHungryPush, runPetEnergyPush } from "./pet-push";
 import { initBonusSchema, startBonusWorker } from "./bonus1c";
 import cartRouter from "./routes/cart";
 import purchasesRouter from "./routes/purchases";
-import { initPurchaseSchema, runPurchaseSync } from "./purchase1c";
+import { initPurchaseSchema, runPurchaseSync, setPurchaseNotifier } from "./purchase1c";
 import { scrapeCatalog, loadCatalog, catalogAge, reloadDietaryOverrides, detectDietary, Product } from "./scraper";
 import {
   initDb,
@@ -512,6 +512,7 @@ const bot = new Bot(BOT_TOKEN || "1:DUMMY_PREVIEW_TOKEN_AAAAAAAAAAAAAAAAAAAAAA")
 // bot.api.sendMessage по сохранённому chat_id запрещены — только send* отсюда.
 const vkSender = createVkSender();
 const _pushService = createPushService(bot, vkSender);
+setPurchaseNotifier((chatId, text) => _pushService.sendRaw(chatId, text));
 const sendPushSafely = _pushService.sendPushSafely;
 const sendRaw = _pushService.sendRaw;
 setClickerPushService(_pushService); // пуш «копилка стаи полна» из donateSquadBank
