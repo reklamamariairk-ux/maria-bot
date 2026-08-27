@@ -590,6 +590,18 @@ const QR_WELCOME = `
 Жмите «Играть» 👇
 `.trim();
 
+async function sendPhonePrompt(ctx: any) {
+  if (!ctx.from) return;
+  if (await isPhoneVerified(ctx.from.id).catch(() => false)) {
+    await ctx.reply("✅ Номер уже подтверждён — возвращайся в Mini App.", { reply_markup: webAppButton("") }).catch(() => {});
+    return;
+  }
+  await ctx.reply(
+    "Чтобы получать награды за покупки в магазинах «Марии», поделись своим номером кнопкой ниже:",
+    { reply_markup: new Keyboard().requestContact("📱 Поделиться телефоном").resized().oneTime() }
+  ).catch(() => {});
+}
+
 bot.command("start", async (ctx) => {
   if (ctx.from) {
     await addSubscriber(ctx.from.id, ctx.from.username, ctx.from.first_name).catch(() => {});
@@ -597,6 +609,12 @@ bot.command("start", async (ctx) => {
     // Referral payload: /start ref_MARIA-XXX (code-based, активная схема)
     // Старый numeric-формат (/start ref_12345) — deprecated, игнорируется.
     const payload = ctx.match?.trim();
+    // Прямая ссылка из Mini App: /start phone. Отдельная ветка нужна,
+    // чтобы кнопка контакта появлялась даже если пользователь уже открывал игру.
+    if (payload === "phone") {
+      await sendPhonePrompt(ctx);
+      return;
+    }
     // Вход в maria-app: /start applogin_<nonce> — привязать чат к nonce и
     // попросить контакт (криптографическая верификация, как в клубе).
     if (payload && /^applogin_[a-f0-9]{32}$/.test(payload)) {
@@ -689,12 +707,11 @@ bot.command("start", async (ctx) => {
   // Раньше она была только запланирована в UX, поэтому новый пользователь
   // не мог найти подтверждение номера из Mini App.
   if (ctx.from && !(await isPhoneVerified(ctx.from.id).catch(() => false))) {
-    await ctx.reply(
-      "Для заданий за покупки в физических точках привяжи номер телефона:",
-      { reply_markup: new Keyboard().requestContact("📱 Поделиться телефоном").resized().oneTime() }
-    ).catch(() => {});
+    await sendPhonePrompt(ctx);
   }
 });
+
+bot.command("phone", async (ctx) => { await sendPhonePrompt(ctx); });
 
 // Phone share via WebApp.requestContact OR keyboard button
 bot.on(":contact", async (ctx) => {

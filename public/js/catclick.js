@@ -3080,7 +3080,15 @@
   function giftPopup(points) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Подарок на карту!</h3><div class="v">+${points} баллов</div><div style="color:var(--muted);font-size:13px">Баллы «Мария» зачислены на твою карту клуба — трать при заказе тортов 🎂</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
   function requestPhone() {
     if (window.App?.requestContact?.((ok) => { if (ok) { flashMsg('Спасибо! Проверяем номер…', 'light'); setTimeout(renderTasks, 1500); } })) return;
-    flashMsg('Открой бота «Мария» → кнопка «Поделиться телефоном»');
+    const link = `https://t.me/${BOT}?start=phone`;
+    if (window.Telegram?.WebApp?.openTelegramLink) {
+      window.Telegram.WebApp.openTelegramLink(link);
+    } else if (window.Telegram?.WebApp?.openLink) {
+      window.Telegram.WebApp.openLink(link);
+    } else {
+      window.open(link, '_blank', 'noopener');
+    }
+    flashMsg('Открыл бота «Мария» — нажми «Поделиться телефоном»', 'light');
   }
   async function redeemCodeAct(code) {
     if (!code || !code.trim()) return;
