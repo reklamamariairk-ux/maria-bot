@@ -29,10 +29,14 @@ export async function initPurchaseSchema(): Promise<void> {
       starts_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       ends_at TIMESTAMPTZ,
       max_claims INT,
+      reward_levels JSONB,
+      priority_score NUMERIC(8,2) NOT NULL DEFAULT 0,
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS purchase_tasks_active_idx ON purchase_tasks (is_active, starts_at, ends_at);
+    ALTER TABLE purchase_tasks ADD COLUMN IF NOT EXISTS reward_levels JSONB;
+    ALTER TABLE purchase_tasks ADD COLUMN IF NOT EXISTS priority_score NUMERIC(8,2) NOT NULL DEFAULT 0;
     CREATE TABLE IF NOT EXISTS purchase_events (
       id BIGSERIAL PRIMARY KEY,
       event_key TEXT NOT NULL UNIQUE,
@@ -81,6 +85,14 @@ function periodNow(): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 function asNumber(v: unknown): number { const n = Number(v); return Number.isFinite(n) ? n : 0; }
+const LEVEL_NEEDS = [0,2000,6000,15000,35000,75000,150000,320000,650000,1300000,3000000,7000000,15000000,30000000,55000000,100000000,180000000,300000000,500000000];
+function careerLevel(totalEarned: number): number { let level = 1; for (let i = 1; i < LEVEL_NEEDS.length; i++) if (totalEarned >= LEVEL_NEEDS[i]) level = i + 1; return level; }
+function taskReward(task: any, level: number): { coins: number; points: number } {
+  const base = { coins: Number(task.reward_coins) || 0, points: Number(task.loyalty_points) || 0 };
+  if (!Array.isArray(task.reward_levels)) return base;
+  const row = task.reward_levels.find((x: any) => Number(x.level) === level) || task.reward_levels.filter((x: any) => Number(x.level) <= level).sort((a: any, b: any) => Number(b.level) - Number(a.level))[0];
+  return row ? { coins: Math.max(0, Math.floor(Number(row.coins) || 0)), points: Math.max(0, Math.floor(Number(row.points) || 0)) } : base;
+}
 function isSale(operation: string): boolean { return !/возврат|return|refund/i.test(operation); }
 
 async function fetchRows(period: string): Promise<SaleRow[]> {
@@ -153,6 +165,8 @@ async function settleEvent(chatId: number, eventId: number, product: string, row
        AND (cardinality(store_codes)=0 OR $4 = ANY(store_codes)) ORDER BY id FOR UPDATE`,
       [product, qty, amount, row.storeCode ?? ""]
     );
+    const state = await client.query(`SELECT total_earned FROM clicker_state WHERE chat_id=$1`, [chatId]);
+    const level = careerLevel(Number(state.rows[0]?.total_earned) || 0);
     let count = 0;
     for (const task of tasks) {
       if (task.max_claims != null) {
@@ -164,14 +178,16 @@ async function settleEvent(chatId: number, eventId: number, product: string, row
         [task.id, chatId, eventId, Number(task.reward_coins), Number(task.loyalty_points)]
       );
       if (!claim.rows[0]) continue;
-      if (Number(task.reward_coins) > 0) {
-        await client.query(`UPDATE clicker_state SET balance=balance+$2,total_earned=total_earned+$2,state_revision=state_revision+1,updated_at=NOW() WHERE chat_id=$1`, [chatId, Number(task.reward_coins)]);
+      const reward = taskReward(task, level);
+      await client.query(`UPDATE purchase_claims SET reward_coins=$2, loyalty_points=$3 WHERE id=$1`, [claim.rows[0].id, reward.coins, reward.points]);
+      if (reward.coins > 0) {
+        await client.query(`UPDATE clicker_state SET balance=balance+$2,total_earned=total_earned+$2,state_revision=state_revision+1,updated_at=NOW() WHERE chat_id=$1`, [chatId, reward.coins]);
       }
-      if (Number(task.loyalty_points) > 0) {
+      if (reward.points > 0) {
         const { rows: p } = await client.query(`SELECT phone FROM subscribers WHERE chat_id=$1 AND phone_verified_at IS NOT NULL`, [chatId]);
-        if (p[0]?.phone) await enqueueAccrual(p[0].phone, Number(task.loyalty_points), `purchase_task:${task.id}`, `purchase:${task.id}:${eventId}:${chatId}`);
+        if (p[0]?.phone) await enqueueAccrual(p[0].phone, reward.points, `purchase_task:${task.id}`, `purchase:${task.id}:${eventId}:${chatId}`);
       }
-      const rewardText = [Number(task.reward_coins) > 0 ? `+${Number(task.reward_coins).toLocaleString('ru-RU')} монет` : '', Number(task.loyalty_points) > 0 ? `+${Number(task.loyalty_points).toLocaleString('ru-RU')} баллов лояльности` : ''].filter(Boolean).join(' и ');
+      const rewardText = [reward.coins > 0 ? `+${reward.coins.toLocaleString('ru-RU')} монет` : '', reward.points > 0 ? `+${reward.points.toLocaleString('ru-RU')} баллов лояльности` : ''].filter(Boolean).join(' и ');
       notifications.push(`🎉 Покупка засчитана!\n\n${task.title}\nНаграда: ${rewardText}.`);
       count++;
     }
