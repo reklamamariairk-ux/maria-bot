@@ -3017,7 +3017,8 @@
       const claimed = t.status === 'confirmed';
       const period = t.endsAt ? `до ${new Date(t.endsAt).toLocaleDateString('ru-RU')}` : 'без срока';
       const reward = [Number(t.rewardCoins) > 0 ? `+${fmt(Number(t.rewardCoins))} ${COIN(13)}` : '', Number(t.loyaltyPoints) > 0 ? `+${fmt(Number(t.loyaltyPoints))} баллов` : ''].filter(Boolean).join(' · ');
-      return `<div class="ck-card"${claimed ? ' style="opacity:.65"' : ''}><div class="ck-card__ic">${ICON.gift(22)}</div><div class="ck-card__b"><div class="ck-card__n">${t.title}</div><div class="ck-card__s">${t.description || `Купи нужный товар · ${period}`}<br>${reward || 'Награда уточняется'}</div></div><button class="ck-card__buy" disabled>${claimed ? '✓ Засчитано' : 'Проверяем'}</button></div>`;
+      const phoneHint = !purchasePhoneVerified && !claimed ? `<br><span style="color:var(--gold-l);font-weight:800">📱 Нужен подтверждённый номер телефона</span>` : '';
+      return `<div class="ck-card"${claimed ? ' style="opacity:.65"' : ''}><div class="ck-card__ic">${ICON.gift(22)}</div><div class="ck-card__b"><div class="ck-card__n">${t.title}</div><div class="ck-card__s">${t.description || `Купи нужный товар · ${period}`}<br>${reward || 'Награда уточняется'}${phoneHint}</div></div><button class="ck-card__buy" disabled>${claimed ? '✓ Засчитано' : 'Проверяем'}</button></div>`;
     }).join('');
     // «Награды за прогресс» (реальные промокоды/баллы) СКРЫТЫ — решение юзера 31.07:
     // в «Призах» только внутриигровое до согласования внешних наград с Машей.
@@ -3293,6 +3294,8 @@
     tasks: [
       { text: '«Призы» — сюда каждый день! Сундук удачи: монеты, турбо или джекпот', anchor: '#ck-taskslist', anchorFn: function () { return ov.querySelectorAll('#ck-taskslist .ck-bonus')[0]; }, pos: 'bottom' },
       { text: '«Комбо дня»: прокачай 3 названных бизнеса сегодня — +12 000. Меняются каждый день', anchor: '#ck-taskslist', anchorFn: function () { return ov.querySelectorAll('#ck-taskslist .ck-bonus')[1]; }, pos: 'bottom' },
+      { text: 'Здесь же бывают задания от «Марии»: купи указанный продукт в точке, и покупка найдётся по подтверждённому номеру телефона', anchor: '#ck-purchase-phone', anchorFn: function () { return ov.querySelector('#ck-purchase-phone') || ov.querySelector('#ck-taskslist'); }, pos: 'bottom' },
+      { text: 'После проверки чека монеты начислятся в игру, баллы — на карту лояльности, а бот пришлёт уведомление. Проверка обычно занимает до 15 минут', anchor: '#ck-purchase-phone', anchorFn: function () { return ov.querySelector('#ck-purchase-phone') || ov.querySelector('#ck-taskslist'); }, pos: 'bottom' },
       { text: 'Ниже — задания и достижения: монеты за действия в игре. Заглядывай, тут копятся награды', anchor: '#ck-taskslist', pos: 'top' },
     ],
     top: [
