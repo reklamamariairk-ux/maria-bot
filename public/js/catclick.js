@@ -1419,6 +1419,7 @@
         <div class="ck-bal">${COIN(32)} <span id="ck-bal">0</span></div>
         <div class="ck-prof" id="ck-prof">${COIN(14)} +0 / час</div>
         <div class="ck-event" id="ck-event" hidden></div>
+        <button class="ck-event" id="ck-shop-offer" hidden type="button" aria-label="Открыть предложение Марии"></button>
         <button class="ck-ftue" id="ck-ftue" hidden></button>
         <div class="ck-progwrap"><div class="ck-prog"><div class="ck-prog__bar"><div class="ck-prog__fill" id="ck-prog"></div></div><div class="ck-prog__t" id="ck-progt"></div></div><div class="ck-goal" id="ck-goal" hidden><div class="ck-goal__av"><img id="ck-goal-img" alt="" draggable="false"/></div><div class="ck-goal__l" id="ck-goal-l"></div></div></div>
         <button class="ck-prestige" id="ck-prestige" hidden></button>
@@ -2470,6 +2471,8 @@
     const evb = ov.querySelector('#ck-event');
     if (st.event && st.event.active && Number(st.event.endsTs) > Date.now()) { evb.hidden = false; evb.innerHTML = `${ICON.bolt(15)} <b>${st.event.name}</b> · до конца ${fmtDur(st.event.endsTs - Date.now())}`; }
     else evb.hidden = true;
+    const offer = ov.querySelector('#ck-shop-offer');
+    if (offer) { offer.hidden = false; offer.innerHTML = `${ICON.gift(15)} Оффер дня · купить в «Марии» и получить награду`; offer.onclick = () => { const u = 'https://maria-irk.ru/'; if (window.App?.openExternal) App.openExternal(u); else window.open(u, '_blank', 'noopener'); }; }
     // кнопка престижа (на макс. уровне, только для авторизованных)
     const pb = ov.querySelector('#ck-prestige');
     if (st.prestigeReady && authed()) { pb.hidden = false; pb.innerHTML = `${ICON.star(16)} Уйти в престиж · заработок ×${(1 + (st.prestige + 1) * 0.1).toFixed(1)}`; }
