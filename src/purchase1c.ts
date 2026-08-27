@@ -6,6 +6,7 @@ type SaleRow = {
   date?: string; storeCode?: string; chequeNo?: string | number; operation?: string;
   cardCode?: string; cardName?: string; phone?: string; productCode?: string;
   qty?: number | string; sum?: number | string; discount?: number | string;
+  cost?: number | string; grossProfit?: number | string; targetAmount?: number | string; stockQty?: number | string;
 };
 
 const SALES_API = (process.env.PURCHASE_SALES_API ?? "").trim();
@@ -215,4 +216,30 @@ export async function runPurchaseSync(): Promise<void> {
   if (!purchaseSyncConfigured()) return;
   try { const r = await syncPurchases(); log.info(r, "[purchases] sync complete"); }
   catch (e) { log.error({ err: e }, "[purchases] sync failed"); }
+}
+
+export async function refreshAutoPurchaseTasks(): Promise<void> {
+  if (!purchaseSyncConfigured()) return;
+  const base = SALES_API.replace(/\/api\/sales\/purchase-feed\/?$/, '');
+  const response = await fetch(`${base}/api/sales/purchase-candidates?period=${encodeURIComponent(periodNow())}`, { headers: { 'X-Ingest-Token': SALES_KEY } });
+  if (!response.ok) throw new Error(`candidate feed ${response.status}`);
+  const data = await response.json() as any;
+  const candidates = Array.isArray(data.candidates) ? data.candidates.filter((x: any) => x.productCode && (Number(x.stockQty) === 0 ? false : true)).slice(0, 5) : [];
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`UPDATE purchase_tasks SET is_active=false WHERE title LIKE 'Авто · %'`);
+    for (const c of candidates) {
+      const name = String(c.productName || c.productCode);
+      const title = `Авто · ${name}`;
+      const target = Number(c.targetAmount) || 0;
+      const sales = Number(c.salesAmount) || 0;
+      const gap = target > 0 ? Math.max(0, 1 - sales / target) : 0.25;
+      const baseCoins = Math.max(5000, Math.min(150000, Math.round((Number(c.grossProfit) || Number(c.salesAmount) * 0.2 || 1000) * (0.15 + gap * 0.35))));
+      const levels = [1,6,11,16].map((level, i) => ({ level, coins: Math.round(baseCoins * [1,3,8,20][i]), points: Math.max(10, Math.round(baseCoins / 250)) }));
+      await client.query(`INSERT INTO purchase_tasks (title,description,product_codes,reward_coins,loyalty_points,reward_levels,priority_score,starts_at,ends_at,is_active) VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW()+INTERVAL '7 days',true)`, [title, `Купи «${name}» — товар выбран по данным продаж и плана`, [String(c.productCode)], baseCoins, Math.max(10, Math.round(baseCoins / 250)), JSON.stringify(levels), Math.round((gap * 30 + Math.min(1, (Number(c.grossProfit) || 0) / Math.max(1, sales)) * 25) * 100) / 100]);
+    }
+    await client.query('COMMIT');
+    log.info({ count: candidates.length }, '[purchases] auto campaigns refreshed');
+  } catch (e) { await client.query('ROLLBACK'); throw e; } finally { client.release(); }
 }

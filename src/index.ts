@@ -51,7 +51,7 @@ import { runPetHungryPush, runPetEnergyPush } from "./pet-push";
 import { initBonusSchema, startBonusWorker } from "./bonus1c";
 import cartRouter from "./routes/cart";
 import purchasesRouter from "./routes/purchases";
-import { initPurchaseSchema, runPurchaseSync, setPurchaseNotifier } from "./purchase1c";
+import { initPurchaseSchema, runPurchaseSync, refreshAutoPurchaseTasks, setPurchaseNotifier } from "./purchase1c";
 import { scrapeCatalog, loadCatalog, catalogAge, reloadDietaryOverrides, detectDietary, Product } from "./scraper";
 import {
   initDb,
@@ -2595,6 +2595,9 @@ async function main() {
   // До настройки PURCHASE_SALES_API/KEY задача безопасно ничего не делает.
   cron.schedule("*/15 * * * *", () => {
     runPurchaseSync().catch((e) => log.error({ err: e }, "[PURCHASE SYNC CRON]"));
+  });
+  cron.schedule("15 */6 * * *", () => {
+    refreshAutoPurchaseTasks().catch((e) => log.error({ err: e }, "[PURCHASE CAMPAIGNS CRON]"));
   });
   console.log("[STARTUP] Purchase-task sync scheduled (every 15 min)");
 
