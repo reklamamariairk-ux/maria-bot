@@ -84,7 +84,9 @@ function isSale(operation: string): boolean { return !/возврат|return|ref
 async function fetchRows(period: string): Promise<SaleRow[]> {
   if (!purchaseSyncConfigured()) return [];
   const url = `${SALES_API}${SALES_API.includes("?") ? "&" : "?"}period=${encodeURIComponent(period)}&limit=200000`;
-  const res = await fetch(url, { headers: { "X-API-Key": SALES_KEY }, signal: AbortSignal.timeout(90_000) });
+  // Supports both the public sales-dashboard proxy and the internal
+  // maria-marketing feed used on the VPS.
+  const res = await fetch(url, { headers: { "X-API-Key": SALES_KEY, "X-Ingest-Token": SALES_KEY }, signal: AbortSignal.timeout(90_000) });
   if (!res.ok) throw new Error(`sales_api_http_${res.status}`);
   const body = await res.json() as { rows?: SaleRow[] };
   return Array.isArray(body.rows) ? body.rows : [];
