@@ -6,6 +6,7 @@ exports.getBonusQueue = getBonusQueue;
 exports.ackBonusQueue = ackBonusQueue;
 exports.initBonusSchema = initBonusSchema;
 exports.enqueueAccrual = enqueueAccrual;
+exports.enqueueAdjustment = enqueueAdjustment;
 exports.flushBonusOutbox = flushBonusOutbox;
 exports.startBonusWorker = startBonusWorker;
 /**
@@ -93,6 +94,16 @@ async function postOne(row) {
     const j = (await r.json().catch(() => null));
     if (j && j.ok === false)
         throw new Error(`gateway:${j.error || "unknown"}`);
+}
+/** Сторнирующее начисление (возврат покупки). 1С получает отрицательную сумму. */
+async function enqueueAdjustment(phone, amount, reason, idemKey) {
+    if (!bonusSyncEnabled())
+        return;
+    const p = String(phone || "").replace(/\D+/g, "");
+    const a = Math.floor(Number(amount) || 0);
+    if (!p || a === 0)
+        return;
+    await db_1.pool.query(`INSERT INTO bonus_outbox (phone, amount, reason, idem_key) VALUES ($1,$2,$3,$4) ON CONFLICT (idem_key) DO NOTHING`, [p, a, reason || null, idemKey || null]).catch((e) => logger_1.log.error({ err: e }, "[bonus] enqueue adjustment"));
 }
 /** Атомарная аренда строк: параллельный worker/1С не получают одну запись. */
 async function claimBonusRows(limit) {

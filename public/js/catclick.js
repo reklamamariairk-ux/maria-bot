@@ -2976,11 +2976,14 @@
     const list = ov.querySelector('#ck-taskslist');
     if (authed()) list.innerHTML = skelRows(6);
     const refBlock = refCard();
-    let tasks, tasksFail = false;
+    let tasks, tasksFail = false, purchaseTasks = [], purchaseClaims = [];
     if (authed()) {
       const d = await api('/api/clicker/tasks').catch(() => null);
       tasks = d && d.tasks;
       tasksFail = !d || !!d.error || !Array.isArray(tasks);
+      const pd = await api('/api/clicker/purchase-tasks').catch(() => null);
+      if (pd && Array.isArray(pd.tasks)) purchaseTasks = pd.tasks;
+      if (pd && Array.isArray(pd.claims)) purchaseClaims = pd.claims;
     }
     else tasks = guestTaskList();
     if (gen !== tasksGen) return;
@@ -3008,6 +3011,12 @@
           : `<button class="ck-card__buy" disabled>+${fmt(a.reward)}</button>`;
       return `<div class="ck-card"${a.done ? ' style="opacity:.6"' : ''}><div class="ck-card__ic">${achIcon(a.icon)}</div><div class="ck-card__b"><div class="ck-card__n">${a.name}</div><div class="ck-card__s">${achDesc(a)}</div></div>${btn}</div>`;
     }).join('');
+    const purchaseRows = purchaseTasks.map(t => {
+      const claimed = t.status === 'confirmed';
+      const period = t.endsAt ? `до ${new Date(t.endsAt).toLocaleDateString('ru-RU')}` : 'без срока';
+      const reward = [Number(t.rewardCoins) > 0 ? `+${fmt(Number(t.rewardCoins))} ${COIN(13)}` : '', Number(t.loyaltyPoints) > 0 ? `+${fmt(Number(t.loyaltyPoints))} баллов` : ''].filter(Boolean).join(' · ');
+      return `<div class="ck-card"${claimed ? ' style="opacity:.65"' : ''}><div class="ck-card__ic">${ICON.gift(22)}</div><div class="ck-card__b"><div class="ck-card__n">${t.title}</div><div class="ck-card__s">${t.description || `Купи нужный товар · ${period}`}<br>${reward || 'Награда уточняется'}</div></div><button class="ck-card__buy" disabled>${claimed ? '✓ Засчитано' : 'Проверяем'}</button></div>`;
+    }).join('');
     // «Награды за прогресс» (реальные промокоды/баллы) СКРЫТЫ — решение юзера 31.07:
     // в «Призах» только внутриигровое до согласования внешних наград с Машей.
     // Бэк (milestones/claim, GIFTS_ENABLED) жив — вернуть = флаг true.
@@ -3017,7 +3026,7 @@
     const failCard = tasksFail ? `<div class="ck-card"><div class="ck-card__ic">${ICON.bolt(26)}</div><div class="ck-card__b"><div class="ck-card__n">Не всё загрузилось</div><div class="ck-card__s">Проверь связь</div></div><button class="ck-card__buy" id="ck-tasks-retry">Обновить</button></div>` : '';
     // Промокод убран из вкладки «Призы» по решению юзера (15.07). redeemCodeAct/эндпоинт живы —
     // при возврате секции достаточно вернуть promoCard в innerHTML ниже.
-    list.innerHTML = '<div class="ck-intro">Забирай бесплатное: награда дня, сундук удачи, комбо дня. Ниже — задания и достижения за монеты.</div>' + todayStatusHtml() + failCard + bonusBlock() + (progRows ? `<div class="ck-sect">${ICON.gift(13)} Награды за прогресс</div>` + progRows : '') + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows + '<div class="ck-sect">Достижения</div>' + achRows;
+    list.innerHTML = '<div class="ck-intro">Забирай бесплатное: награда дня, сундук удачи, комбо дня. Ниже — задания и достижения за монеты.</div>' + todayStatusHtml() + failCard + bonusBlock() + (purchaseRows ? '<div class="ck-sect">🛍 Покупки в Марии</div>' + purchaseRows : '') + (progRows ? `<div class="ck-sect">${ICON.gift(13)} Награды за прогресс</div>` + progRows : '') + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows + '<div class="ck-sect">Достижения</div>' + achRows;
     const rtb = list.querySelector('#ck-tasks-retry'); if (rtb) rtb.onclick = () => renderTasks();
     ov.querySelector('#ck-invite').onclick = shareRef;
     list.querySelectorAll('[data-open]').forEach(b => b.onclick = () => { const id = b.dataset.open, link = b.dataset.link; if (link) { if (window.App && App.openExternal) App.openExternal(link); else window.open(link, '_blank'); } linkOpened[id] = true; setTimeout(renderTasks, 400); });

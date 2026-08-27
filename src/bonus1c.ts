@@ -93,6 +93,18 @@ async function postOne(row: { id: number; phone: string; amount: number; reason:
   if (j && j.ok === false) throw new Error(`gateway:${j.error || "unknown"}`);
 }
 
+/** Сторнирующее начисление (возврат покупки). 1С получает отрицательную сумму. */
+export async function enqueueAdjustment(phone: string, amount: number, reason: string, idemKey?: string): Promise<void> {
+  if (!bonusSyncEnabled()) return;
+  const p = String(phone || "").replace(/\D+/g, "");
+  const a = Math.floor(Number(amount) || 0);
+  if (!p || a === 0) return;
+  await pool.query(
+    `INSERT INTO bonus_outbox (phone, amount, reason, idem_key) VALUES ($1,$2,$3,$4) ON CONFLICT (idem_key) DO NOTHING`,
+    [p, a, reason || null, idemKey || null]
+  ).catch((e) => log.error({ err: e }, "[bonus] enqueue adjustment"));
+}
+
 type BonusRow = { id: number; phone: string; amount: number; reason: string | null; idem_key: string | null; attempts: number };
 
 /** Атомарная аренда строк: параллельный worker/1С не получают одну запись. */

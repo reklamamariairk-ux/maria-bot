@@ -49,6 +49,11 @@ async function initPurchaseSchema() {
     );
     CREATE INDEX IF NOT EXISTS purchase_events_phone_idx ON purchase_events (phone, sold_at DESC);
     CREATE INDEX IF NOT EXISTS purchase_events_card_idx ON purchase_events (card_code, sold_at DESC);
+    CREATE TABLE IF NOT EXISTS purchase_card_links (
+      card_code TEXT PRIMARY KEY,
+      chat_id BIGINT NOT NULL REFERENCES subscribers(chat_id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
     CREATE TABLE IF NOT EXISTS purchase_claims (
       id BIGSERIAL PRIMARY KEY,
       task_id BIGINT NOT NULL REFERENCES purchase_tasks(id),
@@ -104,13 +109,34 @@ async function syncPurchases(period = periodNow()) {
         if (!inserted.rows[0])
             continue;
         imported++;
-        if (!isSale(operation) || !phone)
+        if (!isSale(operation)) {
+            await reverseEvent(Number(inserted.rows[0].id), phone, String(row.cardCode ?? "").trim(), product);
             continue;
-        const { rows: users } = await db_1.pool.query(`SELECT chat_id FROM subscribers WHERE RIGHT(regexp_replace(COALESCE(phone,''),'\\D','','g'),10)=$1 AND phone_verified_at IS NOT NULL`, [phone]);
+        }
+        if (!phone && !String(row.cardCode ?? "").trim())
+            continue;
+        const { rows: users } = await db_1.pool.query(`SELECT chat_id FROM subscribers WHERE RIGHT(regexp_replace(COALESCE(phone,''),'\\D','','g'),10)=$1 AND phone_verified_at IS NOT NULL
+       UNION SELECT chat_id FROM purchase_card_links WHERE card_code=$2`, [phone, String(row.cardCode ?? "").trim()]);
         for (const user of users)
             rewarded += await settleEvent(Number(user.chat_id), Number(inserted.rows[0].id), product, row);
     }
     return { rows: rows.length, imported, rewarded };
+}
+async function reverseEvent(eventId, phone, cardCode, product) {
+    const { rows } = await db_1.pool.query(`SELECT pc.id,pc.chat_id,pc.reward_coins,pc.loyalty_points,pe.phone
+       FROM purchase_claims pc JOIN purchase_events pe ON pe.id=pc.event_id
+      WHERE pc.status='confirmed' AND pe.product_code=$1 AND (pe.phone=$2 OR ($3<>'' AND pe.card_code=$3))
+      ORDER BY pc.created_at DESC LIMIT 20`, [product, phone, cardCode]);
+    for (const claim of rows) {
+        const updated = await db_1.pool.query(`UPDATE purchase_claims SET status='reversed',reversed_at=NOW() WHERE id=$1 AND status='confirmed'`, [claim.id]);
+        if (!updated.rowCount)
+            continue;
+        if (Number(claim.reward_coins) > 0)
+            await db_1.pool.query(`UPDATE clicker_state SET balance=GREATEST(0,balance-$2),state_revision=state_revision+1,updated_at=NOW() WHERE chat_id=$1`, [claim.chat_id, Number(claim.reward_coins)]);
+        if (Number(claim.loyalty_points) > 0 && claim.phone)
+            await (0, bonus1c_1.enqueueAdjustment)(claim.phone, -Number(claim.loyalty_points), `purchase_return`, `purchase-return:${claim.id}`);
+        break;
+    }
 }
 async function settleEvent(chatId, eventId, product, row) {
     const qty = asNumber(row.qty);

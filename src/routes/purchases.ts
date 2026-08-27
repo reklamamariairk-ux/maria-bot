@@ -43,4 +43,15 @@ router.post("/api/admin/purchase-tasks/:id/disable", requireAdminToken, rateLimi
   catch { res.status(500).json({ error: "internal" }); }
 });
 
+router.post("/api/admin/purchase-card-links", requireAdminToken, rateLimit(30), async (req, res) => {
+  const cardCode = String(req.body?.cardCode ?? "").trim();
+  const chatId = Number(req.body?.chatId);
+  if (!cardCode || !Number.isSafeInteger(chatId) || chatId <= 0) { res.status(400).json({ error: "cardCode_and_chatId_required" }); return; }
+  try {
+    const { pool } = await import("../db");
+    await pool.query(`INSERT INTO purchase_card_links(card_code,chat_id) VALUES($1,$2) ON CONFLICT(card_code) DO UPDATE SET chat_id=EXCLUDED.chat_id`, [cardCode, chatId]);
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: "internal" }); }
+});
+
 export default router;
