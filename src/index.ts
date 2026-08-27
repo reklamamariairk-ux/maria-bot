@@ -685,6 +685,15 @@ bot.command("start", async (ctx) => {
     }
   }
   await ctx.reply(WELCOME, { parse_mode: "Markdown", reply_markup: webAppButton(WELCOME) });
+  // Явно показываем системную кнопку Telegram для привязки телефона.
+  // Раньше она была только запланирована в UX, поэтому новый пользователь
+  // не мог найти подтверждение номера из Mini App.
+  if (ctx.from && !(await isPhoneVerified(ctx.from.id).catch(() => false))) {
+    await ctx.reply(
+      "Для заданий за покупки в физических точках привяжи номер телефона:",
+      { reply_markup: new Keyboard().requestContact("📱 Поделиться телефоном").resized().oneTime() }
+    ).catch(() => {});
+  }
 });
 
 // Phone share via WebApp.requestContact OR keyboard button
