@@ -3018,7 +3018,7 @@
           : `<button class="ck-card__buy" disabled>+${fmt(a.reward)}</button>`;
       return `<div class="ck-card"${a.done ? ' style="opacity:.6"' : ''}><div class="ck-card__ic">${achIcon(a.icon)}</div><div class="ck-card__b"><div class="ck-card__n">${a.name}</div><div class="ck-card__s">${achDesc(a)}</div></div>${btn}</div>`;
     }).join('');
-    const purchasePhoneRow = !purchasePhoneVerified ? `<div class="ck-card"><div class="ck-card__ic">${ICON.phone ? ICON.phone(22) : ICON.wallet(22)}</div><div class="ck-card__b"><div class="ck-card__n">Подтверди номер телефона</div><div class="ck-card__s">Это нужно для наград за покупки в «Марии». Нажми кнопку — бот покажет безопасную системную кнопку Telegram.</div></div><button class="ck-card__buy" id="ck-purchase-phone">Поделиться номером</button></div>` : '';
+      const purchasePhoneRow = !purchasePhoneVerified ? `<div class="ck-card"><div class="ck-card__ic">${ICON.phone ? ICON.phone(22) : ICON.wallet(22)}</div><div class="ck-card__b"><div class="ck-card__n">Подтверди номер телефона</div><div class="ck-card__s">Это нужно для наград за покупки в «Марии». Нажми кнопку — откроется безопасное подтверждение номера${window.App?.platform === 'vk' ? ' VK' : ' Telegram'}.</div></div><button class="ck-card__buy" id="ck-purchase-phone">Поделиться номером</button></div>` : '';
     const purchaseRows = purchaseTasks.map(t => {
       const claimed = t.status === 'confirmed';
       const period = t.endsAt ? `до ${new Date(t.endsAt).toLocaleDateString('ru-RU')}` : 'без срока';
@@ -3086,7 +3086,26 @@
     pop.classList.add('on'); const cp = pop.querySelector('#ck-pop-copy'); if (cp) cp.onclick = async () => { cp.textContent = await copyText(code) ? 'Скопировано' : 'Выдели код выше'; }; pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
   }
   function giftPopup(points) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Подарок на карту!</h3><div class="v">+${points} баллов</div><div style="color:var(--muted);font-size:13px">Баллы «Мария» зачислены на твою карту клуба — трать при заказе тортов 🎂</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
-  function requestPhone() {
+  async function requestPhone() {
+    // VK: номер выдаётся самим VK Mini Apps, а не Telegram-ботом.
+    // Важно не открывать t.me fallback — в VK он выглядит как «кнопка не работает».
+    if (window.App?.platform === 'vk') {
+      flashMsg('Запрашиваем номер в VK…', 'light');
+      const r = await window.App.verifyPhoneVk?.();
+      if (r?.ok) {
+        window.haptic?.('success');
+        flashMsg(r.bonusAwarded > 0 ? `Номер подтверждён · +${fmt(r.bonusAwarded)} баллов` : 'Номер подтверждён', 'light');
+        await window.ckRefreshState?.();
+        renderTasks();
+      } else if (r?.error === 'denied') {
+        flashMsg('Разрешение на номер не выдано. Можно повторить позже.', 'light');
+      } else if (r?.error === 'not_vk') {
+        flashMsg('Открой игру внутри VK, чтобы подтвердить номер', 'light');
+      } else {
+        flashMsg('Не удалось подтвердить номер. Попробуй ещё раз.', 'light');
+      }
+      return;
+    }
     if (window.App?.requestContact?.((ok) => { if (ok) { flashMsg('Спасибо! Проверяем номер…', 'light'); setTimeout(renderTasks, 1500); } })) return;
     const link = `https://t.me/${BOT}?start=phone`;
     if (window.Telegram?.WebApp?.openTelegramLink) {
