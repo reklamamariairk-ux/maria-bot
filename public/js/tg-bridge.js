@@ -106,7 +106,18 @@
   async function initVk() {
     _vkBridge = await loadVkSdk();
     if (!_vkBridge) return;
-    try { await _vkBridge.send('VKWebAppInit', {}); } catch {}
+    // VK иногда отдаёт iframe раньше, чем готов host bridge. Не считаем
+    // приложение инициализированным после первого отказа — повторяем запрос.
+    let initialized = false;
+    for (let attempt = 0; attempt < 3 && !initialized; attempt++) {
+      try {
+        await _vkBridge.send('VKWebAppInit', {});
+        initialized = true;
+      } catch {
+        if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 350 * (attempt + 1)));
+      }
+    }
+    if (!initialized) return;
     // Имя/аватар — для приветствия, share-текстов и x-vk-user (display-only)
     try { _vkUser = await _vkBridge.send('VKWebAppGetUserInfo', {}); } catch {}
     // app_id/group_id с бэка (для share-ссылок и AllowMessagesFromGroup)
