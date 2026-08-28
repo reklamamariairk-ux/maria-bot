@@ -168,6 +168,8 @@ async function settleEvent(chatId: number, eventId: number, product: string, row
     );
     const state = await client.query(`SELECT total_earned FROM clicker_state WHERE chat_id=$1`, [chatId]);
     const level = careerLevel(Number(state.rows[0]?.total_earned) || 0);
+    const history = await client.query(`SELECT COUNT(*)::int AS n FROM purchase_claims WHERE chat_id=$1 AND status='confirmed' AND created_at >= NOW() - INTERVAL '30 days'`, [chatId]);
+    const purchaseNumber = Math.min(3, Number(history.rows[0]?.n || 0) + 1);
     let count = 0;
     for (const task of tasks) {
       if (task.max_claims != null) {
@@ -180,6 +182,8 @@ async function settleEvent(chatId: number, eventId: number, product: string, row
       );
       if (!claim.rows[0]) continue;
       const reward = taskReward(task, level);
+      const streakMultiplier = purchaseNumber === 3 ? 2.5 : purchaseNumber === 2 ? 1.5 : 1;
+      reward.coins = Math.round(reward.coins * streakMultiplier);
       await client.query(`UPDATE purchase_claims SET reward_coins=$2, loyalty_points=$3 WHERE id=$1`, [claim.rows[0].id, reward.coins, reward.points]);
       if (reward.coins > 0) {
         await client.query(`UPDATE clicker_state SET balance=balance+$2,total_earned=total_earned+$2,state_revision=state_revision+1,updated_at=NOW() WHERE chat_id=$1`, [chatId, reward.coins]);
@@ -189,7 +193,7 @@ async function settleEvent(chatId: number, eventId: number, product: string, row
         if (p[0]?.phone) await enqueueAccrual(p[0].phone, reward.points, `purchase_task:${task.id}`, `purchase:${task.id}:${eventId}:${chatId}`);
       }
       const rewardText = [reward.coins > 0 ? `+${reward.coins.toLocaleString('ru-RU')} монет` : '', reward.points > 0 ? `+${reward.points.toLocaleString('ru-RU')} баллов лояльности` : ''].filter(Boolean).join(' и ');
-      notifications.push(`🎉 Покупка засчитана!\n\n${task.title}\nНаграда: ${rewardText}.`);
+      notifications.push(`🎉 Покупка засчитана!\n\n${task.title}\n${purchaseNumber === 1 ? 'Первая покупка за 30 дней' : `Покупка №${purchaseNumber} за 30 дней · бонус серии ×${streakMultiplier}`}\nНаграда: ${rewardText}.`);
       count++;
     }
     await client.query("COMMIT");
