@@ -882,6 +882,14 @@ app.use(requestLogger());
 // rateLimit и requireAdminToken вынесены в `./middleware`
 // (см. волну рефакторинга #5). Импортируются ниже.
 
+// VK Mini App запускаем сразу в чистом игровом режиме. VK передаёт launch
+// params в query (vk_app_id/vk_user_id); магазин остаётся доступен отдельно.
+app.get("/", (req, res, next) => {
+  if (req.query.vk_app_id || req.query.vk_user_id || req.hostname === "bot.186-246-14-117.sslip.io") {
+    return res.sendFile(path.join(__dirname, "..", "public", "game.html"));
+  }
+  return next();
+});
 app.use(express.static(path.join(__dirname, "..", "public"), {
   setHeaders(res, filePath) {
     // HTML не кэшируем — иначе Telegram/браузер держат старый index с прежним ?v=
