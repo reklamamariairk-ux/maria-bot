@@ -99,11 +99,15 @@
   function loadVkSdk() {
     return new Promise((resolve) => {
       if (window.vkBridge) { resolve(window.vkBridge); return; }
+      let settled = false;
+      const finish = (bridge) => { if (settled) return; settled = true; resolve(bridge || null); };
       const s = document.createElement('script');
       s.src = 'https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js';
-      s.onload = () => resolve(window.vkBridge || null);
-      s.onerror = () => resolve(null);
+      s.onload = () => finish(window.vkBridge);
+      s.onerror = () => finish(null);
       document.head.appendChild(s);
+      // CDN/контент-фильтры VK не должны блокировать запуск игры навсегда.
+      setTimeout(() => finish(window.vkBridge), 3500);
     });
   }
 
