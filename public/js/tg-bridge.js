@@ -41,6 +41,10 @@
   let _vkUser = null;            // кэш VKWebAppGetUserInfo
   let _vkConfig = null;          // {app_id, group_id} c /api/vk/config
   let _readyPromise = null;
+  const vkTimeout = (promise, ms) => Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('vk_timeout')), ms)),
+  ]);
 
   // ─── Telegram init + тема ──────────────────────────────────────────────────
   if (tg) {
@@ -111,7 +115,7 @@
     let initialized = false;
     for (let attempt = 0; attempt < 3 && !initialized; attempt++) {
       try {
-        await _vkBridge.send('VKWebAppInit', {});
+        await vkTimeout(_vkBridge.send('VKWebAppInit', {}), 2500);
         initialized = true;
       } catch {
         if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 350 * (attempt + 1)));
@@ -119,10 +123,10 @@
     }
     if (!initialized) return;
     // Имя/аватар — для приветствия, share-текстов и x-vk-user (display-only)
-    try { _vkUser = await _vkBridge.send('VKWebAppGetUserInfo', {}); } catch {}
+    try { _vkUser = await vkTimeout(_vkBridge.send('VKWebAppGetUserInfo', {}), 2500); } catch {}
     // app_id/group_id с бэка (для share-ссылок и AllowMessagesFromGroup)
     try {
-      const r = await fetch('/api/vk/config');
+      const r = await fetch('/api/vk/config', { signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(2500) : undefined });
       if (r.ok) _vkConfig = await r.json();
     } catch {}
   }
