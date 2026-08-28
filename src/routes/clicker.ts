@@ -12,6 +12,8 @@ import { clearGameAccessCache, requireGameUser as requireTgUser } from "../game-
 import { getBonusQueue, ackBonusQueue, queueAuthOk } from "../bonus1c";
 import { trackActivity, trackEvent, getClickerStats } from "../analytics";
 import { log } from "../logger";
+import crypto from "crypto";
+import { pool } from "../db";
 
 const router = Router();
 
@@ -103,8 +105,36 @@ router.post("/api/clicker/tap", requireTgUser, rateLimit(120), async (req, res) 
 router.post("/api/clicker/commerce-click", requireTgUser, rateLimit(30), async (req, res) => {
   const u = getTgUser(req)!;
   const kind = String(req.body?.kind || "site").slice(0, 16);
-  trackEvent(u.id, "commerce_click", { kind, taskId: String(req.body?.taskId || "").slice(0, 64) });
-  res.json({ ok: true });
+  const taskId = String(req.body?.taskId || "").slice(0, 64);
+  const campaignId = String(req.body?.campaignId || "").slice(0, 64);
+  const token = crypto.randomBytes(18).toString("base64url");
+  try {
+    await pool.query(`INSERT INTO clicker_commerce_clicks(token, chat_id, kind, task_id, campaign_id) VALUES($1,$2,$3,$4,$5)`, [token, u.id, kind, taskId || null, campaignId || null]);
+    trackEvent(u.id, "commerce_click", { kind, taskId, campaignId, token });
+    res.json({ ok: true, token, expiresInHours: 72 });
+  } catch (e) {
+    log.error({ err: e, chatId: u.id }, "[clicker/commerce-click]");
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+// Webhook для сайта/1С. Начисление награды здесь не происходит: только
+// подтверждённый заказ может стать основанием для purchase-sync/задания.
+// Это исключает ложные награды за клик, открытие корзины или незавершённый заказ.
+router.post("/api/commerce/order-paid", rateLimit(120), async (req, res) => {
+  const secret = String(process.env.COMMERCE_WEBHOOK_SECRET || "");
+  if (!secret || req.header("X-Commerce-Webhook-Secret") !== secret) { res.status(401).json({ error: "unauthorized" }); return; }
+  const token = String(req.body?.mariaRef || req.body?.token || "").trim();
+  const orderId = String(req.body?.orderId || "").trim().slice(0, 128);
+  const amount = Number(req.body?.amount);
+  if (!token || !orderId || !Number.isFinite(amount) || amount <= 0) { res.status(400).json({ error: "invalid_payload" }); return; }
+  try {
+    const r = await pool.query(`UPDATE clicker_commerce_clicks SET order_id=$2, order_amount=$3, paid_at=NOW(), last_seen_at=NOW() WHERE token=$1 AND paid_at IS NULL AND created_at > NOW() - INTERVAL '72 hours' RETURNING chat_id, kind, task_id, campaign_id`, [token, orderId, amount]);
+    if (!r.rowCount) { res.status(409).json({ error: "unknown_or_already_processed" }); return; }
+    const row = r.rows[0];
+    trackEvent(Number(row.chat_id), "commerce_order_paid", { orderId, amount, kind: row.kind, taskId: row.task_id, campaignId: row.campaign_id });
+    res.json({ ok: true, tracked: true });
+  } catch (e) { log.error({ err: e }, "[commerce/order-paid]"); res.status(500).json({ error: "internal" }); }
 });
 
 router.post("/api/clicker/buy", requireTgUser, rateLimit(60), async (req, res) => {

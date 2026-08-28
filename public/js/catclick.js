@@ -1420,7 +1420,7 @@
         <div class="ck-prof" id="ck-prof">${COIN(14)} +0 / час</div>
         <div class="ck-event" id="ck-event" hidden></div>
         <button class="ck-event" id="ck-shop-offer" hidden type="button" aria-label="Открыть предложение Марии"></button>
-        <div id="ck-shop-actions" hidden style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap"><button class="ck-event" id="ck-shop-point" type="button">📍 Найти точку</button><button class="ck-event" id="ck-shop-site" type="button">🛒 Заказать на сайте</button></div>
+        <div id="ck-shop-actions" hidden style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap"><button class="ck-event" id="ck-shop-point" type="button">📍 Найти точку</button><button class="ck-event" id="ck-shop-site" type="button">🛒 Заказать на сайте</button><div style="width:100%;font-size:11px;color:var(--muted);text-align:center;margin-top:2px">Переход сам по себе не даёт награду. Монеты начисляются только после оплаченного и подтверждённого заказа.</div></div>
         <button class="ck-ftue" id="ck-ftue" hidden></button>
         <div class="ck-progwrap"><div class="ck-prog"><div class="ck-prog__bar"><div class="ck-prog__fill" id="ck-prog"></div></div><div class="ck-prog__t" id="ck-progt"></div></div><div class="ck-goal" id="ck-goal" hidden><div class="ck-goal__av"><img id="ck-goal-img" alt="" draggable="false"/></div><div class="ck-goal__l" id="ck-goal-l"></div></div></div>
         <button class="ck-prestige" id="ck-prestige" hidden></button>
@@ -2475,7 +2475,7 @@
     const offer = ov.querySelector('#ck-shop-offer');
     if (offer) offer.hidden = true;
     const actions = ov.querySelector('#ck-shop-actions');
-    if (actions) { actions.hidden = false; const site = actions.querySelector('#ck-shop-site'); const point = actions.querySelector('#ck-shop-point'); const go = (kind, u) => { api('/api/clicker/commerce-click', { method: 'POST', body: JSON.stringify({ kind, taskId: 'daily-offer' }) }).catch(() => {}); if (window.App?.openExternal) App.openExternal(u); else window.open(u, '_blank', 'noopener'); }; if (site) site.onclick = () => go('site', 'https://maria-irk.ru/'); if (point) point.onclick = () => go('store', 'https://yandex.ru/maps/?text=Мария%20кондитерская%20Иркутск'); }
+    if (actions) { actions.hidden = false; const site = actions.querySelector('#ck-shop-site'); const point = actions.querySelector('#ck-shop-point'); const go = async (kind, u) => { const d = await api('/api/clicker/commerce-click', { method: 'POST', body: JSON.stringify({ kind, taskId: 'daily-offer' }) }).catch(() => null); if (d?.token && kind === 'site') { const sep = u.includes('?') ? '&' : '?'; u += sep + 'maria_ref=' + encodeURIComponent(d.token); } if (window.App?.openExternal) App.openExternal(u); else window.open(u, '_blank', 'noopener'); }; if (site) site.onclick = () => go('site', 'https://maria-irk.ru/'); if (point) point.onclick = () => go('store', 'https://yandex.ru/maps/?text=Мария%20кондитерская%20Иркутск'); }
     // кнопка престижа (на макс. уровне, только для авторизованных)
     const pb = ov.querySelector('#ck-prestige');
     if (st.prestigeReady && authed()) { pb.hidden = false; pb.innerHTML = `${ICON.star(16)} Уйти в престиж · заработок ×${(1 + (st.prestige + 1) * 0.1).toFixed(1)}`; }
@@ -3035,7 +3035,7 @@
     const failCard = tasksFail ? `<div class="ck-card"><div class="ck-card__ic">${ICON.bolt(26)}</div><div class="ck-card__b"><div class="ck-card__n">Не всё загрузилось</div><div class="ck-card__s">Проверь связь</div></div><button class="ck-card__buy" id="ck-tasks-retry">Обновить</button></div>` : '';
     // Промокод убран из вкладки «Призы» по решению юзера (15.07). redeemCodeAct/эндпоинт живы —
     // при возврате секции достаточно вернуть promoCard в innerHTML ниже.
-    const purchaseBlock = purchasePhoneRow || purchaseRows ? '<div class="ck-sect">🛍 Покупки в Марии</div>' + purchasePhoneRow + purchaseRows : '';
+    const purchaseBlock = purchasePhoneRow || purchaseRows ? '<div class="ck-sect">🛍 Покупки в Марии</div>' + '<div class="ck-intro" style="font-size:12px">Для заказа на сайте или покупки в точке нужен подтверждённый номер телефона. Переход, корзина и отменённый заказ не засчитываются — награда появляется только после подтверждения оплаченной покупки.</div>' + purchasePhoneRow + purchaseRows : '';
     list.innerHTML = '<div class="ck-intro">Забирай бесплатное: награда дня, сундук удачи, комбо дня. Ниже — задания и достижения за монеты.</div>' + todayStatusHtml() + failCard + bonusBlock() + purchaseBlock + (progRows ? `<div class="ck-sect">${ICON.gift(13)} Награды за прогресс</div>` + progRows : '') + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows + '<div class="ck-sect">Достижения</div>' + achRows;
     const rtb = list.querySelector('#ck-tasks-retry'); if (rtb) rtb.onclick = () => renderTasks();
     const pp = list.querySelector('#ck-purchase-phone'); if (pp) pp.onclick = () => requestPhone();
@@ -3300,8 +3300,8 @@
     tasks: [
       { text: '«Призы» — сюда каждый день! Сундук удачи: монеты, турбо или джекпот', anchor: '#ck-taskslist', anchorFn: function () { return ov.querySelectorAll('#ck-taskslist .ck-bonus')[0]; }, pos: 'bottom' },
       { text: '«Комбо дня»: прокачай 3 названных бизнеса сегодня — +12 000. Меняются каждый день', anchor: '#ck-taskslist', anchorFn: function () { return ov.querySelectorAll('#ck-taskslist .ck-bonus')[1]; }, pos: 'bottom' },
-      { text: 'Здесь же бывают задания от «Марии»: купи указанный продукт в точке, и покупка найдётся по подтверждённому номеру телефона', anchor: '#ck-purchase-phone', anchorFn: function () { return ov.querySelector('#ck-purchase-phone') || ov.querySelector('#ck-taskslist'); }, pos: 'bottom' },
-      { text: 'После проверки чека монеты начислятся в игру, баллы — на карту лояльности, а бот пришлёт уведомление. Проверка обычно занимает до 15 минут', anchor: '#ck-purchase-phone', anchorFn: function () { return ov.querySelector('#ck-purchase-phone') || ov.querySelector('#ck-taskslist'); }, pos: 'bottom' },
+      { text: 'Здесь бывают задания от «Марии»: купи указанный продукт в точке или оформи заказ на сайте. Сначала подтверди номер телефона — он нужен для честной привязки покупки', anchor: '#ck-purchase-phone', anchorFn: function () { return ov.querySelector('#ck-purchase-phone') || ov.querySelector('#ck-taskslist'); }, pos: 'bottom' },
+      { text: 'Важно: переход, корзина и отменённый заказ награды не дают. Монеты и баллы начисляются только после оплаченной покупки, которую подтвердит система. Бот пришлёт уведомление; обычно проверка занимает до 15 минут', anchor: '#ck-purchase-phone', anchorFn: function () { return ov.querySelector('#ck-purchase-phone') || ov.querySelector('#ck-taskslist'); }, pos: 'bottom' },
       { text: 'Ниже — задания и достижения: монеты за действия в игре. Заглядывай, тут копятся награды', anchor: '#ck-taskslist', pos: 'top' },
     ],
     top: [

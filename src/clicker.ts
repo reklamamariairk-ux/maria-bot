@@ -592,6 +592,23 @@ export async function initClickerSchema(): Promise<void> {
     CREATE TABLE IF NOT EXISTS clicker_purchase_sync (
       chat_id BIGINT PRIMARY KEY, spent_synced BIGINT NOT NULL DEFAULT 0, last_check TIMESTAMPTZ
     );
+    -- Атрибуция переходов из игры на сайт/в торговую точку. Токен не содержит
+    -- Telegram ID и живёт ограниченное время; сайт может передать его обратно
+    -- при оформлении заказа, чтобы связать оплату с игроком без утечки данных.
+    CREATE TABLE IF NOT EXISTS clicker_commerce_clicks (
+      token TEXT PRIMARY KEY,
+      chat_id BIGINT NOT NULL,
+      kind TEXT NOT NULL,
+      task_id TEXT,
+      campaign_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen_at TIMESTAMPTZ,
+      order_id TEXT,
+      order_amount NUMERIC,
+      paid_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS clicker_commerce_clicks_chat_idx ON clicker_commerce_clicks (chat_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS clicker_commerce_clicks_order_idx ON clicker_commerce_clicks (order_id) WHERE order_id IS NOT NULL;
     CREATE TABLE IF NOT EXISTS clicker_week_winners (
       week_key     TEXT NOT NULL,
       rank         INT NOT NULL,
