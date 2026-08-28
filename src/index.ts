@@ -850,7 +850,7 @@ app.use(
         "default-src": ["'self'"],
         // VK-порт: мини-апп открывается в iframe vk.com/m.vk.com (web) — нужны
         // frame-ancestors; vk-bridge SDK грузится с unpkg (script-src)
-        "frame-ancestors": ["'self'", "https://web.telegram.org", "https://t.me", "https://*.telegram.org", "https://vk.com", "https://*.vk.com", "https://*.vk-apps.com"],
+        "frame-ancestors": ["'self'", "https://web.telegram.org", "https://t.me", "https://*.telegram.org", "https://vk.com", "https://*.vk.com", "https://vk.ru", "https://*.vk.ru", "https://*.vk-apps.com"],
         "script-src": ["'self'", "'unsafe-inline'", "https://telegram.org", "https://*.telegram.org", "https://unpkg.com"],
         "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         "font-src": ["'self'", "https://fonts.gstatic.com", "data:"],
