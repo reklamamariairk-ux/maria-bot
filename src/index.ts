@@ -839,6 +839,11 @@ app.set("trust proxy", 1);
 //   (TG WebApp SDK).
 app.use(
   helmet({
+    // CSP frame-ancestors ниже задаёт точный список доверенных контейнеров.
+    // X-Frame-Options: SAMEORIGIN от Helmet несовместим с запуском Mini App
+    // внутри vk.com (и некоторых web-клиентов Telegram), поэтому отключаем
+    // устаревший дублирующий заголовок.
+    frameguard: false,
     contentSecurityPolicy: {
       useDefaults: false,
       directives: {
