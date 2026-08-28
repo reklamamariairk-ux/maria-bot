@@ -100,6 +100,13 @@ router.post("/api/clicker/tap", requireTgUser, rateLimit(120), async (req, res) 
   } catch (e) { log.error({ err: e, chatId: u.id }, "[tap]"); res.status(500).json({ error: "internal" }); }
 });
 
+router.post("/api/clicker/commerce-click", requireTgUser, rateLimit(30), async (req, res) => {
+  const u = getTgUser(req)!;
+  const kind = String(req.body?.kind || "site").slice(0, 16);
+  trackEvent(u.id, "commerce_click", { kind, taskId: String(req.body?.taskId || "").slice(0, 64) });
+  res.json({ ok: true });
+});
+
 router.post("/api/clicker/buy", requireTgUser, rateLimit(60), async (req, res) => {
   const u = getTgUser(req)!; const { type, id } = req.body as { type?: string; id?: string };
   try { const r = await buyClicker(u.id, String(type || ""), id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json(r.state); trackEvent(u.id, "buy", { type: String(type || ""), id: id || null }); }
