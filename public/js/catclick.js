@@ -4095,7 +4095,18 @@
       }
     } catch (_) {}
   }
-  function clickBootstrap() { try { if (window.App && typeof App.ready === 'function') App.ready().then(clickAutoOpen, clickAutoOpen); else clickAutoOpen(); } catch (_) { clickAutoOpen(); } }
+  function clickBootstrap() {
+    try {
+      if (window.App && typeof App.ready === 'function') {
+        // VK bridge может зависнуть внутри web-контейнера. Игра не должна
+        // ждать нативную инициализацию: открываемся быстро, auth догружается
+        // параллельно, а API вернёт понятный результат при необходимости.
+        const ready = Promise.resolve().then(() => App.ready());
+        Promise.race([ready, new Promise((resolve) => setTimeout(resolve, 1500))])
+          .then(clickAutoOpen, clickAutoOpen);
+      } else clickAutoOpen();
+    } catch (_) { clickAutoOpen(); }
+  }
   // Гейм-first (сплэш уже на экране, магазин под ним): открываем игру сразу, без задержки-«моргания».
   const _ckGameFirst = document.documentElement.classList.contains('ck-gamefirst');
   const _ckDelay = _ckGameFirst ? 0 : 600;
