@@ -224,7 +224,7 @@ export async function refreshAutoPurchaseTasks(): Promise<void> {
   const response = await fetch(`${base}/api/sales/purchase-candidates?period=${encodeURIComponent(periodNow())}`, { headers: { 'X-Ingest-Token': SALES_KEY } });
   if (!response.ok) throw new Error(`candidate feed ${response.status}`);
   const data = await response.json() as any;
-  const candidates = Array.isArray(data.candidates) ? data.candidates.filter((x: any) => x.productCode && (Number(x.stockQty) === 0 ? false : true)).slice(0, 5) : [];
+  const candidates = Array.isArray(data.candidates) ? data.candidates.filter((x: any) => x.productCode && (x.stockQty == null || Number(x.stockQty) > 0)).slice(0, 5) : [];
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
