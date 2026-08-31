@@ -30,6 +30,11 @@
   // ─── Детекция платформы ────────────────────────────────────────────────────
   const _search = new URLSearchParams(location.search);
   const IS_VK = _search.has('vk_app_id');
+  // Сохраняем именно ту подписанную строку, с которой VK создал WebView.
+  // Некоторые версии контейнера восстанавливают/переписывают URL уже после
+  // старта страницы. Платформа тогда остаётся VK, но чтение location.search
+  // на каждом fetch раньше могло отправить только служебный ?v=N и дать 401.
+  const _vkLaunchParams = IS_VK ? location.search.slice(1) : '';
   const tg = !IS_VK ? window.Telegram?.WebApp : null;
   // МАКС: его бридж кладёт window.WebApp (без window.Telegram-неймспейса)
   const mx = !IS_VK && !tg?.initData ? window.WebApp : null;
@@ -290,7 +295,7 @@
         return { Authorization: 'max ' + mx.initData };
       }
       if (PLATFORM === 'vk') {
-        const h = { Authorization: 'vk ' + location.search.slice(1) };
+        const h = { Authorization: 'vk ' + _vkLaunchParams };
         if (_vkUser) {
           // Display-only имя (бэк НЕ доверяет ему для security)
           try { h['x-vk-user'] = JSON.stringify({ first_name: _vkUser.first_name, last_name: _vkUser.last_name }); } catch {}
@@ -316,7 +321,7 @@
     initDataLength() {
       if (PLATFORM === 'tg') return String(tg?.initData || '').length;
       if (PLATFORM === 'max') return String(mx?.initData || '').length;
-      if (PLATFORM === 'vk') return location.search.length;
+      if (PLATFORM === 'vk') return _vkLaunchParams.length;
       return 0;
     },
 

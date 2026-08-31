@@ -18,4 +18,18 @@ describe("VK asset aliases", () => {
       expect(html).toMatch(new RegExp(`${route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\?v=\\d+`));
     }
   });
+
+  it("VK bridge сохраняет исходную launch-строку для всех API-запросов", () => {
+    const bridge = fs.readFileSync(path.join(root, "public", "js", "tg-bridge.js"), "utf8");
+    expect(bridge).toContain("const _vkLaunchParams = IS_VK ? location.search.slice(1) : '';");
+    expect(bridge).toContain("Authorization: 'vk ' + _vkLaunchParams");
+    expect(bridge).not.toContain("Authorization: 'vk ' + location.search.slice(1)");
+  });
+
+  it("первичная загрузка профиля повторяется после временного сетевого сбоя", () => {
+    const clicker = fs.readFileSync(path.join(root, "public", "js", "catclick.js"), "utf8");
+    expect(clicker).toContain("async function loadInitialServerState(path)");
+    expect(clicker).toContain("for (let attempt = 0; attempt < 3; attempt++)");
+    expect(clicker).toContain("loadInitialServerState('/api/clicker' + q)");
+  });
 });

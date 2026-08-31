@@ -667,6 +667,22 @@
   function cacheServerState(account, state) {
     try { localStorage.setItem(accountStorageKey('ck_server_state_v1'), JSON.stringify({ account, state, savedAt: Date.now() })); } catch (_) {}
   }
+  const initialLoadPause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  async function loadInitialServerState(path) {
+    let result = null;
+    // VK WebView иногда обрывает первый same-origin fetch во время восстановления
+    // iframe, хотя HTML и скрипты уже успели загрузиться. GET состояния безопасно
+    // повторить: ждём до трёх попыток и только потом показываем экран ошибки.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try { result = await api(path); } catch (_) { result = null; }
+      if (result && !result.error) return result;
+      const reason = String(result && result.error || '');
+      // Повтор сети не исправит авторизацию или административную блокировку.
+      if (reason === 'unauthorized' || reason === 'forbidden' || reason === 'account_blocked') return result;
+      if (attempt < 2) await initialLoadPause(450 * (attempt + 1));
+    }
+    return result;
+  }
   async function load() {
     let q = '';
     try { const sp = (window.App && App.startParam && App.startParam()) || ''; const m = /^src[_-]([a-zA-Z0-9_-]{1,32})/.exec(sp); if (m) q = '?source=' + encodeURIComponent(m[1]); } catch (_) {}
@@ -682,7 +698,7 @@
     }
     let loaded = null;
     if (authed()) {
-      loaded = await api('/api/clicker' + q).then((d) => {
+      loaded = await loadInitialServerState('/api/clicker' + q).then((d) => {
         if (!d || d.error) { loadFailureReason = String(d && d.error || 'bad_state'); return null; }
         return d;
       }).catch(() => null);
