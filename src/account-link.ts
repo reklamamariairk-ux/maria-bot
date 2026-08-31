@@ -18,6 +18,7 @@ import { pool } from "./db";
 import { trackEvent } from "./analytics";
 import { log } from "./logger";
 import type { PoolClient } from "pg";
+import { platformOf, type Platform } from "./platform";
 
 export async function initAccountLinkSchema(): Promise<void> {
   await pool.query(`
@@ -41,6 +42,20 @@ export interface LinkResult {
   linked: boolean;              // появилась ли НОВАЯ связь в этом вызове
   canonicalChatId: number;      // кем теперь играет этот телефон
   aliasedChatId?: number;       // чей прогресс заморожен (если связь новая)
+}
+
+/** Платформы, которые уже ведут в один канонический профиль. */
+export function accountPlatforms(
+  currentPlatform: Platform,
+  canonicalChatId: number,
+  aliasChatIds: number[],
+): Platform[] {
+  const found = new Set<Platform>([
+    currentPlatform,
+    platformOf(canonicalChatId),
+    ...aliasChatIds.map(platformOf),
+  ]);
+  return (["tg", "vk", "max"] as Platform[]).filter((platform) => found.has(platform));
 }
 
 /** total_earned кликера (0 если в игру не заходил). */

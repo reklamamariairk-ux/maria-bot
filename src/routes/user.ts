@@ -28,6 +28,7 @@ import { getVerifiedPhone } from "../lk";
 import { rateLimit } from "../middleware";
 import { requireTgUser, getTgUser, getUser } from "../auth";
 import { toPlatformId } from "../platform";
+import { accountPlatforms, linksOf } from "../account-link";
 import { log } from "../logger";
 import { isValidIsoDate } from "../date-utils";
 
@@ -99,6 +100,34 @@ router.get("/api/me", requireTgUser, async (req, res) => {
     });
   } catch (e) {
     log.error({ err: e, chatId: u.id }, "[API /me]");
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+router.get("/api/account-link/status", requireTgUser, rateLimit(60), async (req, res) => {
+  const u = getTgUser(req)!;
+  const currentPlatform = getUser(req)?.platform ?? "tg";
+  try {
+    const [phoneVerified, aliases] = await Promise.all([
+      isPhoneVerified(u.id),
+      linksOf(u.id),
+    ]);
+    const linkedPlatforms = accountPlatforms(
+      currentPlatform,
+      u.id,
+      aliases.map((item) => item.alias),
+    );
+    res.json({
+      currentPlatform,
+      phoneVerified,
+      linked: linkedPlatforms.includes("vk") && linkedPlatforms.includes("tg"),
+      platforms: {
+        vk: linkedPlatforms.includes("vk"),
+        tg: linkedPlatforms.includes("tg"),
+      },
+    });
+  } catch (e) {
+    log.error({ err: e, chatId: u.id }, "[account-link status]");
     res.status(500).json({ error: "internal" });
   }
 });

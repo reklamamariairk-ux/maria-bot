@@ -33,4 +33,11 @@ describe("VK asset aliases", () => {
     expect(clicker).toContain("for (let attempt = 0; attempt < 3; attempt++)");
     expect(clicker).toContain("loadInitialServerState('/api/clicker' + q)");
   });
+
+  it("объясняет связку VK и Telegram прямо в игровом интерфейсе", () => {
+    const clicker = fs.readFileSync(path.join(root, "public", "js", "catclick.js"), "utf8");
+    expect(clicker).toContain("Один аккаунт в VK и Telegram");
+    expect(clicker).toContain("Один прогресс в VK и Telegram");
+    expect(clicker).toContain("/api/account-link/status");
+  });
 });

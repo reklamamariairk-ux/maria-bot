@@ -1356,6 +1356,18 @@
       .ck-today__i{font-size:11px;font-weight:800;color:var(--muted);background:rgba(255,255,255,.05);border-radius:8px;padding:4px 8px}
       .ck-today__i.pend{color:#12210A;background:linear-gradient(180deg,#D4FF6A,#A8F51E)}
       .ck-today__i.done{color:#9be7a8;background:rgba(155,231,168,.1)}
+      .ck-linkbar{width:min(390px,calc(100% - 28px));min-height:42px;box-sizing:border-box;margin:6px 14px 0;padding:7px 10px;border:1px solid rgba(192,255,51,.34);border-radius:13px;background:linear-gradient(100deg,rgba(155,92,255,.18),rgba(192,255,51,.11));color:var(--ink);display:flex;align-items:center;gap:9px;text-align:left;cursor:pointer}
+      .ck-linkbar[hidden]{display:none}.ck-linkbar.linked{border-color:rgba(111,225,142,.34);background:rgba(111,225,142,.09)}
+      .ck-linkbar__ic{width:29px;height:29px;flex:none;border-radius:9px;display:flex;align-items:center;justify-content:center;background:rgba(192,255,51,.14);color:var(--gold-l)}
+      .ck-linkbar__b{min-width:0;flex:1}.ck-linkbar__t{font-size:11.5px;font-weight:900;line-height:1.15}.ck-linkbar__s{font-size:9.5px;color:var(--muted);line-height:1.2;margin-top:2px}.ck-linkbar__go{font-size:18px;color:var(--gold-l);flex:none}
+      .ck-account{border:1px solid rgba(192,255,51,.38);border-radius:17px;padding:14px;margin:0 0 14px;background:linear-gradient(145deg,rgba(155,92,255,.19),rgba(192,255,51,.09));box-shadow:0 9px 25px rgba(0,0,0,.2)}
+      .ck-account.linked{border-color:rgba(111,225,142,.4);background:linear-gradient(145deg,rgba(111,225,142,.13),rgba(192,255,51,.06))}
+      .ck-account__head{display:flex;align-items:center;gap:10px}.ck-account__ic{width:38px;height:38px;flex:none;border-radius:12px;display:flex;align-items:center;justify-content:center;background:rgba(192,255,51,.14);color:var(--gold-l)}
+      .ck-account__title{font-size:15px;font-weight:900;color:var(--ink)}.ck-account__state{font-size:11px;color:var(--gold-l);font-weight:800;margin-top:2px}
+      .ck-account__copy{font-size:12px;line-height:1.45;color:var(--cream);opacity:.88;margin:10px 0}
+      .ck-account__steps{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:9px 0}.ck-account__step{border:1px solid var(--line);border-radius:10px;padding:7px 9px;font-size:11px;font-weight:800;color:var(--muted);background:rgba(0,0,0,.18)}
+      .ck-account__step.done{color:#b8f6c6;border-color:rgba(111,225,142,.35);background:rgba(111,225,142,.09)}.ck-account__note{font-size:10px;line-height:1.35;color:var(--muted);margin-top:8px}
+      .ck-account__btn{width:100%;min-height:44px;border:1px solid #DFFF8F;border-radius:12px;background:linear-gradient(180deg,#D4FF6A,#A8F51E 56%,#8DBF20);color:#12210A;font:900 13px/1.2 inherit;cursor:pointer}
       .ck-navlk{position:absolute;top:2px;right:11%;font-size:8px;font-weight:800;color:var(--gold-l);background:rgba(0,0,0,.6);padding:1px 4px;border-radius:6px;line-height:1.35}
       .ck-nav-pop{animation:ckNavPop .8s ease-out}
       @keyframes ckNavPop{0%,100%{transform:none}30%{transform:translateY(-5px) scale(1.14)}}
@@ -1457,6 +1469,7 @@
         <div class="ck-greet" id="ck-greet"></div>
         <div class="ck-bal">${COIN(32)} <span id="ck-bal">0</span></div>
         <div class="ck-prof" id="ck-prof">${COIN(14)} +0 / час</div>
+        <button class="ck-linkbar" id="ck-linkbar" type="button" hidden><span class="ck-linkbar__ic">${ICON.users(17)}</span><span class="ck-linkbar__b"><span class="ck-linkbar__t">VK ↔ Telegram</span><span class="ck-linkbar__s">Один прогресс на двух платформах</span></span><span class="ck-linkbar__go">›</span></button>
         <div class="ck-event" id="ck-event" hidden></div>
         <button class="ck-event" id="ck-shop-offer" hidden type="button" aria-label="Открыть предложение Марии"></button>
         <div id="ck-shop-actions" hidden style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap"><button class="ck-event" id="ck-shop-point" type="button">📍 Найти точку</button><button class="ck-event" id="ck-shop-site" type="button">🛒 Заказать на сайте</button><div style="width:100%;font-size:11px;color:var(--muted);text-align:center;margin-top:2px">Переход сам по себе не даёт награду. Монеты начисляются только после оплаченного и подтверждённого заказа.</div></div>
@@ -1542,6 +1555,7 @@
       { ic: ICON.dove(20), t: 'Голубятня', d: 'Каждый голубь добавляет монеты к доходу в час; звёзды и тюнинг усиливают вклад. Голубей можно отправлять на задания с таймером и шансом успеха. До трёх любимцев можно выбрать для показа рядом со своим именем в рейтинге — на силу и доход этот выбор не влияет.' },
       { ic: ICON.trophy(20), t: 'Рейтинг и команды', d: 'Рейтинг недели показывает игроков по количеству монет, заработанных с начала недели — отсчёт идёт с понедельника. В команде общий счёт складывается из очков участников, а копилка стаи наполняется общими вкладами: при достижении цели доход всей стаи умножается на ×1,25 до конца недели.' },
       { ic: ICON.users(20), t: 'Друзья', d: 'Позови друга в игру по своей ссылке — как только он присоединится, тебе начислится 30 000 монет, а другу — 2 500 монет на старт. Ссылку можно скопировать или отправить прямо из игры кнопкой «Позвать».' },
+      { ic: ICON.users(20), t: 'Один аккаунт в VK и Telegram', d: 'На вкладке «Призы» есть карточка «VK ↔ Telegram». Подтверди один и тот же номер сначала в одной версии игры, затем во второй — после второго подтверждения прогресс станет общим. Игра сохранит более прокачанный профиль; балансы двух профилей не складываются.' },
     ];
     s.push({ ic: ICON.list(20), t: 'Призы и задания', d: 'На вкладке «Призы» — простые поручения за монеты: заглянуть на сайт «Марии», оставить отзыв, пригласить друга или просто держать серию заходов и баланс. Выполнил условие — жми кнопку с наградой рядом с заданием. Ниже, в Достижениях — более долгие цели вроде количества тапов, уровня, собранных бизнесов или дней подряд, тоже с наградой в монетах.' });
     s.push({ ic: ICON.medal(20), t: 'Награды за прогресс', d: 'Доходишь до нужного уровня, собираешь коллекцию бизнесов или приглашаешь друзей — и получаешь игровые призы. Баллы на карту клуба «Мария» и купоны доступны в авторизованной игре.' });
@@ -1617,12 +1631,12 @@
     updateDoveBadge(0);
   }
 
-  // ── Прогрессивное открытие вкладок: у новичка активны «Котик»+«Прокачка»,
-  // остальные разблокируются по уровню. Безопасно для существующих игроков —
+  // ── Прогрессивное открытие вкладок: «Призы» доступны сразу, потому что там
+  // находится связка VK ↔ Telegram; Голуби/Рейтинг разблокируются по уровню.
   // level = leagueFor(totalEarned) МОНОТОНЕН (totalEarned только растёт), поэтому
   // никто, кто уже был выше порога, вкладку не теряет; блокировка касается только
-  // самых первых минут новичка. Пороги низкие: Призы — ур.2, Голуби/Рейтинг — ур.3.
-  const TAB_UNLOCK = { cat: 1, up: 1, tasks: 2, dove: 3, top: 3 };
+  // самых первых минут новичка. Пороги низкие: Голуби/Рейтинг — ур.3.
+  const TAB_UNLOCK = { cat: 1, up: 1, tasks: 1, dove: 3, top: 3 };
   const TAB_NAME = { tasks: 'Призы', dove: 'Голуби', top: 'Рейтинг' };
   const tabReq = (t) => TAB_UNLOCK[t] || 1;
   // Серверный level включает храповик при изменении порогов; локальный расчёт нужен,
@@ -2507,6 +2521,7 @@
     // Бафф копилки стаи виден там, где игрок живёт — рядом с доходом
     const bankChip = (st.bankMult && st.bankMult > 1) ? ` <span style="color:var(--gold,#D4FF6A);font-weight:800">⚔️×${st.bankMult}</span>` : '';
     const prof = `${COIN(13)} +${fmt(Math.floor(st.profitPerHour * passiveIncomeMult()))} / час${bankChip}`; ov.querySelector('#ck-prof').innerHTML = prof; ov.querySelector('#ck-prof2').innerHTML = prof;
+    renderAccountLinkBanner();
     // бейдж «Призы»: сколько бесплатного ГОТОВО забрать прямо сейчас (сундук, комбо) —
     // дискаверабилити ежедневок с любой вкладки (аудит: вкладка без индикатора)
     const tb = ov.querySelector('#ck-tasks-badge');
@@ -3026,12 +3041,72 @@
     const ds = guestDerive(); const done = (rawGet().tasksDone) || {};
     return ACHIEVEMENTS.filter(a => a.type !== 'ref').map(a => ({ ...a, done: !!done[a.id], claimable: !done[a.id] && condMet(a, ds) }));
   }
+  let accountLinkStatus = null, accountLinkLoad = null, accountLinkGeneration = 0;
+  async function loadAccountLinkStatus(force) {
+    if (!authed()) return null;
+    if (accountLinkStatus && !force) return accountLinkStatus;
+    if (accountLinkLoad && !force) return accountLinkLoad;
+    const generation = ++accountLinkGeneration;
+    const request = api('/api/account-link/status').catch(() => null);
+    accountLinkLoad = request;
+    const data = await request;
+    if (generation === accountLinkGeneration && data && !data.error) accountLinkStatus = data;
+    if (accountLinkLoad === request) accountLinkLoad = null;
+    return accountLinkStatus;
+  }
+  function platformTitle(platform) { return platform === 'vk' ? 'VK' : platform === 'tg' ? 'Telegram' : 'приложении'; }
+  function renderAccountLinkBanner() {
+    const bar = ov && ov.querySelector('#ck-linkbar'); if (!bar) return;
+    if (!authed()) { bar.hidden = true; return; }
+    const status = accountLinkStatus;
+    const linked = !!status?.linked;
+    bar.hidden = false;
+    bar.classList.toggle('linked', linked);
+    const sub = bar.querySelector('.ck-linkbar__s');
+    if (sub) sub.textContent = linked
+      ? 'Аккаунты связаны · прогресс общий'
+      : status?.phoneVerified ? 'Первый шаг готов · подтверди номер во второй версии' : 'Связать аккаунты за два понятных шага';
+    bar.onclick = () => { window.haptic?.('light'); setTab('tasks'); const list = ov.querySelector('#ck-taskslist'); if (list) list.scrollTop = 0; };
+  }
+  function accountLinkCardHtml() {
+    if (!authed()) return '';
+    const status = accountLinkStatus;
+    const linked = !!status?.linked;
+    const current = status?.currentPlatform || window.App?.platform || 'tg';
+    const currentName = platformTitle(current);
+    const vkDone = !!status?.platforms?.vk;
+    const tgDone = !!status?.platforms?.tg;
+    const state = linked ? 'Аккаунты связаны' : status?.phoneVerified ? 'Шаг 1 из 2 готов' : status ? 'Два шага · меньше минуты' : 'Проверяем статус…';
+    const copy = linked
+      ? 'Готово: VK и Telegram открывают один игровой профиль — монеты, уровень, бизнесы и голуби общие.'
+      : status?.phoneVerified
+        ? `Номер в ${currentName} подтверждён. Теперь открой игру ${current === 'vk' ? 'в Telegram' : 'во VK'} и подтверди там тот же номер.`
+        : 'Подтверди один и тот же номер здесь и во второй версии игры. После второго подтверждения аккаунты свяжутся автоматически.';
+    const action = linked ? '' : status?.phoneVerified
+      ? '<button class="ck-account__btn" id="ck-account-link-action" type="button">Показать второй шаг</button>'
+      : `<button class="ck-account__btn" id="ck-account-link-action" type="button"${status ? '' : ' disabled'}>${status ? `Подтвердить номер в ${currentName}` : 'Загрузка…'}</button>`;
+    const note = linked ? '' : '<div class="ck-account__note">Сохраним более прокачанный профиль. Балансы двух профилей не складываются.</div>';
+    return `<div class="ck-account${linked ? ' linked' : ''}"><div class="ck-account__head"><div class="ck-account__ic">${ICON.users(20)}</div><div><div class="ck-account__title">Один аккаунт в VK и Telegram</div><div class="ck-account__state">${state}</div></div></div><div class="ck-account__copy">${copy}</div><div class="ck-account__steps"><div class="ck-account__step${vkDone ? ' done' : ''}">VK ${vkDone ? '✓ подтверждён' : '○ ожидает'}</div><div class="ck-account__step${tgDone ? ' done' : ''}">Telegram ${tgDone ? '✓ подтверждён' : '○ ожидает'}</div></div>${action}${note}</div>`;
+  }
+  function showAccountLinkHelp() {
+    const status = accountLinkStatus;
+    const current = status?.currentPlatform || window.App?.platform || 'tg';
+    const other = current === 'vk' ? 'Telegram' : 'VK';
+    const pop = ov.querySelector('#ck-pop');
+    pop.innerHTML = `<h3>${ICON.users(20)} Остался один шаг</h3><div style="color:var(--muted);font-size:13px;line-height:1.5;text-align:left"><b style="color:var(--ink)">1.</b> Номер в ${platformTitle(current)} уже подтверждён.<br><b style="color:var(--ink)">2.</b> Открой игру в ${other}.<br><b style="color:var(--ink)">3.</b> Зайди в «Призы» → «Один аккаунт в VK и Telegram» и подтверди <b style="color:var(--ink)">тот же номер</b>.<br><br>После этого прогресс свяжется автоматически.</div><button id="ck-pop-ok">Понятно</button>`;
+    pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
+  }
+  async function accountLinkAction() {
+    if (accountLinkStatus?.phoneVerified) { showAccountLinkHelp(); return; }
+    await requestPhone();
+  }
   let tasksGen = 0; // токен поколения: два конкурирующих renderTasks не перетирают вкладку друг у друга
   async function renderTasks() {
     const gen = ++tasksGen;
     const list = ov.querySelector('#ck-taskslist');
     if (authed()) list.innerHTML = skelRows(6);
     const refBlock = refCard();
+    const accountStatusRequest = authed() ? loadAccountLinkStatus(false) : Promise.resolve(null);
     let tasks, tasksFail = false, purchaseTasks = [], purchaseClaims = [], purchasePhoneVerified = true;
     if (authed()) {
       const d = await api('/api/clicker/tasks').catch(() => null);
@@ -3060,6 +3135,7 @@
       tasksFail = tasksFail || !d || !!d.error || !Array.isArray(achs);
     }
     else achs = guestAchList();
+    await accountStatusRequest;
     if (gen !== tasksGen) return;
     if (!achs) achs = [];
     const achRows = achs.map(a => {
@@ -3068,7 +3144,7 @@
           : `<button class="ck-card__buy" disabled>+${fmt(a.reward)}</button>`;
       return `<div class="ck-card"${a.done ? ' style="opacity:.6"' : ''}><div class="ck-card__ic">${achIcon(a.icon)}</div><div class="ck-card__b"><div class="ck-card__n">${a.name}</div><div class="ck-card__s">${achDesc(a)}</div></div>${btn}</div>`;
     }).join('');
-      const purchasePhoneRow = !purchasePhoneVerified ? `<div class="ck-card"><div class="ck-card__ic">${ICON.phone ? ICON.phone(22) : ICON.wallet(22)}</div><div class="ck-card__b"><div class="ck-card__n">Подтверди номер телефона</div><div class="ck-card__s">Это нужно для наград за покупки в «Марии». Нажми кнопку — откроется безопасное подтверждение номера${window.App?.platform === 'vk' ? ' VK' : ' Telegram'}.</div></div><button class="ck-card__buy" id="ck-purchase-phone">Поделиться номером</button></div>` : '';
+      const purchasePhoneRow = !purchasePhoneVerified && !accountLinkStatus ? `<div class="ck-card"><div class="ck-card__ic">${ICON.phone ? ICON.phone(22) : ICON.wallet(22)}</div><div class="ck-card__b"><div class="ck-card__n">Подтверди номер телефона</div><div class="ck-card__s">Это нужно для наград за покупки в «Марии». Нажми кнопку — откроется безопасное подтверждение номера${window.App?.platform === 'vk' ? ' VK' : ' Telegram'}.</div></div><button class="ck-card__buy" id="ck-purchase-phone">Поделиться номером</button></div>` : '';
     const purchaseRows = purchaseTasks.map(t => {
       const claimed = t.status === 'confirmed';
       const period = t.endsAt ? `до ${new Date(t.endsAt).toLocaleDateString('ru-RU')}` : 'без срока';
@@ -3086,7 +3162,8 @@
     // Промокод убран из вкладки «Призы» по решению юзера (15.07). redeemCodeAct/эндпоинт живы —
     // при возврате секции достаточно вернуть promoCard в innerHTML ниже.
     const purchaseBlock = purchasePhoneRow || purchaseRows ? '<div class="ck-sect">🛍 Покупки в Марии</div>' + '<div class="ck-intro" style="font-size:12px">Для заказа на сайте или покупки в точке нужен подтверждённый номер телефона. Переход, корзина и отменённый заказ не засчитываются — награда появляется только после подтверждения оплаченной покупки.</div>' + purchasePhoneRow + purchaseRows : '';
-    list.innerHTML = '<div class="ck-intro">Забирай бесплатное: награда дня, сундук удачи, комбо дня. Ниже — задания и достижения за монеты.</div>' + todayStatusHtml() + failCard + bonusBlock() + purchaseBlock + (progRows ? `<div class="ck-sect">${ICON.gift(13)} Награды за прогресс</div>` + progRows : '') + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows + '<div class="ck-sect">Достижения</div>' + achRows;
+    list.innerHTML = accountLinkCardHtml() + '<div class="ck-intro">Забирай бесплатное: награда дня, сундук удачи, комбо дня. Ниже — задания и достижения за монеты.</div>' + todayStatusHtml() + failCard + bonusBlock() + purchaseBlock + (progRows ? `<div class="ck-sect">${ICON.gift(13)} Награды за прогресс</div>` + progRows : '') + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows + '<div class="ck-sect">Достижения</div>' + achRows;
+    const alb = list.querySelector('#ck-account-link-action'); if (alb) alb.onclick = accountLinkAction;
     const rtb = list.querySelector('#ck-tasks-retry'); if (rtb) rtb.onclick = () => renderTasks();
     const pp = list.querySelector('#ck-purchase-phone'); if (pp) pp.onclick = () => requestPhone();
     ov.querySelector('#ck-invite').onclick = shareRef;
@@ -3146,6 +3223,8 @@
         window.haptic?.('success');
         flashMsg(r.bonusAwarded > 0 ? `Номер подтверждён · +${fmt(r.bonusAwarded)} баллов` : 'Номер подтверждён', 'light');
         await window.ckRefreshState?.();
+        await loadAccountLinkStatus(true);
+        renderAccountLinkBanner();
         renderTasks();
       } else if (r?.error === 'denied') {
         flashMsg('Разрешение на номер не выдано. Можно повторить позже.', 'light');
@@ -3156,7 +3235,7 @@
       }
       return;
     }
-    if (window.App?.requestContact?.((ok) => { if (ok) { flashMsg('Спасибо! Проверяем номер…', 'light'); setTimeout(renderTasks, 1500); } })) return;
+    if (window.App?.requestContact?.((ok) => { if (ok) { flashMsg('Спасибо! Проверяем номер…', 'light'); setTimeout(async () => { await loadAccountLinkStatus(true); renderAccountLinkBanner(); renderTasks(); }, 1500); } })) return;
     const link = `https://t.me/${BOT}?start=phone`;
     if (window.Telegram?.WebApp?.openTelegramLink) {
       window.Telegram.WebApp.openTelegramLink(link);
@@ -3502,6 +3581,7 @@
       <div class="ck-tut__step"><div class="si">${ICON.paw(20)}</div><div><div class="st">Тапай котика</div><div class="sd">Каждый тап — монеты, лови комбо ×N</div></div></div>
       <div class="ck-tut__step"><div class="si">${ICON.shop(20)}</div><div><div class="st">Заводи бизнесы</div><div class="sd">В «Прокачке» — офлайн-монеты копятся сами, максимум 3 часа</div></div></div>
       <div class="ck-tut__step"><div class="si">${ICON.gift(20)}</div><div><div class="st">Заходи каждый день</div><div class="sd">Награды дня, комбо и новые игровые цели</div></div></div>
+      <div class="ck-tut__step"><div class="si">${ICON.users(20)}</div><div><div class="st">Один прогресс в VK и Telegram</div><div class="sd">Подтверди один и тот же номер в обеих версиях — аккаунты свяжутся сами</div></div></div>
       <button class="ck-tut__go" id="ck-tut-go">Поехали!</button>
       <button class="ck-tut__guide" id="ck-tut-guide" type="button">Полный гайд — как всё устроено</button></div>`;
     ov.appendChild(t);
@@ -3533,6 +3613,11 @@
     ov.querySelector('#ck-cat').src = A(playerLeague().cat || 'idle.png');
     applyCatSize(ov.querySelector('#ck-cat'));
     setTab('cat'); renderAll(); spawnSparks(); applySeason(); scheduleBonus(); loadDoveBadge();
+    void loadAccountLinkStatus(false).then(() => {
+      if (!overlaySessionActive(mySession)) return;
+      renderAccountLinkBanner();
+      if (tab === 'tasks') renderTasks();
+    });
     if (loadNetFail) flashMsg('Нет связи — серверный прогресс не загрузился, попробуй обновить игру');
     // «Уже видел обучение» теперь помнит СЕРВЕР (st.onboarded) — localStorage в webview
     // Telegram Mini App часто НЕ переживает закрытие, из-за чего обучение лезло КАЖДЫЙ
@@ -3956,6 +4041,8 @@
       }
       if (!fresh || fresh.error || !overlaySessionActive(session)) return false;
       uiDay = irkToday();
+      await loadAccountLinkStatus(true);
+      if (!overlaySessionActive(session)) return false;
       renderAll();
       if (tab === 'up') renderUpgrades();
       else if (tab === 'tasks') renderTasks();

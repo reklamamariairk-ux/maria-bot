@@ -34,10 +34,12 @@ describe("auth-vk.ts", () => {
   let verifyVkLaunchParams: typeof import("../src/auth-vk").verifyVkLaunchParams;
   let verifyVkPhoneSign: typeof import("../src/auth-vk").verifyVkPhoneSign;
   let parseVkDisplayNameHeader: typeof import("../src/auth").parseVkDisplayNameHeader;
+  let accountPlatforms: typeof import("../src/account-link").accountPlatforms;
 
   beforeAll(async () => {
     ({ verifyVkLaunchParams, verifyVkPhoneSign } = await import("../src/auth-vk"));
     ({ parseVkDisplayNameHeader } = await import("../src/auth"));
+    ({ accountPlatforms } = await import("../src/account-link"));
   });
 
   it("принимает свежую launch-подпись из безопасного legacy-алиаса ключа", () => {
@@ -73,5 +75,11 @@ describe("auth-vk.ts", () => {
     expect(parseVkDisplayNameHeader(encoded)).toEqual({ first_name: "Василий", last_name: "Котов" });
     expect(parseVkDisplayNameHeader(JSON.stringify({ first_name: "Vasily", last_name: "Cat" })))
       .toEqual({ first_name: "Vasily", last_name: "Cat" });
+  });
+
+  it("показывает VK и Telegram только после появления второго алиаса", () => {
+    expect(accountPlatforms("vk", 2_000_000_000_123, [])).toEqual(["vk"]);
+    expect(accountPlatforms("vk", 123, [2_000_000_000_123])).toEqual(["tg", "vk"]);
+    expect(accountPlatforms("tg", 2_000_000_000_123, [123])).toEqual(["tg", "vk"]);
   });
 });

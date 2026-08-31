@@ -80,6 +80,29 @@ function serve() {
   ok(await pg.evaluate(() => typeof window.catPetOpen === 'undefined'), 'регресс: модуль Дома не загружен');
   await pg.close();
 
+  // ── 3. Явная связка VK ↔ Telegram: карточка и следующий шаг ──
+  pg = await br.newPage({ viewport: { width: 390, height: 844 } });
+  pg.on('pageerror', (e) => errors.push('account-link: ' + e.message));
+  await pg.route('**/api/account-link/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ currentPlatform: 'vk', phoneVerified: false, linked: false, platforms: { vk: false, tg: false } }) }));
+  await pg.route('**/api/clicker/tasks', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ tasks: [] }) }));
+  await pg.route('**/api/clicker/purchase-tasks', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ tasks: [], claims: [], phoneVerified: false }) }));
+  await pg.route('**/api/clicker/achievements', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ achievements: [] }) }));
+  await pg.goto(base + '/game.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await pg.waitForSelector('.ck-ov.on', { timeout: 15000 });
+  await pg.evaluate(() => {
+    document.querySelector('.ck-tut')?.remove();
+    localStorage.setItem('ck_tour3_tasks', 'done');
+  });
+  await pg.evaluate(() => { App.platform = 'vk'; App.isAuthed = () => true; window.ckSetTab('tasks'); });
+  await pg.waitForSelector('.ck-account', { timeout: 10000 });
+  await pg.waitForTimeout(500);
+  ok(((await pg.locator('.ck-account__title').textContent()) || '').includes('Один аккаунт в VK и Telegram'), 'связка: назначение карточки понятно');
+  ok(((await pg.locator('.ck-account__copy').textContent()) || '').includes('один и тот же номер'), 'связка: объяснены оба шага');
+  ok(((await pg.locator('#ck-account-link-action').textContent()) || '').includes('Подтвердить номер в VK'), 'связка: показано конкретное следующее действие');
+  ok((await pg.locator('.ck-account__step').count()) === 2, 'связка: статусы VK и Telegram разделены');
+  if (process.env.SMOKE_SCREENSHOT) await pg.screenshot({ path: process.env.SMOKE_SCREENSHOT, fullPage: true });
+  await pg.close();
+
   await br.close();
   srv.close();
   if (errors.length) { console.error('PAGEERRORS:', errors); process.exit(1); }
