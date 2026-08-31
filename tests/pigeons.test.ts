@@ -14,7 +14,8 @@ import {
   tuneCost, raceDivision, TUNE_MAX,
   createTrade, sendMail, thankMail, setShowcase, claimSet, enterRace,
   pigeonPrice, PIGEON_PRICE, normalizeCoinDelta, TRADE_COIN_CAP,
-  pigeonPassiveValue, pigeonCollectionPassiveBonus, PIGEON_SET_PASSIVE_BONUS, hasCompletePigeonAlbum,
+  pigeonPassiveValue, pigeonCollectionPassiveBonus, pigeonPassiveBonusFromRows,
+  PIGEON_SET_PASSIVE_BONUS, hasCompletePigeonAlbum,
   pigeonMissionChance, pigeonMissionPower, pigeonMissionRank, PIGEON_MISSIONS,
 } from "../src/pigeons";
 
@@ -30,6 +31,21 @@ describe("pigeon passive income — голуби и коллекции дают 
   it("закрытый сет даёт отдельный бонус коллекции", () => {
     const city = new Set(["sizar", "belobok", "ryaboy", "chubaty"]);
     expect(pigeonCollectionPassiveBonus(city)).toBe(PIGEON_SET_PASSIVE_BONUS.city);
+  });
+
+  it("bundle-расчёт совпадает с суммой голубей и бонусом закрытого сета", () => {
+    const rows = ["sizar", "belobok", "ryaboy", "chubaty"].map((breed, index) => ({
+      breed,
+      stars: index === 0 ? 2 : 1,
+      tune_speed: index,
+      tune_stamina: 0,
+      tune_luck: 0,
+    }));
+    const individual = rows.reduce(
+      (sum, row) => sum + pigeonPassiveValue(row.breed, row.stars, row.tune_speed, 0, 0),
+      0,
+    );
+    expect(pigeonPassiveBonusFromRows(rows)).toBe(individual + PIGEON_SET_PASSIVE_BONUS.city);
   });
 
   it("полный альбом требует все актуальные породы — legacy-id не заменяет пропущенную", () => {

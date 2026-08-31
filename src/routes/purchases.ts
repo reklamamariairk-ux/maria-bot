@@ -9,7 +9,14 @@ const router = Router();
 
 router.get("/api/clicker/purchase-tasks", requireTgUser, rateLimit(60), async (req, res) => {
   const user = getTgUser(req)!;
-  try { res.json({ tasks: await getPurchaseTasks(user.id), claims: await getPurchaseTaskClaims(user.id), phoneVerified: await isPhoneVerified(user.id) }); }
+  try {
+    const [tasks, claims, phoneVerified] = await Promise.all([
+      getPurchaseTasks(user.id),
+      getPurchaseTaskClaims(user.id),
+      isPhoneVerified(user.id),
+    ]);
+    res.json({ tasks, claims, phoneVerified });
+  }
   catch { res.status(500).json({ error: "internal" }); }
 });
 

@@ -6,7 +6,11 @@ const needSsl = /neon\.tech|sslmode=require/.test(process.env.DATABASE_URL || ""
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: needSsl ? { rejectUnauthorized: true } : undefined,
-  max: 10,
+  max: Math.max(4, Math.min(20, Number(process.env.PG_POOL_MAX) || 12)),
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10_000,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 5_000,
 });
 
 export async function initDb() {

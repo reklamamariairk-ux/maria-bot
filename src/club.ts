@@ -1,7 +1,7 @@
 import { pool } from "./db";
 import { log } from "./logger";
 import { enqueueAccrual, bonusSyncEnabled } from "./bonus1c";
-import { registerAccountLink, type LinkResult } from "./account-link";
+import { clearAccountLinkStatusCache, registerAccountLink, type LinkResult } from "./account-link";
 import type { PoolClient } from "pg";
 
 // Иркутск = UTC+8. Все «сутки» (daily login, daily star cap) считаем
@@ -487,6 +487,7 @@ export async function verifyPhone(chatId: number, phone: string): Promise<Verify
   // не должен ломать верификацию — она про клубные баллы.
   let link: LinkResult | undefined;
   try { link = await registerAccountLink(chatId, cleanPhone); } catch {}
+  clearAccountLinkStatusCache(chatId, link?.canonicalChatId ?? chatId, link?.aliasedChatId ?? chatId);
 
   return {
     alreadyVerified: !firstTime,

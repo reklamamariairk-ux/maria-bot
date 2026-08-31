@@ -366,8 +366,8 @@
   const activeTapPointers = new Set();
   // «Сладкий тап» — зеркало src/clicker.ts::SWEET_TAP_* (менять синхронно)
   const SWEET_TAP_EVERY = 40, SWEET_TAP_MULT = 8;
-  let renderAcc = 0; // копилка dt для 30fps-капа главного цикла (тап-обработка вне цикла — не влияет)
-  const LOOP_FRAME_BUDGET = 1 / 30;
+  let renderAcc = 0; // копилка dt: HUD обновляется отдельно от мгновенного тап-хендлера
+  const LOOP_FRAME_BUDGET = 1 / 20;
   const MG_MIN_FRAME_MS = 15; // кап рендера экшен-мини-игр ~60fps: на 120–144 Гц не жжём батарею лишними кадрами (геймплей на dt, скорость не меняется)
   let st = null, turboUntil = 0, combo = 0, comboT = 0, bonusTimer = 0, rainState = null, rainRAF = 0, upCat = 'prod', lastBought = null;
   // Пока сервер сохраняет результат, новую мини-игру запускать нельзя: иначе
@@ -382,8 +382,11 @@
     const bank = Number(st.bankMult) > 1 ? Number(st.bankMult) : 1;
     return prestige * event * bank;
   }
+  const LOW_POWER_DEVICE = (Number(navigator.hardwareConcurrency) > 0 && Number(navigator.hardwareConcurrency) <= 4)
+    || (Number(navigator.deviceMemory) > 0 && Number(navigator.deviceMemory) <= 4);
+  const TAP_FX_INTERVAL = LOW_POWER_DEVICE ? 150 : 105;
   let sessionTapCount = 0, energyHintFired = false, boostsHintFired = false, bizCoachPending = false, lastTapFxAt = 0;
-  let lastTapHapticAt = 0, tapRenderFrame = 0, catTapTimer = 0;
+  let lastTapHapticAt = 0, tapRenderFrame = 0, catTapTimer = 0, tapFxSeq = 0, lastFullRenderAt = 0;
 
   function authed() { return !!(window.App && App.isAuthed && App.isAuthed()); }
 
@@ -657,6 +660,12 @@
   // Анти-даблтап: пока летит запрос операции этого типа — повторные тапы игнорируются
   const inflight = new Set();
   async function withLock(key, fn) { if (inflight.has(key)) return; inflight.add(key); try { return await fn(); } finally { inflight.delete(key); } }
+  async function runButtonBusy(button, action) {
+    if (!button || button.classList.contains('ck-busy')) return;
+    button.classList.add('ck-busy'); button.setAttribute('aria-busy', 'true');
+    try { return await action(); }
+    finally { if (button.isConnected) { button.classList.remove('ck-busy'); button.removeAttribute('aria-busy'); } }
+  }
   let loadNetFail = false, loadFailureReason = '', loadedStateAccount = '';
   function cachedServerState(account) {
     try {
@@ -1053,6 +1062,7 @@
       .ck-x{position:absolute;top:12px;right:max(12px,calc(50% - 228px));z-index:9;width:34px;height:34px;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.28);color:var(--cream);font-size:17px;cursor:pointer}
       /* Pressed-отклик на все кнопки игры + расширенные хит-зоны мелких крестиков (визуально 34px, тап 48px) */
       .ck-ov button:not(:disabled):active{transform:scale(.96)}
+      .ck-ov button.ck-busy{pointer-events:none;opacity:.68;cursor:wait}.ck-ov button.ck-busy::after{content:' ···';letter-spacing:1px}
       .ck-nav__b:not(:disabled):active{transform:none;opacity:.72}
       .ck-x::after,.ck-quiz__hd .x::after,.ck-rain__hud .x::after{content:'';position:absolute;inset:-8px;border-radius:50%}
       .ck-quiz__hd .x,.ck-rain__hud .x{position:relative}
@@ -1067,11 +1077,12 @@
       .ck-catwrap::before{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(84vw,340px);height:min(84vw,340px);border-radius:50%;background:radial-gradient(circle at 50% 46%,rgba(192,255,51,.42) 0%,rgba(155,92,255,.4) 46%,rgba(155,92,255,0) 71%);box-shadow:inset 0 0 0 2px rgba(192,255,51,.4),0 0 95px rgba(155,92,255,.4);filter:blur(1.5px);pointer-events:none;z-index:0;animation:ckGlowPulse 4.2s ease-in-out infinite}
       .ck-catwrap::after{content:'';position:absolute;left:50%;bottom:5%;transform:translateX(-50%);width:44%;height:22px;border-radius:50%;background:radial-gradient(ellipse at center,rgba(0,0,0,.5),transparent 72%);filter:blur(3px);pointer-events:none;z-index:0;animation:ckShadowPulse 3.6s ease-in-out infinite}
       .ck-cat{position:relative;z-index:1;max-width:62%;max-height:94%;width:auto;height:auto;object-fit:contain;cursor:pointer;transform-origin:bottom center;-webkit-tap-highlight-color:transparent;animation:ckBreathe 3.8s ease-in-out infinite} /* тень уже запечена в vasily-stage*.webp — filter:drop-shadow тут перерастеризовывал кота на мобильном GPU каждый кадр (жалоба «тормозит») */
-      .ck-cat.tap{animation:ckBreathe 3.8s ease-in-out infinite,ckTapSq .26s ease-out}.ck-cat.turbo{filter:drop-shadow(0 0 30px #C0FF33)}
+      .ck-cat.tap{animation:ckBreathe 3.8s ease-in-out infinite,ckTapSq .26s ease-out}.ck-cat.turbo{filter:none}
       @keyframes ckBreathe{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-5px) scale(1.016)}}
       @keyframes ckTapSq{0%{transform:scale(1,1)}30%{transform:scale(1.07,.9)}62%{transform:scale(.97,1.05)}100%{transform:scale(1,1)}}
       @keyframes ckGlowPulse{0%,100%{opacity:.88;transform:translate(-50%,-50%) scale(1)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.09)}}
       @keyframes ckShadowPulse{0%,100%{opacity:1;width:44%}50%{opacity:.8;width:40%}}
+      .ck-ov.turbo .ck-catwrap::before{box-shadow:inset 0 0 0 2px rgba(216,255,122,.72),0 0 80px rgba(192,255,51,.62)}
       .ck-ripple{position:absolute;width:0;height:0;border:2px solid var(--gold-l);border-radius:50%;pointer-events:none;z-index:6;transform:translate(-50%,-50%);animation:ckRip .5s ease-out forwards}
       @keyframes ckRip{0%{width:8px;height:8px;opacity:.7}100%{width:130px;height:130px;opacity:0}}
       .ck-flyc{position:absolute;left:0;top:0;z-index:7;pointer-events:none;will-change:transform,opacity;contain:layout style paint}
@@ -1314,6 +1325,7 @@
       .ck-ftue-row.dim .t{color:var(--muted)}
       .ck-ftue-row .ck-card__buy{padding:7px 12px;font-size:12px}
       .ck-nav{display:flex;border-top:1px solid var(--line);background:rgba(14,10,26,.55);backdrop-filter:blur(8px)}
+      @media (pointer:coarse){.ck-nav{backdrop-filter:none;background:rgba(14,10,26,.96)}.ck-catwrap::before,.ck-catwrap::after{filter:none}}
       .ck-nav__b{flex:1;border:none;background:transparent;color:var(--muted);padding:9px 0 12px;font-weight:600;font-size:11.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px}.ck-nav__b.on{color:var(--gold-l)}
       .ck-levelup{position:absolute;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;pointer-events:none}.ck-levelup span{font-family:'Nunito',sans-serif;color:var(--gold-l);font-weight:700;font-size:26px;background:linear-gradient(180deg,rgba(27,21,38,.94),rgba(18,13,28,.94));border:1px solid var(--line);padding:14px 24px;border-radius:18px;opacity:0;box-shadow:0 12px 36px rgba(0,0,0,.5)}.ck-levelup span.show{animation:ckLU 1.6s ease-out}@keyframes ckLU{0%{opacity:0;transform:scale(.6)}20%{opacity:1;transform:scale(1.1)}80%{opacity:1}100%{opacity:0}}
       .ck-scrim{position:absolute;inset:0;z-index:8;background:rgba(6,4,14,.55);display:none}.ck-scrim.on{display:block}
@@ -1526,9 +1538,9 @@
       onTap({ preventDefault: () => e.preventDefault(), clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 });
     });
     attachCatRetry(ov.querySelector('#ck-cat'));
-    ov.querySelector('#ck-daily').onclick = dailyBtn;
-    ov.querySelector('#ck-bt-turbo').onclick = () => boost('turbo');
-    ov.querySelector('#ck-bt-energy').onclick = () => boost('energy');
+    ov.querySelector('#ck-daily').onclick = (e) => runButtonBusy(e.currentTarget, dailyBtn);
+    ov.querySelector('#ck-bt-turbo').onclick = (e) => runButtonBusy(e.currentTarget, () => boost('turbo'));
+    ov.querySelector('#ck-bt-energy').onclick = (e) => runButtonBusy(e.currentTarget, () => boost('energy'));
     ov.querySelector('#ck-prestige').onclick = prestigeConfirm;
     ov.querySelectorAll('.ck-nav__b').forEach(b => b.onclick = () => setTab(b.dataset.tab));
     ov.querySelector('#ck-guide-btn').onclick = () => { window.haptic && window.haptic('light'); openGuide(); };
@@ -1691,11 +1703,16 @@
       if (active) b.setAttribute('aria-current', 'page');
       else b.removeAttribute('aria-current');
     });
-    if (t === 'hub') renderHub();
-    if (t === 'up') { renderUpgrades(); coach('up', COACH.up.t, '#ck-uplist', { icon: ICON[COACH.up.icon](18) }); }
-    if (t === 'dove') { mountDoveCol(); loadDoveBadge(); }
-    if (t === 'tasks') renderTasks();
-    if (t === 'top') { renderTop(); coach('top', COACH.top.t, '#ck-toplist', { icon: ICON[COACH.top.icon](18) }); }
+    // Сначала браузер показывает выбранную вкладку/pressed-state, тяжёлый список
+    // монтируем следующим кадром. Это заметно снижает INP на мобильных WebView.
+    requestAnimationFrame(() => {
+      if (tab !== t || !ov || !ov.classList.contains('on')) return;
+      if (t === 'hub') renderHub();
+      if (t === 'up') { renderUpgrades(); coach('up', COACH.up.t, '#ck-uplist', { icon: ICON[COACH.up.icon](18) }); }
+      if (t === 'dove') { mountDoveCol(); loadDoveBadge(); }
+      if (t === 'tasks') renderTasks();
+      if (t === 'top') { renderTop(); coach('top', COACH.top.t, '#ck-toplist', { icon: ICON[COACH.top.icon](18) }); }
+    });
     tourOnTab(t);
   }
 
@@ -1809,7 +1826,7 @@
     const now = performance.now(); combo = (now - comboT < 450) ? combo + 1 : 1; comboT = now;
     // Монеты считаются на КАЖДЫЙ тап. Экран обновляется один раз за кадр, а тяжёлые
     // DOM/audio-эффекты — не чаще 11 раз/с: так мультитап не забивает мобильный WebView.
-    const fxNow = performance.now(), drawTapFx = fxNow - lastTapFxAt >= 90;
+    const fxNow = performance.now(), drawTapFx = fxNow - lastTapFxAt >= TAP_FX_INTERVAL;
     if (drawTapFx) {
       lastTapFxAt = fxNow;
       pulseCat();
@@ -1820,7 +1837,10 @@
         if (fxNow - lastTapHapticAt >= 120) { lastTapHapticAt = fxNow; window.haptic && window.haptic('light'); }
         const fx = ov.querySelector('#ck-fx'), fxRect = fx && fx.getBoundingClientRect();
         flyUp(e.clientX, e.clientY, '+' + gain, Math.min(40, 22 + combo), fxRect);
-        ripple(e.clientX, e.clientY, fxRect); flyCoin(e.clientX, e.clientY, fxRect);
+        // Один акцент поверх цифры за кадр: два параллельных DOM-эффекта раньше
+        // конкурировали за layout/paint именно во время самых быстрых серий.
+        if ((tapFxSeq++ & 1) === 0) ripple(e.clientX, e.clientY, fxRect);
+        else flyCoin(e.clientX, e.clientY, fxRect);
       }
     }
     const comboBonus = comboBonusFor(baseTapGain, lifetime);
@@ -2473,9 +2493,11 @@
     shareRef();
   }
 
+  function setTextIfChanged(el, value) { const next = String(value); if (el && el.textContent !== next) el.textContent = next; }
+  function setHtmlIfChanged(el, value) { const next = String(value); if (el && el.innerHTML !== next) el.innerHTML = next; }
   function renderTop2() { // лёгкий рендер баланса при тапе (без полного)
-    ov.querySelector('#ck-bal').textContent = fmt(st.balance);
-    ov.querySelector('#ck-en').textContent = Math.floor(st.energy);
+    setTextIfChanged(ov.querySelector('#ck-bal'), fmt(st.balance));
+    setTextIfChanged(ov.querySelector('#ck-en'), Math.floor(st.energy));
     ov.querySelector('#ck-enfill').style.width = Math.min(100, st.energy / st.energyMax * 100) + '%';
   }
 
@@ -2513,14 +2535,15 @@
   }
   function renderAll() {
     if (!ov || !st) return;
+    lastFullRenderAt = performance.now();
     const lg = playerLeague();
-    ov.querySelector('#ck-bal').textContent = fmt(st.balance);
-    ov.querySelector('#ck-bal2').textContent = fmt(st.balance);
+    setTextIfChanged(ov.querySelector('#ck-bal'), fmt(st.balance));
+    setTextIfChanged(ov.querySelector('#ck-bal2'), fmt(st.balance));
     const pBadge = st.prestige > 0 ? ` <span class="ck-pbadge">${ICON.star(12)} Престиж ${st.prestige}</span>` : '';
-    ov.querySelector('#ck-lvl').innerHTML = `Уровень ${lg.level} · ${lg.name}${pBadge}`;
+    setHtmlIfChanged(ov.querySelector('#ck-lvl'), `Уровень ${lg.level} · ${lg.name}${pBadge}`);
     // Бафф копилки стаи виден там, где игрок живёт — рядом с доходом
     const bankChip = (st.bankMult && st.bankMult > 1) ? ` <span style="color:var(--gold,#D4FF6A);font-weight:800">⚔️×${st.bankMult}</span>` : '';
-    const prof = `${COIN(13)} +${fmt(Math.floor(st.profitPerHour * passiveIncomeMult()))} / час${bankChip}`; ov.querySelector('#ck-prof').innerHTML = prof; ov.querySelector('#ck-prof2').innerHTML = prof;
+    const prof = `${COIN(13)} +${fmt(Math.floor(st.profitPerHour * passiveIncomeMult()))} / час${bankChip}`; setHtmlIfChanged(ov.querySelector('#ck-prof'), prof); setHtmlIfChanged(ov.querySelector('#ck-prof2'), prof);
     renderAccountLinkBanner();
     // бейдж «Призы»: сколько бесплатного ГОТОВО забрать прямо сейчас (сундук, комбо) —
     // дискаверабилити ежедневок с любой вкладки (аудит: вкладка без индикатора)
@@ -2531,23 +2554,23 @@
     }
     // ивент-баннер (×N монеты)
     const evb = ov.querySelector('#ck-event');
-    if (st.event && st.event.active && Number(st.event.endsTs) > Date.now()) { evb.hidden = false; evb.innerHTML = `${ICON.bolt(15)} <b>${st.event.name}</b> · до конца ${fmtDur(st.event.endsTs - Date.now())}`; }
+    if (st.event && st.event.active && Number(st.event.endsTs) > Date.now()) { evb.hidden = false; setHtmlIfChanged(evb, `${ICON.bolt(15)} <b>${st.event.name}</b> · до конца ${fmtDur(st.event.endsTs - Date.now())}`); }
     else evb.hidden = true;
     const offer = ov.querySelector('#ck-shop-offer');
     if (offer) offer.hidden = true;
     const actions = ov.querySelector('#ck-shop-actions');
-    if (actions) { actions.hidden = false; const site = actions.querySelector('#ck-shop-site'); const point = actions.querySelector('#ck-shop-point'); const go = async (kind, u) => { const d = await api('/api/clicker/commerce-click', { method: 'POST', body: JSON.stringify({ kind, taskId: 'daily-offer' }) }).catch(() => null); if (d?.token && kind === 'site') { const sep = u.includes('?') ? '&' : '?'; u += sep + 'maria_ref=' + encodeURIComponent(d.token); } if (window.App?.openExternal) App.openExternal(u); else window.open(u, '_blank', 'noopener'); }; if (site) site.onclick = () => go('site', 'https://maria-irk.ru/'); if (point) point.onclick = () => go('store', 'https://yandex.ru/maps/?text=Мария%20кондитерская%20Иркутск'); }
+    if (actions) { actions.hidden = false; const site = actions.querySelector('#ck-shop-site'); const point = actions.querySelector('#ck-shop-point'); const go = async (kind, u) => { const d = await api('/api/clicker/commerce-click', { method: 'POST', body: JSON.stringify({ kind, taskId: 'daily-offer' }) }).catch(() => null); if (d?.token && kind === 'site') { const sep = u.includes('?') ? '&' : '?'; u += sep + 'maria_ref=' + encodeURIComponent(d.token); } if (window.App?.openExternal) App.openExternal(u); else window.open(u, '_blank', 'noopener'); }; if (site && !site.dataset.wired) { site.dataset.wired = '1'; site.onclick = () => go('site', 'https://maria-irk.ru/'); } if (point && !point.dataset.wired) { point.dataset.wired = '1'; point.onclick = () => go('store', 'https://yandex.ru/maps/?text=Мария%20кондитерская%20Иркутск'); } }
     // кнопка престижа (на макс. уровне, только для авторизованных)
     const pb = ov.querySelector('#ck-prestige');
-    if (st.prestigeReady && authed()) { pb.hidden = false; pb.innerHTML = `${ICON.star(16)} Уйти в престиж · заработок ×${(1 + (st.prestige + 1) * 0.1).toFixed(1)}`; }
+    if (st.prestigeReady && authed()) { pb.hidden = false; setHtmlIfChanged(pb, `${ICON.star(16)} Уйти в престиж · заработок ×${(1 + (st.prestige + 1) * 0.1).toFixed(1)}`); }
     else pb.hidden = true;
-    ov.querySelector('#ck-en').textContent = Math.floor(st.energy); ov.querySelector('#ck-enmax').textContent = st.energyMax;
+    setTextIfChanged(ov.querySelector('#ck-en'), Math.floor(st.energy)); setTextIfChanged(ov.querySelector('#ck-enmax'), st.energyMax);
     ov.querySelector('#ck-enfill').style.width = Math.min(100, st.energy / st.energyMax * 100) + '%';
     if (!energyHintFired && tab === 'cat' && st.energyMax > 0 && st.energy / st.energyMax < 0.15) { energyHintFired = true; coach('energy', COACH.energy.t, '.ck-energy', { icon: ICON[COACH.energy.icon](18) }); }
     if (!boostsHintFired && tab === 'cat' && lg.level >= 2) { boostsHintFired = true; coach('boosts', COACH.boosts.t, '.ck-boosts', { icon: ICON[COACH.boosts.icon](18) }); }
     const nn = nextNeedForLevel(lg.level), prog = ov.querySelector('#ck-prog'), progt = ov.querySelector('#ck-progt');
-    if (nn) { const pct = Math.max(0, Math.min(100, (st.totalEarned - lg.need) / (nn - lg.need) * 100)); prog.style.width = pct + '%'; progt.innerHTML = `${fmt(st.totalEarned)} / ${fmt(nn)} ${COIN(12)} до ур. ${lg.level + 1}`; }
-    else { prog.style.width = '100%'; progt.textContent = 'Максимальный уровень!'; }
+    if (nn) { const pct = Math.max(0, Math.min(100, (st.totalEarned - lg.need) / (nn - lg.need) * 100)); prog.style.width = pct + '%'; setHtmlIfChanged(progt, `${fmt(st.totalEarned)} / ${fmt(nn)} ${COIN(12)} до ур. ${lg.level + 1}`); }
+    else { prog.style.width = '100%'; setTextIfChanged(progt, 'Максимальный уровень!'); }
     // цель — силуэт следующего котика
     const goal = ov.querySelector('#ck-goal'), nx = LEAGUES[lg.level];
     if (nx && nn) { goal.hidden = false; const gi = ov.querySelector('#ck-goal-img'), gs = A(nx.cat); if (gi.getAttribute('src') !== gs) gi.src = gs; ov.querySelector('#ck-goal-l').textContent = nx.name; goal.title = 'Цель: ' + nx.name; }
@@ -2555,21 +2578,21 @@
     // ежедневка
     const daily = ov.querySelector('#ck-daily');
     daily.style.display = '';
-    if (st.dailyAvailable) { daily.classList.remove('done'); daily.innerHTML = `${ICON.gift(16)} Награда дня · День ${st.dailyStreak + 1}`; }
-    else { daily.classList.add('done'); daily.innerHTML = `${ICON.gift(16)} Награда ✓ · день ${st.dailyStreak}`; }
+    if (st.dailyAvailable) { daily.classList.remove('done'); setHtmlIfChanged(daily, `${ICON.gift(16)} Награда дня · День ${st.dailyStreak + 1}`); }
+    else { daily.classList.add('done'); setHtmlIfChanged(daily, `${ICON.gift(16)} Награда ✓ · день ${st.dailyStreak}`); }
     // бусты
     const turboBtn = ov.querySelector('#ck-bt-turbo'), energyBtn = ov.querySelector('#ck-bt-energy');
     const turboLocked = Number(st.boostTurboLimit || 0) <= 0;
-    ov.querySelector('#ck-bt-turbo-n').textContent = turboLocked ? '(стрик 3 дня)' : '(' + st.boostTurboLeft + ')';
-    ov.querySelector('#ck-bt-energy-n').textContent = '(' + st.boostEnergyLeft + ')';
+    setTextIfChanged(ov.querySelector('#ck-bt-turbo-n'), turboLocked ? '(стрик 3 дня)' : '(' + st.boostTurboLeft + ')');
+    setTextIfChanged(ov.querySelector('#ck-bt-energy-n'), '(' + st.boostEnergyLeft + ')');
     turboBtn.title = turboLocked ? 'Откроется после серии из 3 дней' : 'Один заряд в сутки';
     energyBtn.title = Number(st.boostEnergyLimit || 1) > 1 ? 'Два заряда за стрик' : 'Второй заряд откроется на стрике 3 дня';
     turboBtn.disabled = turboLocked || st.boostTurboLeft <= 0 || turboOn(); // во время турбо тап впустую сжёг бы заряд
     energyBtn.disabled = st.boostEnergyLeft <= 0 || st.energy >= st.energyMax;
     // турбо-вид
     const on = turboOn(); ov.classList.toggle('turbo', on); ov.querySelector('#ck-cat').classList.toggle('turbo', on);
-    if (on) ov.querySelector('#ck-enpre').innerHTML = ICON.rocket(15) + ' ТУРБО ×5! ·';
-    else ov.querySelector('#ck-enpre').innerHTML = ICON.bolt(15);
+    if (on) setHtmlIfChanged(ov.querySelector('#ck-enpre'), ICON.rocket(15) + ' ТУРБО ×5! ·');
+    else setHtmlIfChanged(ov.querySelector('#ck-enpre'), ICON.bolt(15));
     if (lg.level !== curLevel) { if (lg.level > curLevel) levelUp(lg); curLevel = lg.level; }
     const tier = bgTier(lg.level); if (ov.dataset.tier !== '' + tier) ov.dataset.tier = '' + tier;
     applyCostume(lg);
@@ -2614,7 +2637,7 @@
     list.innerHTML = h;
     if (lastBought) { const el = list.querySelector(`[data-id="${lastBought}"]`); const card = el && el.closest('.ck-biz'); if (card) { card.classList.add('bump'); if (bizCoachPending) coach('bizFirst', COACH.bizFirst.t, card, { icon: ICON[COACH.bizFirst.icon](18) }); } bizCoachPending = false; lastBought = null; }
     list.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { window.haptic && window.haptic('selection'); upCat = b.dataset.cat; renderUpgrades(); });
-    list.querySelectorAll('[data-act]').forEach(b => b.onclick = () => buy(b.dataset.act, b.dataset.id || undefined));
+    list.querySelectorAll('[data-act]').forEach(b => b.onclick = () => runButtonBusy(b, () => buy(b.dataset.act, b.dataset.id || undefined)));
   }
   // (renderDove/helperPopup — витрина бизнес-голубей «Помощники» — удалены 04.08.2026:
   //  вкладка «Голуби» теперь = альбом пород CatDove, монтируется в mountDoveCol.)
@@ -3002,7 +3025,13 @@
       const actionSession = overlaySession;
       const d = await mutationApi('/api/clicker/purchase-sync', { method: 'POST', body: '{}' }).catch(() => null);
       if (d && !d.error) {
-        if (d.balance != null) applyServerState(d);
+        if (d.balance != null) {
+          applyServerState(d);
+          if (overlaySessionActive(actionSession)) {
+            renderAll();
+            if (tab === 'up') renderUpgrades();
+          }
+        }
         if (!overlaySessionActive(actionSession)) return;
         if (Array.isArray(d.pigeonDrops) && d.pigeonDrops.length) pendingDoveSummary = d.pigeonDrops;
         if (d.bonus > 0) { sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); purchasePopup(d.bonus); }
@@ -3063,9 +3092,9 @@
     bar.hidden = false;
     bar.classList.toggle('linked', linked);
     const sub = bar.querySelector('.ck-linkbar__s');
-    if (sub) sub.textContent = linked
+    if (sub) setTextIfChanged(sub, linked
       ? 'Аккаунты связаны · прогресс общий'
-      : status?.phoneVerified ? 'Первый шаг готов · подтверди номер во второй версии' : 'Связать аккаунты за два понятных шага';
+      : status?.phoneVerified ? 'Первый шаг готов · подтверди номер во второй версии' : 'Связать аккаунты за два понятных шага');
     bar.onclick = () => { window.haptic?.('light'); setTab('tasks'); const list = ov.querySelector('#ck-taskslist'); if (list) list.scrollTop = 0; };
   }
   function accountLinkCardHtml() {
@@ -3104,20 +3133,42 @@
   async function renderTasks() {
     const gen = ++tasksGen;
     const list = ov.querySelector('#ck-taskslist');
-    if (authed()) list.innerHTML = skelRows(6);
-    const refBlock = refCard();
-    const accountStatusRequest = authed() ? loadAccountLinkStatus(false) : Promise.resolve(null);
-    let tasks, tasksFail = false, purchaseTasks = [], purchaseClaims = [], purchasePhoneVerified = true;
     if (authed()) {
-      const d = await api('/api/clicker/tasks').catch(() => null);
-      tasks = d && d.tasks;
-      tasksFail = !d || !!d.error || !Array.isArray(tasks);
-      const pd = await api('/api/clicker/purchase-tasks').catch(() => null);
-      if (pd && Array.isArray(pd.tasks)) purchaseTasks = pd.tasks;
-      if (pd && Array.isArray(pd.claims)) purchaseClaims = pd.claims;
-      if (pd && typeof pd.phoneVerified === 'boolean') purchasePhoneVerified = pd.phoneVerified;
+      list.innerHTML = accountLinkCardHtml() + skelRows(6);
+      const earlyAccountAction = list.querySelector('#ck-account-link-action');
+      if (earlyAccountAction) earlyAccountAction.onclick = (e) => runButtonBusy(e.currentTarget, accountLinkAction);
     }
-    else tasks = guestTaskList();
+    const refBlock = refCard();
+    let tasks, tasksFail = false, purchaseTasks = [], purchaseClaims = [], purchasePhoneVerified = true;
+    let achs;
+    if (authed()) {
+      const overview = await api('/api/clicker/tasks-overview').catch(() => null);
+      if (overview && !overview.error && Array.isArray(overview.done)) {
+        const done = new Set(overview.done.map(String));
+        tasks = TASKS.map(t => ({ ...t, done: done.has(t.id), claimable: !done.has(t.id) && condMet(t, st) }));
+        achs = ACHIEVEMENTS.map(a => ({ ...a, done: done.has(a.id), claimable: !done.has(a.id) && condMet(a, st) }));
+        if (Array.isArray(overview.purchaseTasks)) purchaseTasks = overview.purchaseTasks;
+        if (Array.isArray(overview.purchaseClaims)) purchaseClaims = overview.purchaseClaims;
+        if (typeof overview.phoneVerified === 'boolean') purchasePhoneVerified = overview.phoneVerified;
+        if (overview.accountLink && !overview.accountLink.error) accountLinkStatus = overview.accountLink;
+      } else {
+        // Совместимость на время переката/rollback: старые ручки запрашиваются
+        // параллельно, а не последовательно по несколько секунд каждая.
+        const [d, pd, ad] = await Promise.all([
+          api('/api/clicker/tasks').catch(() => null),
+          api('/api/clicker/purchase-tasks').catch(() => null),
+          api('/api/clicker/achievements').catch(() => null),
+          loadAccountLinkStatus(false),
+        ]);
+        tasks = d && d.tasks;
+        achs = ad && ad.achievements;
+        tasksFail = !d || !!d.error || !Array.isArray(tasks) || !ad || !!ad.error || !Array.isArray(achs);
+        if (pd && Array.isArray(pd.tasks)) purchaseTasks = pd.tasks;
+        if (pd && Array.isArray(pd.claims)) purchaseClaims = pd.claims;
+        if (pd && typeof pd.phoneVerified === 'boolean') purchasePhoneVerified = pd.phoneVerified;
+      }
+    }
+    else { tasks = guestTaskList(); achs = guestAchList(); }
     if (gen !== tasksGen) return;
     if (!tasks) tasks = [];
     const rows = tasks.map(t => {
@@ -3128,14 +3179,6 @@
       else btn = `<button class="ck-card__buy" disabled>+${fmt(t.reward)}</button>`;
       return `<div class="ck-card"><div class="ck-card__ic">${taskIcon(t.id)}</div><div class="ck-card__b"><div class="ck-card__n">${t.name}</div><div class="ck-card__s">Награда +${fmt(t.reward)} ${COIN(13)}</div></div>${btn}</div>`;
     }).join('');
-    let achs;
-    if (authed()) {
-      const d = await api('/api/clicker/achievements').catch(() => null);
-      achs = d && d.achievements;
-      tasksFail = tasksFail || !d || !!d.error || !Array.isArray(achs);
-    }
-    else achs = guestAchList();
-    await accountStatusRequest;
     if (gen !== tasksGen) return;
     if (!achs) achs = [];
     const achRows = achs.map(a => {
@@ -3163,12 +3206,12 @@
     // при возврате секции достаточно вернуть promoCard в innerHTML ниже.
     const purchaseBlock = purchasePhoneRow || purchaseRows ? '<div class="ck-sect">🛍 Покупки в Марии</div>' + '<div class="ck-intro" style="font-size:12px">Для заказа на сайте или покупки в точке нужен подтверждённый номер телефона. Переход, корзина и отменённый заказ не засчитываются — награда появляется только после подтверждения оплаченной покупки.</div>' + purchasePhoneRow + purchaseRows : '';
     list.innerHTML = accountLinkCardHtml() + '<div class="ck-intro">Забирай бесплатное: награда дня, сундук удачи, комбо дня. Ниже — задания и достижения за монеты.</div>' + todayStatusHtml() + failCard + bonusBlock() + purchaseBlock + (progRows ? `<div class="ck-sect">${ICON.gift(13)} Награды за прогресс</div>` + progRows : '') + '<div class="ck-sect">Друзья</div>' + refBlock + '<div class="ck-sect">Задания</div>' + rows + '<div class="ck-sect">Достижения</div>' + achRows;
-    const alb = list.querySelector('#ck-account-link-action'); if (alb) alb.onclick = accountLinkAction;
+    const alb = list.querySelector('#ck-account-link-action'); if (alb) alb.onclick = (e) => runButtonBusy(e.currentTarget, accountLinkAction);
     const rtb = list.querySelector('#ck-tasks-retry'); if (rtb) rtb.onclick = () => renderTasks();
     const pp = list.querySelector('#ck-purchase-phone'); if (pp) pp.onclick = () => requestPhone();
     ov.querySelector('#ck-invite').onclick = shareRef;
     list.querySelectorAll('[data-open]').forEach(b => b.onclick = () => { const id = b.dataset.open, link = b.dataset.link; if (link) { if (window.App && App.openExternal) App.openExternal(link); else window.open(link, '_blank'); } linkOpened[id] = true; setTimeout(renderTasks, 400); });
-    list.querySelectorAll('[data-claim]').forEach(b => b.onclick = () => claimTask(b.dataset.claim));
+    list.querySelectorAll('[data-claim]').forEach(b => b.onclick = () => runButtonBusy(b, () => claimTask(b.dataset.claim)));
     list.querySelectorAll('[data-ms]').forEach(b => b.onclick = () => { const g = b.dataset.ms; if (g === 'phone') requestPhone(); else claimMilestoneAct(g); });
     const cg = ov.querySelector('#ck-code-go'), ci = ov.querySelector('#ck-code-in');
     if (cg && ci) { cg.onclick = () => redeemCodeAct(ci.value); ci.onkeydown = (e) => { if (e.key === 'Enter') redeemCodeAct(ci.value); }; }
@@ -3295,9 +3338,9 @@
     return '<div class="ck-sect">Бонусы дня</div>' + chestCard + caseCard + comboCard;
   }
   function wireBonus() {
-    const cb = ov.querySelector('#ck-combo-claim'); if (cb) cb.onclick = claimCombo;
-    const ch = ov.querySelector('#ck-chest-open'); if (ch) ch.onclick = openChestAct;
-    const co = ov.querySelector('#ck-case-open'); if (co) co.onclick = openCaseAct;
+    const cb = ov.querySelector('#ck-combo-claim'); if (cb) cb.onclick = () => runButtonBusy(cb, claimCombo);
+    const ch = ov.querySelector('#ck-chest-open'); if (ch) ch.onclick = () => runButtonBusy(ch, openChestAct);
+    const co = ov.querySelector('#ck-case-open'); if (co) co.onclick = () => runButtonBusy(co, openCaseAct);
     const go = ov.querySelector('#ck-cipher-go'), inp = ov.querySelector('#ck-cipher-in');
     if (go && inp) { go.onclick = () => claimCipher(inp.value); inp.onkeydown = (e) => { if (e.key === 'Enter') claimCipher(inp.value); }; }
   }
@@ -3396,7 +3439,7 @@
     if (!ov || !ov.classList.contains('on') || document.hidden) return;
     const dtFull = lastTs ? (ts - lastTs) / 1000 : 0; lastTs = ts;
     renderAcc += dtFull;
-    if (renderAcc < LOOP_FRAME_BUDGET) { raf = requestAnimationFrame(loop); return; } // кап 30fps: тап-хендлер вне цикла, тут только пассивный доход/комбо-декей/рендер
+    if (renderAcc < LOOP_FRAME_BUDGET) { raf = requestAnimationFrame(loop); return; } // кап 20fps: тап-хендлер вне цикла, тут только пассивный доход/комбо-декей/лёгкий HUD
     const dt = renderAcc; renderAcc = 0;
     if (st) {
       // Открытая всю ночь игра тоже должна разблокировать новый сундук/игры/стрик.
@@ -3414,7 +3457,16 @@
       if (st.profitPerHour > 0) { const inc = st.profitPerHour / 3600 * dt * passiveIncomeMult(); st.balance += inc; st.totalEarned += inc; }
       if (combo && performance.now() - comboT > 700) { combo = 0; ov.querySelector('#ck-combo').classList.remove('show'); }
       syncT += dt; if (syncT > 1.6) { syncT = 0; if (authed()) flush(); else st = guestDerive(); }
-      if (tab === 'cat') renderAll();
+      if (tab === 'cat') {
+        renderTop2();
+        // Полный HUD содержит SVG, подсказки, кнопки и проверки вкладок. Раньше он
+        // пересобирался 30 раз/с; теперь — раз в секунду либо немедленно при
+        // действительно важном переходе (уровень/окончание турбо).
+        const fullRenderDue = performance.now() - lastFullRenderAt >= 1000;
+        const levelChanged = playerLevel() !== curLevel;
+        const turboChanged = ov.classList.contains('turbo') !== turboOn();
+        if (fullRenderDue || levelChanged || turboChanged) renderAll();
+      }
     }
     raf = requestAnimationFrame(loop);
   }
@@ -3606,13 +3658,14 @@
     if (!overlaySessionActive(mySession)) return;
     await ensureRefRegistered();
     if (!overlaySessionActive(mySession)) return;
-    await maybePurchaseBonus();
-    if (!overlaySessionActive(mySession)) return;
     curLevel = playerLevel();
     loadFtue(); // не await — чип «Первый день» догрузится сам, старт не тормозим
     ov.querySelector('#ck-cat').src = A(playerLeague().cat || 'idle.png');
     applyCatSize(ov.querySelector('#ck-cat'));
     setTab('cat'); renderAll(); spawnSparks(); applySeason(); scheduleBonus(); loadDoveBadge();
+    // Синхронизация покупок может обращаться к внешней 1С и не должна удерживать
+    // первый интерактивный кадр. Запускаем её после того, как игрок уже может тапать.
+    setTimeout(() => { if (overlaySessionActive(mySession)) void maybePurchaseBonus(); }, 3500);
     void loadAccountLinkStatus(false).then(() => {
       if (!overlaySessionActive(mySession)) return;
       renderAccountLinkBanner();

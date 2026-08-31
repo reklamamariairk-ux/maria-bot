@@ -217,10 +217,16 @@ export function pigeonCollectionPassiveBonus(owned: Set<string>): number {
   return bonus;
 }
 
-export async function pigeonPassiveBonus(chatId: number, client: PoolClient | typeof pool = pool): Promise<number> {
-  const { rows } = await client.query(
-    `SELECT breed, stars, tune_speed, tune_stamina, tune_luck FROM pigeon_inventory WHERE chat_id=$1 AND count>0`,
-    [chatId]);
+type PigeonPassiveRow = {
+  breed: unknown;
+  stars?: unknown;
+  tune_speed?: unknown;
+  tune_stamina?: unknown;
+  tune_luck?: unknown;
+};
+
+/** Чистый расчёт для уже загруженного набора — refresh кликера объединяет его с state/cards в один SQL. */
+export function pigeonPassiveBonusFromRows(rows: PigeonPassiveRow[]): number {
   const owned = new Set<string>();
   let total = 0;
   for (const r of rows) {
@@ -228,6 +234,13 @@ export async function pigeonPassiveBonus(chatId: number, client: PoolClient | ty
     total += pigeonPassiveValue(String(r.breed), Number(r.stars), Number(r.tune_speed), Number(r.tune_stamina), Number(r.tune_luck));
   }
   return total + pigeonCollectionPassiveBonus(owned);
+}
+
+export async function pigeonPassiveBonus(chatId: number, client: PoolClient | typeof pool = pool): Promise<number> {
+  const { rows } = await client.query(
+    `SELECT breed, stars, tune_speed, tune_stamina, tune_luck FROM pigeon_inventory WHERE chat_id=$1 AND count>0`,
+    [chatId]);
+  return pigeonPassiveBonusFromRows(rows);
 }
 export function pigeonPrice(breed: string): number | null {
   const b = BREED_BY_ID.get(breed);

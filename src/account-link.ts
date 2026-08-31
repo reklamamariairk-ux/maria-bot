@@ -58,6 +58,13 @@ export function accountPlatforms(
   return (["tg", "vk", "max"] as Platform[]).filter((platform) => found.has(platform));
 }
 
+export interface AccountLinkStatus {
+  currentPlatform: Platform;
+  phoneVerified: boolean;
+  linked: boolean;
+  platforms: { vk: boolean; tg: boolean };
+}
+
 /** total_earned кликера (0 если в игру не заходил). */
 async function progressOf(chatId: number, db: Pick<PoolClient, "query"> = pool): Promise<number> {
   const { rows } = await db.query(
@@ -84,14 +91,14 @@ export async function registerAccountLink(chatId: number, phone: string): Promis
       await client.query(
         `INSERT INTO phone_canonical (phone, canonical_chat_id) VALUES ($1, $2)`, [phone, candidate]);
       await client.query("COMMIT");
-      _cache.delete(chatId); _cache.delete(candidate);
+      clearAccountLinkStatusCache(chatId, candidate);
       return { linked: false, canonicalChatId: candidate };
     }
 
     const existing = Number(cur.rows[0].canonical_chat_id);
     if (existing === candidate) {
       await client.query("COMMIT");
-      _cache.delete(chatId); _cache.delete(candidate);
+      clearAccountLinkStatusCache(chatId, candidate);
       return { linked: false, canonicalChatId: candidate };
     }
 
@@ -121,9 +128,7 @@ export async function registerAccountLink(chatId: number, phone: string): Promis
     await client.query("COMMIT");
 
     // Все затронутые алиасы могли уже кэшировать прежний канон на 60 секунд.
-    for (const id of new Set([chatId, candidate, existing, alias, canonical, ...moved.rows.map((r) => Number(r.alias_chat_id))])) {
-      _cache.delete(id);
-    }
+    clearAccountLinkStatusCache(chatId, candidate, existing, alias, canonical, ...moved.rows.map((r) => Number(r.alias_chat_id)));
     trackEvent(canonical, "account_link", { alias, phone_last4: phone.slice(-4) });
     log.info({ canonical, alias }, "[account-link] linked");
     return { linked: true, canonicalChatId: canonical, aliasedChatId: alias };
@@ -138,8 +143,18 @@ export async function registerAccountLink(chatId: number, phone: string): Promis
 
 // ── Резолв канона на каждом запросе (кэш 60с, промах = 1 индексный SELECT) ──
 const CACHE_TTL = 60_000;
+const STATUS_CACHE_TTL = 15_000;
 const CACHE_MAX = 20_000;
 const _cache = new Map<number, { canon: number; ts: number }>();
+const _statusCache = new Map<number, { phoneVerified: boolean; aliases: number[]; ts: number }>();
+
+/** Инвалидация вызывается сразу после верификации/пересвязки; TTL — только страховка между процессами. */
+export function clearAccountLinkStatusCache(...chatIds: number[]): void {
+  for (const id of new Set(chatIds.filter(Number.isFinite))) {
+    _cache.delete(id);
+    _statusCache.delete(id);
+  }
+}
 
 export async function canonicalChatId(chatId: number): Promise<number> {
   const hit = _cache.get(chatId);
@@ -162,4 +177,38 @@ export async function linksOf(chatId: number): Promise<{ alias: number; phone: s
   const { rows } = await pool.query(
     `SELECT alias_chat_id, phone FROM account_links WHERE canonical_chat_id = $1`, [chatId]);
   return rows.map((r) => ({ alias: Number(r.alias_chat_id), phone: String(r.phone) }));
+}
+
+/** Один SQL и короткий cache fast-path вместо двух сетевых походов к managed PostgreSQL. */
+export async function getAccountLinkStatus(currentPlatform: Platform, canonicalChatId: number): Promise<AccountLinkStatus> {
+  const now = Date.now();
+  let snapshot = _statusCache.get(canonicalChatId);
+  if (!snapshot || now - snapshot.ts >= STATUS_CACHE_TTL) {
+    const { rows } = await pool.query(
+      `SELECT
+         EXISTS(SELECT 1 FROM subscribers s WHERE s.chat_id=$1 AND s.phone_verified_at IS NOT NULL) AS phone_verified,
+         COALESCE((SELECT array_agg(a.alias_chat_id) FROM account_links a WHERE a.canonical_chat_id=$1), '{}'::bigint[]) AS aliases`,
+      [canonicalChatId],
+    );
+    snapshot = {
+      phoneVerified: Boolean(rows[0]?.phone_verified),
+      aliases: Array.isArray(rows[0]?.aliases) ? rows[0].aliases.map(Number).filter(Number.isFinite) : [],
+      ts: now,
+    };
+    _statusCache.set(canonicalChatId, snapshot);
+    if (_statusCache.size > CACHE_MAX) {
+      for (const [id, item] of _statusCache) if (now - item.ts >= STATUS_CACHE_TTL) _statusCache.delete(id);
+      if (_statusCache.size > CACHE_MAX) _statusCache.delete(_statusCache.keys().next().value!);
+    }
+  }
+  const linkedPlatforms = accountPlatforms(currentPlatform, canonicalChatId, snapshot.aliases);
+  return {
+    currentPlatform,
+    phoneVerified: snapshot.phoneVerified,
+    linked: linkedPlatforms.includes("vk") && linkedPlatforms.includes("tg"),
+    platforms: {
+      vk: linkedPlatforms.includes("vk"),
+      tg: linkedPlatforms.includes("tg"),
+    },
+  };
 }

@@ -777,10 +777,6 @@ export async function resetClickerProgress(chatId: number): Promise<void> {
   } finally { client.release(); }
 }
 
-async function readCards(client: any, chatId: number): Promise<Record<string, number>> {
-  const { rows } = await client.query(`SELECT card, level FROM clicker_cards WHERE chat_id=$1`, [chatId]);
-  const m: Record<string, number> = {}; for (const r of rows) m[r.card] = r.level; return m;
-}
 export function normalizeAdminPassiveBonus(value: unknown): number {
   const n = Math.floor(Number(value));
   return Number.isFinite(n) && n > 0 ? n : 0;
@@ -827,18 +823,53 @@ function buildState(r: any, cl: Record<string, number>, passiveEarned: number): 
   };
 }
 
+async function readRefreshBundle(client: any, chatId: number): Promise<any> {
+  const select = () => client.query(
+    `SELECT s.*,
+       COALESCE((
+         SELECT jsonb_object_agg(c.card, c.level)
+           FROM clicker_cards c
+          WHERE c.chat_id=s.chat_id
+       ), '{}'::jsonb) AS "__cards",
+       COALESCE((
+         SELECT jsonb_agg(jsonb_build_object(
+           'breed', p.breed,
+           'stars', p.stars,
+           'tune_speed', p.tune_speed,
+           'tune_stamina', p.tune_stamina,
+           'tune_luck', p.tune_luck
+         ))
+           FROM pigeon_inventory p
+          WHERE p.chat_id=s.chat_id AND p.count>0
+       ), '[]'::jsonb) AS "__pigeons"
+       FROM clicker_state s
+      WHERE s.chat_id=$1
+      FOR UPDATE OF s`,
+    [chatId],
+  );
+  let result = await select();
+  // Для существующего игрока убираем безусловный INSERT с каждого GET/тапа.
+  // Новый профиль всё ещё создаётся атомарно и перечитывается под FOR UPDATE.
+  if (!result.rows[0]) {
+    await client.query(`INSERT INTO clicker_state (chat_id) VALUES ($1) ON CONFLICT (chat_id) DO NOTHING`, [chatId]);
+    result = await select();
+  }
+  return result.rows[0];
+}
+
 async function refresh(client: any, chatId: number): Promise<{ r: any; cl: Record<string, number>; passive: number }> {
-  await client.query(`INSERT INTO clicker_state (chat_id) VALUES ($1) ON CONFLICT (chat_id) DO NOTHING`, [chatId]);
-  const { rows } = await client.query(`SELECT * FROM clicker_state WHERE chat_id=$1 FOR UPDATE`, [chatId]);
-  const r = rows[0];
+  const r = await readRefreshBundle(client, chatId);
+  if (!r) throw new Error("clicker_state_unavailable");
   if (r.admin_blocked) throw new Error("account_blocked");
   // Стартовый голубь: при первом заходе выдаём Сизаря один раз (флаг starter_pigeon),
   // чтобы коллекция не была пустой и механика была сразу понятна. Дёшево: r уже загружен.
+  let starterPigeonGranted = false;
   if (!r.starter_pigeon) {
     const { grantPigeon } = await import("./pigeons");
     await grantPigeon(chatId, "sizar", client);
     await client.query(`UPDATE clicker_state SET starter_pigeon=TRUE WHERE chat_id=$1`, [chatId]);
     r.starter_pigeon = true;
+    starterPigeonGranted = true;
   }
   // Храповик уровня растёт только внутри текущего цикла престижа. Для старых записей,
   // созданных до max_level_prestige, сначала восстанавливаем фактический уровень цикла.
@@ -854,7 +885,10 @@ async function refresh(client: any, chatId: number): Promise<{ r: any; cl: Recor
       r.max_level = compLvl;
     }
   }
-  const cl = await readCards(client, chatId);
+  const cl = Object.fromEntries(
+    Object.entries((r.__cards && typeof r.__cards === "object") ? r.__cards : {})
+      .map(([card, level]) => [card, Number(level) || 0]),
+  );
   const today = irkToday();
   if (r.boost_date !== today) { r.boost_energy_used = 0; r.boost_turbo_used = 0; r.boost_date = today; }
   const energySecs = Math.max(0, (Date.now() - new Date(r.energy_updated_at || r.updated_at).getTime()) / 1000);
@@ -870,9 +904,13 @@ async function refresh(client: any, chatId: number): Promise<{ r: any; cl: Recor
   r.energy_carry = energySettlement.carry;
   // Перк полного альбома (+5% к пассиву): флаг кэширован на clicker_state.album_bonus
   // (выставляется в grantPigeon при 16/16 пород) — без похода в pigeon_inventory на каждый тап.
-  const { ALBUM_PASSIVE_BONUS, pigeonPassiveBonus } = await import("./pigeons");
+  const { ALBUM_PASSIVE_BONUS, pigeonPassiveBonus, pigeonPassiveBonusFromRows } = await import("./pigeons");
   const albumMult = r.album_bonus ? 1 + ALBUM_PASSIVE_BONUS : 1;
-  const pigeonPassive = await pigeonPassiveBonus(chatId, client);
+  // Первый старый профиль без стартового голубя изменился уже после bundle SELECT —
+  // только для него перечитываем инвентарь. Обычный горячий путь обходится без запроса.
+  const pigeonPassive = starterPigeonGranted
+    ? await pigeonPassiveBonus(chatId, client)
+    : pigeonPassiveBonusFromRows(Array.isArray(r.__pigeons) ? r.__pigeons : []);
   r.__albumMult = albumMult;
   r.__pigeonPassive = pigeonPassive;
   // Копилка стаи: закрытая цель недели множит ВЕСЬ доход (пассив здесь, тапы в tapClicker)

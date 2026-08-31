@@ -12,7 +12,9 @@ import { pool } from "./db";
 import { log } from "./logger";
 
 const accessCache = new Map<number, { blocked: boolean; expires: number }>();
-const ACCESS_CACHE_MS = 5_000;
+// Блок/разблок из админки инвалидирует запись немедленно. Минутный fast-path
+// убирает отдельный SELECT перед каждым тап-батчем и игровой кнопкой.
+const ACCESS_CACHE_MS = 60_000;
 
 /** Админская блокировка инвалидирует fast-path немедленно. */
 export function clearGameAccessCache(chatId: number): void {

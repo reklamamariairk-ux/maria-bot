@@ -40,4 +40,12 @@ describe("VK asset aliases", () => {
     expect(clicker).toContain("Один прогресс в VK и Telegram");
     expect(clicker).toContain("/api/account-link/status");
   });
+
+  it("не возвращает тяжёлый полный рендер в цикл тапов", () => {
+    const clicker = fs.readFileSync(path.join(root, "public", "js", "catclick.js"), "utf8");
+    expect(clicker).toContain("performance.now() - lastFullRenderAt >= 1000");
+    expect(clicker).toContain("const LOOP_FRAME_BUDGET = 1 / 20");
+    expect(clicker).toContain("/api/clicker/tasks-overview");
+    expect(clicker).toContain("void maybePurchaseBonus(); }, 3500");
+  });
 });

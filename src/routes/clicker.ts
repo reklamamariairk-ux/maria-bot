@@ -7,13 +7,15 @@
 import { Router } from "express";
 import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements, getRewards, redeemReward, claimBonus, openChest, openCase, claimRain, claimGame, createGameAttempt, getMilestones, claimMilestone, syncPurchaseBonus, migrateGuest, redeemCode, getSquads, joinSquad, squadBankStatus, donateSquadBank, createSquad, joinSquadByCode, requestJoinSquad, listSquadRequests, decideSquadRequest, prestigeReset, welcomePromoShown, markWelcomePromoShown, markOnboarded, getFtue, claimFtue, getSquadMembers, deleteClickerProfile } from "../clicker";
 import { rateLimit, requireAdminToken } from "../middleware";
-import { requireTgUser as requireAnyTgUser, getTgUser } from "../auth";
+import { requireTgUser as requireAnyTgUser, getTgUser, getUser } from "../auth";
 import { clearGameAccessCache, requireGameUser as requireTgUser } from "../game-auth";
 import { getBonusQueue, ackBonusQueue, queueAuthOk } from "../bonus1c";
 import { trackActivity, trackEvent, getClickerStats } from "../analytics";
 import { log } from "../logger";
 import crypto from "crypto";
 import { pool } from "../db";
+import { getPurchaseTasks, getPurchaseTaskClaims } from "../purchase1c";
+import { getAccountLinkStatus } from "../account-link";
 
 const router = Router();
 
@@ -328,6 +330,33 @@ router.post("/api/clicker/migrate", requireTgUser, rateLimit(10), async (req, re
 router.get("/api/clicker/tasks", requireTgUser, rateLimit(60), async (req, res) => {
   const u = getTgUser(req)!;
   try { res.json(await getTasks(u.id)); } catch (e) { log.error({ err: e, chatId: u.id }, "[tasks]"); res.status(500).json({ error: "internal" }); }
+});
+
+// Быстрый снимок вкладки «Призы»: клиент уже имеет свежий ClickerState и сам
+// вычисляет claimable. Здесь одним HTTP параллельно отдаём только серверные факты,
+// покупки и связку аккаунтов — вместо четырёх последовательных запросов и двух
+// повторных getClicker() с транзакциями.
+router.get("/api/clicker/tasks-overview", requireTgUser, rateLimit(60), async (req, res) => {
+  const u = getTgUser(req)!;
+  const currentPlatform = getUser(req)?.platform ?? "tg";
+  try {
+    const [doneRows, purchaseTasks, purchaseClaims, accountLink] = await Promise.all([
+      pool.query(`SELECT task FROM clicker_tasks WHERE chat_id=$1`, [u.id]),
+      getPurchaseTasks(u.id),
+      getPurchaseTaskClaims(u.id),
+      getAccountLinkStatus(currentPlatform, u.id),
+    ]);
+    res.json({
+      done: doneRows.rows.map((row) => String(row.task)),
+      purchaseTasks,
+      purchaseClaims,
+      phoneVerified: accountLink.phoneVerified,
+      accountLink,
+    });
+  } catch (e) {
+    log.error({ err: e, chatId: u.id }, "[tasks-overview]");
+    res.status(500).json({ error: "internal" });
+  }
 });
 
 router.get("/api/clicker/achievements", requireTgUser, rateLimit(60), async (req, res) => {

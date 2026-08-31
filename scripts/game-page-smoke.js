@@ -60,6 +60,28 @@ function serve() {
   ok((await pg.locator('.ck-row2[data-goto="home"]').count()) === 0, 'pure: раздел Дом удалён');
   ok(await pg.evaluate(() => typeof window.catPetOpen === 'undefined'), 'pure: модуль Дома не загружен');
   ok(await pg.evaluate(() => !Array.from(document.scripts).some(s => /cat(?:pet|feed|game)\.js/.test(s.src))), 'pure: скрипты Дома и мини-игр не загружены');
+  const tapPerf = await pg.evaluate(async () => {
+    window.ckSetTab('cat');
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const prof = document.querySelector('#ck-prof');
+    const cat = document.querySelector('#ck-catwrap');
+    let mutations = 0;
+    const observer = new MutationObserver((records) => { mutations += records.length; });
+    observer.observe(prof, { childList: true, characterData: true, subtree: true });
+    const rect = cat.getBoundingClientRect();
+    const started = performance.now();
+    for (let i = 0; i < 60; i++) {
+      const pointerId = i + 1;
+      const common = { bubbles: true, pointerId, pointerType: 'touch', clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 };
+      cat.dispatchEvent(new PointerEvent('pointerdown', common));
+      cat.dispatchEvent(new PointerEvent('pointerup', common));
+    }
+    await new Promise(resolve => setTimeout(resolve, 120));
+    observer.disconnect();
+    return { mutations, duration: performance.now() - started };
+  });
+  ok(tapPerf.mutations <= 3, `perf: серия тапов не перестраивает HUD (${tapPerf.mutations} мутаций)`);
+  ok(tapPerf.duration < 500, `perf: 60 тапов обрабатываются без длинной блокировки (${Math.round(tapPerf.duration)} мс)`);
   await pg.close();
 
   // ── 2. index.html: регресс (магазин + игра с коммерцией) ──
@@ -84,6 +106,7 @@ function serve() {
   pg = await br.newPage({ viewport: { width: 390, height: 844 } });
   pg.on('pageerror', (e) => errors.push('account-link: ' + e.message));
   await pg.route('**/api/account-link/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ currentPlatform: 'vk', phoneVerified: false, linked: false, platforms: { vk: false, tg: false } }) }));
+  await pg.route('**/api/clicker/tasks-overview', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ done: [], purchaseTasks: [], purchaseClaims: [], phoneVerified: false, accountLink: { currentPlatform: 'vk', phoneVerified: false, linked: false, platforms: { vk: false, tg: false } } }) }));
   await pg.route('**/api/clicker/tasks', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ tasks: [] }) }));
   await pg.route('**/api/clicker/purchase-tasks', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ tasks: [], claims: [], phoneVerified: false }) }));
   await pg.route('**/api/clicker/achievements', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ achievements: [] }) }));
