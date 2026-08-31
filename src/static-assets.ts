@@ -9,6 +9,10 @@ import path from "path";
 export const VK_ASSET_ALIASES = {
   "/js/tg-bridge-vk.js": "js/tg-bridge.js",
   "/js/catclick-vk.js": "js/catclick.js",
+  // Тяжёлые механики грузятся только при первом открытии соответствующего
+  // раздела. Имя URL содержит версию, поэтому WebView может хранить файл год.
+  "/js/catdove-v57.js": "js/catdove.js",
+  "/js/catdrag-v28.js": "js/catdrag.js",
 } as const;
 
 export function registerVkAssetAliases(app: Express, publicDir: string): void {

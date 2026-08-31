@@ -10,6 +10,8 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
 const VK_ALIASES = {
   '/js/tg-bridge-vk.js': '/js/tg-bridge.js',
   '/js/catclick-vk.js': '/js/catclick.js',
+  '/js/catdove-v57.js': '/js/catdove.js',
+  '/js/catdrag-v28.js': '/js/catdrag.js',
 };
 
 function serve() {
@@ -45,6 +47,7 @@ function serve() {
   ok(await pg.locator('.ck-nav__b[data-tab="tasks"]').isVisible(), 'pure: вкладка Призы видима');
   ok(((await pg.locator('.ck-nav__b[data-tab="tasks"]').textContent()) || '').includes('Призы'), 'pure: вкладка называется «Призы»');
   ok(await pg.locator('#ck-x').isHidden(), 'pure: крестик скрыт у гостя');
+  ok(await pg.evaluate(() => !Array.from(document.scripts).some(s => /cat(?:dove-v57|drag-v28)\.js/.test(s.src))), 'perf: голуби и гонки не загружены на старте');
   // .ck-reward — карточки витрины наград (не текстовый матч: во вступлении тьюториала
   // тоже упоминается фраза «награды «Марии»» как флейвор-текст, это не витрина)
   ok((await pg.locator('.ck-reward').count()) === 0, 'pure: витрины наград нет');

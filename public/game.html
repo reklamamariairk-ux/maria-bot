@@ -16,8 +16,6 @@
   <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;600&display=swap"/>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'"/>
   <noscript><link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet"/></noscript>
-  <link rel="preload" as="script" href="/js/catdove.js?v=56"/>
-  <link rel="preload" as="script" href="/js/catdrag.js?v=27"/>
   <script>
   // VK не должен ждать два чужих SDK до запуска defer-бандла игры. Для TG/МАКС
   // сохраняем прежний порядок загрузки: document.write выполняется только во
@@ -51,9 +49,7 @@ setTimeout(function () {
     '<button onclick="location.reload()" style="border:none;border-radius:14px;padding:12px 28px;font:800 15px Nunito,system-ui,sans-serif;background:#f0c24e;color:#0B0814;cursor:pointer">Повторить</button>';
 }, 12000);
 </script>
-<script src="/js/catdove.js?v=56" defer></script>
-<script src="/js/catdrag.js?v=27" defer></script>
-<script src="/js/catclick-vk.js?v=9" defer></script>
+<script src="/js/catclick-vk.js?v=10" defer></script>
 <script>
 // Резервный автозапуск для VK WebView: некоторые версии VK не вызывают
 // DOMContentLoaded для defer-скриптов после восстановления страницы из кэша.

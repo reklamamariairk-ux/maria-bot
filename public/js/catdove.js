@@ -8,7 +8,7 @@
  * api — fetch-хелпер catclick (тот же initData-заголовок), передан аргументом
  * (и продублирован в window.ckApi catclick.js — на случай отдельного вызова).
  * Тосты об ошибках — через window.ckFlash (catclick.js::flashMsg), если нет —
- * молча (не должно случиться, catdove.js всегда грузится вместе с catclick.js).
+ * молча (catclick.js лениво загружает этот модуль и создаёт мост заранее).
  * ───────────────────────────────────────────────────────────────────────────── */
 (function () {
   // 4 сета × 4 — зеркало src/pigeons.ts::PIGEON_BREEDS
@@ -72,6 +72,14 @@
   const PURE = () => document.documentElement.classList.contains('ck-pure');
   function flash(msg) { if (window.ckFlash) window.ckFlash(msg); }
   function haptic(k) { window.haptic && window.haptic(k); }
+  async function loadDrag() {
+    if (window.CatDrag) return window.CatDrag;
+    try {
+      if (window.ckLoadCatDrag) await window.ckLoadCatDrag();
+    } catch (_) {}
+    if (!window.CatDrag) flash('Не удалось загрузить заезд. Попробуйте ещё раз.');
+    return window.CatDrag || null;
+  }
 
   let container = null, apiRef = null, data = null, busy = false, missionTimer = null, mountReady = null;
   let dataLoadGeneration = 0;
@@ -658,7 +666,11 @@
     const tuneBtn = sh.querySelector('#cd-tune');
     if (tuneBtn) tuneBtn.onclick = () => openTune(breedId);
     const dragBtn = sh.querySelector('#cd-drag-one');
-    if (dragBtn) dragBtn.onclick = () => { closeSheet(); if (window.CatDrag) window.CatDrag.open(apiRef, breedId); };
+    if (dragBtn) dragBtn.onclick = async () => {
+      closeSheet();
+      const drag = await loadDrag();
+      if (drag) drag.open(apiRef, breedId);
+    };
   }
 
   // ── Шит закрытой породы: характеристики до получения (имя не раскрываем —
@@ -1880,11 +1892,12 @@
     sc.classList.add('on'); requestAnimationFrame(() => sh.classList.add('on'));
     sh.querySelector('#cd-sheet-x').onclick = () => openFriendRaceStakePicker(friend);
     sh.querySelectorAll('.cd-pickcard').forEach(el => {
-      el.onclick = () => {
+      el.onclick = async () => {
         const breedId = el.dataset.breed;
         if (!ensureDuelStake(stake)) return;
         closeSheet();
-        if (window.CatDrag && window.CatDrag.openDuelCreate) window.CatDrag.openDuelCreate(apiRef, breedId, friend.chat, friend.name, stake);
+        const drag = await loadDrag();
+        if (drag && drag.openDuelCreate) drag.openDuelCreate(apiRef, breedId, friend.chat, friend.name, stake);
       };
     });
   }
@@ -1900,11 +1913,12 @@
     sc.classList.add('on'); requestAnimationFrame(() => sh.classList.add('on'));
     sh.querySelector('#cd-sheet-x').onclick = openFriendRaceFriendPicker;
     sh.querySelectorAll('.cd-pickcard').forEach(el => {
-      el.onclick = () => {
+      el.onclick = async () => {
         const breedId = el.dataset.breed;
         if (!ensureDuelStake(duel.stake || 0)) return;
         closeSheet();
-        if (window.CatDrag && window.CatDrag.openDuelAccept) window.CatDrag.openDuelAccept(apiRef, breedId, duel.id, duel.fromName || 'Друг', duel.stake || 0);
+        const drag = await loadDrag();
+        if (drag && drag.openDuelAccept) drag.openDuelAccept(apiRef, breedId, duel.id, duel.fromName || 'Друг', duel.stake || 0);
       };
     });
   }
@@ -1922,10 +1936,11 @@
     requestAnimationFrame(() => sh.classList.add('on'));
     sh.querySelector('#cd-sheet-x').onclick = closeSheet;
     sh.querySelectorAll('.cd-pickcard').forEach(el => {
-      el.onclick = () => {
+      el.onclick = async () => {
         const breedId = el.dataset.breed;
         closeSheet();
-        if (window.CatDrag) window.CatDrag.open(apiRef, breedId);
+        const drag = await loadDrag();
+        if (drag) drag.open(apiRef, breedId);
       };
     });
   }
@@ -1945,11 +1960,12 @@
     requestAnimationFrame(() => sh.classList.add('on'));
     sh.querySelector('#cd-sheet-x').onclick = closeSheet;
     sh.querySelectorAll('.cd-pickcard').forEach(el => {
-      el.onclick = () => {
+      el.onclick = async () => {
         const breedId = el.dataset.breed;
         closeSheet();
-        if (window.CatDrag && window.CatDrag.openQualify) {
-          window.CatDrag.openQualify(apiRef, breedId, async () => { await load(); render(); });
+        const drag = await loadDrag();
+        if (drag && drag.openQualify) {
+          drag.openQualify(apiRef, breedId, async () => { await load(); render(); });
         }
       };
     });

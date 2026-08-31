@@ -107,35 +107,58 @@ async function fetchRows(period: string): Promise<SaleRow[]> {
   return Array.isArray(body.rows) ? body.rows : [];
 }
 
-/** Imports receipt lines and settles all matching active tasks. Safe to run repeatedly. */
-export async function syncPurchases(period = periodNow()): Promise<{ rows: number; imported: number; rewarded: number }> {
-  const rows = await fetchRows(period);
-  let imported = 0; let rewarded = 0;
-  for (const row of rows) {
-    const receipt = String(row.chequeNo ?? "").trim();
-    const product = String(row.productCode ?? "").trim();
-    const soldAt = new Date(String(row.date ?? ""));
-    if (!receipt || !product || Number.isNaN(soldAt.getTime())) continue;
-    const operation = String(row.operation ?? "sale");
-    const eventKey = `${soldAt.toISOString()}|${String(row.storeCode ?? "")}|${receipt}|${product}|${operation}`;
-    const phone = digits(row.phone);
-    const inserted = await pool.query(
-      `INSERT INTO purchase_events (event_key, receipt_id, operation, sold_at, store_code, card_code, card_name, phone, product_code, qty, amount, raw)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT (event_key) DO NOTHING RETURNING id`,
-      [eventKey, receipt, operation, soldAt.toISOString(), row.storeCode ?? null, row.cardCode ?? null,
-       row.cardName ?? null, phone || null, product, asNumber(row.qty), asNumber(row.sum), row]
+export type PurchaseSyncResult = { rows: number; imported: number; rewarded: number; skipped?: boolean };
+
+/**
+ * Imports receipt lines and settles all matching active tasks. Safe to run repeatedly.
+ *
+ * The worker flag prevents non-leader instances from scheduling this job. The
+ * advisory lock is a second line of defence for rolling deploys, when an old and
+ * a new process can overlap briefly while sharing the same PostgreSQL database.
+ */
+export async function syncPurchases(period = periodNow()): Promise<PurchaseSyncResult> {
+  const lockClient = await pool.connect();
+  let locked = false;
+  try {
+    const lock = await lockClient.query<{ locked: boolean }>(
+      "SELECT pg_try_advisory_lock(71031, 2611) AS locked"
     );
-    if (!inserted.rows[0]) continue;
-    imported++;
-    if (!isSale(operation)) { await reverseEvent(Number(inserted.rows[0].id), phone, String(row.cardCode ?? "").trim(), product); continue; }
-    if (!phone && !String(row.cardCode ?? "").trim()) continue;
-    const { rows: users } = await pool.query<{ chat_id: number }>(
-      `SELECT chat_id FROM subscribers WHERE RIGHT(regexp_replace(COALESCE(phone,''),'\\D','','g'),10)=$1 AND phone_verified_at IS NOT NULL
-       UNION SELECT chat_id FROM purchase_card_links WHERE card_code=$2`, [phone, String(row.cardCode ?? "").trim()]
-    );
-    for (const user of users) rewarded += await settleEvent(Number(user.chat_id), Number(inserted.rows[0].id), product, row);
+    locked = lock.rows[0]?.locked === true;
+    if (!locked) return { rows: 0, imported: 0, rewarded: 0, skipped: true };
+
+    const rows = await fetchRows(period);
+    let imported = 0; let rewarded = 0;
+    for (const row of rows) {
+      const receipt = String(row.chequeNo ?? "").trim();
+      const product = String(row.productCode ?? "").trim();
+      const soldAt = new Date(String(row.date ?? ""));
+      if (!receipt || !product || Number.isNaN(soldAt.getTime())) continue;
+      const operation = String(row.operation ?? "sale");
+      const eventKey = `${soldAt.toISOString()}|${String(row.storeCode ?? "")}|${receipt}|${product}|${operation}`;
+      const phone = digits(row.phone);
+      const inserted = await pool.query(
+        `INSERT INTO purchase_events (event_key, receipt_id, operation, sold_at, store_code, card_code, card_name, phone, product_code, qty, amount, raw)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT (event_key) DO NOTHING RETURNING id`,
+        [eventKey, receipt, operation, soldAt.toISOString(), row.storeCode ?? null, row.cardCode ?? null,
+         row.cardName ?? null, phone || null, product, asNumber(row.qty), asNumber(row.sum), row]
+      );
+      if (!inserted.rows[0]) continue;
+      imported++;
+      if (!isSale(operation)) { await reverseEvent(Number(inserted.rows[0].id), phone, String(row.cardCode ?? "").trim(), product); continue; }
+      if (!phone && !String(row.cardCode ?? "").trim()) continue;
+      const { rows: users } = await pool.query<{ chat_id: number }>(
+        `SELECT chat_id FROM subscribers WHERE RIGHT(regexp_replace(COALESCE(phone,''),'\\D','','g'),10)=$1 AND phone_verified_at IS NOT NULL
+         UNION SELECT chat_id FROM purchase_card_links WHERE card_code=$2`, [phone, String(row.cardCode ?? "").trim()]
+      );
+      for (const user of users) rewarded += await settleEvent(Number(user.chat_id), Number(inserted.rows[0].id), product, row);
+    }
+    return { rows: rows.length, imported, rewarded };
+  } finally {
+    if (locked) {
+      await lockClient.query("SELECT pg_advisory_unlock(71031, 2611)").catch(() => {});
+    }
+    lockClient.release();
   }
-  return { rows: rows.length, imported, rewarded };
 }
 
 async function reverseEvent(eventId: number, phone: string, cardCode: string, product: string): Promise<void> {

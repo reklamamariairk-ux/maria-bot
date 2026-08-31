@@ -427,34 +427,15 @@ export const CARD_PROFIT_GROWTH = 1.25;
 export const cardPrice = (c: { basePrice: number }, lvl: number) => Math.round(c.basePrice * Math.pow(CARD_PRICE_GROWTH, lvl));
 export const cardProfit = (c: { baseProfit: number }, lvl: number) => lvl <= 0 ? 0 : Math.round(c.baseProfit * (Math.pow(CARD_PROFIT_GROWTH, lvl) - 1) / (CARD_PROFIT_GROWTH - 1));
 
-// ── Бонусы дня: Комбо (3 карты) + Шифр (морзе) — детерминированы от даты ─────────
-// ⚠️ Алгоритм/слова/морзе продублированы во фронте public/js/catclick.js — менять синхронно.
+// ── Бонус дня: Комбо (3 карты), детерминированное от даты ────────────────────────
 const COMBO_REWARD = 12000;
+// Поля и обработчик шифра пока сохраняются только для совместимости схемы БД.
+// Публичный маршрут закрыт кодом 410 и клиент больше эту механику не загружает.
 const CIPHER_REWARD = 3000;
 const CIPHER_WORDS = ["МАРИЯ", "ТОРТ", "КОТИК", "КРЕМ", "ЭКЛЕР", "МУСС", "БИСКВИТ", "ВАНИЛЬ", "ШОКОЛАД", "КАРАМЕЛЬ", "ДЕСЕРТ", "ПЕКАРНЯ"];
-const MORSE: Record<string, string> = {
-  А: ".-", Б: "-...", В: ".--", Г: "--.", Д: "-..", Е: ".", Ж: "...-", З: "--..", И: "..", Й: ".---",
-  К: "-.-", Л: ".-..", М: "--", Н: "-.", О: "---", П: ".--.", Р: ".-.", С: "...", Т: "-", У: "..-",
-  Ф: "..-.", Х: "....", Ц: "-.-.", Ч: "---.", Ш: "----", Щ: "--.-", Ь: "-..-", Ы: "-.--", Э: "..-..", Ю: "..--", Я: ".-.-",
-};
 function dateSeed(day: string, salt: string): number { let h = 2166136261 >>> 0; const s = day + salt; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h >>> 0; }
 function todaysCombo(day: string): string[] { let h = dateSeed(day, "combo"); const pool2 = CARDS.map((c) => c.id); const pick: string[] = []; for (let i = 0; i < 3; i++) { h = (Math.imul(h, 1664525) + 1013904223) >>> 0; pick.push(pool2.splice(h % pool2.length, 1)[0]); } return pick; }
 function todaysCipher(day: string): string { return CIPHER_WORDS[dateSeed(day, "cipher") % CIPHER_WORDS.length]; }
-// Анаграмма вместо морзе (аудит 30.07: азбука Морзе — барьер для аудитории кондитерской;
-// слово и проверка те же, меняется только подача). Детерминированный шафл от даты —
-// у всех игроков одинаковая перемешка. ⚠️ Зеркало в catclick.js — менять синхронно.
-function scrambleWord(word: string, day: string): string {
-  const letters = word.split("");
-  let s = (dateSeed(day, "scramble") || 1) & 0x7fffffff;
-  for (let i = letters.length - 1; i > 0; i--) {
-    s = (s * 1103515245 + 12345) & 0x7fffffff;
-    const j = s % (i + 1);
-    [letters[i], letters[j]] = [letters[j], letters[i]];
-  }
-  const out = letters.join("");
-  return out === word ? letters.reverse().join("") : out;
-}
-function toMorse(w: string): string { return w.split("").map((c) => MORSE[c] || "").join(" "); }
 function parseHits(s: string | null): string[] { return s ? s.split(",").filter(Boolean) : []; }
 
 export interface ClickerState {
@@ -468,14 +449,13 @@ export interface ClickerState {
   cards: { id: string; name: string; cat: string; level: number; profit: number; currentProfit: number; profitGain: number; price: number; req: number; locked: boolean; maxed: boolean }[];
   // усиления
   dailyAvailable: boolean; dailyStreak: number; dailyNext: number;
-  chestAvailable: boolean; rainAvailable: boolean; squad: string | null;
+  chestAvailable: boolean; squad: string | null;
   /** ×1.25 при закрытой копилке стаи, иначе 1 (индикатор на главной). */
   bankMult: number;
   boostEnergyLeft: number; boostTurboLeft: number; turboMsLeft: number;
   boostEnergyLimit: number; boostTurboLimit: number; boostUnlockStreak: number;
   referrals: number; refCode: string; refLink: string;
   combo: { cards: string[]; hits: string[]; complete: boolean; claimed: boolean; reward: number };
-  cipher: { morse: string; anagram: string; len: number; claimed: boolean; reward: number };
   taps: number; cardsOwned: number; onboarded: boolean;
   season: { points: number; endsTs: number };
   prestige: number; prestigeMult: number; prestigeReady: boolean;
@@ -805,7 +785,6 @@ function buildState(r: any, cl: Record<string, number>, passiveEarned: number): 
     dailyAvailable, dailyStreak: visibleDailyStreak,
     dailyNext: dailyReward(dailyAvailable ? visibleDailyStreak + 1 : visibleDailyStreak),
     chestAvailable: r.chest_date !== today,
-    rainAvailable: r.rain_date !== today,
     squad: r.squad || null,
     boostEnergyLeft: boostRemaining(boostLimits.energy, r.boost_energy_used, r.boost_date, today),
     boostTurboLeft: boostRemaining(boostLimits.turbo, r.boost_turbo_used, r.boost_date, today),
@@ -813,7 +792,6 @@ function buildState(r: any, cl: Record<string, number>, passiveEarned: number): 
     boostUnlockStreak: BOOST_STREAK_UNLOCK, turboMsLeft: turboMs,
     referrals: r.referrals || 0, refCode: String(r.chat_id), refLink: clickerReferralLink(Number(r.chat_id)),
     combo: (() => { const cards = todaysCombo(today); const recorded = r.combo_date === today ? parseHits(r.combo_hits) : []; const hits = comboHitsIncludingMaxed(cards, recorded, cl); return { cards, hits, complete: cards.every((c) => hits.includes(c)), claimed: r.combo_claimed === today, reward: COMBO_REWARD }; })(),
-    cipher: { morse: toMorse(todaysCipher(today)), anagram: scrambleWord(todaysCipher(today), today), len: todaysCipher(today).length, claimed: r.cipher_date === today, reward: CIPHER_REWARD },
     taps: Number(r.taps || 0), cardsOwned: CARDS.filter((c) => (cl[c.id] || 0) > 0).length,
     onboarded: !!r.onboarded,
     season: { points: r.week_key === weekKey() ? Math.max(0, Number(r.total_earned) - Number(r.week_base || 0)) : 0, endsTs: seasonEndsTs() },
@@ -990,7 +968,6 @@ export async function getClicker(chatId: number): Promise<ClickerState> {
     await client.query("BEGIN");
     const { r, cl, passive } = await refresh(client, chatId);
     const st = buildState(r, cl, passive);
-    st.gamesDone = await gamesDoneToday(client, chatId);
     await client.query("COMMIT");
     return st;
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
@@ -1410,7 +1387,7 @@ export async function claimGame(chatId: number, game: string, score: number, att
     r.state_revision = Number(updated.rows[0]?.state_revision || r.state_revision || 0);
     const pigeonDrop = isFirstGameToday ? await maybeDropPigeon(chatId, 0.25, client) : undefined;
     await syncPigeonModifiersAfterDrop(r, chatId, pigeonDrop, client);
-    const st = buildState(r, cl, 0); st.gamesDone = await gamesDoneToday(client, chatId);
+    const st = buildState(r, cl, 0);
     await client.query("COMMIT");
     return { ok: true, reward, game, state: st, pigeonDrop };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }

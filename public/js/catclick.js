@@ -164,10 +164,7 @@
     tap: (s) => SVG('<path d="M9 11V5.5a1.7 1.7 0 0 1 3.4 0V11M12.4 11V9.4a1.5 1.5 0 0 1 3 0V11M15.4 11v-.6a1.5 1.5 0 0 1 3 0V15a5 5 0 0 1-5 5h-1.6a4 4 0 0 1-3-1.4L6 15.4a1.6 1.6 0 0 1 2.4-2L9 14"/>', s),
     battery: (s) => SVG('<rect x="3" y="8" width="15" height="8" rx="2"/><path d="M20 11v2"/><path d="M9.5 9.5 7.5 12.4h2.6L8 15"/>', s),
     chest: (s) => SVG('<path d="M4 10.5 6 6h12l2 4.5M4 10.5V19h16v-8.5M4 10.5h16M10 10.5v3h4v-3"/>', s),
-    game: (s) => SVG('<rect x="2.5" y="8.5" width="19" height="9" rx="4.2"/><path d="M7 11.9v3M5.5 13.4h3M15.4 12.9h.01M17.6 14.1h.01M16.5 11.8h.01"/>', s),
-    quiz: (s) => SVG('<path d="M4 5.5h16A1.5 1.5 0 0 1 21.5 7v8a1.5 1.5 0 0 1-1.5 1.5H9l-4 3v-3H4A1.5 1.5 0 0 1 2.5 15V7A1.5 1.5 0 0 1 4 5.5Z"/><path d="M9.9 9.6a2.2 2.2 0 0 1 3.3 1.8c0 1.4-1.9 1.6-1.9 2.9M11.3 16.1h.01"/>', s),
     gem: (s) => SVG('<path d="M6 3h12l3 5-9 13L3 8l3-5Z"/><path d="M3 8h18M9 3 7.5 8 12 21M15 3l1.5 5L12 21"/>', s),
-    rain: (s) => SVG('<path d="M7.5 13.5A3.5 3.5 0 0 1 8 6.6a5 5 0 0 1 9.4 1.3A3.3 3.3 0 0 1 16.8 13.5M8 17l-1 2.5M12 17l-1 2.5M16 17l-1 2.5"/>', s),
     oven: (s) => SVG('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 9h16M7 6.6h.01M10 6.6h.01M7.5 13a4.5 4.5 0 0 1 9 0"/>', s),
     megaphone: (s) => SVG('<path d="M4 10v4l10 4.5V5.5L4 10ZM4 10H3.2A1.2 1.2 0 0 0 2 11.2v1.6A1.2 1.2 0 0 0 3.2 14H4M14 8.5a3.5 3.5 0 0 1 0 7M7 15v3.5"/>', s),
     chef: (s) => SVG('<path d="M7 13.5h10V19a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1v-5.5ZM7 13.5a3.6 3.6 0 0 1-.8-7A3.4 3.4 0 0 1 12 4.6a3.4 3.4 0 0 1 5.8 1.9 3.6 3.6 0 0 1-.8 7M7 16.5h10"/>', s),
@@ -180,124 +177,12 @@
   const cardArt = (id) => BIZ_ART_V ? `<img src="/assets/images/biz/${id}.png?v=${BIZ_ART_V}" alt="" loading="lazy">` : cardIcon(id, 30);
   const taskIcon = (id) => ({ site: ICON.globe, review: ICON.star, vk: ICON.users, tg: ICON.send, invite1: ICON.users, level3: ICON.star, balance10: ICON.wallet, streak3: ICON.fire }[id] || ICON.star)(26);
 
-  // ── Бонусы дня (зеркало src/clicker.ts — алгоритм/слова/морзе менять синхронно) ──
-  const COMBO_REWARD = 12000, CIPHER_REWARD = 3000;
+  // ── Бонус дня: комбо бизнесов (зеркало src/clicker.ts) ───────────────────────
+  const COMBO_REWARD = 12000;
   const CASE_COST = 100000; // цена открытия платного кейса — зеркало src/lootbox.ts::CASE_COST
-  const CIPHER_WORDS = ['МАРИЯ', 'ТОРТ', 'КОТИК', 'КРЕМ', 'ЭКЛЕР', 'МУСС', 'БИСКВИТ', 'ВАНИЛЬ', 'ШОКОЛАД', 'КАРАМЕЛЬ', 'ДЕСЕРТ', 'ПЕКАРНЯ'];
-  const MORSE = { А: '.-', Б: '-...', В: '.--', Г: '--.', Д: '-..', Е: '.', Ж: '...-', З: '--..', И: '..', Й: '.---', К: '-.-', Л: '.-..', М: '--', Н: '-.', О: '---', П: '.--.', Р: '.-.', С: '...', Т: '-', У: '..-', Ф: '..-.', Х: '....', Ц: '-.-.', Ч: '---.', Ш: '----', Щ: '--.-', Ь: '-..-', Ы: '-.--', Э: '..-..', Ю: '..--', Я: '.-.-' };
   function dateSeed(day, salt) { let h = 2166136261 >>> 0; const s = day + salt; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h >>> 0; }
   function todaysCombo(day) { let h = dateSeed(day, 'combo'); const pool2 = CARDS.map(c => c.id); const pick = []; for (let i = 0; i < 3; i++) { h = (Math.imul(h, 1664525) + 1013904223) >>> 0; pick.push(pool2.splice(h % pool2.length, 1)[0]); } return pick; }
 
-  // ── Хаб «Игры»: детские квизы + казуальные. Контент тут (гость играет офлайн) ──
-  // {q: вопрос, a: верный ответ, w: [неверные]}. Движок строит 4 варианта и тасует.
-  const QUIZ_KIDS = [
-    { q: 'Сколько ног у паука?', a: '8', w: ['6', '4', '10'] },
-    { q: 'Какое животное даёт нам молоко?', a: 'Корова', w: ['Курица', 'Свинья', 'Лошадь'] },
-    { q: 'Какого цвета спелый банан?', a: 'Жёлтый', w: ['Синий', 'Красный', 'Зелёный'] },
-    { q: 'Где живут рыбы?', a: 'В воде', w: ['На дереве', 'В небе', 'В норе'] },
-    { q: 'Сколько дней в неделе?', a: '7', w: ['5', '10', '12'] },
-    { q: 'Как называется наша планета?', a: 'Земля', w: ['Марс', 'Луна', 'Солнце'] },
-    { q: 'Кто делает мёд?', a: 'Пчела', w: ['Муравей', 'Бабочка', 'Комар'] },
-    { q: 'Какое время года самое холодное?', a: 'Зима', w: ['Лето', 'Весна', 'Осень'] },
-    { q: 'Что нужно растению, чтобы расти?', a: 'Солнце и вода', w: ['Конфеты', 'Снег', 'Темнота'] },
-    { q: 'Сколько цветов у радуги?', a: '7', w: ['5', '3', '10'] },
-    { q: 'Какой первый месяц года?', a: 'Январь', w: ['Декабрь', 'Март', 'Июнь'] },
-    { q: 'Кто из них умеет летать?', a: 'Орёл', w: ['Кит', 'Слон', 'Черепаха'] },
-    { q: 'Что делают из молока?', a: 'Сыр', w: ['Хлеб', 'Сок', 'Бумагу'] },
-    { q: 'Какой формы колесо?', a: 'Круглое', w: ['Квадратное', 'Треугольное', 'Как звезда'] },
-    { q: 'Сколько пальцев на одной руке?', a: '5', w: ['4', '6', '10'] },
-    { q: 'Кто говорит «мяу»?', a: 'Кошка', w: ['Собака', 'Корова', 'Утка'] },
-    { q: 'Что светит на небе ночью?', a: 'Луна', w: ['Солнце', 'Радуга', 'Облако'] },
-    { q: 'Самое большое животное на Земле?', a: 'Синий кит', w: ['Слон', 'Жираф', 'Медведь'] },
-    { q: 'Из чего пекут хлеб?', a: 'Из муки', w: ['Из песка', 'Из травы', 'Из камней'] },
-    { q: 'Сколько будет 2 + 2?', a: '4', w: ['3', '5', '22'] },
-    { q: 'Какого цвета трава летом?', a: 'Зелёная', w: ['Синяя', 'Розовая', 'Чёрная'] },
-    { q: 'Сколько месяцев в году?', a: '12', w: ['7', '10', '24'] },
-    { q: 'Кто живёт в улье?', a: 'Пчёлы', w: ['Муравьи', 'Птицы', 'Рыбы'] },
-    { q: 'Что падает зимой с неба?', a: 'Снег', w: ['Песок', 'Листья', 'Конфеты'] },
-    { q: 'Какое животное самое быстрое на суше?', a: 'Гепард', w: ['Черепаха', 'Улитка', 'Слон'] },
-    { q: 'Сколько глаз у человека?', a: '2', w: ['1', '3', '4'] },
-    { q: 'Кто из них насекомое?', a: 'Бабочка', w: ['Кошка', 'Воробей', 'Лягушка'] },
-    { q: 'Что растёт на дубе?', a: 'Жёлуди', w: ['Яблоки', 'Бананы', 'Шишки'] },
-    { q: 'Какой день после понедельника?', a: 'Вторник', w: ['Среда', 'Пятница', 'Воскресенье'] },
-    { q: 'Из чего делают масло?', a: 'Из молока', w: ['Из песка', 'Из воды', 'Из камня'] },
-    { q: 'Кто плетёт паутину?', a: 'Паук', w: ['Муравей', 'Жук', 'Оса'] },
-    { q: 'Какого цвета снег?', a: 'Белый', w: ['Зелёный', 'Синий', 'Красный'] },
-    { q: 'Где растут яблоки?', a: 'На дереве', w: ['Под землёй', 'В море', 'На траве'] },
-    { q: 'Сколько лап у кошки?', a: '4', w: ['2', '6', '8'] },
-    { q: 'Что делает корова?', a: 'Мычит', w: ['Лает', 'Каркает', 'Квакает'] },
-    { q: 'Какое время суток самое тёмное?', a: 'Ночь', w: ['Утро', 'День', 'Полдень'] },
-    { q: 'Какая птица не умеет летать?', a: 'Пингвин', w: ['Орёл', 'Воробей', 'Голубь'] },
-    { q: 'Что нужно, чтобы видеть в темноте?', a: 'Свет', w: ['Вода', 'Холод', 'Шум'] },
-    { q: 'Сколько будет 3 + 1?', a: '4', w: ['5', '2', '31'] },
-    { q: 'Какого цвета солнце днём?', a: 'Жёлтое', w: ['Синее', 'Чёрное', 'Зелёное'] },
-    { q: 'Кто живёт в будке и сторожит дом?', a: 'Собака', w: ['Кошка', 'Корова', 'Коза'] },
-    { q: 'Из чего птицы вьют гнездо?', a: 'Из веточек', w: ['Из конфет', 'Из стекла', 'Из железа'] },
-  ];
-  const QUIZ_RIDDLE = [
-    { q: 'Мягкие лапки, а в лапках — царапки. Кто это?', a: 'Кот', w: ['Пёс', 'Заяц', 'Ёж'] },
-    { q: 'Голову кивает, по площади гуляет, «гур-гур» воркует. Кто это?', a: 'Голубь', w: ['Ворона', 'Воробей', 'Сорока'] },
-    { q: 'Сладкий, пышный, со свечками в день рождения. Что это?', a: 'Торт', w: ['Суп', 'Хлеб', 'Каша'] },
-    { q: 'Усатый, полосатый, днём спит, ночью охотится. Кто?', a: 'Кот', w: ['Петух', 'Гусь', 'Конь'] },
-    { q: 'Носит письма на лапке, домой дорогу знает. Какая птица?', a: 'Почтовый голубь', w: ['Курица', 'Индюк', 'Пингвин'] },
-    { q: 'Белое, холодное, сладкое, тает во рту. Что это?', a: 'Мороженое', w: ['Лёд', 'Снег', 'Мел'] },
-    { q: 'Мурлычет, когда доволен, шипит, когда сердит. Кто?', a: 'Кот', w: ['Чайник', 'Змея', 'Ветер'] },
-    { q: 'Круглые, шоколадные, тают в руках — что любит котик?', a: 'Конфеты', w: ['Камни', 'Шишки', 'Жёлуди'] },
-    { q: 'Воркует на крыше, кружит над городом, любит зёрнышки. Кто?', a: 'Голубь', w: ['Летучая мышь', 'Бабочка', 'Пчела'] },
-    { q: 'Хвостик крючком, глазки горят, молочко лакает. Кто?', a: 'Котёнок', w: ['Цыплёнок', 'Поросёнок', 'Утёнок'] },
-    { q: 'Воздушное, кремовое, с вишенкой наверху. Что это?', a: 'Пирожное', w: ['Котлета', 'Огурец', 'Сухарь'] },
-    { q: 'Два крыла, рук нет, а письмо доставит. Кто?', a: 'Голубь', w: ['Робот', 'Почтальон', 'Самолётик'] },
-    { q: 'Зимой и летом одним цветом. Что это?', a: 'Ёлка', w: ['Берёза', 'Куст', 'Трава'] },
-    { q: 'Не лает, не кусает, а в дом не пускает. Что это?', a: 'Замок', w: ['Кот', 'Забор', 'Окно'] },
-    { q: 'Пёстрая, ест зелёное, даёт белое. Кто?', a: 'Корова', w: ['Коза', 'Кошка', 'Курица'] },
-    { q: 'Пушистая шубка, на лапках подушки, а внутри царапки. Кто?', a: 'Кот', w: ['Заяц', 'Белка', 'Лиса'] },
-    { q: 'Гнездо на карнизе, крошки клюёт у окна, воркует. Кто?', a: 'Голубь', w: ['Снегирь', 'Дятел', 'Сова'] },
-    { q: 'Сладкая, тянется, в фантике живёт. Что это?', a: 'Конфета', w: ['Печенье', 'Сухарь', 'Орех'] },
-    { q: 'Круглый бок, румяный, от бабушки укатился. Кто?', a: 'Колобок', w: ['Блин', 'Бублик', 'Пирог'] },
-    { q: 'Белый, сладкий, узором на торте лежит. Что это?', a: 'Крем', w: ['Соль', 'Мука', 'Снег'] },
-    { q: 'Перья сизые, грудка отливает, символ мира. Кто?', a: 'Голубь', w: ['Орёл', 'Павлин', 'Аист'] },
-    { q: 'Тёплый, румяный, из печки, с хрустящей корочкой. Что это?', a: 'Хлеб', w: ['Лёд', 'Камень', 'Мяч'] },
-    { q: 'Лапками умывается, на солнышке греется, мышей ловит. Кто?', a: 'Кот', w: ['Ёж', 'Крот', 'Бобр'] },
-    { q: 'Воздушный шарик из теста, внутри дырка. Что это?', a: 'Бублик', w: ['Торт', 'Каша', 'Котлета'] },
-  ];
-  const GAME_META = {
-    quiz_kids:   { name: 'Котовикторина', icon: () => ICON.quiz(20) },
-    quiz_riddle: { name: 'Загадки',       icon: () => ICON.paw(20) },
-    count:       { name: 'Счёт конфет',   icon: () => ICON.cupcake(20) },
-  };
-  // детерминированная тасовка (LCG от seed) — стабильно в течение дня
-  function shuffleSeed(arr, seedNum) { const a = arr.slice(); let h = seedNum >>> 0; for (let i = a.length - 1; i > 0; i--) { h = (Math.imul(h, 1664525) + 1013904223) >>> 0; const j = h % (i + 1); const t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
-  function pickDaily(bank, n, salt) { const ord = shuffleSeed(bank.map((_, i) => i), dateSeed(irkToday(), salt)); return ord.slice(0, n).map(i => bank[i]); }
-  function quizQuestions(deck) {
-    if (deck === 'count') return genCount(6);
-    const bank = deck === 'quiz_riddle' ? QUIZ_RIDDLE : QUIZ_KIDS, n = deck === 'quiz_riddle' ? 4 : 5;
-    return pickDaily(bank, n, deck).map((q, i) => ({ q: q.q, opts: shuffleSeed([q.a, ...q.w], dateSeed(irkToday(), deck + 'o' + i)), a: q.a }));
-  }
-  const CANDY = `<svg width="26" height="26" viewBox="0 0 32 32" style="vertical-align:-.32em;margin:0 1px"><g stroke="#d8487f" stroke-width="1.8" stroke-linejoin="round"><path d="M7 16 1.5 11.5v9z" fill="#ff9ec4"/><path d="M25 16 30.5 11.5v9z" fill="#ff9ec4"/><ellipse cx="16" cy="16" rx="8" ry="7" fill="#ff7aae"/></g><path d="M12.5 13.5c2 1.8 5 1.8 7 0" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" opacity=".7"/></svg>`;
-  function genCount(n) {
-    const out = []; let h = dateSeed(irkToday(), 'count');
-    for (let i = 0; i < n; i++) {
-      h = (Math.imul(h, 1664525) + 1013904223) >>> 0; const x = 1 + (h >>> 3) % 5;
-      h = (Math.imul(h, 1664525) + 1013904223) >>> 0; const y = 1 + (h >>> 5) % 5; const sum = x + y;
-      const opts = []; [sum, sum + 1, Math.max(1, sum - 1), sum + 2].forEach(v => { if (opts.indexOf(String(v)) < 0) opts.push(String(v)); });
-      out.push({ q: CANDY.repeat(x) + ' + ' + CANDY.repeat(y) + ' = ?', opts: shuffleSeed(opts.slice(0, 4), dateSeed(irkToday(), 'co' + i)), a: String(sum) });
-    }
-    return out;
-  }
-  function todaysCipher(day) { return CIPHER_WORDS[dateSeed(day, 'cipher') % CIPHER_WORDS.length]; }
-  // Анаграмма вместо морзе — зеркало src/clicker.ts::scrambleWord (менять синхронно)
-  function scrambleWord(word, day) {
-    const letters = word.split('');
-    let s = (dateSeed(day, 'scramble') || 1) & 0x7fffffff;
-    for (let i = letters.length - 1; i > 0; i--) {
-      s = (s * 1103515245 + 12345) & 0x7fffffff;
-      const j = s % (i + 1);
-      const t = letters[i]; letters[i] = letters[j]; letters[j] = t;
-    }
-    const out = letters.join('');
-    return out === word ? letters.reverse().join('') : out;
-  }
-  function toMorse(w) { return w.split('').map(c => MORSE[c] || '').join(' '); }
   const cardName = (id) => (CARDS.find(c => c.id === id) || {}).name || id;
 
   // ── Сезон (неделя) + Достижения (зеркало src/clicker.ts — менять синхронно) ──────
@@ -369,11 +254,7 @@
   const SWEET_TAP_EVERY = 40, SWEET_TAP_MULT = 8;
   let renderAcc = 0; // копилка dt: HUD обновляется отдельно от мгновенного тап-хендлера
   const LOOP_FRAME_BUDGET = 1 / 20;
-  const MG_MIN_FRAME_MS = 15; // кап рендера экшен-мини-игр ~60fps: на 120–144 Гц не жжём батарею лишними кадрами (геймплей на dt, скорость не меняется)
-  let st = null, turboUntil = 0, combo = 0, comboT = 0, bonusTimer = 0, rainState = null, rainRAF = 0, upCat = 'prod', lastBought = null;
-  // Пока сервер сохраняет результат, новую мини-игру запускать нельзя: иначе
-  // старый ответ способен закрыть/перерисовать уже начатую следующую игру.
-  const gameSubmissions = new Set();
+  let st = null, turboUntil = 0, combo = 0, comboT = 0, bonusTimer = 0, upCat = 'prod', lastBought = null;
   // profitPerHour уже включает альбом; здесь остаются динамические множители,
   // которыми сервер умножает итоговую часовую ставку.
   function passiveIncomeMult() {
@@ -489,7 +370,7 @@
   function coinSfx() { sfxTap(0); }
 
   // ── Гость (localStorage) ─────────────────────────────────────────────────────
-  function rawDefault() { return { balance: 0, totalEarned: 0, energy: 1000, energyCarry: 0, multitapLevel: 0, energyLevel: 0, cards: {}, taps: 0, dailyStreak: 0, dailyDate: null, bE: 0, bT: 0, bDate: null, turboUntil: 0, tasksDone: {}, comboDate: null, comboHits: [], comboClaimed: null, cipherDate: null, bonusAt: 0, chestDate: null, rainDate: null, gamesDone: {}, passiveCarry: 0, _ts: Date.now() }; }
+  function rawDefault() { return { balance: 0, totalEarned: 0, energy: 1000, energyCarry: 0, multitapLevel: 0, energyLevel: 0, cards: {}, taps: 0, dailyStreak: 0, dailyDate: null, bE: 0, bT: 0, bDate: null, turboUntil: 0, tasksDone: {}, comboDate: null, comboHits: [], comboClaimed: null, bonusAt: 0, chestDate: null, passiveCarry: 0, _ts: Date.now() }; }
   let memRaw = null; // in-memory фолбэк: заблокированный localStorage не должен ронять тап (setItem кидает в приватных webview)
   let guestTapRaw = null, guestTapSaveTimer = 0;
   function rawGet() { let s; try { s = JSON.parse(localStorage.getItem(LS)); } catch (_) {} if (memRaw && (!s || (memRaw._ts || 0) >= (s._ts || 0))) s = memRaw; if (!s) s = rawDefault(); if (!s.cards) s.cards = {}; return s; }
@@ -558,13 +439,11 @@
       cards: CARDS.map(c => { const lv = s.cards[c.id] || 0; const locked = lv === 0 && !!c.req && lg.level < c.req; const maxed = lv >= BUSINESS_MAX_LEVEL; const currentProfit = cardProfit(c, lv), profit = maxed ? currentProfit : cardProfit(c, lv + 1); return { id: c.id, name: c.name, cat: c.cat, level: lv, profit, currentProfit, profitGain: profit - currentProfit, price: maxed ? 0 : cardPrice(c, lv), req: c.req || 0, locked, maxed }; }),
       dailyAvailable, dailyStreak: visibleDailyStreak, dailyNext: dailyReward(dailyAvailable ? visibleDailyStreak + 1 : visibleDailyStreak),
       chestAvailable: s.chestDate !== today,
-      rainAvailable: s.rainDate !== today,
       boostEnergyLeft: Math.max(0, boostLimits.energy - Math.max(0, Number(s.bE) || 0)),
       boostTurboLeft: Math.max(0, boostLimits.turbo - Math.max(0, Number(s.bT) || 0)),
       boostEnergyLimit: boostLimits.energy, boostTurboLimit: boostLimits.turbo,
       boostUnlockStreak: BOOST_STREAK_UNLOCK, turboMsLeft: Math.max(0, (s.turboUntil || 0) - Date.now()),
       combo: { cards: comboCards, hits: comboHits, complete: comboCards.every(c => comboHits.includes(c)), claimed: s.comboClaimed === today, reward: COMBO_REWARD },
-      cipher: { morse: toMorse(todaysCipher(today)), anagram: scrambleWord(todaysCipher(today), today), len: todaysCipher(today).length, claimed: s.cipherDate === today, reward: CIPHER_REWARD },
       taps: s.taps || 0, cardsOwned: CARDS.filter(c => (s.cards[c.id] || 0) > 0).length,
       season: { points: 0, endsTs: seasonEndsTs() },
       prestige: 0, prestigeMult: 1, prestigeReady: false, event: ckEvent(),
@@ -980,30 +859,6 @@
     if (!combo.every(c => hits.includes(c))) return false;
     s.balance += COMBO_REWARD; s.totalEarned += COMBO_REWARD; s.comboClaimed = today; rawSave(s); return true;
   }
-  async function claimCipher(guess) {
-    return withLock('cipher', async () => {
-      const actionSession = overlaySession;
-      let r;
-      if (authed()) {
-        r = await mutationApi('/api/clicker/cipher', { method: 'POST', body: JSON.stringify({ guess }) }).catch(() => null);
-        if (r && !r.error) applyServerState(r);
-        else if (!r || r.error === 'internal') {
-          const fresh = await stateApi('/api/clicker').catch(() => null);
-          if (fresh && !fresh.error && fresh.cipher && fresh.cipher.claimed) { applyServerState(fresh); r = { reward: CIPHER_REWARD, recovered: true }; }
-          else { if (overlaySessionActive(actionSession)) flashMsg('Нет связи — попробуй ещё раз'); return; }
-        } else { if (overlaySessionActive(actionSession)) flashMsg(r.error === 'internal' ? 'Нет связи — попробуй ещё раз' : r.error === 'already' ? 'Уже разгадан сегодня' : 'Неверно, попробуй ещё'); return; }
-      }
-      else { const g = guestClaimCipherRaw(guess); if (!g) { if (overlaySessionActive(actionSession)) flashMsg('Неверно, попробуй ещё'); return; } applyServerState(guestDerive()); r = { reward: CIPHER_REWARD }; }
-      if (!overlaySessionActive(actionSession)) return;
-      if (r && r.reward) { sfxReward(); window.haptic && window.haptic('success'); coinShower(); dailyPopupRaw(ICON.bolt(20) + ' Шифр разгадан!', r.reward); renderAll(); renderTasks(); bumpBalance(); }
-    });
-  }
-  function guestClaimCipherRaw(guess) {
-    guestDerive(); const s = rawGet(); const today = irkToday();
-    if (s.cipherDate === today) return false;
-    if (String(guess || '').trim().toUpperCase().replace(/Ё/g, 'Е') !== todaysCipher(today)) return false;
-    s.balance += CIPHER_REWARD; s.totalEarned += CIPHER_REWARD; s.cipherDate = today; rawSave(s); return true;
-  }
   async function boost(type) {
     if (type === 'turbo' && turboOn()) { flashMsg('Турбо уже активно', 'light'); return; } // не сжигать заряд на переустановку тех же 20с
     if (type === 'energy' && st && st.energy >= st.energyMax) { flashMsg('Энергия уже полная', 'light'); return; }
@@ -1065,8 +920,7 @@
       .ck-ov button:not(:disabled):active{transform:scale(.96)}
       .ck-ov button.ck-busy{pointer-events:none;opacity:.68;cursor:wait}.ck-ov button.ck-busy::after{content:' ···';letter-spacing:1px}
       .ck-nav__b:not(:disabled):active{transform:none;opacity:.72}
-      .ck-x::after,.ck-quiz__hd .x::after,.ck-rain__hud .x::after{content:'';position:absolute;inset:-8px;border-radius:50%}
-      .ck-quiz__hd .x,.ck-rain__hud .x{position:relative}
+      .ck-x::after{content:'';position:absolute;inset:-8px;border-radius:50%}
       .ck-cat-chip:disabled{opacity:.45}
       .ck-i{display:inline-block;vertical-align:-.16em}.ck-coin-i{display:inline-block;vertical-align:-.18em;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4))}
       .ck-daily{margin-top:13px;display:inline-flex;align-items:center;gap:7px;min-height:44px;box-sizing:border-box;background:linear-gradient(180deg,#D4FF6A,#A8F51E);color:#12210A;font-weight:800;border:1px solid rgba(216,255,122,.7);border-radius:14px;padding:9px 18px;font-size:13px;cursor:pointer;box-shadow:0 6px 18px rgba(168,245,30,.42),inset 0 1px 0 rgba(255,255,255,.4)}
@@ -1122,59 +976,6 @@
       .ck-case__res .rs{color:var(--muted);font-size:13px;margin-top:4px}
       .ck-case__res button{margin-top:14px;border:1px solid #DFFF8F;border-radius:14px;padding:12px 30px;font-weight:800;background:linear-gradient(180deg,#D4FF6A,#A8F51E 56%,#8DBF20);color:#12210A;cursor:pointer}
       .ck-case__actions{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;padding:0 12px}.ck-case__actions button{padding:11px 18px}.ck-case__actions button:disabled{opacity:.45;cursor:default}.ck-case__actions .secondary{background:rgba(255,255,255,.07);border-color:var(--line);color:var(--cream)}
-      .ck-rain{position:absolute;inset:0;z-index:11;display:none;flex-direction:column;background:radial-gradient(135% 100% at 50% -8%,#1B0F26,#120D1C);touch-action:none}
-      .ck-rain.on{display:flex}
-      .ck-rain__hud{display:flex;align-items:center;gap:14px;padding:14px 16px;font-weight:800;font-size:15px;color:var(--cream);font-variant-numeric:tabular-nums}
-      .ck-rain__hud .t{display:inline-flex;align-items:center;gap:6px}.ck-rain__hud .s{display:inline-flex;align-items:center;gap:6px;color:var(--gold-l)}.ck-rain__hud .sp{flex:1}
-      .ck-rain__hud .x{width:32px;height:32px;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.3);color:var(--cream);font-size:16px;cursor:pointer}
-      .ck-rain canvas{flex:1;width:100%;display:block;touch-action:none;cursor:pointer}
-      .ck-rain__cfm{position:absolute;inset:0;z-index:3;display:flex;align-items:center;justify-content:center;background:rgba(10,6,8,.62)}
-      .ck-rain__cfm .b{background:linear-gradient(180deg,#1B1526,#120D1C);border:1px solid var(--line);border-radius:18px;padding:20px;max-width:80%;text-align:center}
-      .ck-rain__cfm .t{font-weight:800;font-size:18px;color:var(--cream)}
-      .ck-rain__cfm .s{color:var(--muted);font-size:13px;margin:8px 0 14px;display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap}
-      .ck-rain__cfm .r{display:flex;gap:10px;justify-content:center}
-      .ck-rain__cfm button{border:none;border-radius:13px;padding:12px 20px;font-weight:800;cursor:pointer;min-height:44px}
-      .ck-rain__cfm .stay{background:linear-gradient(180deg,#D4FF6A,#A8F51E 56%,#8DBF20);color:#12210A;border:1px solid #DFFF8F}
-      .ck-rain__cfm .quit{background:rgba(255,255,255,.08);color:var(--cream);border:1px solid var(--line)}
-      .ck-rain__hint{position:absolute;left:0;right:0;top:48%;text-align:center;color:var(--muted);font-size:13px;pointer-events:none}
-      .ck-quiz,.ck-mem,.ck-tower,.ck-gems{position:absolute;inset:0;z-index:12;display:none;flex-direction:column;background:radial-gradient(135% 100% at 50% -8%,#1B1526,#0B0814);padding:0 16px 26px;overflow:hidden;-webkit-overflow-scrolling:touch}
-      .ck-quiz,.ck-mem,.ck-gems{overflow-y:auto}
-      .ck-quiz.on,.ck-mem.on,.ck-tower.on,.ck-gems.on{display:flex}
-      .ck-gems__grid{display:grid;gap:5px;max-width:360px;width:100%;margin:10px auto 0;padding:8px;background:rgba(0,0,0,.22);border:1px solid var(--line);border-radius:18px;box-shadow:inset 0 2px 14px rgba(0,0,0,.4)}
-      .ck-gems__c{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border:none;border-radius:12px;background:rgba(255,255,255,.03);cursor:pointer;padding:0;transition:transform .1s,box-shadow .15s}
-      .ck-gems__c:active{transform:scale(.9)}
-      .ck-gems__c.sel{background:rgba(238,191,82,.16);box-shadow:0 0 0 2px var(--gold),0 0 14px var(--gold);transform:scale(1.04)}
-      .ck-gems__c .cd{width:80%;height:80%;border-radius:46% 46% 50% 50%/50%;position:relative;box-shadow:inset 0 -4px 7px rgba(0,0,0,.32),inset 0 3px 5px rgba(255,255,255,.25),0 2px 4px rgba(0,0,0,.35)}
-      .ck-gems__c .cd::after{content:'';position:absolute;top:13%;left:20%;width:32%;height:24%;border-radius:50%;background:rgba(255,255,255,.6);filter:blur(.5px)}
-      .cd0{background:radial-gradient(circle at 38% 30%,#ff9db4,#d11d54)}
-      .cd1{background:radial-gradient(circle at 38% 30%,#ffe39a,#cf9320)}
-      .cd2{background:radial-gradient(circle at 38% 30%,#c79877,#5e3a25)}
-      .cd3{background:radial-gradient(circle at 38% 30%,#bdee9f,#4f9b3e)}
-      .cd4{background:radial-gradient(circle at 38% 30%,#aeb8ff,#4350c0)}
-      .ck-gems__c.clr{animation:ckGemPop .24s ease-out forwards}
-      @keyframes ckGemPop{0%{transform:scale(1)}45%{transform:scale(1.35);filter:brightness(1.8)}100%{transform:scale(.15);opacity:0}}
-      .ck-tower__score{position:absolute;left:0;right:0;top:84px;z-index:2;text-align:center;font-size:40px;font-weight:900;color:var(--gold-l);text-shadow:0 2px 14px rgba(0,0,0,.6);pointer-events:none;font-variant-numeric:tabular-nums}
-      #ck-tower-cv{flex:1;width:100%;display:block;touch-action:none;cursor:pointer}
-      .ck-quiz__hd{display:flex;align-items:center;gap:10px;padding:16px 0 6px;font-weight:800;font-size:16px;color:var(--cream)}
-      .ck-quiz__hd .t{flex:1;display:flex;align-items:center;gap:8px;color:var(--gold-l)}
-      .ck-quiz__hd .x{width:34px;height:34px;border:1px solid var(--line);border-radius:50%;background:rgba(0,0,0,.3);color:var(--cream);font-size:18px;cursor:pointer;flex:none}
-      .ck-quiz__dots{display:flex;gap:6px;justify-content:center;margin:8px 0 2px}
-      .ck-quiz__dots i{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.16);transition:background .2s}
-      .ck-quiz__dots i.d{background:var(--gold)}.ck-quiz__dots i.c{background:var(--gold-l);box-shadow:0 0 8px var(--gold)}
-      .ck-quiz__q{margin:20px 4px;font-size:21px;font-weight:800;color:var(--ink);text-align:center;line-height:1.3;min-height:58px;display:flex;align-items:center;justify-content:center}
-      .ck-quiz__opts{display:flex;flex-direction:column;gap:11px;max-width:440px;width:100%;margin:0 auto}
-      .ck-quiz__o{padding:16px 18px;border-radius:15px;border:1.5px solid var(--line);background:var(--panel);color:var(--ink);font-size:17px;font-weight:700;cursor:pointer;text-align:left;transition:transform .08s,background .2s,border-color .2s}
-      .ck-quiz__o:active{transform:scale(.98)}
-      .ck-quiz__o.ok{background:rgba(72,187,120,.22);border-color:#48bb78;color:#c6f6d5}
-      .ck-quiz__o.bad{background:rgba(229,62,62,.2);border-color:#e53e3e;color:#feb2b2}
-      .ck-mem__sub{text-align:center;color:var(--muted);font-size:13px;margin:6px 0 16px;font-variant-numeric:tabular-nums}
-      .ck-mem__grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;max-width:380px;width:100%;margin:0 auto}
-      .ck-mem__c{position:relative;aspect-ratio:1;border:none;background:none;cursor:pointer;padding:0}
-      .ck-mem__c .f,.ck-mem__c .b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:14px;backface-visibility:hidden;-webkit-backface-visibility:hidden;transition:transform .35s;font-size:30px}
-      .ck-mem__c .f{background:linear-gradient(160deg,#241830,#1B1526);border:1.5px solid var(--line);color:var(--gold-l);font-weight:800;font-size:22px}
-      .ck-mem__c .b{background:var(--panel);border:1.5px solid var(--gold);transform:rotateY(180deg)}
-      .ck-mem__c.show .f{transform:rotateY(180deg)}.ck-mem__c.show .b{transform:rotateY(0)}
-      .ck-mem__c.match .b{border-color:#48bb78;box-shadow:0 0 12px rgba(72,187,120,.5)}
       .ck-bonus-fly{position:absolute;z-index:8;pointer-events:auto;cursor:pointer;filter:drop-shadow(0 0 13px rgba(255,212,90,.95));animation:ckBonusSpin 1.1s linear infinite}
       @keyframes ckBonusSpin{to{transform:rotate(360deg)}}
       .ck-season{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
@@ -1231,7 +1032,6 @@
       .ck-seg__sub{display:block;font-size:9px;font-weight:600;line-height:1.2;margin-top:1px;color:inherit;opacity:.75;text-transform:none;letter-spacing:0}
       .ck-badge{display:inline-flex;align-items:center;justify-content:center;position:absolute;top:1px;right:22%;min-width:15px;height:15px;padding:0 4px;border-radius:8px;background:#e5484d;color:#fff;font-size:9px;font-weight:800;line-height:1;box-shadow:0 0 0 2px rgba(18,8,11,.6)}
       .ck-badge[hidden]{display:none}
-      .ck-games-hd{margin:10px 2px 2px;padding:11px 14px;border-radius:14px;background:linear-gradient(90deg,rgba(238,191,82,.16),rgba(238,191,82,.04));border:1px solid var(--line);color:var(--cream);font-size:13.5px;font-weight:700;text-align:center}.ck-games-hd b{color:var(--gold-l);font-size:16px}
       .ck-gift{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--gold-l);background:rgba(238,191,82,.1);border:1px solid var(--line);border-radius:11px;padding:8px 11px;font-weight:600;margin-top:2px}
       .ck-gift.ok{color:#9be7a8;background:rgba(72,187,120,.1)}
       .ck-gift.earned{justify-content:space-between}.ck-gift.earned span{display:flex;align-items:center;gap:7px;flex:1;min-width:0}.ck-gift.earned .ck-card__buy{flex:none}
@@ -1281,10 +1081,10 @@
       .ck-cmb svg{width:24px;height:24px;opacity:.45}
       .ck-cmb.on{color:var(--gold-l);border-color:rgba(238,191,82,.5);background:rgba(238,191,82,.1)}.ck-cmb.on svg{opacity:1}
       .ck-cmb.on::after{content:'✓';position:absolute;top:3px;right:6px;color:var(--gold-l);font-size:11px;font-weight:800}
-      .ck-morse{font-family:'JetBrains Mono',ui-monospace,monospace;letter-spacing:2px;word-spacing:12px;font-size:19px;color:var(--gold-l);text-align:center;padding:12px 8px;background:rgba(0,0,0,.26);border-radius:12px;border:1px solid var(--line)}
-      .ck-cipher-in{flex:1;min-width:0;background:rgba(0,0,0,.26);border:1px solid var(--line);border-radius:12px;padding:10px 12px;color:var(--ink);font-size:14px;font-weight:700;text-transform:uppercase;outline:none}
-      .ck-cipher-in::placeholder{color:var(--muted);text-transform:none;font-weight:400}
-      .ck-cipher-in:focus{border-color:rgba(238,191,82,.5)}
+      .ck-reward-code{font-family:'JetBrains Mono',ui-monospace,monospace;letter-spacing:2px;word-spacing:12px;font-size:19px;color:var(--gold-l);text-align:center;padding:12px 8px;background:rgba(0,0,0,.26);border-radius:12px;border:1px solid var(--line)}
+      .ck-text-in{flex:1;min-width:0;background:rgba(0,0,0,.26);border:1px solid var(--line);border-radius:12px;padding:10px 12px;color:var(--ink);font-size:14px;font-weight:700;text-transform:uppercase;outline:none}
+      .ck-text-in::placeholder{color:var(--muted);text-transform:none;font-weight:400}
+      .ck-text-in:focus{border-color:rgba(238,191,82,.5)}
       .ck-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin:12px 0}
       .ck-cal-day{background:rgba(0,0,0,.22);border:1px solid var(--line);border-radius:9px;padding:7px 1px;text-align:center}
       .ck-cal-day .d{font-weight:700;color:var(--cream);font-size:11px}.ck-cal-day .a{color:var(--gold-l);font-weight:700;font-variant-numeric:tabular-nums;font-size:9.5px;margin-top:3px}
@@ -1333,7 +1133,7 @@
       .ck-pop{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9;background:linear-gradient(180deg,#1B1526,#120D1C);border:1px solid var(--line);border-radius:20px;padding:24px;text-align:center;box-shadow:0 18px 50px rgba(0,0,0,.6);display:none;max-width:80%}.ck-pop.on{display:block}.ck-pop h3{margin:0 0 6px;font-family:'Nunito',sans-serif;font-weight:700;font-size:20px;color:var(--cream)}.ck-pop .v{font-family:'Nunito',sans-serif;font-size:32px;font-weight:700;color:var(--gold-l);margin:10px 0;display:inline-flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums}.ck-pop button{margin-top:10px;border:1px solid #DFFF8F;border-radius:14px;padding:12px 28px;font-weight:800;background:linear-gradient(180deg,#D4FF6A,#A8F51E 56%,#8DBF20);color:#12210A;cursor:pointer}
       /* ===================== ДИЗАЙН-ДОВОДКА (перенос на master) ===================== */
       .ck-ov{--cream:#eee7dd;--ink:#f1ece6;--muted:#9aa0ab;background:radial-gradient(130% 100% at 50% -10%,#1B1526 0%,#120D1C 52%,#0B0814 100%);font-family:'Nunito','Mulish',system-ui,sans-serif}
-      .ck-ov button:focus-visible,.ck-ov input:focus-visible,.ck-cat:focus-visible,.ck-gems__c:focus-visible,.ck-mem__c:focus-visible,.ck-quiz__o:focus-visible,.ck-nav__b:focus-visible{outline:2px solid var(--gold-l);outline-offset:2px}
+      .ck-ov button:focus-visible,.ck-ov input:focus-visible,.ck-cat:focus-visible,.ck-nav__b:focus-visible{outline:2px solid var(--gold-l);outline-offset:2px}
       .ck-ov[data-tier="1"]{--tg:rgba(155,92,255,.14)}.ck-ov[data-tier="2"]{--tg:rgba(155,92,255,.18)}.ck-ov[data-tier="3"]{--tg:rgba(155,92,255,.22)}.ck-ov[data-tier="4"]{--tg:rgba(155,92,255,.26)}.ck-ov[data-tier="5"]{--tg:rgba(155,92,255,.30)}.ck-ov[data-tier="6"]{--tg:rgba(192,255,51,.22)}
       .ck-ov:not(.turbo)[data-tier="1"]{background:radial-gradient(90% 56% at 50% -4%,rgba(155,92,255,.16),transparent 62%),radial-gradient(75% 45% at 82% 112%,rgba(192,255,51,.08),transparent 58%),linear-gradient(180deg,#0E0A1A,#0B0814)}
       .ck-ov:not(.turbo)[data-tier="2"]{background:radial-gradient(92% 58% at 50% -4%,rgba(155,92,255,.22),transparent 64%),radial-gradient(75% 45% at 82% 112%,rgba(192,255,51,.10),transparent 58%),linear-gradient(180deg,#0F0A1C,#0B0814)}
@@ -1615,21 +1415,50 @@
   // Монтируется лениво при первом входе — не грузим модуль, пока вкладку не открыли.
   // (Сегмент «Помощники» / витрина бизнес-голубей удалён по решению юзера 04.08.2026.)
   let doveColMounted = false;
-  function mountDoveCol() {
+  const gameScriptLoads = new Map();
+  function loadGameScript(src, globalName) {
+    if (window[globalName]) return Promise.resolve(window[globalName]);
+    if (gameScriptLoads.has(src)) return gameScriptLoads.get(src);
+    let script;
+    const promise = new Promise((resolve, reject) => {
+      script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+      script.onload = () => window[globalName] ? resolve(window[globalName]) : reject(new Error(globalName + ' did not register'));
+      script.onerror = () => reject(new Error('Failed to load ' + src));
+      document.head.appendChild(script);
+    }).catch(err => {
+      gameScriptLoads.delete(src);
+      if (script) script.remove();
+      throw err;
+    });
+    gameScriptLoads.set(src, promise);
+    return promise;
+  }
+  const ensureDoveModule = () => loadGameScript('/js/catdove-v57.js', 'CatDove');
+  const ensureDragModule = () => loadGameScript('/js/catdrag-v28.js', 'CatDrag');
+
+  async function mountDoveCol() {
     const col = ov.querySelector('#ck-dove-col');
-    if (col && !doveColMounted && window.CatDove) {
-      // POST-запросы голубятни меняют тот же баланс, что и тапы. Ставим их в общую
-      // очередь мутаций; GET остаются параллельными, чтобы экран не грузился медленнее.
+    if (!col) return;
+    if (!doveColMounted) {
+      col.innerHTML = '<div class="ck-empty">Загружаем голубятню…</div>';
+      try {
+        await ensureDoveModule();
+      } catch (_) {
+        if (tab === 'dove') {
+          col.innerHTML = '<div class="ck-empty">Не удалось загрузить голубятню.<br>Открой вкладку ещё раз.</div>';
+          flashMsg('Не удалось загрузить голубятню');
+        }
+        return;
+      }
+      if (tab !== 'dove' || !ov.classList.contains('on')) return;
       const doveApi = (path, opts) => opts && String(opts.method || 'GET').toUpperCase() !== 'GET' ? mutationApi(path, opts) : api(path, opts);
-      doveColMounted = true; window.CatDove.mount(col, doveApi);
-    }
-    else if (col && doveColMounted && window.CatDove && typeof window.CatDove.refresh === 'function') {
-      // Альбом меняется и вне своей вкладки: голубь может выпасть из сундука,
-      // комбо или мини-игры. При повторном входе перечитываем инвентарь/гонку.
+      doveColMounted = true;
+      window.CatDove.mount(col, doveApi);
+    } else if (window.CatDove && typeof window.CatDove.refresh === 'function') {
       void window.CatDove.refresh();
     }
-    // тур альбома при первом входе новичка — с задержкой на асинхронный монтаж CatDove
-    // (якорь ещё не отрисован → мягкий выход, покажется в следующий раз)
     if (!tourSeen('col')) setTimeout(() => { if (tab === 'dove' && !tourActive) startTour('col'); }, 1100);
   }
   // Бейдж непрочитанной почты голубятни на кнопке навбара — грузится один раз при
@@ -1985,8 +1814,8 @@
     for (let i = 0; i < total; i++) { const c = document.createElement('div'); c.className = 'ck-coin'; c.innerHTML = COIN(22); c.style.left = (Math.random() * w) + 'px'; c.style.top = '-30px'; c.style.transition = 'transform 1s ease-in, opacity 1s'; fx.appendChild(c); requestAnimationFrame(() => { c.style.transform = `translateY(${fx.clientHeight + 40}px) rotate(${(Math.random() - .5) * 360}deg)`; c.style.opacity = '0.2'; }); setTimeout(() => c.remove(), 1000); }
   }
   // kind: 'error' (дефолт, с вибро) | 'light' (нейтральные сообщения). Плашка держится ~0.8с и гаснет — раньше гасла мгновенно и терялась.
-  // Топ-слой (z 30000, крепится к ov, не к #ck-fx z6): сообщение видно над хабом «Игры»,
-  // оверлеями мини-игр (z 11-12) и попапами — раньше «Перемешали!» внутри gems просто терялось.
+  // Топ-слой (z 30000, крепится к ov, не к #ck-fx z6): сообщение остаётся
+  // видимым поверх экранов и попапов.
   function flashMsg(text, kind) { if (!ov || !ov.classList.contains('on')) return; const el = document.createElement('div'); el.className = 'ck-up'; el.style.color = kind === 'light' ? 'var(--gold-l)' : '#ff8a8a'; el.style.fontSize = '16px'; el.style.background = 'rgba(20,8,10,.88)'; el.style.padding = '9px 16px'; el.style.borderRadius = '13px'; el.style.maxWidth = '82%'; el.style.textAlign = 'center'; el.style.zIndex = '30000'; el.textContent = text; el.style.left = '50%'; el.style.top = '56%'; el.style.transform = 'translateX(-50%)'; el.style.transition = 'opacity .5s ease .8s'; ov.appendChild(el); window.haptic && window.haptic(kind === 'light' ? 'light' : 'error'); requestAnimationFrame(() => el.style.opacity = '0'); setTimeout(() => el.remove(), 1400); }
 
   // ── Анимации (juice) ─────────────────────────────────────────────────────────
@@ -2324,141 +2153,6 @@
     if (again && canAgain) again.onclick = () => { again.disabled = true; finish(false); setTimeout(openCaseAct, 0); };
   }
 
-  // ── Мини-игра «Золотой дождь» (canvas, 20с лови монеты) ───────────────────────
-  function rainAvailable() { return !st || st.rainAvailable; }
-  async function openRain() {
-    return withLock('rain-start', async () => {
-      if (gameSubmissions.size) { flashMsg('Сохраняем предыдущий результат…'); return; }
-      if (!rainAvailable()) { flashMsg('Игра будет снова ' + untilNewDay()); return; }
-      if (!(await beginGameAttempt('rain'))) return;
-      let el = ov.querySelector('#ck-rain');
-      if (!el) {
-        el = document.createElement('div'); el.id = 'ck-rain'; el.className = 'ck-rain';
-        el.innerHTML = `<div class="ck-rain__hud"><div class="t">${ICON.bolt(16)} <span id="ck-rain-t">20</span></div><div class="sp"></div><div class="s">${COIN(16)} <span id="ck-rain-s">0</span></div><button class="x" id="ck-rain-x">×</button></div><canvas id="ck-rain-cv"></canvas><div class="ck-rain__hint" id="ck-rain-hint">Лови падающие монеты! Золотые — ×3</div>`;
-        ov.appendChild(el); el.querySelector('#ck-rain-x').onclick = confirmRainExit;
-      }
-      el.querySelector('#ck-rain-s').textContent = '0'; el.querySelector('#ck-rain-t').textContent = '20'; el.querySelector('#ck-rain-hint').style.display = '';
-      el.classList.add('on'); startRain();
-    });
-  }
-  function startRain() {
-    const el = ov.querySelector('#ck-rain'), cv = el.querySelector('#ck-rain-cv');
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const elr = el.getBoundingClientRect(), hud = el.querySelector('.ck-rain__hud').getBoundingClientRect();
-    const W = elr.width, H = Math.max(200, elr.height - hud.height);
-    cv.width = W * dpr; cv.height = H * dpr; cv.style.height = H + 'px';
-    const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    rainState = { items: [], score: 0, tEnd: performance.now() + 20000, lastSpawn: 0, W, H, ctx, ended: false, lastTs: performance.now() };
-    cv.onpointerdown = (e) => { e.preventDefault(); const r = cv.getBoundingClientRect(); hitRain(e.clientX - r.left, e.clientY - r.top); };
-    cancelAnimationFrame(rainRAF); rainRAF = requestAnimationFrame(rainLoop);
-  }
-  function hitRain(x, y) {
-    const s = rainState; if (!s) return;
-    for (let i = s.items.length - 1; i >= 0; i--) { const it = s.items[i]; const dx = x - it.x, dy = y - it.y, rr = it.r + 10; if (dx * dx + dy * dy <= rr * rr) { s.items.splice(i, 1); s.score += it.gold ? 3 : 1; ov.querySelector('#ck-rain-s').textContent = s.score; ov.querySelector('#ck-rain-hint').style.display = 'none'; note(it.gold ? 1320 : 880, 0.11, 'triangle', 0.07, it.gold ? 1760 : 1400); window.haptic && window.haptic('light'); break; } }
-  }
-  function rainLoop(ts) {
-    const s = rainState; if (!s || s.ended) return;
-    const now = ts || performance.now();
-    if (now - s.lastTs < MG_MIN_FRAME_MS) { rainRAF = requestAnimationFrame(rainLoop); return; }
-    const dt = Math.min(0.05, (now - s.lastTs) / 1000); s.lastTs = now;
-    const left = Math.max(0, (s.tEnd - now) / 1000); ov.querySelector('#ck-rain-t').textContent = Math.ceil(left);
-    if (left <= 0) { endRain(false); return; }
-    if (now - s.lastSpawn > Math.max(230, 420 - s.score * 3)) { s.lastSpawn = now; const gold = Math.random() < 0.15; const r = gold ? 21 : 16; s.items.push({ x: r + Math.random() * (s.W - 2 * r), y: -r, r, vy: 110 + Math.random() * 150, gold }); }
-    const ctx = s.ctx; ctx.clearRect(0, 0, s.W, s.H);
-    for (let i = s.items.length - 1; i >= 0; i--) { const it = s.items[i]; it.y += it.vy * dt; if (it.y - it.r > s.H) { s.items.splice(i, 1); continue; } drawRainCoin(ctx, it); }
-    rainRAF = requestAnimationFrame(rainLoop);
-  }
-  function drawRainCoin(ctx, it) {
-    ctx.save(); ctx.translate(it.x, it.y);
-    const g = ctx.createRadialGradient(-it.r * 0.3, -it.r * 0.3, it.r * 0.2, 0, 0, it.r);
-    g.addColorStop(0, '#fff3cf'); g.addColorStop(.5, '#C0FF33'); g.addColorStop(1, '#8DBF20');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, it.r, 0, 7); ctx.fill();
-    ctx.lineWidth = 1.5; ctx.strokeStyle = it.gold ? '#fff' : '#5E7B1E'; ctx.stroke();
-    if (it.gold) { ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.arc(0, 0, it.r + 2.5, 0, 7); ctx.stroke(); }
-    ctx.fillStyle = '#16210A'; ctx.font = `700 ${Math.round(it.r * 1.05)}px Georgia,serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('М', 0, it.r * 0.08);
-    ctx.restore();
-  }
-  // × мид-гейм: набранное сгорит, но неподтверждённая сервером попытка не расходуется.
-  function confirmRainExit() {
-    const s = rainState; if (!s || s.ended) return;
-    if (!s.score) { endRain(true); return; } // терять нечего — выходим сразу
-    s.pauseLeft = Math.max(0, s.tEnd - performance.now()); cancelAnimationFrame(rainRAF);
-    const el = ov.querySelector('#ck-rain');
-    let c = el.querySelector('#ck-rain-cfm');
-    if (!c) { c = document.createElement('div'); c.id = 'ck-rain-cfm'; c.className = 'ck-rain__cfm'; el.appendChild(c); }
-    c.innerHTML = `<div class="b"><div class="t">Выйти из игры?</div><div class="s">Собранные ${s.score} ${COIN(13)} сгорят, но игру можно будет начать заново</div><div class="r"><button class="stay" id="ck-rain-stay">Доиграть</button><button class="quit" id="ck-rain-quit">Выйти</button></div></div>`;
-    c.querySelector('#ck-rain-stay').onclick = () => { c.remove(); const p = rainState; if (!p || p.ended) return; p.tEnd = performance.now() + p.pauseLeft; p.lastTs = performance.now(); cancelAnimationFrame(rainRAF); rainRAF = requestAnimationFrame(rainLoop); window.haptic && window.haptic('light'); };
-    c.querySelector('#ck-rain-quit').onclick = () => { window.haptic && window.haptic('light'); endRain(true); };
-    window.haptic && window.haptic('warning');
-  }
-  function endRain(aborted) {
-    const s = rainState; if (!s || s.ended) return; s.ended = true; cancelAnimationFrame(rainRAF);
-    const el = ov.querySelector('#ck-rain'); el.classList.remove('on');
-    const cfm = el.querySelector('#ck-rain-cfm'); if (cfm) cfm.remove(); // close() мог прийти при открытом confirm
-    if (aborted) { clearGameAttempt('rain'); rainState = null; return; }
-    submitRain(s.score); rainState = null;
-  }
-  async function submitRain(score) {
-    const gameSession = overlaySession;
-    gameSubmissions.add('rain'); renderGames();
-    let reward = 0, netfail = false;
-    try {
-      if (authed()) {
-        const expected = Math.min(8000, 1500 + playerLeague().level * 500);
-        const d = await submitAttemptResult('/api/clicker/rain', 'rain', score, expected).catch(() => null);
-        if (!overlaySessionActive(gameSession)) return;
-        if (d && !d.error) { applyServerState(d); reward = d.reward; }
-        else if (d && d.error) { sfxError(); flashMsg('Результат не засчитан — запусти игру заново'); renderAll(); return; }
-        else netfail = true;
-      }
-      else { const g = guestClaimRainRaw(score); if (g != null) { reward = g; applyServerState(guestDerive()); } }
-      if (!overlaySessionActive(gameSession)) return;
-      if (netfail && !reward) { sfxError(); flashMsg('Нет связи — результат не засчитан'); renderAll(); return; } // не праздновать «+0» с конфетти
-      sfxReward(); window.haptic && window.haptic('success'); confettiBurst(); coinShower(); dailyPopupRaw(ICON.rain(20) + ` Золотой дождь · ${score} ${plu(score, 'монета', 'монеты', 'монет')}`, reward || 0); renderAll(); renderTasks(); bumpBalance();
-    } finally {
-      gameSubmissions.delete('rain');
-      if (overlaySessionActive(gameSession)) renderGames();
-    }
-  }
-  // ── Хаб «Игры»: единый claim (clamp+гейт 1/день; для гостя — localStorage) ────
-  const GAME_CAP = { quiz_kids: { reward: 2500 }, quiz_riddle: { reward: 2400 }, count: { reward: 1200 }, memory: { reward: 3000 }, gems: { reward: 4500 }, tower: { reward: 6000 } };
-  // gamesDone приходит только в getClicker/claimGame; tap/buy его не несут → кэшируем
-  let gdCache = [], gdCacheDay = irkToday();
-  function gamesDoneNow() {
-    if (authed()) {
-      const today = irkToday();
-      if (gdCacheDay !== today) { gdCache = []; gdCacheDay = today; }
-      if (st && Array.isArray(st.gamesDone)) { gdCache = st.gamesDone; gdCacheDay = today; }
-      return gdCache;
-    }
-    return guestGamesDoneList();
-  }
-  function gameDone(g) { return gamesDoneNow().indexOf(g) >= 0; }
-  function guestGamesDoneList() { const s = rawGet(); const today = irkToday(); const g = s.gamesDone || {}; return Object.keys(g).filter(k => g[k] === today); }
-  function guestClaimGameRaw(game, score) {
-    const cfg = GAME_CAP[game]; if (!cfg) return null; guestDerive(); const s = rawGet(); const today = irkToday();
-    if (!s.gamesDone) s.gamesDone = {}; if (s.gamesDone[game] === today) return null;
-    const reward = cfg.reward;
-    s.balance += reward; s.totalEarned += reward; s.gamesDone[game] = today; rawSave(s); return reward;
-  }
-  async function submitGame(game, score) {
-    gameSubmissions.add(game); renderGames();
-    try {
-      let reward = 0, pigeonDrop;
-      if (authed()) { const d = await submitAttemptResult('/api/clicker/game', game, score, GAME_CAP[game]?.reward || 0).catch(() => null); if (d && !d.error) { applyServerState(d); reward = d.reward || 0; pigeonDrop = d.pigeonDrop; } else return d && d.error ? { error: d.error } : null; /* сеть/попытка упала — не праздновать «+0» */ }
-      else { const g = guestClaimGameRaw(game, score); if (g != null) { reward = g; applyServerState(guestDerive()); } else return { error: 'already' }; }
-      return { reward, pigeonDrop };
-    } finally {
-      gameSubmissions.delete(game);
-    }
-  }
-
-  function guestClaimRainRaw(score) {
-    guestDerive(); const s = rawGet(); const today = irkToday(); if (s.rainDate === today) return 0;
-    const lvl = leagueFor(s.totalEarned).level; const reward = Math.min(8000, 1500 + lvl * 500);
-    s.balance += reward; s.totalEarned += reward; s.rainDate = today; rawSave(s); return reward;
-  }
-
   // ── Карточка-хвастовство (canvas → шеринг) ────────────────────────────────────
   function drawCardCoin(ctx, x, y, r) {
     const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.2, x, y, r);
@@ -2776,7 +2470,7 @@
         ? `<div class="ck-bank__sub" style="margin-top:5px">Герои недели: ${b.topDonors.map((t, i) => `${['🥇', '🥈', '🥉'][i] || ''}${(t.name || 'Игрок').replace(/[<>]/g, '')} ${fmt(t.total)}`).join(' · ')}</div>` : '';
       bankHtml = b.reached
         ? `<div class="ck-bank"><div class="ck-bank__hd">🏆 Копилка «${myName}» полна!</div><div class="ck-bank__sub">Весь доход стаи ×${b.mult} до конца недели — тапы и бизнесы</div><div class="ck-bank__bar"><i style="width:100%"></i></div>${donors}</div>`
-        : `<div class="ck-bank"><div class="ck-bank__hd">🏦 Копилка стаи · ${fmt(b.sum)} / ${fmt(b.target)}</div><div class="ck-bank__bar"><i style="width:${pct}%"></i></div><div class="ck-bank__sub">Наполните вместе до воскресенья — весь доход стаи ×${b.mult} (тапы и бизнесы)${b.myTotal ? ` · твой вклад ${fmt(b.myTotal)}` : ''}</div><div class="ck-cats" style="margin-top:6px">${presets}</div><div style="display:flex;gap:8px;margin-top:7px"><input class="ck-cipher-in" id="ck-bank-custom" inputmode="numeric" type="text" maxlength="12" placeholder="Своя сумма" aria-label="Своя сумма в копилку" style="flex:1;min-width:0"/><button class="ck-cat-chip" data-bank-custom="1">Внести</button></div>${donors}${b.myToday >= b.dayCap ? `<div class="ck-bank__sub">Дневной лимит вклада исчерпан — продолжишь ${untilNewDay()}</div>` : ''}</div>`;
+        : `<div class="ck-bank"><div class="ck-bank__hd">🏦 Копилка стаи · ${fmt(b.sum)} / ${fmt(b.target)}</div><div class="ck-bank__bar"><i style="width:${pct}%"></i></div><div class="ck-bank__sub">Наполните вместе до воскресенья — весь доход стаи ×${b.mult} (тапы и бизнесы)${b.myTotal ? ` · твой вклад ${fmt(b.myTotal)}` : ''}</div><div class="ck-cats" style="margin-top:6px">${presets}</div><div style="display:flex;gap:8px;margin-top:7px"><input class="ck-text-in" id="ck-bank-custom" inputmode="numeric" type="text" maxlength="12" placeholder="Своя сумма" aria-label="Своя сумма в копилку" style="flex:1;min-width:0"/><button class="ck-cat-chip" data-bank-custom="1">Внести</button></div>${donors}${b.myToday >= b.dayCap ? `<div class="ck-bank__sub">Дневной лимит вклада исчерпан — продолжишь ${untilNewDay()}</div>` : ''}</div>`;
     }
     return { html: `<div class="ck-sect">Команды</div><div style="color:var(--muted);font-size:12px;text-align:center;margin:0 0 6px">Монеты всех игроков команды складываются в общий счёт</div>${ownHtml}${bankHtml}${rows}<div style="color:var(--muted);font-size:12px;text-align:center;margin:6px 0 4px">${my ? 'Сменить команду:' : 'Или выбери открытую команду:'}</div><div class="ck-cats">${chips}</div>`, wire: () => {
       ov.querySelectorAll('[data-squad]').forEach(b => b.onclick = () => joinSquadAct(b.dataset.squad));
@@ -2806,7 +2500,7 @@
     window.haptic && window.haptic('light');
     pop.innerHTML = `<h3>⚔️ ${title}</h3>
       <div style="color:var(--muted);font-size:12.5px;margin-bottom:8px">${sub}</div>
-      <div style="display:flex;gap:8px"><input class="ck-cipher-in" id="ck-pop-sq-in" maxlength="20" placeholder="${placeholder}" autocomplete="off" spellcheck="false" enterkeyhint="done"/><button class="ck-card__buy" id="ck-pop-sq-go" style="justify-content:center">${btnLabel}</button></div>
+      <div style="display:flex;gap:8px"><input class="ck-text-in" id="ck-pop-sq-in" maxlength="20" placeholder="${placeholder}" autocomplete="off" spellcheck="false" enterkeyhint="done"/><button class="ck-card__buy" id="ck-pop-sq-go" style="justify-content:center">${btnLabel}</button></div>
       <button id="ck-pop-ok" style="background:rgba(255,255,255,.07);color:var(--ink);border-color:var(--line)">Закрыть</button>`;
     pop.classList.add('on');
     const inp = pop.querySelector('#ck-pop-sq-in');
@@ -3254,7 +2948,7 @@
   function promoPopup(title, code, minOrder, points) {
     const pop = ov.querySelector('#ck-pop');
     const ptsLine = points ? `<div style="font-size:13px;color:var(--gold-l);font-weight:700;margin:6px 0">${COIN(13)} +${fmt(points)} баллов на карту тоже начислено</div>` : '';
-    pop.innerHTML = `<h3>${ICON.gift(20)} Подарок!</h3><div style="font-size:18px;font-weight:800;color:var(--ink);margin:4px 0">${title || 'Подарок «Мария»'}</div>${ptsLine}<div style="margin:8px 0;font-size:13px;color:var(--muted)">Применить в корзине или назвать менеджеру${minOrder ? ` (от ${fmt(minOrder)}₽)` : ''}:</div><div class="ck-morse" style="font-size:21px;letter-spacing:2px">${code}</div><div style="font-size:12px;color:var(--muted);margin-top:6px">Код действует 30 дней · сохранён в «Мои награды»</div><div style="display:flex;gap:8px;justify-content:center;margin:10px 0 2px"><button class="ck-card__buy" id="ck-pop-copy" style="justify-content:center">Скопировать</button></div><button id="ck-pop-ok">Закрыть</button>`;
+    pop.innerHTML = `<h3>${ICON.gift(20)} Подарок!</h3><div style="font-size:18px;font-weight:800;color:var(--ink);margin:4px 0">${title || 'Подарок «Мария»'}</div>${ptsLine}<div style="margin:8px 0;font-size:13px;color:var(--muted)">Применить в корзине или назвать менеджеру${minOrder ? ` (от ${fmt(minOrder)}₽)` : ''}:</div><div class="ck-reward-code" style="font-size:21px;letter-spacing:2px">${code}</div><div style="font-size:12px;color:var(--muted);margin-top:6px">Код действует 30 дней · сохранён в «Мои награды»</div><div style="display:flex;gap:8px;justify-content:center;margin:10px 0 2px"><button class="ck-card__buy" id="ck-pop-copy" style="justify-content:center">Скопировать</button></div><button id="ck-pop-ok">Закрыть</button>`;
     pop.classList.add('on'); const cp = pop.querySelector('#ck-pop-copy'); if (cp) cp.onclick = async () => { cp.textContent = await copyText(code) ? 'Скопировано' : 'Выдели код выше'; }; pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
   }
   function giftPopup(points) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${ICON.gift(20)} Подарок на карту!</h3><div class="v">+${points} баллов</div><div style="color:var(--muted);font-size:13px">Баллы «Мария» зачислены на твою карту клуба — трать при заказе тортов 🎂</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on'); }
@@ -3343,8 +3037,6 @@
     const cb = ov.querySelector('#ck-combo-claim'); if (cb) cb.onclick = () => runButtonBusy(cb, claimCombo);
     const ch = ov.querySelector('#ck-chest-open'); if (ch) ch.onclick = () => runButtonBusy(ch, openChestAct);
     const co = ov.querySelector('#ck-case-open'); if (co) co.onclick = () => runButtonBusy(co, openCaseAct);
-    const go = ov.querySelector('#ck-cipher-go'), inp = ov.querySelector('#ck-cipher-in');
-    if (go && inp) { go.onclick = () => claimCipher(inp.value); inp.onkeydown = (e) => { if (e.key === 'Enter') claimCipher(inp.value); }; }
   }
   async function claimTask(id) {
     return withLock('task', async () => {
@@ -3369,9 +3061,9 @@
     });
   }
   // ── Дроп голубя: попап поверх #ck-pop, показывается ПОСЛЕ закрытия предыдущего
-  // попапа (сундук/комбо/золотой бонус/игра/покупки) — один общий DOM-элемент,
+  // попапа (сундук/комбо/золотой бонус/покупки) — один общий DOM-элемент,
   // два попапа разом не влезают. Очередь на случай будущих множественных дропов;
-  // сейчас реально копится максимум 1 штука (combo/chest/bonus/game дают по одному),
+  // сейчас реально копится максимум 1 штука (combo/chest/bonus дают по одному),
   // кроме purchase-sync — там отдельный сводный попап (doveDropsSummaryPopup), не очередь.
   // Мини-мирror имя+редкость — src/pigeons.ts::PIGEON_BREEDS (полный список с сетами/
   // артом ведёт catdove.js; тут достаточно для попапа дропа).
@@ -3444,7 +3136,7 @@
     if (renderAcc < LOOP_FRAME_BUDGET) { raf = requestAnimationFrame(loop); return; } // кап 20fps: тап-хендлер вне цикла, тут только пассивный доход/комбо-декей/лёгкий HUD
     const dt = renderAcc; renderAcc = 0;
     if (st) {
-      // Открытая всю ночь игра тоже должна разблокировать новый сундук/игры/стрик.
+      // Открытая всю ночь игра тоже должна разблокировать новый сундук и стрик.
       // При неудаче сети повторяем раз в 15 секунд, а не оставляем вчерашний UI.
       const wallNow = Date.now();
       if (wallNow >= dayCheckAt) {
@@ -3512,8 +3204,8 @@
       { text: 'Пригласи друга — обоим монеты: тебе +30 000, ему +2 500 на старт', anchor: '#ck-toplist', pos: 'bottom' },
     ],
     hub: [
-      { text: 'Это раздел мини-игр. Выбирай игру, выполняй её условия и получай дополнительные монеты', anchor: '#ck-hub-body', pos: 'bottom' },
-      { text: 'У каждой игры свои правила и лимит награды. Перед стартом читай короткое описание на карточке', anchor: '#ck-hub-body', pos: 'top' },
+      { text: 'На Главной собраны ключевые показатели: уровень, доход, энергия, голуби и прогресс стаи', anchor: '#ck-hub-body', pos: 'bottom' },
+      { text: 'Отсюда можно быстро перейти к прокачке, голубям, призам и рейтингу', anchor: '#ck-hub-body', pos: 'top' },
     ],
     col: [
       { text: 'Альбом пород: собери все 16! Каждый голубь увеличивает доход в час, а звёзды и тюнинг усиливают его', anchor: '#ck-dove-col .cd-summary', pos: 'bottom' },
@@ -3712,348 +3404,6 @@
     }
     lastTs = 0; syncT = 0; combo = 0; renderAcc = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
   }
-  // ── Хаб «Игры»: рендер + квизы + «Собери торт» + «Ровный крем» ───────────────
-  let quizState = null, memState = null, towerState = null;
-  // Рисованные сладости (правило бренда «никаких эмодзи как арта»); совпадение по равенству строк.
-  const MEM_ICONS = [
-    `<svg width="34" height="34" viewBox="0 0 40 40"><path d="M12 18h16l-1.6 12.4a1.8 1.8 0 0 1-1.8 1.6H15.4a1.8 1.8 0 0 1-1.8-1.6z" fill="#D4FF6A" stroke="#8DBF20" stroke-width="1.6" stroke-linejoin="round"/><path d="M10 18c-.4-3.6 3-5.6 5.2-5.6.8-3.2 8.8-3.2 9.6 0 2.2 0 5.6 2 5.2 5.6z" fill="#ff9ec4" stroke="#e0639a" stroke-width="1.6" stroke-linejoin="round"/><circle cx="20" cy="9.6" r="2.3" fill="#e8413f"/></svg>`,
-    `<svg width="34" height="34" viewBox="0 0 40 40"><rect x="7" y="18.4" width="26" height="5.6" rx="2.8" fill="#fff0c4" stroke="#e6c98a" stroke-width="1.1"/><path d="M8 19c0-5 5-8.2 12-8.2s12 3.2 12 8.2q-12 3-24 0z" fill="#c9a6e0" stroke="#9a6fc4" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 23.4c0 5 5 8.2 12 8.2s12-3.2 12-8.2q-12-3-24 0z" fill="#c9a6e0" stroke="#9a6fc4" stroke-width="1.5" stroke-linejoin="round"/><g fill="#b88fd6"><circle cx="10.5" cy="18.8" r="0.9"/><circle cx="14.5" cy="18.4" r="0.9"/><circle cx="25.5" cy="18.4" r="0.9"/><circle cx="29.5" cy="18.8" r="0.9"/></g><path d="M11 14.8q9-3 18 0" fill="none" stroke="#ecdcf6" stroke-width="1.4" stroke-linecap="round" opacity=".85"/></svg>`,
-    `<svg width="34" height="34" viewBox="0 0 40 40"><circle cx="20" cy="20" r="13" fill="#d6a25a" stroke="#a9762f" stroke-width="1.6"/><circle cx="15" cy="16" r="1.8" fill="#16210A"/><circle cx="24" cy="15" r="1.8" fill="#16210A"/><circle cx="26" cy="23" r="1.8" fill="#16210A"/><circle cx="17" cy="25" r="1.8" fill="#16210A"/><circle cx="21" cy="20" r="1.5" fill="#16210A"/></svg>`,
-    `<svg width="34" height="34" viewBox="0 0 40 40"><circle cx="20" cy="21" r="12" fill="#D4FF6A" stroke="#8DBF20" stroke-width="1.6"/><path d="M20 9c6.6 0 12 5.4 12 12 0 2-.5 4-1.4 5.6C28 24 24 26 20 26s-8-2-10.6-.6A11.9 11.9 0 0 1 8 21C8 14.4 13.4 9 20 9z" fill="#7a4a2a" stroke="#5a3318" stroke-width="1.4" stroke-linejoin="round"/><circle cx="20" cy="21" r="4.2" fill="#120D1C"/><circle cx="16" cy="15" r="1" fill="#ff9ec4"/><circle cx="24" cy="14" r="1" fill="#7da33f"/><circle cx="27" cy="19" r="1" fill="#ffd24d"/><circle cx="13" cy="19" r="1" fill="#5aa8e8"/></svg>`,
-    `<svg width="34" height="34" viewBox="0 0 40 40"><path d="M8 31 20 12l12 19z" fill="#f0c688" stroke="#c9954a" stroke-width="1.6" stroke-linejoin="round"/><path d="M18 24.6 L33 24.6 L33 21 L23 21 Z" fill="#F2FFCE" stroke="#e3c39a" stroke-width="1"/><path d="M7 31 L33 15 L33 11.5 L7 27.5 Z" fill="#ff9ec4" stroke="#e0639a" stroke-width="1.4" stroke-linejoin="round"/><circle cx="32.4" cy="11.9" r="2.6" fill="#e8413f" stroke="#b02a28" stroke-width="0.9"/></svg>`,
-    `<svg width="34" height="34" viewBox="0 0 40 40"><g stroke="#c0392b" stroke-width="1.6" stroke-linejoin="round"><path d="M11 20 4 13v14z" fill="#ff8a7a"/><path d="M29 20 36 13v14z" fill="#ff8a7a"/><ellipse cx="20" cy="20" rx="9" ry="8" fill="#ff6b5e"/></g><path d="M16 16c2.4 2.4 5.6 2.4 8 0" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".7"/></svg>`,
-  ];
-
-  function renderGames() {
-    const box = ov && ov.querySelector('#ck-gameslist'); if (!box) return;
-    const saving = gameSubmissions.size > 0;
-    const card = (id, icon, name, desc) => {
-      const done = gameDone(id);
-      return `<div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${icon}</div><div class="ck-card__b"><div class="ck-card__n">${name}</div><div class="ck-card__s">${done ? 'Сыграно — снова ' + untilNewDay() : desc}</div></div>${done ? `<button class="ck-card__buy" disabled>✓ Сегодня</button>` : saving ? `<button class="ck-card__buy" disabled>Сохраняем…</button>` : `<button class="ck-card__buy" data-game="${id}">Играть</button>`}</div></div>`;
-    };
-    const rainAvail = !st || st.rainAvailable;
-    const rainCard = `<div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.rain(26)}</div><div class="ck-card__b"><div class="ck-card__n">Золотой дождь</div><div class="ck-card__s">${rainAvail ? 'Лови монеты 20 секунд → бонус' : 'Сыграно — снова ' + untilNewDay()}</div></div>${rainAvail ? saving ? `<button class="ck-card__buy" disabled>Сохраняем…</button>` : `<button class="ck-card__buy" id="ck-games-rain">Играть</button>` : `<button class="ck-card__buy" disabled>✓ Сегодня</button>`}</div></div>`;
-    // «Слово дня» — часть хаба игр (переехало из «Призов», решение юзера 31.07)
-    const cph = (st && st.cipher) || { claimed: false, reward: CIPHER_REWARD };
-    const cipherCard = `<div class="ck-card ck-bonus"><div style="display:flex;align-items:center;gap:11px"><div class="ck-card__ic">${ICON.bolt(26)}</div><div class="ck-card__b"><div class="ck-card__n">Слово дня</div><div class="ck-card__s">${cph.claimed ? 'Разгадано — приходи завтра' : `Собери слово из букв · +${fmt(cph.reward)} ` + COIN(13)}</div></div>${cph.claimed ? `<button class="ck-card__buy" disabled>✓ Сегодня</button>` : `<button class="ck-card__buy" id="ck-games-cipher">Играть</button>`}</div></div>`;
-    const gated = ['quiz_kids', 'quiz_riddle', 'count', 'memory', 'gems', 'tower'];
-    const total = gated.length + 2, doneN = gated.filter(gameDone).length + (rainAvail ? 0 : 1) + (cph.claimed ? 1 : 0), remain = total - doneN;
-    const head = `<div class="ck-games-hd">${remain > 0 ? `Сегодня доступно игр: <b>${remain}</b> из ${total} · награды ждут ${COIN(14)}` : 'Все игры на сегодня пройдены — новые ' + untilNewDay()}</div>`;
-    box.innerHTML = head +
-      '<div class="ck-sect">Учимся и играем · детям</div>' +
-      card('quiz_kids', ICON.quiz(26), 'Котовикторина', '5 вопросов обо всём · +2500 ' + COIN(13)) +
-      card('quiz_riddle', ICON.paw(26), 'Загадки', 'Отгадай 4 загадки · +2400 ' + COIN(13)) +
-      card('count', ICON.cupcake(26), 'Счёт конфет', 'Сложи конфеты, малышам · +1200 ' + COIN(13)) +
-      card('memory', ICON.cake(26), 'Собери торт', 'Найди пары на память · +3000 ' + COIN(13)) +
-      '<div class="ck-sect">Казуальные · всем</div>' +
-      card('gems', ICON.gem(26), 'Сладкий ряд', 'Match-3: собирай 3+ конфеты в ряд · +4500 ' + COIN(13)) +
-      card('tower', ICON.cake(26), 'Башня тортов', 'Ставь коржи ровно, строй башню · +6000 ' + COIN(13)) +
-      cipherCard +
-      rainCard;
-    box.querySelectorAll('.ck-card__buy[data-game]').forEach(b => b.onclick = () => startGame(b.dataset.game));
-    const rb = box.querySelector('#ck-games-rain'); if (rb) rb.onclick = openRain;
-    const cb = box.querySelector('#ck-games-cipher'); if (cb) cb.onclick = openCipherPopup;
-  }
-  // Попап «Слова дня» (та же анаграмма и claimCipher, что жили в «Призах»)
-  function openCipherPopup() {
-    const pop = ov && ov.querySelector('#ck-pop'); if (!pop) return;
-    const cph = (st && st.cipher) || { anagram: '', morse: '', len: 0, reward: CIPHER_REWARD };
-    if (cph.claimed) { flashMsg('Уже разгадано сегодня'); return; }
-    window.haptic && window.haptic('light');
-    const letters = (cph.anagram || '').split('').join(' ');
-    pop.innerHTML = `<h3>${ICON.bolt(20)} Слово дня</h3>
-      <div style="color:var(--muted);font-size:12.5px;margin-bottom:8px">Собери слово из букв · +${fmt(cph.reward)} ${COIN(13)}</div>
-      <div class="ck-morse" style="margin-bottom:10px">${letters || cph.morse}</div>
-      <div style="display:flex;gap:8px"><input class="ck-cipher-in" id="ck-pop-cipher-in" maxlength="14" placeholder="${cph.len} букв" autocomplete="off" spellcheck="false" enterkeyhint="done" autocapitalize="characters"/><button class="ck-card__buy" id="ck-pop-cipher-go" style="justify-content:center">Разгадать</button></div>
-      <button id="ck-pop-ok" style="background:rgba(255,255,255,.07);color:var(--ink);border-color:var(--line)">Закрыть</button>`;
-    pop.classList.add('on');
-    const inp = pop.querySelector('#ck-pop-cipher-in');
-    const submit = () => { pop.classList.remove('on'); claimCipher(inp.value); };
-    pop.querySelector('#ck-pop-cipher-go').onclick = submit;
-    inp.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
-    pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
-  }
-  const gameAttempts = {};
-  async function beginGameAttempt(game) {
-    if (!authed()) return true;
-    const d = await api('/api/clicker/game-attempt', { method: 'POST', body: JSON.stringify({ game }) }).catch(() => null);
-    if (!d || d.error || !d.token) { flashMsg(!d || d.error === 'internal' ? 'Нет связи — игру не запустили' : 'Игру сейчас не удалось запустить'); return false; }
-    gameAttempts[game] = d.token;
-    return true;
-  }
-  function gameAttempt(game) { return gameAttempts[game] || ''; }
-  function clearGameAttempt(game) { delete gameAttempts[game]; }
-  async function submitAttemptResult(path, game, score, fallbackReward) {
-    const attempt = gameAttempt(game);
-    if (!attempt) return null;
-    const send = () => mutationApi(path, { method: 'POST', body: JSON.stringify({ game, score, attempt }) }).catch(() => null);
-    let d = await send();
-    // Один повтор тем же подписанным токеном: если первый запрос не дошёл, он
-    // завершит claim; если ответ потерялся после commit, GET ниже восстановит UI.
-    if (!d || d.error === 'internal') d = await send();
-    if (d && !d.error) { clearGameAttempt(game); return d; }
-    if (!d || d.error === 'internal' || d.error === 'already') {
-      const fresh = await stateApi('/api/clicker').catch(() => null);
-      const recorded = fresh && !fresh.error && (game === 'rain'
-        ? fresh.rainAvailable === false
-        : Array.isArray(fresh.gamesDone) && fresh.gamesDone.indexOf(game) >= 0);
-      if (recorded) {
-        clearGameAttempt(game);
-        return { ...fresh, reward: fallbackReward, recovered: true };
-      }
-    }
-    if (d && d.error !== 'too_fast' && d.error !== 'internal') clearGameAttempt(game);
-    return d;
-  }
-  async function startGame(g) {
-    return withLock('game-start:' + g, async () => {
-      if (gameSubmissions.size) { flashMsg('Сохраняем предыдущий результат…'); return; }
-      if (gameDone(g)) { flashMsg('Сыграно — снова ' + untilNewDay()); return; }
-      const gameSession = overlaySession;
-      const hub = ov && ov.querySelector('#ck-games');
-      if (!(await beginGameAttempt(g))) return;
-      // Пока сервер выдавал подписанную попытку, игрок мог закрыть хаб или всю игру.
-      // Не открываем мини-игру за уже закрытым экраном и не переносим токен дальше.
-      if (!overlaySessionActive(gameSession) || !hub || !hub.classList.contains('on')) {
-        clearGameAttempt(g);
-        return;
-      }
-      if (g === 'memory') openMemory(); else if (g === 'tower') openTower(); else if (g === 'gems') openGems(); else openQuiz(g);
-    });
-  }
-  function openGamesHub() { if (!ov) return; window.haptic && window.haptic('light'); ov.querySelector('#ck-games').classList.add('on'); renderGames(); }
-  function closeGamesHub() { const g = ov && ov.querySelector('#ck-games'); if (g) g.classList.remove('on'); if (tab === 'tasks') renderTasks(); /* обновить счётчик «доступно N из 7» на карточке */ }
-  function resultPopup(title, amount, sub) { const pop = ov.querySelector('#ck-pop'); pop.innerHTML = `<h3>${title}</h3><div class="v">+${fmt(amount)} ${COIN(26)}</div><div style="color:var(--muted);font-size:13px">${sub || ''}</div><button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => { pop.classList.remove('on'); advancePopupQueue(); }; }
-  function gameResultFailed(gres) {
-    if (gres && !gres.error) return false;
-    sfxError();
-    flashMsg(gres && gres.error ? 'Результат не засчитан — запусти игру заново' : 'Нет связи — результат не засчитан');
-    renderAll(); renderGames();
-    return true;
-  }
-
-  // — Квизы (Котовикторина / Загадки / Счёт конфет) —
-  function openQuiz(deck) {
-    if (gameDone(deck)) { flashMsg('Сыграно — снова ' + untilNewDay()); return; }
-    const qs = quizQuestions(deck); if (!qs.length) return;
-    let el = ov.querySelector('#ck-quiz'); if (!el) { el = document.createElement('div'); el.id = 'ck-quiz'; el.className = 'ck-quiz'; ov.appendChild(el); }
-    quizState = { deck, qs, i: 0, correct: 0, locked: false }; el.classList.add('on'); renderQuizStep();
-  }
-  function renderQuizStep() {
-    const el = ov.querySelector('#ck-quiz'), s = quizState; if (!s) return; const q = s.qs[s.i]; const meta = GAME_META[s.deck];
-    const dots = s.qs.map((_, k) => `<i class="${k < s.i ? 'd' : ''} ${k === s.i ? 'c' : ''}"></i>`).join('');
-    el.innerHTML = `<div class="ck-quiz__hd"><div class="t">${meta.icon()} ${meta.name}</div><button class="x" id="ck-quiz-x">×</button></div><div class="ck-quiz__dots">${dots}</div><div class="ck-quiz__q">${q.q}</div><div class="ck-quiz__opts">${q.opts.map(o => `<button class="ck-quiz__o">${o}</button>`).join('')}</div>`;
-    el.querySelector('#ck-quiz-x').onclick = closeQuiz;
-    el.querySelectorAll('.ck-quiz__o').forEach(b => b.onclick = () => answerQuiz(b, q));
-  }
-  function answerQuiz(btn, q) {
-    const s = quizState; if (!s || s.locked) return; s.locked = true;
-    const ok = btn.textContent === q.a; const el = ov.querySelector('#ck-quiz');
-    el.querySelectorAll('.ck-quiz__o').forEach(b => { b.disabled = true; if (b.textContent === q.a) b.classList.add('ok'); else if (b === btn) b.classList.add('bad'); });
-    if (ok) { s.correct++; note(880, 0.12, 'triangle', 0.09, 1320); window.haptic && window.haptic('light'); } else { sfxError(); window.haptic && window.haptic('warning'); }
-    setTimeout(() => { if (quizState !== s) return; s.i++; s.locked = false; if (s.i >= s.qs.length) finishQuiz(); else renderQuizStep(); }, 760);
-  }
-  async function finishQuiz() {
-    const s = quizState; if (!s) return; const deck = s.deck, correct = s.correct, total = s.qs.length, meta = GAME_META[deck]; closeQuiz();
-    const gameSession = overlaySession;
-    const gres = await submitGame(deck, correct);
-    if (!overlaySessionActive(gameSession)) return;
-    if (gameResultFailed(gres)) return;
-    sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
-    queueDoveDrop(gres.pigeonDrop);
-    resultPopup(`${meta.icon()} ${correct}/${total} верно!`, gres.reward || 0, correct === total ? 'Идеально! 🌟' : 'Молодец, заходи завтра!');
-    renderAll(); renderGames(); bumpBalance();
-  }
-  function closeQuiz() { const el = ov.querySelector('#ck-quiz'); if (el) el.classList.remove('on'); quizState = null; }
-
-  // — «Собери торт» (память/пары) —
-  function openMemory() {
-    if (gameDone('memory')) { flashMsg('Сыграно — снова ' + untilNewDay()); return; }
-    let el = ov.querySelector('#ck-mem'); if (!el) { el = document.createElement('div'); el.id = 'ck-mem'; el.className = 'ck-mem'; ov.appendChild(el); }
-    const cards = shuffleSeed([...MEM_ICONS, ...MEM_ICONS], dateSeed(irkToday(), 'mem')).map(v => ({ v, done: false }));
-    memState = { cards, flipped: [], matched: 0, moves: 0, t0: performance.now(), lock: false }; el.classList.add('on'); renderMemory();
-  }
-  function renderMemory() {
-    const el = ov.querySelector('#ck-mem'), s = memState; if (!s) return;
-    el.innerHTML = `<div class="ck-quiz__hd"><div class="t">${ICON.cake(20)} Собери торт</div><button class="x" id="ck-mem-x">×</button></div><div class="ck-mem__sub">Найди одинаковые пары · ходов: <span id="ck-mem-moves">0</span></div><div class="ck-mem__grid">${s.cards.map((c, k) => `<button class="ck-mem__c" data-k="${k}"><span class="f">?</span><span class="b">${c.v}</span></button>`).join('')}</div>`;
-    el.querySelector('#ck-mem-x').onclick = closeMemory;
-    el.querySelectorAll('.ck-mem__c').forEach(b => b.onclick = () => flipMem(parseInt(b.dataset.k, 10)));
-  }
-  function memCell(k) { return ov.querySelector(`.ck-mem__c[data-k="${k}"]`); }
-  function flipMem(k) {
-    const s = memState; if (!s || s.lock) return; const c = s.cards[k]; if (c.done || s.flipped.indexOf(k) >= 0) return;
-    memCell(k).classList.add('show'); s.flipped.push(k); note(740, 0.08, 'sine', 0.06);
-    if (s.flipped.length === 2) {
-      s.moves++; ov.querySelector('#ck-mem-moves').textContent = s.moves; s.lock = true;
-      const a = s.flipped[0], b = s.flipped[1];
-      if (s.cards[a].v === s.cards[b].v) { s.cards[a].done = s.cards[b].done = true; s.matched++; setTimeout(() => { if (memState !== s) return; const ca = memCell(a), cb = memCell(b); if (ca) ca.classList.add('match'); if (cb) cb.classList.add('match'); s.flipped = []; s.lock = false; note(1046, 0.12, 'triangle', 0.08, 1320); window.haptic && window.haptic('light'); if (s.matched === MEM_ICONS.length) finishMemory(); }, 340); }
-      else { setTimeout(() => { if (memState !== s) return; const ca = memCell(a), cb = memCell(b); if (ca) ca.classList.remove('show'); if (cb) cb.classList.remove('show'); s.flipped = []; s.lock = false; sfxError(); }, 720); }
-    }
-  }
-  async function finishMemory() {
-    const s = memState; if (!s) return; const secs = (performance.now() - s.t0) / 1000; const moves = s.moves;
-    const score = Math.max(20, Math.min(100, Math.round(100 - (moves - MEM_ICONS.length) * 5 - secs * 1.2))); closeMemory();
-    const gameSession = overlaySession;
-    const gres = await submitGame('memory', score);
-    if (!overlaySessionActive(gameSession)) return;
-    if (gameResultFailed(gres)) return;
-    sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
-    queueDoveDrop(gres.pigeonDrop);
-    resultPopup(`${ICON.cake(22)} Торт собран!`, gres.reward || 0, `За ${moves} ходов · ${Math.round(secs)}с`);
-    renderAll(); renderGames(); bumpBalance();
-  }
-  function closeMemory() { const el = ov.querySelector('#ck-mem'); if (el) el.classList.remove('on'); memState = null; }
-
-  // — «Башня тортов» (стопка коржей, на канвасе). Тап → поставить корж ровно —
-  const TOWER_COLORS = ['#7a2d3a', '#c98a3c', '#e7c98f', '#9d5a3c', '#d98fb0', '#8c4a6b'];
-  function towerRoundRect(ctx, x, y, w, h, r) { r = Math.min(r, w / 2, h / 2); ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
-  function towerLayer(ctx, x, y, w, h, color, glow) {
-    ctx.save(); if (glow) { ctx.shadowColor = 'rgba(255,210,110,.55)'; ctx.shadowBlur = 16; }
-    ctx.fillStyle = color; towerRoundRect(ctx, x, y, w, h, 6); ctx.fill(); ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(255,255,255,.20)'; towerRoundRect(ctx, x, y, w, Math.min(7, h / 2), 6); ctx.fill();
-    ctx.fillStyle = 'rgba(0,0,0,.16)'; ctx.fillRect(x, y + h - 4, w, 4);
-    ctx.restore();
-  }
-  function openTower() {
-    if (gameDone('tower')) { flashMsg('Сыграно — снова ' + untilNewDay()); return; }
-    let el = ov.querySelector('#ck-tower'); if (!el) { el = document.createElement('div'); el.id = 'ck-tower'; el.className = 'ck-tower'; ov.appendChild(el); }
-    el.innerHTML = `<div class="ck-quiz__hd"><div class="t">${ICON.cake(20)} Башня тортов</div><button class="x" id="ck-tower-x">×</button></div><div class="ck-mem__sub">Тапни по экрану, чтобы поставить корж ровно. Чем выше башня — тем больше монет!</div><div class="ck-tower__score" id="ck-tower-score">0</div><canvas id="ck-tower-cv"></canvas>`;
-    el.classList.add('on');
-    el.querySelector('#ck-tower-x').onclick = closeTower;
-    startTower();
-  }
-  function startTower() {
-    const el = ov.querySelector('#ck-tower'), cv = el.querySelector('#ck-tower-cv');
-    const rect = cv.getBoundingClientRect();
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const W = Math.max(240, Math.floor(rect.width)), H = Math.max(320, Math.floor(rect.height));
-    cv.width = W * dpr; cv.height = H * dpr; const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
-    const baseW = Math.floor(W * 0.5), LH = 28;
-    const base = { x: (W - baseW) / 2, w: baseW, color: TOWER_COLORS[0] };
-    towerState = { ctx, W, H, LH, stack: [base], score: 0, cam: 0, ended: false, raf: 0, last: performance.now(),
-      cur: { x: 0, w: baseW, dir: 1, speed: 150, color: TOWER_COLORS[1] } };
-    cv.onpointerdown = (e) => { e.preventDefault(); towerDrop(); };
-    towerState.raf = requestAnimationFrame(towerLoop);
-  }
-  function towerLoop(ts) {
-    const s = towerState; if (!s || s.ended) return;
-    if (ts - s.last < MG_MIN_FRAME_MS) { s.raf = requestAnimationFrame(towerLoop); return; }
-    const dt = Math.min(0.05, (ts - s.last) / 1000); s.last = ts; const c = s.cur;
-    c.x += c.dir * c.speed * dt;
-    if (c.x <= 0) { c.x = 0; c.dir = 1; } if (c.x + c.w >= s.W) { c.x = s.W - c.w; c.dir = -1; }
-    drawTower(); s.raf = requestAnimationFrame(towerLoop);
-  }
-  function drawTower() {
-    const s = towerState, ctx = s.ctx; ctx.clearRect(0, 0, s.W, s.H);
-    const towerTop = s.stack.length * s.LH;
-    s.cam += ((Math.max(0, towerTop - (s.H - 150))) - s.cam) * 0.16;
-    for (let i = 0; i < s.stack.length; i++) { const L = s.stack[i]; towerLayer(ctx, L.x, s.H - 44 - i * s.LH + s.cam, L.w, s.LH, L.color); }
-    const cy = s.H - 44 - s.stack.length * s.LH + s.cam; towerLayer(ctx, s.cur.x, cy, s.cur.w, s.LH, s.cur.color, true);
-  }
-  function towerDrop() {
-    const s = towerState; if (!s || s.ended) return;
-    const prev = s.stack[s.stack.length - 1], c = s.cur;
-    const l = Math.max(c.x, prev.x), r = Math.min(c.x + c.w, prev.x + prev.w), over = r - l;
-    if (over <= 4) { finishTower(); return; }
-    let nx = l, nw = over;
-    if (Math.abs(c.x - prev.x) < 7) { nx = prev.x; nw = prev.w; note(1318, 0.14, 'triangle', 0.1, 1760); window.haptic && window.haptic('medium'); }
-    else { note(820, 0.1, 'triangle', 0.08, 1150); window.haptic && window.haptic('light'); }
-    s.stack.push({ x: nx, w: nw, color: c.color });
-    s.score++; const se = ov.querySelector('#ck-tower-score'); if (se) se.textContent = s.score;
-    const ci = s.stack.length % TOWER_COLORS.length;
-    s.cur = { x: c.dir > 0 ? 0 : s.W - nw, w: nw, dir: c.dir > 0 ? 1 : -1, speed: 150 + s.score * 8, color: TOWER_COLORS[ci] };
-  }
-  async function finishTower() {
-    const s = towerState; if (!s || s.ended) return; s.ended = true; cancelAnimationFrame(s.raf);
-    const score = s.score; closeTower();
-    const gameSession = overlaySession;
-    const gres = await submitGame('tower', score);
-    if (!overlaySessionActive(gameSession)) return;
-    if (gameResultFailed(gres)) return;
-    sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
-    queueDoveDrop(gres.pigeonDrop);
-    resultPopup(`${ICON.cake(22)} Башня из ${score} коржей!`, gres.reward || 0, score >= 20 ? 'Высоченная! 🎂' : 'Неплохо — завтра выше!');
-    renderAll(); renderGames(); bumpBalance();
-  }
-  function closeTower() { if (towerState) cancelAnimationFrame(towerState.raf); const el = ov.querySelector('#ck-tower'); if (el) el.classList.remove('on'); towerState = null; }
-
-  // — «Сладкий ряд» (match-3 на конфетах). Модель проверена юнит-тестом —
-  const GEMS = ['🍬', '🍭', '🍫', '🍓', '🫐'], GN = 7, GT = 5, GEM_SEC = 50;
-  let gemsState = null;
-  function findMatchesG(g, n) {
-    const m = new Set();
-    for (let r = 0; r < n; r++) { let run = 1; for (let c = 1; c <= n; c++) { if (c < n && g[r * n + c] >= 0 && g[r * n + c] === g[r * n + c - 1]) run++; else { if (run >= 3) for (let k = 1; k <= run; k++) m.add(r * n + c - k); run = 1; } } }
-    for (let c = 0; c < n; c++) { let run = 1; for (let r = 1; r <= n; r++) { if (r < n && g[r * n + c] >= 0 && g[r * n + c] === g[(r - 1) * n + c]) run++; else { if (run >= 3) for (let k = 1; k <= run; k++) m.add((r - k) * n + c); run = 1; } } }
-    return m;
-  }
-  function applyGravityG(g, n, rng) { for (let c = 0; c < n; c++) { let w = n - 1; for (let r = n - 1; r >= 0; r--) { if (g[r * n + c] >= 0) { g[w * n + c] = g[r * n + c]; if (w !== r) g[r * n + c] = -1; w--; } } for (let r = w; r >= 0; r--) g[r * n + c] = Math.floor(rng() * GT); } }
-  function makeGemBoard(n, rng) { const g = new Array(n * n); for (let i = 0; i < g.length; i++) g[i] = Math.floor(rng() * GT); let m = findMatchesG(g, n), guard = 0; while (m.size && guard++ < 800) { m.forEach(i => g[i] = Math.floor(rng() * GT)); m = findMatchesG(g, n); } return g; }
-  function adjG(a, b, n) { const ra = (a / n) | 0, ca = a % n, rb = (b / n) | 0, cb = b % n; return Math.abs(ra - rb) + Math.abs(ca - cb) === 1; }
-  function hasMoveG(g, n) { for (let a = 0; a < n * n; a++) { const cands = [a + 1, a + n]; for (const b of cands) { if (b < n * n && adjG(a, b, n)) { const t = g[a]; g[a] = g[b]; g[b] = t; const ok = findMatchesG(g, n).size > 0; const u = g[a]; g[a] = g[b]; g[b] = u; if (ok) return true; } } } return false; }
-  const wait = (ms) => new Promise(r => setTimeout(r, ms));
-
-  function openGems() {
-    if (gameDone('gems')) { flashMsg('Сыграно — снова ' + untilNewDay()); return; }
-    let el = ov.querySelector('#ck-gems'); if (!el) { el = document.createElement('div'); el.id = 'ck-gems'; el.className = 'ck-gems'; ov.appendChild(el); }
-    gemsState = { g: makeGemBoard(GN, Math.random), n: GN, sel: -1, score: 0, lock: false, ended: false, tEnd: performance.now() + GEM_SEC * 1000, raf: 0 };
-    el.classList.add('on'); renderGemsUI();
-    gemsState.raf = setTimeout(gemsTimer, 0); // секундному таймеру не нужен rAF 60fps
-  }
-  function renderGemsUI() {
-    const el = ov.querySelector('#ck-gems');
-    el.innerHTML = `<div class="ck-quiz__hd"><div class="t">${ICON.gem(20)} Сладкий ряд</div><button class="x" id="ck-gems-x">×</button></div><div class="ck-mem__sub">Меняй соседние конфеты, собирай 3+ в ряд · <span id="ck-gems-t">${GEM_SEC}</span>с · очки <span id="ck-gems-s">0</span></div><div class="ck-gems__grid" id="ck-gems-grid" style="grid-template-columns:repeat(${GN},1fr)"></div>`;
-    el.querySelector('#ck-gems-x').onclick = closeGems; renderGemsGrid();
-  }
-  function renderGemsGrid() {
-    const grid = ov.querySelector('#ck-gems-grid'), s = gemsState; if (!grid || !s) return;
-    grid.innerHTML = s.g.map((t, i) => `<button class="ck-gems__c ${i === s.sel ? 'sel' : ''}" data-i="${i}">${t < 0 ? '' : `<span class="cd cd${t}"></span>`}</button>`).join('');
-    grid.querySelectorAll('.ck-gems__c').forEach(b => b.onclick = () => tapGem(parseInt(b.dataset.i, 10)));
-  }
-  async function tapGem(i) {
-    const s = gemsState; if (!s || s.lock || s.ended) return;
-    if (s.sel < 0 || (s.sel !== i && !adjG(s.sel, i, s.n))) { s.sel = i; renderGemsGrid(); note(660, 0.06, 'sine', 0.05); return; }
-    if (i === s.sel) { s.sel = -1; renderGemsGrid(); return; }
-    const a = s.sel, b = i; s.sel = -1; s.lock = true;
-    const t = s.g[a]; s.g[a] = s.g[b]; s.g[b] = t; renderGemsGrid();
-    if (findMatchesG(s.g, s.n).size > 0) { window.haptic && window.haptic('light'); await resolveGemsAnimated(); }
-    else { await wait(170); const u = s.g[a]; s.g[a] = s.g[b]; s.g[b] = u; renderGemsGrid(); sfxError(); window.haptic && window.haptic('warning'); }
-    s.lock = false;
-  }
-  async function resolveGemsAnimated() {
-    const s = gemsState;
-    for (let guard = 0; guard < 60; guard++) {
-      const m = findMatchesG(s.g, s.n); if (!m.size) break;
-      const grid = ov.querySelector('#ck-gems-grid');
-      if (grid) m.forEach(idx => { const c = grid.querySelector(`.ck-gems__c[data-i="${idx}"]`); if (c) c.classList.add('clr'); });
-      s.score += m.size; const ss = ov.querySelector('#ck-gems-s'); if (ss) ss.textContent = s.score;
-      note(880, 0.1, 'triangle', 0.08, 1320);
-      await wait(230);
-      if (s.ended) return;
-      m.forEach(idx => s.g[idx] = -1); applyGravityG(s.g, s.n, Math.random); renderGemsGrid();
-      await wait(150);
-    }
-    if (!hasMoveG(s.g, s.n)) { s.g = makeGemBoard(s.n, Math.random); renderGemsGrid(); flashMsg('Перемешали!', 'light'); }
-  }
-  function gemsTimer() {
-    const s = gemsState; if (!s || s.ended) return;
-    const left = Math.max(0, (s.tEnd - performance.now()) / 1000); const tEl = ov.querySelector('#ck-gems-t'); if (tEl) tEl.textContent = Math.ceil(left);
-    if (left <= 0) { finishGems(); return; }
-    s.raf = setTimeout(gemsTimer, 250);
-  }
-  async function finishGems() {
-    const s = gemsState; if (!s || s.ended) return; s.ended = true; clearTimeout(s.raf);
-    const score = s.score; closeGems();
-    const gameSession = overlaySession;
-    const gres = await submitGame('gems', score);
-    if (!overlaySessionActive(gameSession)) return;
-    if (gameResultFailed(gres)) return;
-    sfxReward(); window.haptic && window.haptic('success'); confettiBurst();
-    queueDoveDrop(gres.pigeonDrop);
-    resultPopup(`${ICON.gem(22)} Собрано ${score} конфет!`, gres.reward || 0, 'Сладко! Заходи завтра');
-    renderAll(); renderGames(); bumpBalance();
-  }
-  function closeGems() { if (gemsState) { gemsState.ended = true; clearTimeout(gemsState.raf); } const el = ov.querySelector('#ck-gems'); if (el) el.classList.remove('on'); gemsState = null; }
-
   function close() {
     if (ov && ov.classList.contains('on')) overlaySession++;
     activeTapPointers.clear(); cancelAnimationFrame(raf); clearTimeout(bonusTimer); clearTimeout(resumeRetryTimer);
@@ -4066,9 +3416,6 @@
     // очередь в следующую сессию, где она выглядела бы наградой за другое действие.
     doveDropQueue.length = 0; pendingDoveSummary = null;
     if (window.CatDove && typeof window.CatDove.closeAll === 'function') window.CatDove.closeAll();
-    if (rainState) endRain(true); if (quizState) closeQuiz(); if (memState) closeMemory();
-    if (towerState) closeTower(); if (gemsState) closeGems();
-    const gh = ov && ov.querySelector('#ck-games'); if (gh) gh.classList.remove('on');
     void flushForPageExit(); if (ov) ov.classList.remove('on'); window.scrollUnlock && window.scrollUnlock();
   }
   window.catClickOpen = open; window.catClickClose = close; window.catClickBonusNow = () => { if (ov && ov.classList.contains('on')) showFlyingBonus(); }; // превью/тест золотого бонуса
@@ -4107,7 +3454,6 @@
       else if (tab === 'top') renderTop();
       else if (tab === 'hub') renderHub();
       else if (tab === 'dove' && window.CatDove && typeof window.CatDove.refresh === 'function') void window.CatDove.refresh();
-      const games = ov.querySelector('#ck-games'); if (games && games.classList.contains('on')) renderGames();
       return true;
     })().finally(() => { resumeRefresh = null; });
     return resumeRefresh;
@@ -4135,6 +3481,7 @@
   // initData-заголовками, flashMsg — тост об ошибке, updateDoveBadge — бейдж непрочитанной
   // почты на кнопке навбара (учитывая, что мьютить его дальше будет Task 10 — почта).
   window.ckApi = api; window.ckMutationApi = mutationApi; window.ckFlash = flashMsg; window.ckUpdateDoveBadge = updateDoveBadge; window.ckOpenBotGame = openBotGame;
+  window.ckLoadCatDrag = ensureDragModule;
   // Мосты для catdove: переключение вкладок (кнопка «Вступить в команду» из почты)
   // и системный шаринг (ссылка «кода дружбы»)
   window.ckSetTab = setTab;

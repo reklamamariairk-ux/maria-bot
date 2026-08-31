@@ -104,6 +104,13 @@ const GROQ_KEY     = process.env.GROQ_KEY     ?? "";
 const WEBHOOK_URL  = process.env.WEBHOOK_URL  ?? "";
 const PORT         = Number(process.env.PORT  ?? 3000);
 const MINI_APP_URL = process.env.MINI_APP_URL ?? WEBHOOK_URL;
+// Публичный адрес игры отделён от webhook/служебного HTTP-хоста. Это позволяет
+// держать Telegram webhook на основном сервере, а саму игру открывать на
+// быстром российском узле рядом с базой данных.
+const GAME_PUBLIC_URL = process.env.GAME_PUBLIC_URL ?? MINI_APP_URL;
+const PURCHASE_SYNC_WORKER = !/^(?:0|false|no|off)$/i.test(
+  (process.env.PURCHASE_SYNC_WORKER ?? "true").trim()
+);
 const ADMIN_IDS    = (process.env.ADMIN_IDS ?? "").split(",").map(Number).filter(Boolean);
 
 // Preview-режим (staging): если BOT_TOKEN пуст — поднимаем только HTTP-сервер
@@ -515,7 +522,7 @@ setClickerPushService(_pushService); // пуш «копилка стаи пол�
 // Приложение-магазин отменили (07.2026) — в боте живёт ТОЛЬКО игра «Котик
 // Комбат» (game.html). Все Mini App-кнопки ведут в игру; корень (старый магазин)
 // не открываем нигде. BotFather Main Mini App URL тоже = game.html.
-const GAME_URL = (MINI_APP_URL || "https://bot.145-223-121-47.sslip.io").replace(/\/+$/, "") + "/game.html";
+const GAME_URL = (GAME_PUBLIC_URL || "https://bot.145-223-121-47.sslip.io").replace(/\/+$/, "") + "/game.html";
 function webAppButton(_text: string, label = "🎮 Открыть игру") {
   return new InlineKeyboard().webApp(label, GAME_URL);
 }
@@ -2586,13 +2593,17 @@ async function main() {
 
   // Импорт чеков физических точек через защищённый прокси sales-dashboard.
   // До настройки PURCHASE_SALES_API/KEY задача безопасно ничего не делает.
-  cron.schedule("*/15 * * * *", () => {
-    runPurchaseSync().catch((e) => log.error({ err: e }, "[PURCHASE SYNC CRON]"));
-  });
-  cron.schedule("15 */6 * * *", () => {
-    refreshAutoPurchaseTasks().catch((e) => log.error({ err: e }, "[PURCHASE CAMPAIGNS CRON]"));
-  });
-  console.log("[STARTUP] Purchase-task sync scheduled (every 15 min)");
+  if (PURCHASE_SYNC_WORKER) {
+    cron.schedule("*/15 * * * *", () => {
+      runPurchaseSync().catch((e) => log.error({ err: e }, "[PURCHASE SYNC CRON]"));
+    });
+    cron.schedule("15 */6 * * *", () => {
+      refreshAutoPurchaseTasks().catch((e) => log.error({ err: e }, "[PURCHASE CAMPAIGNS CRON]"));
+    });
+    console.log("[STARTUP] Purchase-task sync scheduled (every 15 min)");
+  } else {
+    console.log("[STARTUP] Purchase-task sync worker disabled on this instance");
+  }
 
   // Sentry error handler — после всех routes, до listen
   app.use(sentryExpressErrorHandler());
@@ -2601,6 +2612,8 @@ async function main() {
     botToken: BOT_TOKEN ? "set" : "MISSING",
     groqKey: GROQ_KEY ? "set" : "MISSING",
     webhookUrl: WEBHOOK_URL || "(empty — long polling)",
+    gameUrl: GAME_URL,
+    purchaseSyncWorker: PURCHASE_SYNC_WORKER,
     port: PORT,
     previewMode: PREVIEW_MODE,
     sentry: process.env.SENTRY_DSN ? "enabled" : "disabled",

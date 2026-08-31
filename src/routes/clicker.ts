@@ -5,7 +5,7 @@
  * POST /api/clicker/boost {type:turbo|energy} · GET /api/clicker/top
  */
 import { Router } from "express";
-import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, claimCipher, getAchievements, getRewards, redeemReward, claimBonus, openChest, openCase, claimRain, claimGame, createGameAttempt, getMilestones, claimMilestone, syncPurchaseBonus, migrateGuest, redeemCode, getSquads, joinSquad, squadBankStatus, donateSquadBank, createSquad, joinSquadByCode, requestJoinSquad, listSquadRequests, decideSquadRequest, prestigeReset, welcomePromoShown, markWelcomePromoShown, markOnboarded, getFtue, claimFtue, getSquadMembers, deleteClickerProfile } from "../clicker";
+import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, getAchievements, getRewards, redeemReward, claimBonus, openChest, openCase, getMilestones, claimMilestone, syncPurchaseBonus, migrateGuest, redeemCode, getSquads, joinSquad, squadBankStatus, donateSquadBank, createSquad, joinSquadByCode, requestJoinSquad, listSquadRequests, decideSquadRequest, prestigeReset, welcomePromoShown, markWelcomePromoShown, markOnboarded, getFtue, claimFtue, getSquadMembers, deleteClickerProfile } from "../clicker";
 import { rateLimit, requireAdminToken } from "../middleware";
 import { requireTgUser as requireAnyTgUser, getTgUser, getUser } from "../auth";
 import { clearGameAccessCache, requireGameUser as requireTgUser } from "../game-auth";
@@ -157,23 +157,13 @@ router.post("/api/clicker/code", requireTgUser, rateLimit(20), async (req, res) 
   catch (e) { log.error({ err: e, chatId: u.id }, "[code]"); res.status(500).json({ error: "internal" }); }
 });
 
-router.post("/api/clicker/game-attempt", requireTgUser, rateLimit(80), async (req, res) => {
-  const u = getTgUser(req)!; const game = String((req.body as { game?: string }).game || "");
-  try { const r = createGameAttempt(u.id, game); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ token: r.token }); }
-  catch (e) { log.error({ err: e, chatId: u.id }, "[game-attempt]"); res.status(500).json({ error: "internal" }); }
-});
-
-router.post("/api/clicker/rain", requireTgUser, rateLimit(30), async (req, res) => {
-  const u = getTgUser(req)!; const { score, attempt } = req.body as { score?: number; attempt?: string };
-  try { const r = await claimRain(u.id, Number(score) || 0, String(attempt || "")); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ reward: r.reward, ...r.state }); trackEvent(u.id, "rain", { score: Number(score) || 0, reward: r.reward }); }
-  catch (e) { log.error({ err: e, chatId: u.id }, "[rain]"); res.status(500).json({ error: "internal" }); }
-});
-
-router.post("/api/clicker/game", requireTgUser, rateLimit(40), async (req, res) => {
-  const u = getTgUser(req)!; const { game, score, attempt } = req.body as { game?: string; score?: number; attempt?: string };
-  try { const r = await claimGame(u.id, String(game || ""), Number(score) || 0, String(attempt || "")); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ reward: r.reward, game: r.game, pigeonDrop: r.pigeonDrop, ...r.state }); trackEvent(u.id, "game", { game: String(game || ""), score: Number(score) || 0, reward: r.reward }); }
-  catch (e) { log.error({ err: e, chatId: u.id }, "[game]"); res.status(500).json({ error: "internal" }); }
-});
+// Старые мини-игры удалены из клиента. Явный 410 не позволяет старым кешированным
+// клиентам продолжать начислять награды через устаревшие игровые маршруты.
+for (const path of ["/api/clicker/game-attempt", "/api/clicker/rain", "/api/clicker/game", "/api/clicker/cipher"]) {
+  router.post(path, requireTgUser, rateLimit(30), (_req, res) => {
+    res.status(410).json({ error: "removed" });
+  });
+}
 
 router.post("/api/clicker/chest", requireTgUser, rateLimit(30), async (req, res) => {
   const u = getTgUser(req)!;
@@ -211,12 +201,6 @@ router.post("/api/clicker/combo", requireTgUser, rateLimit(30), async (req, res)
   const u = getTgUser(req)!;
   try { const r = await claimCombo(u.id); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ reward: r.reward, pigeonDrop: r.pigeonDrop, ...r.state }); trackEvent(u.id, "combo", { reward: r.reward }); }
   catch (e) { log.error({ err: e, chatId: u.id }, "[combo]"); res.status(500).json({ error: "internal" }); }
-});
-
-router.post("/api/clicker/cipher", requireTgUser, rateLimit(30), async (req, res) => {
-  const u = getTgUser(req)!; const guess = String((req.body as { guess?: string }).guess || "");
-  try { const r = await claimCipher(u.id, guess); if (!r.ok) { res.status(400).json({ error: r.reason }); return; } res.json({ reward: r.reward, ...r.state }); trackEvent(u.id, "cipher", { reward: r.reward }); }
-  catch (e) { log.error({ err: e, chatId: u.id }, "[cipher]"); res.status(500).json({ error: "internal" }); }
 });
 
 router.get("/api/clicker/squads", requireTgUser, rateLimit(60), async (req, res) => {
