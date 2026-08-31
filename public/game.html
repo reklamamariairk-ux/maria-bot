@@ -10,6 +10,7 @@
   <link rel="icon" href="/assets/images/cat-mascot-cut.png"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link rel="preconnect" href="https://unpkg.com" crossorigin/>
   <!-- Игра использует только Nunito (сплеш+кликер) и JetBrains Mono (цифры кликера) —
        Onest/Playfair из index.html тут не нужны, набор сокращён под game.html. -->
   <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;600&display=swap"/>
@@ -17,8 +18,15 @@
   <noscript><link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet"/></noscript>
   <link rel="preload" as="script" href="/js/catdove.js?v=56"/>
   <link rel="preload" as="script" href="/js/catdrag.js?v=27"/>
-  <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
-  <script src="https://st.max.ru/js/max-web-app.js" defer></script>
+  <script>
+  // VK не должен ждать два чужих SDK до запуска defer-бандла игры. Для TG/МАКС
+  // сохраняем прежний порядок загрузки: document.write выполняется только во
+  // время первичного разбора head и добавляет обычные defer-скрипты.
+  if (!new URLSearchParams(location.search).has('vk_app_id')) {
+    document.write('<script src="https://telegram.org/js/telegram-web-app.js" defer><\/script>');
+    document.write('<script src="https://st.max.ru/js/max-web-app.js" defer><\/script>');
+  }
+  </script>
   <script src="/js/utils.js" defer></script>
   <script src="/js/tg-bridge-vk.js?v=6" defer></script>
   <style>

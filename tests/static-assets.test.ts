@@ -17,6 +17,7 @@ describe("VK asset aliases", () => {
     for (const route of Object.keys(VK_ASSET_ALIASES)) {
       expect(html).toMatch(new RegExp(`${route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\?v=\\d+`));
     }
+    expect(html).toContain("!new URLSearchParams(location.search).has('vk_app_id')");
   });
 
   it("VK bridge сохраняет исходную launch-строку для всех API-запросов", () => {
