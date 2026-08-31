@@ -1,6 +1,6 @@
 /* ── «Котик Комбат» — кликер (Hamster Kombat-стиль), усиленная версия ──────────
  * Тап (комбо+монетопад, турбо ×5), энергия, апгрейды, бизнесы (пассив+офлайн),
- * бусты (🚀 турбо / ⚡ полная энергия, 6/день), ежедневная награда (стрик),
+ * бусты (🚀 турбо / ⚡ полная энергия за дневной стрик), ежедневная награда,
  * лидерборд. Сервер /api/clicker* для авторизованных, localStorage у гостей.
  * ───────────────────────────────────────────────────────────────────────────── */
 (function () {
@@ -9,7 +9,8 @@
   window.addEventListener('error', (e) => { if (ckDiagErrors.length < 5) ckDiagErrors.push(String((e && e.message) || e)); });
   const A = (s) => `/assets/images/cat/${s}?v=25`;  // v25: анатомия — 4 лапы у всех (реген 2/6/8/10/14/15/17/18), кулон вместо «М»-медальона
   const LS = 'maria_click_v2';
-  const REGEN = 0.25, TAP_COST = 2, PASSIVE_CAP_H = 3, TURBO_MULT = 5, TURBO_SEC = 20, DAILY_BOOSTS = 6;
+  const REGEN = 0.25, TAP_COST = 2, PASSIVE_CAP_H = 3, TURBO_MULT = 5, TURBO_SEC = 20;
+  const BOOST_STREAK_UNLOCK = 3, BASE_ENERGY_BOOSTS = 1, STREAK_ENERGY_BOOSTS = 2, STREAK_TURBO_BOOSTS = 1;
   // ⚠️ Зеркало CARDS/CARD_CATS из src/clicker.ts — менять синхронно (+ cardIcon по id).
   const CARD_CATS = [{ id: 'prod', name: 'Производство' }, { id: 'mkt', name: 'Маркетинг' }, { id: 'staff', name: 'Персонал' }, { id: 'net', name: 'Сеть' }];
   const SQUADS = [{ id: 'choco', name: 'Шоколадные' }, { id: 'vanilla', name: 'Ванильные' }, { id: 'caramel', name: 'Карамельные' }, { id: 'berry', name: 'Ягодные' }];
@@ -107,6 +108,9 @@
   }
   const fmt = (n) => Math.floor(n).toLocaleString('ru-RU');
   const irkToday = () => new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+  const dailyBoostLimits = (streak) => Number(streak) >= BOOST_STREAK_UNLOCK
+    ? { energy: STREAK_ENERGY_BOOSTS, turbo: STREAK_TURBO_BOOSTS }
+    : { energy: BASE_ENERGY_BOOSTS, turbo: 0 };
   // Русские склонения: plu(2,'монета','монеты','монет') → «монеты»
   const plu = (n, one, few, many) => { const a = Math.abs(n) % 100, b = a % 10; return (a > 10 && a < 20) ? many : (b > 1 && b < 5) ? few : (b === 1) ? one : many; };
   // Сколько осталось до нового дня по Иркутску (UTC+8) — «через 5 ч 12 мин»
@@ -396,7 +400,7 @@
     energy: { icon: 'battery', t: 'Энергия кончилась? Она восстанавливается сама — возвращайся чуть позже' },
     combo:    { icon: 'fire',   t: 'Это комбо: тапай без пауз — каждые 10 тапов дают бонус' },
     bizFirst: { icon: 'shop',   t: 'Бизнес работает сам; после выхода доход копится до 3 часов. Строка +N/час показывает точную прибавку от покупки нового уровня' },
-    boosts:   { icon: 'rocket', t: 'Турбо и Энергия — бесплатные бусты, обновляются каждый день' },
+    boosts:   { icon: 'rocket', t: 'Энергия — 1 раз в день. Стрик 3 дня открывает второй заряд и одно Турбо' },
   };
   const coachSeenMem = new Set();
   function coachSeen(id) { try { return !!localStorage.getItem('ck_coach_' + id); } catch (_) { return coachSeenMem.has(id); } }
@@ -535,6 +539,7 @@
     const today = irkToday();
     const yesterday = new Date(Date.now() + 8 * 3600 * 1000 - 86400000).toISOString().slice(0, 10);
     const visibleDailyStreak = (s.dailyDate === today || s.dailyDate === yesterday) ? Math.max(0, Number(s.dailyStreak) || 0) : 0;
+    const boostLimits = dailyBoostLimits(visibleDailyStreak);
     const dailyAvailable = s.dailyDate !== today;
     const lg = leagueFor(s.totalEarned);
     const comboCards = todaysCombo(today);
@@ -550,7 +555,10 @@
       dailyAvailable, dailyStreak: visibleDailyStreak, dailyNext: dailyReward(dailyAvailable ? visibleDailyStreak + 1 : visibleDailyStreak),
       chestAvailable: s.chestDate !== today,
       rainAvailable: s.rainDate !== today,
-      boostEnergyLeft: DAILY_BOOSTS - s.bE, boostTurboLeft: DAILY_BOOSTS - s.bT, turboMsLeft: Math.max(0, (s.turboUntil || 0) - Date.now()),
+      boostEnergyLeft: Math.max(0, boostLimits.energy - Math.max(0, Number(s.bE) || 0)),
+      boostTurboLeft: Math.max(0, boostLimits.turbo - Math.max(0, Number(s.bT) || 0)),
+      boostEnergyLimit: boostLimits.energy, boostTurboLimit: boostLimits.turbo,
+      boostUnlockStreak: BOOST_STREAK_UNLOCK, turboMsLeft: Math.max(0, (s.turboUntil || 0) - Date.now()),
       combo: { cards: comboCards, hits: comboHits, complete: comboCards.every(c => comboHits.includes(c)), claimed: s.comboClaimed === today, reward: COMBO_REWARD },
       cipher: { morse: toMorse(todaysCipher(today)), anagram: scrambleWord(todaysCipher(today), today), len: todaysCipher(today).length, claimed: s.cipherDate === today, reward: CIPHER_REWARD },
       taps: s.taps || 0, cardsOwned: CARDS.filter(c => (s.cards[c.id] || 0) > 0).length,
@@ -989,7 +997,7 @@
       }
       else { ok = guestBoost(type); if (ok) applyServerState(guestDerive()); }
       if (!overlaySessionActive(actionSession)) return;
-      if (!ok) { flashMsg(netfail ? 'Нет связи — попробуй ещё раз' : reason === 'full_energy' ? 'Энергия уже полная' : reason === 'already_active' ? 'Турбо уже активно' : 'Бусты на сегодня кончились'); return; }
+      if (!ok) { flashMsg(netfail ? 'Нет связи — попробуй ещё раз' : reason === 'full_energy' ? 'Энергия уже полная' : reason === 'already_active' ? 'Турбо уже активно' : reason === 'boost_locked' ? 'Турбо откроется на стрике 3 дня' : 'Бусты на сегодня кончились'); return; }
       if (type === 'turbo') { turboUntil = Date.now() + Math.max(0, Number(st && st.turboMsLeft) || TURBO_SEC * 1000); sfxTurbo(); }
       else { chord([520, 780], 0.14); }
       window.haptic && window.haptic('medium'); renderAll();
@@ -997,8 +1005,11 @@
   }
   function guestBoost(type) {
     guestDerive(); const s = rawGet();
-    if (type === 'energy') { if (s.bE >= DAILY_BOOSTS || s.energy >= energyMaxFor(s.energyLevel)) return false; s.energy = energyMaxFor(s.energyLevel); s.energyCarry = 0; s.bE++; }
-    else { if (s.bT >= DAILY_BOOSTS || Number(s.turboUntil || 0) > Date.now()) return false; s.turboUntil = Date.now() + TURBO_SEC * 1000; s.bT++; }
+    const today = irkToday(), yesterday = new Date(Date.now() + 8 * 3600 * 1000 - 86400000).toISOString().slice(0, 10);
+    const visibleStreak = (s.dailyDate === today || s.dailyDate === yesterday) ? Math.max(0, Number(s.dailyStreak) || 0) : 0;
+    const limits = dailyBoostLimits(visibleStreak);
+    if (type === 'energy') { if (s.bE >= limits.energy || s.energy >= energyMaxFor(s.energyLevel)) return false; s.energy = energyMaxFor(s.energyLevel); s.energyCarry = 0; s.bE++; }
+    else { if (limits.turbo <= 0 || s.bT >= limits.turbo || Number(s.turboUntil || 0) > Date.now()) return false; s.turboUntil = Date.now() + TURBO_SEC * 1000; s.bT++; }
     rawSave(s); return true;
   }
   async function loadTop() {
@@ -1507,7 +1518,7 @@
     const s = [
       { ic: ICON.tap(20), t: 'Тап и комбо', d: 'Тапай Василия — каждый тап приносит монеты и расходует 2 энергии. Одна единица энергии возвращается за 4 секунды. Держи темп без пауз дольше пяти тапов подряд — над котиком загорится комбо-счётчик ×N, а на каждой десятке комбо экран вспыхивает искрами.' },
       { ic: ICON.star(20), t: 'Уровни и карьера Василия', d: 'Монеты, заработанные в текущем цикле карьеры, двигают Василия по лестнице из девятнадцати ступеней — от Котёнка-стажёра до Императора выпечки. После престижа счётчик цикла начинается заново, но уже открытые разделы остаются доступны. На каждом новом уровне у кота меняется образ и сцена вокруг — костюм, атрибуты, фон. Полоска под балансом показывает прогресс до следующего уровня, а рядом — силуэт того, кем Василий станет дальше.' },
-      { ic: ICON.rocket(20), t: 'Бусты', d: 'Турбо и Энергия — два бесплатных буста на вкладке «Котик». Турбо на 20 секунд даёт монеты за тап ×5, Энергия сразу наполняет шкалу энергии до максимума. Каждый буст доступен до 6 раз в день, а на следующий день лимит обновляется — счётчик рядом с кнопкой показывает, сколько попыток осталось.' },
+      { ic: ICON.rocket(20), t: 'Бусты', d: 'Энергия сразу наполняет шкалу и доступна один раз в день. Стрик от 3 дней открывает второй заряд Энергии и одно Турбо ×5 на 20 секунд. Использованный дневной заряд не возвращается до следующих иркутских суток; в бесплатном сундуке бусты тоже бывают, но редко.' },
       { ic: ICON.shop(20), t: 'Прокачка и бизнесы', d: 'В «Прокачке» — четыре направления: Производство, Маркетинг, Персонал и Сеть. Каждый бизнес, который ты завёл, дальше сам приносит монеты в час — после закрытия игры доход копится максимум 3 часа, а следующий уровень бизнеса поднимает доход ещё выше. Часть бизнесов открывается только с определённого уровня игрока — до этого карточка показана силуэтом с замком. Там же можно докупить Мультитап (больше монет за тап) и Запас энергии (выше потолок энергии).' },
       { ic: ICON.gift(20), t: 'Награда дня', d: 'Каждый день, когда заходишь в игру впервые, тебе доступна награда дня — забери её кнопкой сверху экрана. Награда растёт вместе со стриком: чем больше дней подряд ты заходишь, тем она весомее, а пропущенный день сбрасывает счётчик. Календарь на семь дней вперёд показывает, сколько причитается в каждый из ближайших дней.' },
       { ic: ICON.gem(20), t: 'Комбо дня', d: 'В «Прокачке» каждый день выбираются три случайных бизнеса — прокачай (купи хотя бы один уровень) все три, и получишь бонус +12 000 монет. Бизнес на максимальном уровне засчитывается автоматически. Забрать бонус можно на вкладке «Призы». Комбо обновляется раз в сутки.' },
@@ -2071,9 +2082,9 @@
   // ── Сундук удачи ──────────────────────────────────────────────────────────────
   function rollChestGuest(level) {
     const r = Math.random(), sc = 1 + level * 0.25;
-    if (r < 0.42) return { type: 'coins', amount: Math.round((300 + Math.random() * 1000) * sc) };
-    if (r < 0.68) return { type: 'coins', amount: Math.round((1200 + Math.random() * 2500) * sc) };
-    if (r < 0.82) return { type: 'turbo' };
+    if (r < 0.52) return { type: 'coins', amount: Math.round((300 + Math.random() * 1000) * sc) };
+    if (r < 0.87) return { type: 'coins', amount: Math.round((1200 + Math.random() * 2500) * sc) };
+    if (r < 0.90) return { type: 'turbo' };
     if (r < 0.95) return { type: 'energy' };
     return { type: 'jackpot', amount: Math.round(5000 + Math.random() * 15000) };
   }
@@ -2082,7 +2093,7 @@
     const prize = rollChestGuest(leagueFor(s.totalEarned).level);
     if (prize.type === 'coins' || prize.type === 'jackpot') { s.balance += prize.amount; s.totalEarned += prize.amount; }
     else if (prize.type === 'turbo') { s.turboUntil = Math.max(Date.now(), Number(s.turboUntil || 0)) + TURBO_SEC * 1000; }
-    else if (prize.type === 'energy') { s.energy = energyMaxFor(s.energyLevel); }
+    else { s.energy = energyMaxFor(s.energyLevel); s.energyCarry = 0; }
     s.chestDate = today; rawSave(s); return prize;
   }
   async function openChestAct() {
@@ -2109,8 +2120,8 @@
   }
   function chestPopup(prize) {
     const pop = ov.querySelector('#ck-pop'); let body;
-    if (prize.type === 'turbo') body = `<div class="v">${ICON.rocket(22)} Турбо ×5</div><div style="color:var(--muted);font-size:13px">20 секунд множитель за тап!</div>`;
-    else if (prize.type === 'energy') body = `<div class="v">${ICON.bolt(22)} Полная энергия</div>`;
+    if (prize.type === 'turbo') body = `<div class="v">${ICON.rocket(22)} Турбо ×5</div><div style="color:var(--muted);font-size:13px">Редкий приз · 20 секунд множителя за тап</div>`;
+    else if (prize.type === 'energy') body = `<div class="v">${ICON.bolt(22)} Полная энергия</div><div style="color:var(--muted);font-size:13px">Редкий приз из сундука</div>`;
     else body = `<div class="v">+${fmt(prize.amount)} ${COIN(24)}</div>${prize.type === 'jackpot' ? '<div style="color:var(--gold-l);font-size:14px;font-weight:800;letter-spacing:1px">ДЖЕКПОТ!</div>' : ''}`;
     pop.innerHTML = `<h3>${ICON.chest(20)} Сундук удачи</h3>${body}<button id="ck-pop-ok">Класс!</button>`; pop.classList.add('on'); pop.querySelector('#ck-pop-ok').onclick = () => { pop.classList.remove('on'); advancePopupQueue(); };
   }
@@ -2516,10 +2527,14 @@
     if (st.dailyAvailable) { daily.classList.remove('done'); daily.innerHTML = `${ICON.gift(16)} Награда дня · День ${st.dailyStreak + 1}`; }
     else { daily.classList.add('done'); daily.innerHTML = `${ICON.gift(16)} Награда ✓ · день ${st.dailyStreak}`; }
     // бусты
-    ov.querySelector('#ck-bt-turbo-n').textContent = '(' + st.boostTurboLeft + ')';
+    const turboBtn = ov.querySelector('#ck-bt-turbo'), energyBtn = ov.querySelector('#ck-bt-energy');
+    const turboLocked = Number(st.boostTurboLimit || 0) <= 0;
+    ov.querySelector('#ck-bt-turbo-n').textContent = turboLocked ? '(стрик 3 дня)' : '(' + st.boostTurboLeft + ')';
     ov.querySelector('#ck-bt-energy-n').textContent = '(' + st.boostEnergyLeft + ')';
-    ov.querySelector('#ck-bt-turbo').disabled = st.boostTurboLeft <= 0 || turboOn(); // во время турбо тап впустую сжёг бы заряд
-    ov.querySelector('#ck-bt-energy').disabled = st.boostEnergyLeft <= 0 || st.energy >= st.energyMax;
+    turboBtn.title = turboLocked ? 'Откроется после серии из 3 дней' : 'Один заряд в сутки';
+    energyBtn.title = Number(st.boostEnergyLimit || 1) > 1 ? 'Два заряда за стрик' : 'Второй заряд откроется на стрике 3 дня';
+    turboBtn.disabled = turboLocked || st.boostTurboLeft <= 0 || turboOn(); // во время турбо тап впустую сжёг бы заряд
+    energyBtn.disabled = st.boostEnergyLeft <= 0 || st.energy >= st.energyMax;
     // турбо-вид
     const on = turboOn(); ov.classList.toggle('turbo', on); ov.querySelector('#ck-cat').classList.toggle('turbo', on);
     if (on) ov.querySelector('#ck-enpre').innerHTML = ICON.rocket(15) + ' ТУРБО ×5! ·';
@@ -3323,7 +3338,7 @@
       { text: 'Тапай по мне — каждый тап приносит монету. Ну-ка, пять тапов!', anchor: '#ck-catwrap', pos: 'top', wait: 'taps' },
       { text: 'Кстати: каждый 40-й тап — «Сладкий», сразу ×8 монет. Лови золотые вспышки!', anchor: '#ck-catwrap', pos: 'top' },
       { text: 'Энергия: тап стоит 2 единицы, а 1 единица возвращается за 4 секунды. Кончилась — используй бесплатный буст или загляни в другие вкладки', anchor: '.ck-energy', pos: 'top' },
-      { text: 'Бусты: Турбо ×5 и мгновенная энергия — бесплатные, по кулдауну. Используй их, когда хочешь быстро добрать монеты до покупки', anchor: '.ck-boosts', pos: 'top' },
+      { text: 'Бусты редкие: одна Энергия в день, а стрик 3 дня открывает второй заряд и одно Турбо ×5. Потраченные заряды вернутся только завтра', anchor: '.ck-boosts', pos: 'top' },
       { text: 'Твои монеты и доход в час. Монеты тратим на бизнесы, тюнинг голубей и ставки', anchor: '.ck-bal', pos: 'bottom' },
       { text: 'Полоска карьеры: все заработанные монеты двигают меня по 19 уровням — от стажёра до Императора выпечки', anchor: '.ck-progwrap', pos: 'bottom' },
       { text: '«Награда дня»: заходи каждый день — стрик растёт, награды тоже', anchor: '#ck-daily', anchorFn: function () { return ov.querySelector('#ck-daily:not([style*="none"])') || ov.querySelector('.ck-progwrap'); }, pos: 'bottom' },

@@ -121,7 +121,10 @@ export function settleEnergyRegeneration(
 export const BUSINESS_MAX_LEVEL = 20;
 const TURBO_MULT = 5;
 const TURBO_SEC = 20;
-const DAILY_BOOSTS = 6;           // бесплатных бустов каждого типа в день
+export const BOOST_STREAK_UNLOCK = 3;
+const BASE_ENERGY_BOOSTS = 1;
+const STREAK_ENERGY_BOOSTS = 2;
+const STREAK_TURBO_BOOSTS = 1;
 const REF_INVITEE = 2500;         // бонус приглашённому
 const REF_REFERRER = 30000;       // бонус пригласившему (поднято юзером 31.07 с 5000)
 const irkToday = () => new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
@@ -281,6 +284,28 @@ export function effectiveDailyStreak(lastClaimDate: unknown, storedStreak: unkno
   if (!Number.isFinite(todayMs)) return 0;
   const yesterday = new Date(todayMs - 86400000).toISOString().slice(0, 10);
   return lastClaimDate === today || lastClaimDate === yesterday ? n : 0;
+}
+
+/**
+ * Бесплатные бусты теперь являются наградой за возвращение в игру, а не
+ * безусловным пакетом из шести зарядов. Один refill энергии остаётся страховкой
+ * новичку; второй refill и единственный Turbo открываются со стрика 3 дня.
+ */
+export function dailyBoostLimits(
+  lastClaimDate: unknown,
+  storedStreak: unknown,
+  today = irkToday(),
+): { energy: number; turbo: number } {
+  const streak = effectiveDailyStreak(lastClaimDate, storedStreak, today);
+  return streak >= BOOST_STREAK_UNLOCK
+    ? { energy: STREAK_ENERGY_BOOSTS, turbo: STREAK_TURBO_BOOSTS }
+    : { energy: BASE_ENERGY_BOOSTS, turbo: 0 };
+}
+
+/** Остаток не бывает отрицательным после уменьшения старого дневного лимита. */
+export function boostRemaining(limit: number, used: unknown, boostDate: unknown, today = irkToday()): number {
+  const usedToday = boostDate === today ? Math.max(0, Math.floor(Number(used) || 0)) : 0;
+  return Math.max(0, Math.floor(Number(limit) || 0) - usedToday);
 }
 
 // «Кондитерская карьера Василия» (арт-комплект 08.07.2026) — имена синхронно с
@@ -447,6 +472,7 @@ export interface ClickerState {
   /** ×1.25 при закрытой копилке стаи, иначе 1 (индикатор на главной). */
   bankMult: number;
   boostEnergyLeft: number; boostTurboLeft: number; turboMsLeft: number;
+  boostEnergyLimit: number; boostTurboLimit: number; boostUnlockStreak: number;
   referrals: number; refCode: string; refLink: string;
   combo: { cards: string[]; hits: string[]; complete: boolean; claimed: boolean; reward: number };
   cipher: { morse: string; anagram: string; len: number; claimed: boolean; reward: number };
@@ -767,9 +793,8 @@ function buildState(r: any, cl: Record<string, number>, passiveEarned: number): 
   const lg = LEAGUES[effLevel - 1];
   const today = irkToday();
   const turboMs = r.turbo_until ? Math.max(0, new Date(r.turbo_until).getTime() - Date.now()) : 0;
-  const bUsedE = r.boost_date === today ? r.boost_energy_used : 0;
-  const bUsedT = r.boost_date === today ? r.boost_turbo_used : 0;
   const visibleDailyStreak = effectiveDailyStreak(r.daily_date, r.daily_streak, today);
+  const boostLimits = dailyBoostLimits(r.daily_date, r.daily_streak, today);
   const dailyAvailable = r.daily_date !== today;
   return {
     revision: Number(r.state_revision || 0),
@@ -786,7 +811,10 @@ function buildState(r: any, cl: Record<string, number>, passiveEarned: number): 
     chestAvailable: r.chest_date !== today,
     rainAvailable: r.rain_date !== today,
     squad: r.squad || null,
-    boostEnergyLeft: DAILY_BOOSTS - bUsedE, boostTurboLeft: DAILY_BOOSTS - bUsedT, turboMsLeft: turboMs,
+    boostEnergyLeft: boostRemaining(boostLimits.energy, r.boost_energy_used, r.boost_date, today),
+    boostTurboLeft: boostRemaining(boostLimits.turbo, r.boost_turbo_used, r.boost_date, today),
+    boostEnergyLimit: boostLimits.energy, boostTurboLimit: boostLimits.turbo,
+    boostUnlockStreak: BOOST_STREAK_UNLOCK, turboMsLeft: turboMs,
     referrals: r.referrals || 0, refCode: String(r.chat_id), refLink: clickerReferralLink(Number(r.chat_id)),
     combo: (() => { const cards = todaysCombo(today); const recorded = r.combo_date === today ? parseHits(r.combo_hits) : []; const hits = comboHitsIncludingMaxed(cards, recorded, cl); return { cards, hits, complete: cards.every((c) => hits.includes(c)), claimed: r.combo_claimed === today, reward: COMBO_REWARD }; })(),
     cipher: { morse: toMorse(todaysCipher(today)), anagram: scrambleWord(todaysCipher(today), today), len: todaysCipher(today).length, claimed: r.cipher_date === today, reward: CIPHER_REWARD },
@@ -1350,32 +1378,46 @@ export async function claimGame(chatId: number, game: string, score: number, att
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
-/** Сундук удачи: 1 открытие в день, взвешенный приз (решается на сервере). */
-function rollChest(level: number): { type: string; amount?: number } {
-  const r = Math.random(); const sc = 1 + level * 0.25;
-  if (r < 0.42) return { type: "coins", amount: Math.round((300 + Math.random() * 1000) * sc) };
-  if (r < 0.68) return { type: "coins", amount: Math.round((1200 + Math.random() * 2500) * sc) };
-  if (r < 0.82) return { type: "turbo" };
+export type DailyChestPrize =
+  | { type: "coins" | "jackpot"; amount: number }
+  | { type: "turbo" | "energy" };
+
+/** Сундук удачи: 1 открытие в день; бусты редкие (вместе 8% вместо прежних 27%). */
+export function rollDailyChest(level: number, prizeRoll = Math.random(), amountRoll = Math.random()): DailyChestPrize {
+  const r = Math.max(0, Math.min(0.999999999, Number(prizeRoll) || 0));
+  const amountRng = Math.max(0, Math.min(1, Number(amountRoll) || 0));
+  const sc = 1 + Math.max(1, Math.floor(Number(level) || 1)) * 0.25;
+  if (r < 0.52) return { type: "coins", amount: Math.round((300 + amountRng * 1000) * sc) };
+  if (r < 0.87) return { type: "coins", amount: Math.round((1200 + amountRng * 2500) * sc) };
+  if (r < 0.90) return { type: "turbo" };
   if (r < 0.95) return { type: "energy" };
-  return { type: "jackpot", amount: Math.round(5000 + Math.random() * 15000) };
+  return { type: "jackpot", amount: Math.round(5000 + amountRng * 15000) };
 }
-export async function openChest(chatId: number): Promise<{ ok: boolean; prize?: { type: string; amount?: number }; state?: ClickerState; reason?: string; pigeonDrop?: { breed: string; isNew: boolean } }> {
+export async function openChest(chatId: number): Promise<{ ok: boolean; prize?: DailyChestPrize; state?: ClickerState; reason?: string; pigeonDrop?: { breed: string; isNew: boolean } }> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const { r, cl } = await refresh(client, chatId);
     const today = irkToday();
     if (r.chest_date === today) { await client.query("ROLLBACK"); return { ok: false, reason: "already" }; }
-    const prize = rollChest(effectiveCareerLevel(Number(r.total_earned), Number(r.max_level)));
-    if (prize.type === "coins" || prize.type === "jackpot") { r.balance = Number(r.balance) + (prize.amount || 0); r.total_earned = Number(r.total_earned) + (prize.amount || 0); }
-    else if (prize.type === "turbo") {
+    const prize = rollDailyChest(effectiveCareerLevel(Number(r.total_earned), Number(r.max_level)));
+    if (prize.type === "coins" || prize.type === "jackpot") {
+      r.balance = Number(r.balance) + prize.amount;
+      r.total_earned = Number(r.total_earned) + prize.amount;
+    } else if (prize.type === "turbo") {
       const activeUntil = r.turbo_until ? new Date(r.turbo_until).getTime() : 0;
       r.turbo_until = new Date(Math.max(Date.now(), activeUntil) + TURBO_SEC * 1000);
+    } else {
+      r.energy = energyMaxFor(r.energy_limit_level);
+      r.energy_carry = 0;
     }
-    else if (prize.type === "energy") { r.energy = energyMaxFor(r.energy_limit_level); r.energy_carry = 0; }
     r.chest_date = today;
-    await client.query(`UPDATE clicker_state SET balance=$2, total_earned=$3, energy=$4, turbo_until=$5, chest_date=$6, energy_carry=$7, updated_at=NOW() WHERE chat_id=$1`,
+    const updated = await client.query(
+      `UPDATE clicker_state SET balance=$2, total_earned=$3, energy=$4, turbo_until=$5,
+         chest_date=$6, energy_carry=$7, state_revision=state_revision+1, updated_at=NOW()
+       WHERE chat_id=$1 RETURNING state_revision`,
       [chatId, r.balance, r.total_earned, r.energy, r.turbo_until || null, today, Number(r.energy_carry || 0)]);
+    r.state_revision = Number(updated.rows[0]?.state_revision || r.state_revision || 0);
     const pigeonDrop = await maybeDropPigeon(chatId, 0.35, client);
     await syncPigeonModifiersAfterDrop(r, chatId, pigeonDrop, client);
     await client.query("COMMIT");
@@ -1474,22 +1516,37 @@ export async function claimBonus(chatId: number): Promise<{ ok: boolean; amount?
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
-/** Буст: turbo (×5 на 20с) или energy (полная энергия). 6/день каждого. */
+/** Буст: Turbo ×5 на 20с или полная энергия; лимит зависит от дневного стрика. */
 export async function boostClicker(chatId: number, type: string): Promise<{ ok: boolean; state?: ClickerState; reason?: string }> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const { r, cl } = await refresh(client, chatId);
+    const today = irkToday();
+    const limits = dailyBoostLimits(r.daily_date, r.daily_streak, today);
     if (type === "energy") {
-      if (r.boost_energy_used >= DAILY_BOOSTS) { await client.query("ROLLBACK"); return { ok: false, reason: "no_boosts" }; }
+      if (r.boost_energy_used >= limits.energy) { await client.query("ROLLBACK"); return { ok: false, reason: "no_boosts" }; }
       if (Number(r.energy) >= energyMaxFor(r.energy_limit_level)) { await client.query("ROLLBACK"); return { ok: false, reason: "full_energy" }; }
       r.energy = energyMaxFor(r.energy_limit_level); r.energy_carry = 0; r.boost_energy_used += 1;
-      await client.query(`UPDATE clicker_state SET energy=$2, boost_energy_used=$3, energy_carry=0, updated_at=NOW(), energy_updated_at=NOW() WHERE chat_id=$1`, [chatId, r.energy, r.boost_energy_used]);
+      const updated = await client.query(
+        `UPDATE clicker_state SET energy=$2, boost_energy_used=$3, boost_date=$4,
+           energy_carry=0, state_revision=state_revision+1, updated_at=NOW(), energy_updated_at=NOW()
+         WHERE chat_id=$1 RETURNING state_revision`,
+        [chatId, r.energy, r.boost_energy_used, today]);
+      r.boost_date = today;
+      r.state_revision = Number(updated.rows[0]?.state_revision || r.state_revision || 0);
     } else if (type === "turbo") {
-      if (r.boost_turbo_used >= DAILY_BOOSTS) { await client.query("ROLLBACK"); return { ok: false, reason: "no_boosts" }; }
+      if (limits.turbo <= 0) { await client.query("ROLLBACK"); return { ok: false, reason: "boost_locked" }; }
+      if (r.boost_turbo_used >= limits.turbo) { await client.query("ROLLBACK"); return { ok: false, reason: "no_boosts" }; }
       if (r.turbo_until && new Date(r.turbo_until).getTime() > Date.now()) { await client.query("ROLLBACK"); return { ok: false, reason: "already_active" }; }
       r.turbo_until = new Date(Date.now() + TURBO_SEC * 1000); r.boost_turbo_used += 1;
-      await client.query(`UPDATE clicker_state SET turbo_until=$2, boost_turbo_used=$3, updated_at=NOW() WHERE chat_id=$1`, [chatId, r.turbo_until, r.boost_turbo_used]);
+      const updated = await client.query(
+        `UPDATE clicker_state SET turbo_until=$2, boost_turbo_used=$3, boost_date=$4,
+           state_revision=state_revision+1, updated_at=NOW()
+         WHERE chat_id=$1 RETURNING state_revision`,
+        [chatId, r.turbo_until, r.boost_turbo_used, today]);
+      r.boost_date = today;
+      r.state_revision = Number(updated.rows[0]?.state_revision || r.state_revision || 0);
     } else { await client.query("ROLLBACK"); return { ok: false, reason: "bad_type" }; }
     await client.query("COMMIT");
     return { ok: true, state: buildState(r, cl, 0) };

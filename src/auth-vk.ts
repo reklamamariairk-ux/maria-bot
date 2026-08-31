@@ -20,11 +20,24 @@ export interface VkLaunchUser {
   appId: number;
 }
 
-const VK_APP_SECRET = process.env.VK_APP_SECRET ?? "";
+// На первом VK-деплое защищённый ключ приложения оказался сохранён под
+// историческим именем VK_CALLBACK_SECRET. Поддерживаем оба имени как набор
+// ключей ротации: подпись всё равно обязана точно совпасть хотя бы с одним
+// серверным секретом, а значение ни при каких условиях не уходит на клиент.
+const VK_APP_SECRETS = [...new Set([
+  process.env.VK_APP_SECRET ?? "",
+  process.env.VK_CALLBACK_SECRET ?? "",
+].filter(Boolean))];
 const VK_APP_ID = Number(process.env.VK_APP_ID ?? 0);
 
+function signatureMatches(value: string, expected: string): boolean {
+  const a = Buffer.from(value);
+  const b = Buffer.from(expected);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
 export function verifyVkLaunchParams(qs: string): VkLaunchUser | null {
-  if (!qs || !VK_APP_SECRET) return null;
+  if (!qs || !VK_APP_SECRETS.length) return null;
 
   let params: URLSearchParams;
   try {
@@ -45,18 +58,17 @@ export function verifyVkLaunchParams(qs: string): VkLaunchUser | null {
     .join("&");
   if (!signedString) return null;
 
-  const calc = crypto
-    .createHmac("sha256", VK_APP_SECRET)
-    .update(signedString)
-    .digest("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-
-  // timing-safe сравнение
-  const a = Buffer.from(calc);
-  const b = Buffer.from(sign);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  const validSignature = VK_APP_SECRETS.some((secret) => {
+    const calc = crypto
+      .createHmac("sha256", secret)
+      .update(signedString)
+      .digest("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+    return signatureMatches(calc, sign);
+  });
+  if (!validSignature) return null;
 
   // Свежесть запуска — 24h, как у Telegram initData
   if (!isFreshAuthTimestamp(params.get("vk_ts"))) return null;
@@ -78,12 +90,12 @@ export function verifyVkLaunchParams(qs: string): VkLaunchUser | null {
  * Сравниваем в hex (lowercase); ApiSecret = защищённый ключ приложения.
  */
 export function verifyVkPhoneSign(phoneNumber: string, vkUserId: number, sign: string): boolean {
-  if (!VK_APP_SECRET || !VK_APP_ID || !phoneNumber || !sign) return false;
-  const calc = crypto
-    .createHash("sha256")
-    .update(`${VK_APP_ID}${VK_APP_SECRET}${vkUserId}phone_number${phoneNumber}`)
-    .digest("hex");
-  const a = Buffer.from(calc);
-  const b = Buffer.from(sign.toLowerCase());
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
+  if (!VK_APP_SECRETS.length || !VK_APP_ID || !phoneNumber || !sign) return false;
+  return VK_APP_SECRETS.some((secret) => {
+    const calc = crypto
+      .createHash("sha256")
+      .update(`${VK_APP_ID}${secret}${vkUserId}phone_number${phoneNumber}`)
+      .digest("hex");
+    return signatureMatches(calc, sign.toLowerCase());
+  });
 }

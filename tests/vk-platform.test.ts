@@ -2,9 +2,12 @@
 import crypto from "crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 
-const TEST_SECRET = "vk-test-secret";
+const TEST_SECRET = "vk-test-protected-key";
 const TEST_APP_ID = 123456;
-process.env.VK_APP_SECRET = TEST_SECRET;
+// Прод повторяет историческую конфигурацию: рабочий защищённый ключ лежит в
+// VK_CALLBACK_SECRET, а VK_APP_SECRET содержит другое значение.
+process.env.VK_APP_SECRET = "not-the-launch-key";
+process.env.VK_CALLBACK_SECRET = TEST_SECRET;
 process.env.VK_APP_ID = String(TEST_APP_ID);
 
 function signLaunch(params: URLSearchParams): string {
@@ -35,7 +38,7 @@ describe("auth-vk.ts", () => {
     ({ verifyVkLaunchParams, verifyVkPhoneSign } = await import("../src/auth-vk"));
   });
 
-  it("принимает свежую launch-подпись своего приложения", () => {
+  it("принимает свежую launch-подпись из безопасного legacy-алиаса ключа", () => {
     expect(verifyVkLaunchParams(buildLaunch())).toEqual({ vkUserId: 11223344, appId: TEST_APP_ID });
   });
 

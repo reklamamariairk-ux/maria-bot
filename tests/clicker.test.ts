@@ -5,7 +5,7 @@
  * дневные лимиты (1 письмо/день) и закрытие недельных сезонов.
  */
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { BUSINESS_MAX_LEVEL, CARDS, cardPrice, cardProfit, closedWeekSeasonPoints, comboHitsIncludingMaxed, comboMilestonesIn, computePurchaseGrant, effectiveCareerLevel, effectiveDailyStreak, gameParticipationReward, nextNeedForLevel, passiveEarnedInCurrentWeek, settleEnergyRegeneration, settlePassiveIncome, settlePassiveIncomeAcrossEvents, todayIrkutsk, weekMonday, weekKey } from "../src/clicker";
+import { BOOST_STREAK_UNLOCK, BUSINESS_MAX_LEVEL, CARDS, boostRemaining, cardPrice, cardProfit, closedWeekSeasonPoints, comboHitsIncludingMaxed, comboMilestonesIn, computePurchaseGrant, dailyBoostLimits, effectiveCareerLevel, effectiveDailyStreak, gameParticipationReward, nextNeedForLevel, passiveEarnedInCurrentWeek, rollDailyChest, settleEnergyRegeneration, settlePassiveIncome, settlePassiveIncomeAcrossEvents, todayIrkutsk, weekMonday, weekKey } from "../src/clicker";
 
 describe("экономика прокачки бизнеса", () => {
   it("дорогой следующий уровень увеличивает и саму прибавку дохода", () => {
@@ -49,6 +49,32 @@ describe("серия ежедневных наград", () => {
 
   it("сбрасывает показываемую серию после пропущенного дня", () => {
     expect(effectiveDailyStreak("2026-08-18", 7, "2026-08-20")).toBe(0);
+  });
+});
+
+describe("редкие дневные бусты", () => {
+  const today = "2026-08-31";
+
+  it("до третьего дня даёт только один заряд энергии", () => {
+    expect(dailyBoostLimits(today, BOOST_STREAK_UNLOCK - 1, today)).toEqual({ energy: 1, turbo: 0 });
+  });
+
+  it("на стрике 3 дня открывает второй refill и одно Turbo", () => {
+    expect(dailyBoostLimits(today, BOOST_STREAK_UNLOCK, today)).toEqual({ energy: 2, turbo: 1 });
+  });
+
+  it("не возвращает потраченный Turbo при повторном чтении в тот же день", () => {
+    expect(boostRemaining(1, 1, today, today)).toBe(0);
+    expect(boostRemaining(1, 1, "2026-08-30", today)).toBe(1);
+  });
+
+  it("после снижения лимитов никогда не показывает отрицательный остаток", () => {
+    expect(boostRemaining(1, 6, today, today)).toBe(0);
+  });
+
+  it("оставляет Turbo и Энергию в сундуке редкими призами", () => {
+    expect([0, 0.51, 0.52, 0.86, 0.87, 0.899, 0.90, 0.949, 0.95, 0.999].map((r) => rollDailyChest(5, r, 0.5).type))
+      .toEqual(["coins", "coins", "coins", "coins", "turbo", "turbo", "energy", "energy", "jackpot", "jackpot"]);
   });
 });
 

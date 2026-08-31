@@ -51,6 +51,9 @@ function serve() {
   // Первый визит показывает тьюториал поверх оверлея — реальный юзер тапнет «Поехали!»
   const tutGo = pg.locator('#ck-tut-go');
   if (await tutGo.isVisible().catch(() => false)) { await tutGo.click(); await pg.waitForTimeout(300); }
+  ok(((await pg.locator('#ck-bt-energy-n').textContent()) || '').includes('1'), 'бусты: новичку доступна одна Энергия');
+  ok(((await pg.locator('#ck-bt-turbo-n').textContent()) || '').includes('стрик 3 дня'), 'бусты: Турбо закрыто до стрика 3 дня');
+  ok(await pg.locator('#ck-bt-turbo').isDisabled(), 'бусты: закрытое Турбо нельзя активировать');
   // «Дом Василия» и связанные мини-игры больше не входят в игровой бандл.
   await pg.locator('.ck-nav__b[data-tab="hub"]').click();
   await pg.waitForTimeout(400);
