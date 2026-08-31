@@ -47,5 +47,6 @@ describe("VK asset aliases", () => {
     expect(clicker).toContain("const LOOP_FRAME_BUDGET = 1 / 20");
     expect(clicker).toContain("/api/clicker/tasks-overview");
     expect(clicker).toContain("void maybePurchaseBonus(); }, 3500");
+    expect(clicker).toContain("if (!s) return false;");
   });
 });

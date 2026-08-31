@@ -340,6 +340,7 @@
     { id: 'ms_ref10', title: 'Пригласил 10 друзей', cond: { type: 'ref', target: 10 }, kind: 'perk', perkText: 'Промокод −10% (от 1000₽)' },
   ];
   function condMet(t, s) {
+    if (!s) return false;
     if (t.type === 'link') return !!linkOpened[t.id];
     if (t.type === 'level') return s.level >= t.target || Number(s.prestige || 0) > 0;
     if (t.type === 'balance') return s.totalEarned >= t.target || Number(s.prestige || 0) > 0;
@@ -3133,6 +3134,7 @@
   async function renderTasks() {
     const gen = ++tasksGen;
     const list = ov.querySelector('#ck-taskslist');
+    if (!st) { list.innerHTML = skelRows(6); return; }
     if (authed()) {
       list.innerHTML = accountLinkCardHtml() + skelRows(6);
       const earlyAccountAction = list.querySelector('#ck-account-link-action');
@@ -3650,9 +3652,12 @@
     if (!ov) build();
     const mySession = ++overlaySession;
     activeTapPointers.clear();
-    ov.classList.add('on'); document.documentElement.classList.remove('ck-gamefirst'); window.scrollLock && window.scrollLock(); ac();
+    ov.classList.add('on'); window.scrollLock && window.scrollLock(); ac();
     const loaded = await load();
     if (!overlaySessionActive(mySession)) return;
+    // Не показываем кликабельные вкладки с нулевым профилем, пока managed DB
+    // отвечает на первый запрос. Иначе быстрый тап по «Призам» обгонял load().
+    document.documentElement.classList.remove('ck-gamefirst');
     if (!loaded) { showLoadFailure(); return; }
     await maybeMigrateGuest();
     if (!overlaySessionActive(mySession)) return;
