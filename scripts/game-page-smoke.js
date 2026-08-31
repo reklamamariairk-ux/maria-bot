@@ -7,11 +7,16 @@ const { chromium } = require('playwright');
 
 const PUB = path.join(__dirname, '..', 'public');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.webp': 'image/webp', '.png': 'image/png', '.json': 'application/json', '.svg': 'image/svg+xml' };
+const VK_ALIASES = {
+  '/js/tg-bridge-vk.js': '/js/tg-bridge.js',
+  '/js/catclick-vk.js': '/js/catclick.js',
+};
 
 function serve() {
   return new Promise((res) => {
     const s = http.createServer((req, rsp) => {
-      const u = decodeURIComponent(req.url.split('?')[0]);
+      const requested = decodeURIComponent(req.url.split('?')[0]);
+      const u = VK_ALIASES[requested] || requested;
       let f = path.join(PUB, u === '/' ? 'index.html' : u);
       if (!f.startsWith(PUB) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { rsp.writeHead(404); return rsp.end(); }
       rsp.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream' });
@@ -47,12 +52,13 @@ function serve() {
   const tutGo = pg.locator('#ck-tut-go');
   if (await tutGo.isVisible().catch(() => false)) { await tutGo.click(); await pg.waitForTimeout(300); }
   // Дом кота теперь в «Разделах» экрана Главная (в навбаре его нет): открыть через hub → строку Дома.
-  // Виджет «До подарка» должен быть виден (game-first: вехи заботы — витрина призов)
+  // В pure/guest реальные призы программы лояльности недоступны: виджет не должен
+  // обещать баллы или промокоды, которые здесь невозможно получить.
   await pg.locator('.ck-nav__b[data-tab="hub"]').click();
   await pg.waitForTimeout(400);
   await pg.locator('.ck-row2[data-goto="home"]').click();
   await pg.waitForTimeout(1500);
-  ok(await pg.locator('#pet-gift').isVisible().catch(() => false), 'pure: #pet-gift виден');
+  ok(await pg.locator('#pet-gift').isHidden().catch(() => false), 'pure: #pet-gift скрыт');
   await pg.close();
 
   // ── 2. index.html: регресс (магазин + игра с коммерцией) ──

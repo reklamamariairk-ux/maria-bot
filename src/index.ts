@@ -30,6 +30,8 @@ import { createVkSender } from "./vk/sender";
 import { createVkCallbackRouter } from "./vk/callback";
 import { createVkRouter } from "./routes/vk";
 import { miniAppLink, withAppLinkForVk } from "./links";
+import { getBuildInfo } from "./build-info";
+import { registerVkAssetAliases } from "./static-assets";
 import { createReferralRouter } from "./routes/referral";
 import { createWheelStreakRouter } from "./routes/wheel-streak";
 import { createPigeonsRouter } from "./routes/pigeons";
@@ -828,7 +830,7 @@ const app = express();
 // в selfie-cake baseUrl строится из заголовков и легко подменяется.
 app.set("trust proxy", 1);
 
-// CSP подобран под Telegram WebApp:
+// CSP подобран под Telegram/VK/MAX WebApp:
 // - frame-ancestors разрешает встраивание в web.telegram.org/k/a/z (web-клиенты)
 //   и на 'self' для прямого открытия в браузере (dev).
 // - default-src 'self' закрывает большинство XSS-каналов.
@@ -848,10 +850,10 @@ app.use(
       useDefaults: false,
       directives: {
         "default-src": ["'self'"],
-        // VK-порт: мини-апп открывается в iframe vk.com/m.vk.com (web) — нужны
-        // frame-ancestors; vk-bridge SDK грузится с unpkg (script-src)
-        "frame-ancestors": ["'self'", "https://web.telegram.org", "https://t.me", "https://*.telegram.org", "https://vk.com", "https://*.vk.com", "https://vk.ru", "https://*.vk.ru", "https://*.vk-apps.com"],
-        "script-src": ["'self'", "'unsafe-inline'", "https://telegram.org", "https://*.telegram.org", "https://unpkg.com"],
+        // VK/MAX-порты открываются во фреймах официальных web-клиентов; SDK
+        // MAX подключается с CDN, указанного в dev.max.ru/docs/webapps/bridge.
+        "frame-ancestors": ["'self'", "https://web.telegram.org", "https://t.me", "https://*.telegram.org", "https://vk.com", "https://*.vk.com", "https://vk.ru", "https://*.vk.ru", "https://*.vk-apps.com", "https://max.ru", "https://*.max.ru"],
+        "script-src": ["'self'", "'unsafe-inline'", "https://telegram.org", "https://*.telegram.org", "https://unpkg.com", "https://st.max.ru"],
         "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         "font-src": ["'self'", "https://fonts.gstatic.com", "data:"],
         "img-src": ["'self'", "data:", "blob:", "https:", "http://image.pollinations.ai", "https://image.pollinations.ai"],
@@ -890,7 +892,9 @@ app.get("/", (req, res, next) => {
   }
   return next();
 });
-app.use(express.static(path.join(__dirname, "..", "public"), {
+const publicDir = path.join(__dirname, "..", "public");
+registerVkAssetAliases(app, publicDir);
+app.use(express.static(publicDir, {
   setHeaders(res, filePath) {
     // HTML не кэшируем — иначе Telegram/браузер держат старый index с прежним ?v=
     // (JS/CSS версионируются через ?v= и могут кэшироваться). Свежесть кода после деплоя.
@@ -2552,10 +2556,10 @@ app.get("/health", (_req, res) =>
 );
 
 // Версия билда — для верификации, что новый код задеплоился
+const buildInfo = getBuildInfo();
 app.get("/version", (_req, res) =>
   res.json({
-    version: process.env.npm_package_version ?? "unknown",
-    commit: process.env.RENDER_GIT_COMMIT ?? "local",
+    ...buildInfo,
     features: ["rich-order-comment", "subscriber-stats", "phone-verified-mark", "b24-productrows", "rich-items-list"],
   })
 );

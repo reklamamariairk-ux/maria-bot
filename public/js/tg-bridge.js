@@ -144,7 +144,7 @@
   if (IS_VK) ready(); // стартуем сразу, не дожидаясь вызова
 
   // ─── Haptic ────────────────────────────────────────────────────────────────
-  window.haptic = function(kind) {
+  function emitHaptic(kind) {
     if (IS_VK) {
       if (!_vkBridge) return;
       try {
@@ -165,7 +165,8 @@
       else if (kind === 'selection') h.selectionChanged();
       else h.impactOccurred(kind || 'light');
     } catch {}
-  };
+  }
+  window.haptic = emitHaptic;
 
   // Авто-haptic на тапах: data-haptic="light|medium|heavy|success|selection"
   document.addEventListener('click', (e) => {
@@ -319,7 +320,9 @@
       return 0;
     },
 
-    haptic(kind) { window.haptic(kind); },
+    // Не вызываем window.haptic отсюда: сторонний legacy-скрипт может случайно
+    // переопределить глобальное имя и замкнуть App.haptic в рекурсию.
+    haptic(kind) { emitHaptic(kind); },
 
     requestContact(callback) {
       const host = PLATFORM === 'max' ? mx : PLATFORM === 'tg' ? tg : null;

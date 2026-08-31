@@ -222,7 +222,7 @@ function renderSweetCheckMy(data) {
       ${taskBlock}
 
       <!-- CTA + детали accordion -->
-      <button class="scp__cta" onclick="haptic('medium');${ctaAction}">${ctaText}</button>
+      <button class="scp__cta" onclick="clubHaptic('medium');${ctaAction}">${ctaText}</button>
       <button class="scp__more" onclick="document.querySelector('#tab-club details.acc:first-of-type')?.setAttribute('open','')">Призы и правила →</button>
     </div>`;
   if (window.IconInflate) window.IconInflate(top);
@@ -327,7 +327,7 @@ async function renderLk() {
           <div class="lk-card__bal-lb">баллов на сайте</div>
           <div class="lk-card__bal-hint">Сделай первый заказ и получи 5–10% кэшбэк</div>
         </div>
-        <button class="lk-card__use-btn" data-haptic="medium" onclick="haptic('light');switchTab('menu')">Перейти в каталог →</button>`;
+        <button class="lk-card__use-btn" data-haptic="medium" onclick="clubHaptic('light');switchTab('menu')">Перейти в каталог →</button>`;
       return;
     }
 
@@ -339,13 +339,13 @@ async function renderLk() {
         <div class="lk-card__bal-num" id="lk-bal-anim" data-target="${balance}">0</div>
         <div class="lk-card__bal-lb">баллов на сайте</div>
         <div class="lk-card__bal-hint">Доступно для оплаты до 30% от заказа</div>
-        ${balance > 0 ? `<button class="lk-card__use-btn" data-haptic="medium" onclick="haptic('light');switchTab('menu')">Использовать в каталоге →</button>` : ''}
+        ${balance > 0 ? `<button class="lk-card__use-btn" data-haptic="medium" onclick="clubHaptic('light');switchTab('menu')">Использовать в каталоге →</button>` : ''}
       </div>
       ${orders.length ? `
         <div class="lk-card__orders">
           <div class="lk-card__tt">Последние заказы</div>
           ${orders.slice(0, 3).map(renderOrderRow).join('')}
-          ${orders.length > 3 ? `<button class="lk-card__all-orders" onclick="haptic('light');profOpenOrders?.()">Все заказы (${orders.length}) →</button>` : `<div class="lk-card__hint-row">Всего заказов: ${orders.length}</div>`}
+          ${orders.length > 3 ? `<button class="lk-card__all-orders" onclick="clubHaptic('light');profOpenOrders?.()">Все заказы (${orders.length}) →</button>` : `<div class="lk-card__hint-row">Всего заказов: ${orders.length}</div>`}
         </div>
       ` : `
         <div class="lk-card__empty">
@@ -436,7 +436,7 @@ function animateCounter(el, target, duration = 600) {
 window.animateCounter = animateCounter;
 
 // Haptic feedback shortcut
-function haptic(type) {
+function clubHaptic(type) {
   window.App?.haptic?.(type || 'light');
 }
 

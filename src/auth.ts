@@ -98,7 +98,24 @@ function resolveUser(req: Request): AppUser | undefined {
     const tg = verifyInitData(auth.slice(4));
     if (tg) user = { ...tg, platform: "tg", platformId: tg.id };
   } else if (auth.startsWith("vk ")) {
-    const vk = verifyVkLaunchParams(auth.slice(3));
+    const rawVk = auth.slice(3);
+    const vk = verifyVkLaunchParams(rawVk);
+    if (!vk) {
+      // Диагностика только метаданных: не логируем launch-параметры и подпись.
+      try {
+        const p = new URLSearchParams(rawVk);
+        console.warn("[vk-auth] launch rejected", {
+          rawLength: rawVk.length,
+          keys: [...p.keys()].filter((k) => k !== "sign").sort(),
+          appId: p.get("vk_app_id") ?? null,
+          userIdPresent: Boolean(p.get("vk_user_id")),
+          tsPresent: Boolean(p.get("vk_ts")),
+          signLength: p.get("sign")?.length ?? 0,
+        });
+      } catch {
+        console.warn("[vk-auth] launch rejected: malformed params", { rawLength: rawVk.length });
+      }
+    }
     if (vk) {
       user = {
         id: toInternalId("vk", vk.vkUserId),
