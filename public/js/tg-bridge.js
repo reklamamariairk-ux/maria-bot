@@ -298,7 +298,9 @@
         const h = { Authorization: 'vk ' + _vkLaunchParams };
         if (_vkUser) {
           // Display-only имя (бэк НЕ доверяет ему для security)
-          try { h['x-vk-user'] = JSON.stringify({ first_name: _vkUser.first_name, last_name: _vkUser.last_name }); } catch {}
+          // Fetch Headers принимает ByteString и отклоняет кириллицу ещё до сети.
+          // URI-кодирование сохраняет Unicode, но оставляет значение ASCII-only.
+          try { h['x-vk-user'] = encodeURIComponent(JSON.stringify({ first_name: _vkUser.first_name, last_name: _vkUser.last_name })); } catch {}
         }
         return h;
       }

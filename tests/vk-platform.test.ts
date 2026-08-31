@@ -33,9 +33,11 @@ function buildLaunch(overrides: Record<string, string> = {}): string {
 describe("auth-vk.ts", () => {
   let verifyVkLaunchParams: typeof import("../src/auth-vk").verifyVkLaunchParams;
   let verifyVkPhoneSign: typeof import("../src/auth-vk").verifyVkPhoneSign;
+  let parseVkDisplayNameHeader: typeof import("../src/auth").parseVkDisplayNameHeader;
 
   beforeAll(async () => {
     ({ verifyVkLaunchParams, verifyVkPhoneSign } = await import("../src/auth-vk"));
+    ({ parseVkDisplayNameHeader } = await import("../src/auth"));
   });
 
   it("принимает свежую launch-подпись из безопасного legacy-алиаса ключа", () => {
@@ -64,5 +66,12 @@ describe("auth-vk.ts", () => {
       .digest("hex");
     expect(verifyVkPhoneSign(phone, userId, sign)).toBe(true);
     expect(verifyVkPhoneSign("+79991234568", userId, sign)).toBe(false);
+  });
+
+  it("декодирует русское имя из ASCII-safe заголовка VK", () => {
+    const encoded = encodeURIComponent(JSON.stringify({ first_name: "Василий", last_name: "Котов" }));
+    expect(parseVkDisplayNameHeader(encoded)).toEqual({ first_name: "Василий", last_name: "Котов" });
+    expect(parseVkDisplayNameHeader(JSON.stringify({ first_name: "Vasily", last_name: "Cat" })))
+      .toEqual({ first_name: "Vasily", last_name: "Cat" });
   });
 });

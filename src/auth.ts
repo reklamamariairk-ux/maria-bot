@@ -71,20 +71,25 @@ type AuthedRequest = Request & { appUser?: AppUser; tgUser?: TgUser };
 
 /**
  * Имя VK-юзера не входит в подписанные launch params (в отличие от TG initData).
- * Фронт может прислать его в заголовке `x-vk-user` (JSON {first_name,last_name}) —
+ * Фронт присылает его в ASCII-safe заголовке `x-vk-user`
+ * (encodeURIComponent(JSON {first_name,last_name})); старый сырой JSON тоже читаем.
  * НЕ доверять для security, использовать ТОЛЬКО для отображения/персонализации.
  */
-function vkDisplayName(req: Request): { first_name?: string; last_name?: string } {
+export function parseVkDisplayNameHeader(raw: string | null | undefined): { first_name?: string; last_name?: string } {
   try {
-    const raw = req.header("x-vk-user");
     if (!raw) return {};
-    const j = JSON.parse(raw) as { first_name?: unknown; last_name?: unknown };
+    const json = /^%7b/i.test(raw) ? decodeURIComponent(raw) : raw;
+    const j = JSON.parse(json) as { first_name?: unknown; last_name?: unknown };
     const clean = (v: unknown) =>
       typeof v === "string" ? v.replace(/[<>]/g, "").slice(0, 64) : undefined;
     return { first_name: clean(j.first_name), last_name: clean(j.last_name) };
   } catch {
     return {};
   }
+}
+
+function vkDisplayName(req: Request): { first_name?: string; last_name?: string } {
+  return parseVkDisplayNameHeader(req.header("x-vk-user"));
 }
 
 /** Парсит Authorization (tma <initData> | vk <launchParamsQS>) → AppUser. Кэширует на req. */

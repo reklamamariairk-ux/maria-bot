@@ -23,6 +23,7 @@ describe("VK asset aliases", () => {
     const bridge = fs.readFileSync(path.join(root, "public", "js", "tg-bridge.js"), "utf8");
     expect(bridge).toContain("const _vkLaunchParams = IS_VK ? location.search.slice(1) : '';");
     expect(bridge).toContain("Authorization: 'vk ' + _vkLaunchParams");
+    expect(bridge).toContain("h['x-vk-user'] = encodeURIComponent(JSON.stringify(");
     expect(bridge).not.toContain("Authorization: 'vk ' + location.search.slice(1)");
   });
 
