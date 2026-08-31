@@ -9,7 +9,7 @@ const ok = (c, m) => { if (c) { pass++; console.log("  OK", m); } else { fail++;
 
 try {
   await pool.query(`INSERT INTO clicker_state (chat_id, balance, total_earned, energy) VALUES ($1, 0, 0, 1000)
-    ON CONFLICT (chat_id) DO UPDATE SET balance=0, total_earned=0, ftue_claimed=0, chest_date=NULL, race_reaction_ms=NULL`, [A]);
+    ON CONFLICT (chat_id) DO UPDATE SET balance=0, total_earned=0, max_level=1, prestige=0, ftue_claimed=0, chest_date=NULL, race_reaction_ms=NULL`, [A]);
   await pool.query(`DELETE FROM clicker_cards WHERE chat_id=$1`, [A]);
   await pool.query(`DELETE FROM pigeon_inventory WHERE chat_id=$1`, [A]);
 
@@ -19,8 +19,9 @@ try {
   const early = await claimFtue(A, 0);
   ok(!early.ok && early.reason === "not_done", "клейм несделанного → not_done");
 
-  // выполняем шаги: тапы (total_earned), пекарня, сундук, голубь, заезд
-  await pool.query(`UPDATE clicker_state SET total_earned=60, chest_date='2026-01-01', race_reaction_ms=300 WHERE chat_id=$1`, [A]);
+  // выполняем шаги: тапы (total_earned), пекарня, сундук, голубь, уровень 2.
+  // Старый драг-заезд удалён и больше не должен блокировать чеклист на 4/5.
+  await pool.query(`UPDATE clicker_state SET total_earned=2500, chest_date='2026-01-01', race_reaction_ms=NULL WHERE chat_id=$1`, [A]);
   await pool.query(`INSERT INTO clicker_cards (chat_id, card, level) VALUES ($1,'bakery',1) ON CONFLICT (chat_id, card) DO UPDATE SET level=1`, [A]);
   await grantPigeon(A, "sizar");
 

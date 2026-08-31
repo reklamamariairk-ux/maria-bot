@@ -1180,14 +1180,16 @@ export const FTUE_STEPS = [
   { id: 1, name: "Заведи «Пекарню» в Прокачке", reward: 1000 },
   { id: 2, name: "Открой Сундук удачи в «Призах»", reward: 1500 },
   { id: 3, name: "Получи первого голубя", reward: 2000 },
-  { id: 4, name: "Проведи драг-заезд в голубятне", reward: 5000 },
+  // Драг-заезды удалены из продукта. Пятый шаг должен выполняться в основной
+  // игре, иначе чеклист навсегда застревает на 4/5 у новых игроков.
+  { id: 4, name: "Дойди до 2 уровня", reward: 5000 },
 ];
 const FTUE_ALL_MASK = (1 << FTUE_STEPS.length) - 1;
 
 async function ftueDoneFlags(chatId: number, db: Queryable = pool): Promise<boolean[]> {
   // Последовательные запросы позволяют безопасно переиспользовать уже занятый
   // PoolClient из claimFtue, не запрашивая дополнительные соединения пула.
-  const st = await db.query(`SELECT total_earned, chest_date, race_reaction_ms, prestige FROM clicker_state WHERE chat_id=$1`, [chatId]);
+  const st = await db.query(`SELECT total_earned, chest_date, max_level, prestige FROM clicker_state WHERE chat_id=$1`, [chatId]);
   const bakery = await db.query(`SELECT 1 FROM clicker_cards WHERE chat_id=$1 AND card='bakery' AND level>0`, [chatId]);
   const pigeon = await db.query(`SELECT 1 FROM pigeon_inventory WHERE chat_id=$1 AND count>0 LIMIT 1`, [chatId]);
   const r = st.rows[0] || {};
@@ -1200,7 +1202,7 @@ async function ftueDoneFlags(chatId: number, db: Queryable = pool): Promise<bool
     progressedPastFtue || !!bakery.rowCount,
     progressedPastFtue || r.chest_date != null,
     progressedPastFtue || !!pigeon.rowCount,
-    progressedPastFtue || r.race_reaction_ms != null,
+    progressedPastFtue || Number(r.max_level || 1) >= 2 || Number(r.total_earned || 0) >= LEAGUES[1].need,
   ];
 }
 

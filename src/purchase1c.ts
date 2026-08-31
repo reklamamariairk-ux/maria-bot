@@ -191,7 +191,7 @@ async function settleEvent(chatId: number, eventId: number, product: string, row
     );
     const state = await client.query(`SELECT total_earned FROM clicker_state WHERE chat_id=$1`, [chatId]);
     const level = careerLevel(Number(state.rows[0]?.total_earned) || 0);
-    const history = await client.query(`SELECT COUNT(*)::int AS n FROM purchase_claims WHERE chat_id=$1 AND status='confirmed' AND created_at >= NOW() - INTERVAL '30 days'`, [chatId]);
+    const history = await client.query(`SELECT COUNT(DISTINCT pe.receipt_id)::int AS n FROM purchase_claims pc JOIN purchase_events pe ON pe.id=pc.event_id WHERE pc.chat_id=$1 AND pc.status='confirmed' AND pc.created_at >= NOW() - INTERVAL '30 days'`, [chatId]);
     const purchaseNumber = Math.min(3, Number(history.rows[0]?.n || 0) + 1);
     let count = 0;
     for (const task of tasks) {
@@ -226,12 +226,35 @@ async function settleEvent(chatId: number, eventId: number, product: string, row
 }
 
 export async function getPurchaseTasks(chatId: number): Promise<any[]> {
-  const { rows } = await pool.query(
-    `SELECT t.id,t.title,t.description,t.product_codes AS "productCodes",t.store_codes AS "storeCodes",t.min_qty AS "minQty",t.min_amount AS "minAmount",t.reward_coins AS "rewardCoins",t.loyalty_points AS "loyaltyPoints",t.starts_at AS "startsAt",t.ends_at AS "endsAt",c.status
-       FROM purchase_tasks t LEFT JOIN purchase_claims c ON c.task_id=t.id AND c.chat_id=$1 AND c.status='confirmed'
-      WHERE t.is_active AND t.starts_at <= NOW() AND (t.ends_at IS NULL OR t.ends_at >= NOW()) ORDER BY t.id`, [chatId]
-  );
-  return rows.map(r => ({ ...r, status: r.status ?? "active" }));
+  const [taskRows, state, history] = await Promise.all([
+    pool.query(
+    `SELECT t.id,t.title,t.description,t.product_codes AS "productCodes",t.store_codes AS "storeCodes",t.min_qty AS "minQty",t.min_amount AS "minAmount",t.reward_coins AS "rewardCoins",t.loyalty_points AS "loyaltyPoints",t.reward_levels AS "rewardLevels",t.starts_at AS "startsAt",t.ends_at AS "endsAt",
+            CASE WHEN EXISTS (SELECT 1 FROM purchase_claims c WHERE c.task_id=t.id AND c.chat_id=$1 AND c.status='confirmed') THEN 'confirmed' ELSE 'active' END AS status
+       FROM purchase_tasks t
+      WHERE t.is_active AND t.starts_at <= NOW() AND (t.ends_at IS NULL OR t.ends_at >= NOW()) ORDER BY t.id`, [chatId]),
+    pool.query(`SELECT total_earned FROM clicker_state WHERE chat_id=$1`, [chatId]),
+    pool.query(`SELECT COUNT(DISTINCT pe.receipt_id)::int AS n FROM purchase_claims pc JOIN purchase_events pe ON pe.id=pc.event_id WHERE pc.chat_id=$1 AND pc.status='confirmed' AND pc.created_at >= NOW() - INTERVAL '30 days'`, [chatId]),
+  ]);
+  const level = careerLevel(Number(state.rows[0]?.total_earned) || 0);
+  const purchaseNumber = Math.min(3, Number(history.rows[0]?.n || 0) + 1);
+  const rewardMultiplier = purchaseNumber === 3 ? 2.5 : purchaseNumber === 2 ? 1.5 : 1;
+  return taskRows.rows.map((row: any) => {
+    const reward = taskReward({
+      reward_coins: row.rewardCoins,
+      loyalty_points: row.loyaltyPoints,
+      reward_levels: row.rewardLevels,
+    }, level);
+    const { rewardLevels: _rewardLevels, ...task } = row;
+    return {
+      ...task,
+      rewardCoins: Math.round(reward.coins * rewardMultiplier),
+      loyaltyPoints: reward.points,
+      rewardMultiplier,
+      purchaseNumber,
+      careerLevel: level,
+      status: row.status ?? "active",
+    };
+  });
 }
 
 export async function getPurchaseTaskClaims(chatId: number): Promise<any[]> {
@@ -262,8 +285,10 @@ export async function refreshAutoPurchaseTasks(): Promise<void> {
       const target = Number(c.targetAmount) || 0;
       const sales = Number(c.salesAmount) || 0;
       const gap = target > 0 ? Math.max(0, 1 - sales / target) : 0.25;
-      const baseCoins = Math.max(5000, Math.min(150000, Math.round((Number(c.grossProfit) || Number(c.salesAmount) * 0.2 || 1000) * (0.15 + gap * 0.35))));
-      const levels = [1,6,11,16].map((level, i) => ({ level, coins: Math.round(baseCoins * [1,3,8,20][i]), points: Math.max(10, Math.round(baseCoins / 250)) }));
+      // Реальная оплаченная покупка должна быть ощутимо ценнее простого игрового
+      // задания. Нижняя граница раньше была 5 000 — меньше награды за приглашение.
+      const baseCoins = Math.max(50000, Math.min(500000, Math.round((Number(c.grossProfit) || Number(c.salesAmount) * 0.2 || 1000) * (0.3 + gap * 0.7))));
+      const levels = [1,6,11,16].map((level, i) => ({ level, coins: Math.round(baseCoins * [1,4,15,50][i]), points: Math.max(10, Math.round(baseCoins / 250)) }));
       await client.query(`INSERT INTO purchase_tasks (title,description,product_codes,reward_coins,loyalty_points,reward_levels,priority_score,starts_at,ends_at,is_active) VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW()+INTERVAL '7 days',true)`, [title, `Купи «${name}» — товар выбран по данным продаж и плана`, [String(c.productCode)], baseCoins, Math.max(10, Math.round(baseCoins / 250)), JSON.stringify(levels), Math.round((gap * 30 + Math.min(1, (Number(c.grossProfit) || 0) / Math.max(1, sales)) * 25) * 100) / 100]);
     }
     await client.query('COMMIT');

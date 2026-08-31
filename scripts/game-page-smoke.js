@@ -87,7 +87,36 @@ function serve() {
   ok(tapPerf.duration < 500, `perf: 60 тапов обрабатываются без длинной блокировки (${Math.round(tapPerf.duration)} мс)`);
   await pg.close();
 
-  // ── 2. index.html: регресс (магазин + игра с коммерцией) ──
+  // ── 2. Низкое окно VK: кот остаётся крупным, управление не уезжает ──
+  pg = await br.newPage({ viewport: { width: 360, height: 640 } });
+  pg.on('pageerror', (e) => errors.push('short-vk: ' + e.message));
+  await pg.goto(base + '/game.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await pg.waitForSelector('.ck-ov.on', { timeout: 15000 });
+  await pg.evaluate(() => document.querySelector('.ck-tut')?.remove());
+  await pg.waitForTimeout(250);
+  const shortLayout = await pg.evaluate(() => {
+    const cat = document.querySelector('#ck-cat').getBoundingClientRect();
+    const wrap = document.querySelector('#ck-catwrap').getBoundingClientRect();
+    const energy = document.querySelector('.ck-energy').getBoundingClientRect();
+    const nav = document.querySelector('.ck-nav').getBoundingClientRect();
+    return { catHeight: cat.height, wrapHeight: wrap.height, controlsFit: energy.bottom <= nav.top + 1 };
+  });
+  ok(shortLayout.catHeight >= 210, `VK 360×640: кот крупный (${Math.round(shortLayout.catHeight)}px)`);
+  ok(shortLayout.wrapHeight >= 215, `VK 360×640: арена не схлопнулась (${Math.round(shortLayout.wrapHeight)}px)`);
+  ok(shortLayout.controlsFit, 'VK 360×640: энергия и навигация не перекрываются');
+  ok(((await pg.locator('#ck-shop-point').textContent()) || '').includes('2ГИС'), 'поиск точки явно открывает 2ГИС');
+  const mapUrl = await pg.evaluate(async () => {
+    window.__smokeExternal = '';
+    App.openExternal = (url) => { window.__smokeExternal = url; };
+    document.querySelector('#ck-shop-point').click();
+    const until = Date.now() + 1500;
+    while (!window.__smokeExternal && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 20));
+    return window.__smokeExternal;
+  });
+  ok(/^https:\/\/2gis\.ru\/irkutsk\/search\//.test(mapUrl), 'кнопка точки ведёт в поиск 2ГИС');
+  await pg.close();
+
+  // ── 3. index.html: регресс (магазин + игра с коммерцией) ──
   pg = await br.newPage();
   pg.on('pageerror', (e) => errors.push('index.html: ' + e.message));
   await pg.goto(base + '/index.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -105,11 +134,11 @@ function serve() {
   ok(await pg.evaluate(() => typeof window.catPetOpen === 'undefined'), 'регресс: модуль Дома не загружен');
   await pg.close();
 
-  // ── 3. Явная связка VK ↔ Telegram: карточка и следующий шаг ──
+  // ── 4. Связка аккаунтов + подробности покупочного задания ──
   pg = await br.newPage({ viewport: { width: 390, height: 844 } });
   pg.on('pageerror', (e) => errors.push('account-link: ' + e.message));
   await pg.route('**/api/account-link/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ currentPlatform: 'vk', phoneVerified: false, linked: false, platforms: { vk: false, tg: false } }) }));
-  await pg.route('**/api/clicker/tasks-overview', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ done: [], purchaseTasks: [], purchaseClaims: [], phoneVerified: false, accountLink: { currentPlatform: 'vk', phoneVerified: false, linked: false, platforms: { vk: false, tg: false } } }) }));
+  await pg.route('**/api/clicker/tasks-overview', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ done: [], purchaseTasks: [{ id: 77, title: 'Купи фирменный торт', description: 'Купи торт «Мария»', minQty: 1, minAmount: 1200, storeCodes: [], rewardCoins: 50000, loyaltyPoints: 200, rewardMultiplier: 1, status: 'active', endsAt: '2026-09-30T15:59:59.000Z' }], purchaseClaims: [], phoneVerified: false, accountLink: { currentPlatform: 'vk', phoneVerified: false, linked: false, platforms: { vk: false, tg: false } } }) }));
   await pg.route('**/api/clicker/tasks', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ tasks: [] }) }));
   await pg.route('**/api/clicker/purchase-tasks', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ tasks: [], claims: [], phoneVerified: false }) }));
   await pg.route('**/api/clicker/achievements', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ achievements: [] }) }));
@@ -126,6 +155,14 @@ function serve() {
   ok(((await pg.locator('.ck-account__copy').textContent()) || '').includes('один и тот же номер'), 'связка: объяснены оба шага');
   ok(((await pg.locator('#ck-account-link-action').textContent()) || '').includes('Подтвердить номер в VK'), 'связка: показано конкретное следующее действие');
   ok((await pg.locator('.ck-account__step').count()) === 2, 'связка: статусы VK и Telegram разделены');
+  const purchaseDetail = pg.locator('[data-detail="purchase:77"]');
+  ok(await purchaseDetail.isVisible(), 'покупки: задание видно в Призах');
+  await purchaseDetail.locator('[data-detail-open]').click();
+  await pg.waitForSelector('.ck-pop.on .ck-task-detail');
+  ok(((await pg.locator('.ck-pop.on h3').textContent()) || '').includes('Купи фирменный торт'), 'покупки: по нажатию открывается подробная карточка');
+  const detailText = (await pg.locator('.ck-pop.on').textContent()) || '';
+  ok(detailText.includes('50 000') && detailText.includes('1 200 ₽'), 'покупки: подробно показаны награда и условие');
+  ok(detailText.includes('автоматически'), 'покупки: объяснено автоматическое подтверждение чека');
   if (process.env.SMOKE_SCREENSHOT) await pg.screenshot({ path: process.env.SMOKE_SCREENSHOT, fullPage: true });
   await pg.close();
 

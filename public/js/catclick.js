@@ -64,6 +64,8 @@
   ];
   const BUSINESS_MAX_LEVEL = 20;
   const REF_REFERRER = 30000, REF_INVITEE = 2500, BOT = 'mariatortik_bot'; // зеркало src/clicker.ts
+  const SHOP_SITE_URL = 'https://maria-irk.ru/';
+  const STORE_MAP_URL = 'https://2gis.ru/irkutsk/search/Кондитерская%20мария';
   // Соцссылки «Марии» — зеркало SOCIAL в src/clicker.ts (менять синхронно). Пустая = задание скрыто.
   const SOCIAL = { review: 'https://yandex.ru/maps/?text=Мария кондитерская Иркутск', vk: '', tg: 'https://t.me/mariatortik_bot' };
   // Режим «чистой игры» (game.html): вся коммерция скрыта. См. спеку 2026-07-13.
@@ -107,6 +109,7 @@
     });
   }
   const fmt = (n) => Math.floor(n).toLocaleString('ru-RU');
+  const escHtml = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const irkToday = () => new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
   const dailyBoostLimits = (streak) => Number(streak) >= BOOST_STREAK_UNLOCK
     ? { energy: STREAK_ENERGY_BOOSTS, turbo: STREAK_TURBO_BOOSTS }
@@ -451,6 +454,19 @@
   }
 
   async function api(path, opts) { const sig = (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? AbortSignal.timeout(10000) : undefined; const r = await fetch(path, { signal: sig, ...opts, headers: { 'Content-Type': 'application/json', ...(App.authHeader ? App.authHeader() : {}) } }); return r.json(); }
+  function openExternalUrl(url) {
+    if (window.App && App.openExternal) App.openExternal(url);
+    else window.open(url, '_blank', 'noopener');
+  }
+  async function openCommerce(kind, url, taskId) {
+    let target = url;
+    const d = await api('/api/clicker/commerce-click', { method: 'POST', body: JSON.stringify({ kind, taskId: String(taskId || 'daily-offer') }) }).catch(() => null);
+    if (d && d.token && kind === 'site') {
+      const sep = target.includes('?') ? '&' : '?';
+      target += sep + 'maria_ref=' + encodeURIComponent(d.token);
+    }
+    openExternalUrl(target);
+  }
   async function copyText(value) {
     const text = String(value || '');
     try {
@@ -1070,6 +1086,7 @@
       .ck-dove.silh .ck-dove__n{color:var(--muted)}
       .ck-dove__role{font-size:10.5px;color:var(--muted);margin-top:1px}
       .ck-card{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:11px 12px;margin-bottom:9px}
+      .ck-card--details{cursor:pointer;transition:border-color .16s,background .16s}.ck-card--details:hover{border-color:rgba(192,255,51,.34)}.ck-card--details:focus-visible{outline:2px solid var(--gold-l);outline-offset:2px}.ck-card--details:active{background:rgba(255,255,255,.07)}
       .ck-card__ic{width:46px;height:46px;flex:none;border-radius:13px;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,rgba(238,191,82,.2),rgba(238,191,82,.04));border:1px solid var(--line);color:var(--gold-l)}
       .ck-card__b{flex:1;min-width:0}.ck-card__n{font-weight:700;font-size:15px;color:var(--ink)}.ck-card__s{color:var(--muted);font-size:12px;margin-top:2px;font-variant-numeric:tabular-nums}
       .ck-card__buy{display:inline-flex;align-items:center;gap:5px;border:1px solid #DFFF8F;border-radius:12px;padding:9px 13px;font-weight:800;font-size:13px;background:linear-gradient(180deg,#D4FF6A,#A8F51E 56%,#8DBF20);color:#12210A;cursor:pointer;white-space:nowrap;font-variant-numeric:tabular-nums;box-shadow:0 4px 11px rgba(165,112,28,.38),inset 0 1px 0 rgba(255,255,255,.5)}.ck-card__buy:disabled{background:rgba(255,255,255,.07);color:var(--muted);border-color:transparent;box-shadow:none;cursor:default}
@@ -1125,6 +1142,7 @@
       .ck-ftue-row .t{flex:1;min-width:0;font-size:12.5px;font-weight:700;color:var(--ink);line-height:1.35}
       .ck-ftue-row.dim .t{color:var(--muted)}
       .ck-ftue-row .ck-card__buy{padding:7px 12px;font-size:12px}
+      .ck-task-detail{text-align:left;max-height:58vh;overflow-y:auto;overscroll-behavior:contain;padding-right:2px}.ck-task-detail__reward{display:flex;align-items:center;justify-content:center;gap:7px;color:var(--gold-l);font-size:18px;font-weight:900;background:rgba(192,255,51,.1);border:1px solid rgba(192,255,51,.28);border-radius:13px;padding:10px 12px;margin:10px 0}.ck-task-detail__row{font-size:12.5px;line-height:1.45;color:var(--cream);padding:8px 0;border-bottom:1px solid var(--line)}.ck-task-detail__row:last-child{border-bottom:0}.ck-task-detail__label{display:block;color:var(--muted);font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;margin-bottom:2px}.ck-task-detail__actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.ck-task-detail__actions button{padding:10px 8px!important;font-size:12px!important}
       .ck-nav{display:flex;border-top:1px solid var(--line);background:rgba(14,10,26,.55);backdrop-filter:blur(8px)}
       @media (pointer:coarse){.ck-nav{backdrop-filter:none;background:rgba(14,10,26,.96)}.ck-catwrap::before,.ck-catwrap::after{filter:none}}
       .ck-nav__b{flex:1;border:none;background:transparent;color:var(--muted);padding:9px 0 12px;font-weight:600;font-size:11.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px}.ck-nav__b.on{color:var(--gold-l)}
@@ -1154,6 +1172,22 @@
       .ck-ov[data-tier="1"] .ck-cat{max-width:90%;max-height:99%}
       .ck-ov[data-tier="2"] .ck-cat{max-width:76%;max-height:97%}
       .ck-ov[data-tier="3"] .ck-cat{max-width:66%}
+      /* Низкое окно VK: верхние служебные блоки раньше съедали почти всю арену
+         (при 360×640 кот ужимался примерно до 137px). Сохраняем все действия,
+         но делаем шапку компактной и отдаём основную высоту коту. */
+      @media (max-height:700px){
+        .ck-daily{margin-top:4px;min-height:36px;padding:5px 14px}
+        .ck-lvl{margin-top:4px;font-size:14px;line-height:17px}
+        .ck-bal{margin-top:1px;font-size:32px;line-height:36px}
+        .ck-prof{margin-top:2px;padding:2px 10px}
+        #ck-shop-actions{min-height:44px;align-items:center}
+        #ck-shop-actions .ck-shop-note{display:none}
+        .ck-progwrap{margin-top:4px}
+        .ck-progwrap .ck-goal{display:none!important}
+        .ck-catwrap{padding-bottom:4px}
+        .ck-boosts{margin-bottom:4px}
+        .ck-energy{margin-bottom:6px}
+      }
       .ck-scene{position:absolute;inset:0;z-index:0;background-position:center center;background-size:cover;background-repeat:no-repeat;filter:brightness(.62) saturate(.92)}
       .ck-scene::after{content:'';position:absolute;inset:0;background:radial-gradient(70% 42% at 50% 46%,transparent,rgba(0,0,0,.34) 100%),linear-gradient(180deg,rgba(0,0,0,.74),rgba(0,0,0,.34) 16%,transparent 38%,transparent 60%,rgba(0,0,0,.52) 88%,rgba(0,0,0,.66))}
       ${Array.from({ length: 19 }, (_, i) => `.ck-ov[data-tier="${i + 1}"] .ck-scene{background-image:url(/assets/images/scene/career-${i + 1}.webp?v=2)}`).join('')}
@@ -1285,7 +1319,7 @@
         <button class="ck-linkbar" id="ck-linkbar" type="button" hidden><span class="ck-linkbar__ic">${ICON.users(17)}</span><span class="ck-linkbar__b"><span class="ck-linkbar__t">VK ↔ Telegram</span><span class="ck-linkbar__s">Один прогресс на двух платформах</span></span><span class="ck-linkbar__go">›</span></button>
         <div class="ck-event" id="ck-event" hidden></div>
         <button class="ck-event" id="ck-shop-offer" hidden type="button" aria-label="Открыть предложение Марии"></button>
-        <div id="ck-shop-actions" hidden style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap"><button class="ck-event" id="ck-shop-point" type="button">📍 Найти точку</button><button class="ck-event" id="ck-shop-site" type="button">🛒 Заказать на сайте</button><div style="width:100%;font-size:11px;color:var(--muted);text-align:center;margin-top:2px">Переход сам по себе не даёт награду. Монеты начисляются только после оплаченного и подтверждённого заказа.</div></div>
+        <div id="ck-shop-actions" hidden style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap"><button class="ck-event" id="ck-shop-point" type="button">📍 Найти в 2ГИС</button><button class="ck-event" id="ck-shop-site" type="button">🛒 Заказать на сайте</button><div class="ck-shop-note" style="width:100%;font-size:11px;color:var(--muted);text-align:center;margin-top:2px">Переход сам по себе не даёт награду. Монеты начисляются только после оплаченного и подтверждённого заказа.</div></div>
         <button class="ck-ftue" id="ck-ftue" hidden></button>
         <div class="ck-progwrap"><div class="ck-prog"><div class="ck-prog__bar"><div class="ck-prog__fill" id="ck-prog"></div></div><div class="ck-prog__t" id="ck-progt"></div></div><div class="ck-goal" id="ck-goal" hidden><div class="ck-goal__av"><img id="ck-goal-img" alt="" draggable="false"/></div><div class="ck-goal__l" id="ck-goal-l"></div></div></div>
         <button class="ck-prestige" id="ck-prestige" hidden></button>
@@ -2254,7 +2288,7 @@
     const offer = ov.querySelector('#ck-shop-offer');
     if (offer) offer.hidden = true;
     const actions = ov.querySelector('#ck-shop-actions');
-    if (actions) { actions.hidden = false; const site = actions.querySelector('#ck-shop-site'); const point = actions.querySelector('#ck-shop-point'); const go = async (kind, u) => { const d = await api('/api/clicker/commerce-click', { method: 'POST', body: JSON.stringify({ kind, taskId: 'daily-offer' }) }).catch(() => null); if (d?.token && kind === 'site') { const sep = u.includes('?') ? '&' : '?'; u += sep + 'maria_ref=' + encodeURIComponent(d.token); } if (window.App?.openExternal) App.openExternal(u); else window.open(u, '_blank', 'noopener'); }; if (site && !site.dataset.wired) { site.dataset.wired = '1'; site.onclick = () => go('site', 'https://maria-irk.ru/'); } if (point && !point.dataset.wired) { point.dataset.wired = '1'; point.onclick = () => go('store', 'https://yandex.ru/maps/?text=Мария%20кондитерская%20Иркутск'); } }
+    if (actions) { actions.hidden = false; const site = actions.querySelector('#ck-shop-site'); const point = actions.querySelector('#ck-shop-point'); if (site && !site.dataset.wired) { site.dataset.wired = '1'; site.onclick = () => openCommerce('site', SHOP_SITE_URL, 'daily-offer'); } if (point && !point.dataset.wired) { point.dataset.wired = '1'; point.onclick = () => openCommerce('store', STORE_MAP_URL, 'daily-offer'); } }
     // кнопка престижа (на макс. уровне, только для авторизованных)
     const pb = ov.querySelector('#ck-prestige');
     if (st.prestigeReady && authed()) { pb.hidden = false; setHtmlIfChanged(pb, `${ICON.star(16)} Уйти в престиж · заработок ×${(1 + (st.prestige + 1) * 0.1).toFixed(1)}`); }
@@ -2824,6 +2858,59 @@
     if (accountLinkStatus?.phoneVerified) { showAccountLinkHelp(); return; }
     await requestPhone();
   }
+  function taskConditionText(task) {
+    if (!task) return '';
+    if (task.type === 'link') return 'Открой страницу по кнопке и вернись в игру, чтобы забрать награду.';
+    if (task.type === 'ref') return `Пригласи ${task.target} ${plu(task.target, 'друга', 'друзей', 'друзей')} по своей ссылке.`;
+    if (task.type === 'level') return `Дойди до ${task.target} уровня карьеры Василия.`;
+    if (task.type === 'balance') return `Заработай суммарно ${fmt(task.target)} монет.`;
+    if (task.type === 'streak') return `Заходи в игру ${task.target} ${plu(task.target, 'день', 'дня', 'дней')} подряд.`;
+    if (task.type === 'taps') return `Сделай ${fmt(task.target)} тапов по Василию.`;
+    if (task.type === 'cards') return `Открой ${task.target} ${plu(task.target, 'бизнес', 'бизнеса', 'бизнесов')} в «Прокачке».`;
+    return achDesc(task) || task.name || '';
+  }
+  function openTaskDetails(task, kind, purchasePhoneVerified) {
+    const pop = ov && ov.querySelector('#ck-pop');
+    if (!pop || !task) return;
+    window.haptic && window.haptic('light');
+    const isPurchase = kind === 'purchase';
+    const title = escHtml(task.title || task.name || 'Задание');
+    let body = '';
+    let actions = '';
+    if (isPurchase) {
+      const claimed = task.status === 'confirmed';
+      const rewardParts = [Number(task.rewardCoins) > 0 ? `+${fmt(Number(task.rewardCoins))} ${COIN(16)}` : '', Number(task.loyaltyPoints) > 0 ? `+${fmt(Number(task.loyaltyPoints))} баллов` : ''].filter(Boolean);
+      const deadline = task.endsAt && !Number.isNaN(new Date(task.endsAt).getTime()) ? new Date(task.endsAt).toLocaleDateString('ru-RU') : 'без ограничения';
+      const requirements = [];
+      if (Number(task.minQty) > 1) requirements.push(`не менее ${fmt(Number(task.minQty))} шт.`);
+      if (Number(task.minAmount) > 0) requirements.push(`сумма от ${fmt(Number(task.minAmount))} ₽`);
+      if (Array.isArray(task.storeCodes) && task.storeCodes.length) requirements.push('в участвующих точках');
+      else requirements.push('на сайте или в любой точке «Марии»');
+      const series = Number(task.rewardMultiplier) > 1 ? ` В награду уже включён бонус серии ×${Number(task.rewardMultiplier).toLocaleString('ru-RU')}.` : '';
+      body = `<div class="ck-task-detail">
+        <div class="ck-task-detail__reward">${rewardParts.join(' · ') || 'Награда уточняется'}</div>
+        <div class="ck-task-detail__row"><span class="ck-task-detail__label">Что сделать</span>${escHtml(task.description || 'Купи указанный товар в «Марии».')}</div>
+        <div class="ck-task-detail__row"><span class="ck-task-detail__label">Условия</span>${escHtml(requirements.join(' · '))}</div>
+        <div class="ck-task-detail__row"><span class="ck-task-detail__label">Как засчитывается</span>Оплати покупку с подтверждённым номером телефона. После подтверждения чека задание и монеты засчитаются автоматически.${escHtml(series)}</div>
+        <div class="ck-task-detail__row"><span class="ck-task-detail__label">Срок</span>${escHtml(deadline)}</div>
+        <div class="ck-task-detail__row"><span class="ck-task-detail__label">Статус</span>${claimed ? '✓ Покупка засчитана, награда начислена' : purchasePhoneVerified ? 'Ждём подходящую оплаченную покупку' : 'Сначала подтверди номер телефона'}</div>
+      </div>`;
+      if (!claimed && !purchasePhoneVerified) actions = '<button id="ck-task-phone" type="button">Подтвердить номер</button>';
+      else if (!claimed) actions = '<div class="ck-task-detail__actions"><button id="ck-task-map" type="button">📍 Найти в 2ГИС</button><button id="ck-task-site" type="button">🛒 Заказать</button></div>';
+    } else {
+      const reward = Number(task.reward) || 0;
+      const done = !!task.done;
+      body = `<div class="ck-task-detail"><div class="ck-task-detail__reward">+${fmt(reward)} ${COIN(16)}</div><div class="ck-task-detail__row"><span class="ck-task-detail__label">Что сделать</span>${escHtml(taskConditionText(task))}</div><div class="ck-task-detail__row"><span class="ck-task-detail__label">Статус</span>${done ? '✓ Награда уже получена' : task.claimable ? 'Готово — награду можно забрать' : 'Ещё не выполнено'}</div></div>`;
+      if (!done && task.type === 'link' && task.link) actions = '<button id="ck-task-link" type="button">Открыть задание</button>';
+    }
+    pop.innerHTML = `<h3>${ICON.gift(20)} ${title}</h3>${body}${actions}<button id="ck-pop-ok" type="button">Закрыть</button>`;
+    pop.classList.add('on');
+    pop.querySelector('#ck-pop-ok').onclick = () => pop.classList.remove('on');
+    const phone = pop.querySelector('#ck-task-phone'); if (phone) phone.onclick = () => { pop.classList.remove('on'); requestPhone(); };
+    const map = pop.querySelector('#ck-task-map'); if (map) map.onclick = () => openCommerce('store', STORE_MAP_URL, task.id);
+    const site = pop.querySelector('#ck-task-site'); if (site) site.onclick = () => openCommerce('site', SHOP_SITE_URL, task.id);
+    const link = pop.querySelector('#ck-task-link'); if (link) link.onclick = () => { openExternalUrl(task.link); linkOpened[task.id] = true; pop.classList.remove('on'); setTimeout(renderTasks, 400); };
+  }
   let tasksGen = 0; // токен поколения: два конкурирующих renderTasks не перетирают вкладку друг у друга
   async function renderTasks() {
     const gen = ++tasksGen;
@@ -2873,7 +2960,7 @@
       else if (t.type === 'link' && !(linkOpened[t.id])) btn = `<button class="ck-card__buy" data-open="${t.id}" data-link="${t.link || ''}">Открыть</button>`;
       else if (t.claimable) btn = `<button class="ck-card__buy" data-claim="${t.id}">+${fmt(t.reward)} ${COIN(14)}</button>`;
       else btn = `<button class="ck-card__buy" disabled>+${fmt(t.reward)}</button>`;
-      return `<div class="ck-card"><div class="ck-card__ic">${taskIcon(t.id)}</div><div class="ck-card__b"><div class="ck-card__n">${t.name}</div><div class="ck-card__s">Награда +${fmt(t.reward)} ${COIN(13)}</div></div>${btn}</div>`;
+      return `<div class="ck-card ck-card--details" data-detail="task:${escHtml(t.id)}" role="button" tabindex="0" aria-label="Подробнее: ${escHtml(t.name)}"><div class="ck-card__ic">${taskIcon(t.id)}</div><div class="ck-card__b"><div class="ck-card__n">${escHtml(t.name)}</div><div class="ck-card__s">Награда +${fmt(t.reward)} ${COIN(13)} · Подробнее ›</div></div>${btn}</div>`;
     }).join('');
     if (gen !== tasksGen) return;
     if (!achs) achs = [];
@@ -2881,7 +2968,7 @@
       const btn = a.done ? `<button class="ck-card__buy" disabled style="justify-content:center">✓ Получено</button>`
         : a.claimable ? `<button class="ck-card__buy" data-claim="${a.id}">+${fmt(a.reward)} ${COIN(14)}</button>`
           : `<button class="ck-card__buy" disabled>+${fmt(a.reward)}</button>`;
-      return `<div class="ck-card"${a.done ? ' style="opacity:.6"' : ''}><div class="ck-card__ic">${achIcon(a.icon)}</div><div class="ck-card__b"><div class="ck-card__n">${a.name}</div><div class="ck-card__s">${achDesc(a)}</div></div>${btn}</div>`;
+      return `<div class="ck-card ck-card--details" data-detail="achievement:${escHtml(a.id)}" role="button" tabindex="0" aria-label="Подробнее: ${escHtml(a.name)}"${a.done ? ' style="opacity:.6"' : ''}><div class="ck-card__ic">${achIcon(a.icon)}</div><div class="ck-card__b"><div class="ck-card__n">${escHtml(a.name)}</div><div class="ck-card__s">${escHtml(achDesc(a))} · Подробнее ›</div></div>${btn}</div>`;
     }).join('');
       const purchasePhoneRow = !purchasePhoneVerified && !accountLinkStatus ? `<div class="ck-card"><div class="ck-card__ic">${ICON.phone ? ICON.phone(22) : ICON.wallet(22)}</div><div class="ck-card__b"><div class="ck-card__n">Подтверди номер телефона</div><div class="ck-card__s">Это нужно для наград за покупки в «Марии». Нажми кнопку — откроется безопасное подтверждение номера${window.App?.platform === 'vk' ? ' VK' : ' Telegram'}.</div></div><button class="ck-card__buy" id="ck-purchase-phone">Поделиться номером</button></div>` : '';
     const purchaseRows = purchaseTasks.map(t => {
@@ -2889,7 +2976,7 @@
       const period = t.endsAt ? `до ${new Date(t.endsAt).toLocaleDateString('ru-RU')}` : 'без срока';
       const reward = [Number(t.rewardCoins) > 0 ? `+${fmt(Number(t.rewardCoins))} ${COIN(13)}` : '', Number(t.loyaltyPoints) > 0 ? `+${fmt(Number(t.loyaltyPoints))} баллов` : ''].filter(Boolean).join(' · ');
       const phoneHint = !purchasePhoneVerified && !claimed ? `<br><span style="color:var(--gold-l);font-weight:800">📱 Нужен подтверждённый номер телефона</span>` : '';
-      return `<div class="ck-card"${claimed ? ' style="opacity:.65"' : ''}><div class="ck-card__ic">${ICON.gift(22)}</div><div class="ck-card__b"><div class="ck-card__n">${t.title}</div><div class="ck-card__s">${t.description || `Купи нужный товар · ${period}`}<br>${reward || 'Награда уточняется'}${phoneHint}</div></div><button class="ck-card__buy" disabled>${claimed ? '✓ Засчитано' : 'Проверяем'}</button></div>`;
+      return `<div class="ck-card ck-card--details" data-detail="purchase:${escHtml(t.id)}" role="button" tabindex="0" aria-label="Подробнее: ${escHtml(t.title)}"${claimed ? ' style="opacity:.65"' : ''}><div class="ck-card__ic">${ICON.gift(22)}</div><div class="ck-card__b"><div class="ck-card__n">${escHtml(t.title)}</div><div class="ck-card__s">${escHtml(t.description || `Купи нужный товар · ${period}`)}<br><b style="color:var(--gold-l)">${reward || 'Награда уточняется'}</b>${phoneHint}</div></div><button class="ck-card__buy" data-detail-open="purchase:${escHtml(t.id)}">Подробнее</button></div>`;
     }).join('');
     // «Награды за прогресс» (реальные промокоды/баллы) СКРЫТЫ — решение юзера 31.07:
     // в «Призах» только внутриигровое до согласования внешних наград с Машей.
@@ -2908,6 +2995,16 @@
     ov.querySelector('#ck-invite').onclick = shareRef;
     list.querySelectorAll('[data-open]').forEach(b => b.onclick = () => { const id = b.dataset.open, link = b.dataset.link; if (link) { if (window.App && App.openExternal) App.openExternal(link); else window.open(link, '_blank'); } linkOpened[id] = true; setTimeout(renderTasks, 400); });
     list.querySelectorAll('[data-claim]').forEach(b => b.onclick = () => runButtonBusy(b, () => claimTask(b.dataset.claim)));
+    const detailItems = new Map();
+    tasks.forEach(t => detailItems.set('task:' + t.id, { task: t, kind: 'task' }));
+    achs.forEach(a => detailItems.set('achievement:' + a.id, { task: a, kind: 'achievement' }));
+    purchaseTasks.forEach(t => detailItems.set('purchase:' + t.id, { task: t, kind: 'purchase' }));
+    const showDetail = (key) => { const item = detailItems.get(key); if (item) openTaskDetails(item.task, item.kind, purchasePhoneVerified); };
+    list.querySelectorAll('[data-detail]').forEach(card => {
+      card.onclick = (e) => { if (!e.target.closest('button')) showDetail(card.dataset.detail); };
+      card.onkeydown = (e) => { if ((e.key === 'Enter' || e.key === ' ') && !e.target.closest('button')) { e.preventDefault(); showDetail(card.dataset.detail); } };
+    });
+    list.querySelectorAll('[data-detail-open]').forEach(b => b.onclick = (e) => { e.stopPropagation(); showDetail(b.dataset.detailOpen); });
     list.querySelectorAll('[data-ms]').forEach(b => b.onclick = () => { const g = b.dataset.ms; if (g === 'phone') requestPhone(); else claimMilestoneAct(g); });
     const cg = ov.querySelector('#ck-code-go'), ci = ov.querySelector('#ck-code-in');
     if (cg && ci) { cg.onclick = () => redeemCodeAct(ci.value); ci.onkeydown = (e) => { if (e.key === 'Enter') redeemCodeAct(ci.value); }; }
