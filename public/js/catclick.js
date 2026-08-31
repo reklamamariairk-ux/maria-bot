@@ -334,11 +334,6 @@
     { id: 'ms_col_all', title: 'Вся коллекция бизнесов', cond: { type: 'collect', target: 'all' }, kind: 'perk', perkText: 'Бенто-торт в подарок (от 2000₽)' },
     { id: 'ms_ref3', title: 'Пригласил 3 друзей', cond: { type: 'ref', target: 3 }, kind: 'points', points: 500 },
     { id: 'ms_ref10', title: 'Пригласил 10 друзей', cond: { type: 'ref', target: 10 }, kind: 'perk', perkText: 'Промокод −10% (от 1000₽)' },
-    { id: 'ms_care7', title: 'Забота о Василии: 7 дней', cond: { type: 'care_streak', target: 7 }, kind: 'points', points: 200 },
-    { id: 'ms_care14', title: 'Забота о Василии: 14 дней', cond: { type: 'care_streak', target: 14 }, kind: 'perk', perkText: 'Промокод −5% (от 500₽)' },
-    { id: 'ms_care30', title: 'Забота о Василии: 30 дней', cond: { type: 'care_streak', target: 30 }, kind: 'points', points: 500 },
-    { id: 'ms_care60', title: 'Забота о Василии: 60 дней', cond: { type: 'care_streak', target: 60 }, kind: 'perk', perkText: 'Бесплатный десерт (к торту от 2000₽)' },
-    { id: 'ms_care100', title: 'Забота о Василии: 100 дней', cond: { type: 'care_streak', target: 100 }, kind: 'points', points: 1000 },
   ];
   function condMet(t, s) {
     if (t.type === 'link') return !!linkOpened[t.id];
@@ -349,10 +344,6 @@
     if (t.type === 'taps') return (s.taps || 0) >= t.target;
     if (t.type === 'cards') return (s.cardsOwned || 0) >= t.target;
     if (t.type === 'collect') { const cs = s.cards || []; if (t.target === 'all') return cs.length > 0 && cs.every(c => c.level > 0); const ic = cs.filter(c => c.cat === t.target); return ic.length > 0 && ic.every(c => c.level > 0); }
-    if (t.type === 'care_streak') {
-      let ps = null; try { ps = JSON.parse(localStorage.getItem('maria_pet_v1')); } catch (_) {}
-      return Math.max(Number(ps && ps.careStreakBest || 0), Number(ps && ps.care_streak || 0)) >= t.target;
-    }
     return false;
   }
   function fmtDur(ms) { const h = Math.max(0, Math.floor(ms / 3600e3)); const d = Math.floor(h / 24); return d > 0 ? `${d}д ${h % 24}ч` : `${h}ч`; }
@@ -388,6 +379,7 @@
     return prestige * event * bank;
   }
   let sessionTapCount = 0, energyHintFired = false, boostsHintFired = false, bizCoachPending = false, lastTapFxAt = 0;
+  let lastTapHapticAt = 0, tapRenderFrame = 0, catTapTimer = 0;
 
   function authed() { return !!(window.App && App.isAuthed && App.isAuthed()); }
 
@@ -430,8 +422,7 @@
     arrowEl.classList.toggle('top', below); arrowEl.classList.toggle('bottom', !below);
     arrowEl.style.left = Math.max(14, Math.min(bw - 14, r.left + r.width / 2 - left)) + 'px';
   }
-  // Одноразовый тултип-бабл у anchorSel. opts: {icon, root} — root по умолчанию текущий
-  // оверлей игры; из catpet.js передавай root: свой оверлей (экспорт — window.ckCoach ниже).
+  // Одноразовый тултип-бабл у anchorSel. opts: {icon, root} — root по умолчанию текущий оверлей игры.
   function coach(id, html, anchorSel, opts) {
     opts = opts || {};
     if (tourActive) return; // во время тура Василия коучи молчат (не наслаиваемся)
@@ -476,10 +467,11 @@
   }
   function beep(f, t, g, slide) { note(f, 0.12, t === 'square' ? 'square' : 'triangle', g || 0.08, slide); }
   function chord(arr, g) { arr.forEach((f, i) => note(f, 0.3, 'triangle', g || 0.1, null, i * 0.08)); }
-  // монета-«колокольчик»: основной тон + октава + искра; питч растёт с комбо
+  // Короткий монетный акцент. Два генератора вместо трёх: на длинной серии это
+  // заметно разгружает AudioContext в мобильных WebView, не делая тап беззвучным.
   function sfxTap(combo) {
     const k = 1 + Math.min(combo || 0, 24) * 0.014; const base = 740 * k;
-    note(base, 0.16, 'triangle', 0.09, base * 1.5); note(base * 2, 0.12, 'sine', 0.05); note(base * 3.01, 0.06, 'sine', 0.03, null, 0.005);
+    note(base, 0.13, 'triangle', 0.085, base * 1.45); note(base * 2, 0.075, 'sine', 0.035);
   }
   function sfxBuy() { note(523, 0.14, 'triangle', 0.11, 660); note(784, 0.18, 'triangle', 0.1, null, 0.08); note(1318, 0.1, 'sine', 0.05, null, 0.12); }
   function sfxLevel() { [523, 659, 784, 1047, 1319].forEach((f, i) => note(f, 0.5, 'triangle', 0.12, null, i * 0.09)); note(2093, 0.5, 'sine', 0.04, null, 0.4); }
@@ -491,8 +483,28 @@
   // ── Гость (localStorage) ─────────────────────────────────────────────────────
   function rawDefault() { return { balance: 0, totalEarned: 0, energy: 1000, energyCarry: 0, multitapLevel: 0, energyLevel: 0, cards: {}, taps: 0, dailyStreak: 0, dailyDate: null, bE: 0, bT: 0, bDate: null, turboUntil: 0, tasksDone: {}, comboDate: null, comboHits: [], comboClaimed: null, cipherDate: null, bonusAt: 0, chestDate: null, rainDate: null, gamesDone: {}, passiveCarry: 0, _ts: Date.now() }; }
   let memRaw = null; // in-memory фолбэк: заблокированный localStorage не должен ронять тап (setItem кидает в приватных webview)
+  let guestTapRaw = null, guestTapSaveTimer = 0;
   function rawGet() { let s; try { s = JSON.parse(localStorage.getItem(LS)); } catch (_) {} if (memRaw && (!s || (memRaw._ts || 0) >= (s._ts || 0))) s = memRaw; if (!s) s = rawDefault(); if (!s.cards) s.cards = {}; return s; }
   function rawSave(s) { s._ts = Date.now(); memRaw = s; try { localStorage.setItem(LS, JSON.stringify(s)); } catch (_) {} }
+  function flushGuestTapSave() {
+    clearTimeout(guestTapSaveTimer); guestTapSaveTimer = 0;
+    if (!guestTapRaw) return;
+    // _ts уже соответствует моменту последнего синка st → raw. Не сдвигаем его
+    // здесь ещё раз: иначе потерялись бы доли пассивного дохода за время таймера.
+    memRaw = guestTapRaw;
+    try { localStorage.setItem(LS, JSON.stringify(guestTapRaw)); } catch (_) {}
+  }
+  function stageGuestTapState(incrementTap) {
+    const s = guestTapRaw || rawGet(); guestTapRaw = s;
+    if (incrementTap) s.taps = (Number(s.taps) || 0) + 1;
+    // st уже содержит реген и пассивный доход текущего кадра; зеркалим его целиком,
+    // чтобы пакетная запись не меняла игровую экономику и ничего не теряла.
+    s.energy = Number(st.energy) || 0; s.energyCarry = 0;
+    s.balance = Number(st.balance) || 0; s.totalEarned = Number(st.totalEarned) || 0;
+    s._ts = Date.now(); memRaw = s;
+    if (!guestTapSaveTimer) guestTapSaveTimer = setTimeout(flushGuestTapSave, 220);
+    return s;
+  }
   function profitOf(c) { let p = 0; for (const x of CARDS) p += cardProfit(x, c[x.id] || 0); return p; }
   function guestDerive() {
     const s = rawGet(); const today = irkToday();
@@ -1035,7 +1047,7 @@
       @keyframes ckShadowPulse{0%,100%{opacity:1;width:44%}50%{opacity:.8;width:40%}}
       .ck-ripple{position:absolute;width:0;height:0;border:2px solid var(--gold-l);border-radius:50%;pointer-events:none;z-index:6;transform:translate(-50%,-50%);animation:ckRip .5s ease-out forwards}
       @keyframes ckRip{0%{width:8px;height:8px;opacity:.7}100%{width:130px;height:130px;opacity:0}}
-      .ck-flyc{position:absolute;z-index:7;pointer-events:none;transition:left .5s cubic-bezier(.5,0,.6,1),top .5s cubic-bezier(.5,0,.6,1),opacity .5s,transform .5s}
+      .ck-flyc{position:absolute;left:0;top:0;z-index:7;pointer-events:none;will-change:transform,opacity;contain:layout style paint}
       .ck-balpop{display:inline-block;animation:ckBalPop .24s ease-out}
       @keyframes ckBalPop{0%{transform:scale(1)}45%{transform:scale(1.08)}100%{transform:scale(1)}}
       .ck-spark{position:absolute;width:7px;height:7px;border-radius:50%;background:radial-gradient(circle,rgba(216,255,122,.95),transparent 70%);pointer-events:none;z-index:0;opacity:0;animation:ckSpark linear infinite}
@@ -1373,7 +1385,7 @@
       .ck-pbadge--baron{background:linear-gradient(90deg,#d8c6ff,#9070c2);color:#2c1a4a}.ck-pbadge--baron .ck-i{color:#2c1a4a}
       .ck-prestige{margin-top:9px;border:1px solid #DFFF8F;border-radius:13px;padding:9px 16px;font-weight:800;font-size:13px;background:linear-gradient(180deg,#D4FF6A,#8DBF20);color:#12210A;cursor:pointer;display:inline-flex;align-items:center;gap:7px;box-shadow:0 4px 12px rgba(165,112,28,.4)}
       .ck-prestige[hidden]{display:none}.ck-prestige .ck-i{color:#12210A}
-      /* Коуч-хинты новичку (одноразовые тултипы — см. coach()/window.ckCoach) */
+      /* Коуч-хинты новичку (одноразовые тултипы — см. coach()) */
       .ck-coach{position:fixed;z-index:50;max-width:250px;background:linear-gradient(180deg,#1B1526,#120D1C);border:1px solid rgba(238,191,82,.55);border-radius:16px;padding:11px 13px;box-shadow:0 12px 30px rgba(0,0,0,.55);font-family:'Nunito','Inter',system-ui,sans-serif;animation:ckCoachIn .18s ease-out}
       @keyframes ckCoachIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
       .ck-coach__arr{position:absolute;width:12px;height:12px;left:50%;background:#120D1C;border:1px solid rgba(238,191,82,.55);transform:translateX(-50%) rotate(45deg)}
@@ -1500,13 +1512,12 @@
       { ic: ICON.gift(20), t: 'Награда дня', d: 'Каждый день, когда заходишь в игру впервые, тебе доступна награда дня — забери её кнопкой сверху экрана. Награда растёт вместе со стриком: чем больше дней подряд ты заходишь, тем она весомее, а пропущенный день сбрасывает счётчик. Календарь на семь дней вперёд показывает, сколько причитается в каждый из ближайших дней.' },
       { ic: ICON.gem(20), t: 'Комбо дня', d: 'В «Прокачке» каждый день выбираются три случайных бизнеса — прокачай (купи хотя бы один уровень) все три, и получишь бонус +12 000 монет. Бизнес на максимальном уровне засчитывается автоматически. Забрать бонус можно на вкладке «Призы». Комбо обновляется раз в сутки.' },
       { ic: ICON.chest(20), t: 'Сундук и кейс', d: 'Сундук удачи открывается бесплатно раз в день. Платный Кейс удачи стоит 100 000: в нём голуби, ранние уровни бизнесов и шанс 0,05% выиграть 10 млн. Можно сделать до 10 прокрутов в сутки; после пяти неокупившихся открытий следующая доступная попытка как минимум окупается.' },
-      { ic: ICON.paw(20), t: 'Дом Василия', d: 'В Доме Василия — четыре комнаты: Кухня, Спальня, Игровая и Двор. В каждой — своё действие (покормить, уложить спать, поиграть, погладить), которое поднимает нужную шкалу — сытость, энергию или настроение — и приносит коту немного опыта. Если заботиться о Василии каждый день подряд, раз в сутки начисляется награда в общих игровых монетах — она растёт с каждым днём серии и с десятого дня держится на максимуме. Во Дворе — магазин шляп для Василия: покупки тоже списываются с общего игрового баланса.' },
       { ic: ICON.dove(20), t: 'Голубятня', d: 'Каждый голубь добавляет монеты к доходу в час; звёзды и тюнинг усиливают вклад. Голубей можно отправлять на задания с таймером и шансом успеха. До трёх любимцев можно выбрать для показа рядом со своим именем в рейтинге — на силу и доход этот выбор не влияет.' },
       { ic: ICON.trophy(20), t: 'Рейтинг и команды', d: 'Рейтинг недели показывает игроков по количеству монет, заработанных с начала недели — отсчёт идёт с понедельника. В команде общий счёт складывается из очков участников, а копилка стаи наполняется общими вкладами: при достижении цели доход всей стаи умножается на ×1,25 до конца недели.' },
       { ic: ICON.users(20), t: 'Друзья', d: 'Позови друга в игру по своей ссылке — как только он присоединится, тебе начислится 30 000 монет, а другу — 2 500 монет на старт. Ссылку можно скопировать или отправить прямо из игры кнопкой «Позвать».' },
     ];
     s.push({ ic: ICON.list(20), t: 'Призы и задания', d: 'На вкладке «Призы» — простые поручения за монеты: заглянуть на сайт «Марии», оставить отзыв, пригласить друга или просто держать серию заходов и баланс. Выполнил условие — жми кнопку с наградой рядом с заданием. Ниже, в Достижениях — более долгие цели вроде количества тапов, уровня, собранных бизнесов или дней подряд, тоже с наградой в монетах.' });
-    s.push({ ic: ICON.medal(20), t: 'Награды за прогресс', d: 'Доходишь до нужного уровня, собираешь коллекцию бизнесов, приглашаешь друзей или заботишься о Василии подряд несколько дней — и получаешь игровые призы. Баллы на карту клуба «Мария» и купоны доступны в авторизованной игре.' });
+    s.push({ ic: ICON.medal(20), t: 'Награды за прогресс', d: 'Доходишь до нужного уровня, собираешь коллекцию бизнесов или приглашаешь друзей — и получаешь игровые призы. Баллы на карту клуба «Мария» и купоны доступны в авторизованной игре.' });
     return s;
   }
   function guideHtml() {
@@ -1530,7 +1541,7 @@
         b.onclick = () => {
           // Полный перепросмотр онбординга: welcome-карта + все 6 туров + коучи
           try {
-            ['cat', 'up', 'dove', 'col', 'tasks', 'top', 'home', 'hub'].forEach(k => localStorage.removeItem('ck_tour3_' + k));
+            ['cat', 'up', 'dove', 'col', 'tasks', 'top', 'hub'].forEach(k => localStorage.removeItem('ck_tour3_' + k));
             localStorage.removeItem('ck_tut_v1');
             localStorage.removeItem('ck_dove_col_seen');
             Object.keys(localStorage).filter(k => k.indexOf('ck_coach_') === 0).forEach(k => localStorage.removeItem(k));
@@ -1583,9 +1594,9 @@
   // остальные разблокируются по уровню. Безопасно для существующих игроков —
   // level = leagueFor(totalEarned) МОНОТОНЕН (totalEarned только растёт), поэтому
   // никто, кто уже был выше порога, вкладку не теряет; блокировка касается только
-  // самых первых минут новичка. Пороги низкие: Дом/Призы — ур.2, Голуби/Рейтинг — ур.3.
-  const TAB_UNLOCK = { cat: 1, up: 1, home: 1, tasks: 2, dove: 3, top: 3 };
-  const TAB_NAME = { home: 'Дом', tasks: 'Призы', dove: 'Голуби', top: 'Рейтинг' };
+  // самых первых минут новичка. Пороги низкие: Призы — ур.2, Голуби/Рейтинг — ур.3.
+  const TAB_UNLOCK = { cat: 1, up: 1, tasks: 2, dove: 3, top: 3 };
+  const TAB_NAME = { tasks: 'Призы', dove: 'Голуби', top: 'Рейтинг' };
   const tabReq = (t) => TAB_UNLOCK[t] || 1;
   // Серверный level включает храповик при изменении порогов; локальный расчёт нужен,
   // чтобы новый уровень появился сразу на ещё не синхронизированных тапах.
@@ -1624,15 +1635,6 @@
     if (tabLocked(t)) { window.haptic && window.haptic('light'); flashMsg('Откроется на уровне ' + tabReq(t), 'light'); return; }
     closeActiveCoach();
     const pop = ov && ov.querySelector('#ck-pop'); if (pop) pop.classList.remove('on'); // попап не должен висеть над чужой вкладкой
-    if (t === 'home') {
-      void flushForPageExit();
-      window.haptic && window.haptic('light');
-      try { window.catPetOpen && window.catPetOpen(); } catch (_) {}
-      // тур «Дома» — поверх пет-оверлея, при первом входе новичка
-      if (tourActive) endTour(false);
-      if (!tourSeen('home')) setTimeout(() => { if (!tourActive) startTour('home'); }, 900);
-      return;
-    }
     window.haptic && window.haptic('selection');
     if (tab === 'cat' && t !== 'cat') void flushForPageExit();
     tab = t;
@@ -1672,10 +1674,9 @@
       `<div class="ck-tile"><span class="ck-tile__l">Топ недели</span><span class="ck-tile__v grape" id="ck-hub-rank">…</span></div>`,
       `<div class="ck-tile"><span class="ck-tile__l">Копилка стаи</span><span class="ck-tile__v" id="ck-hub-bank">…</span></div>`,
     ].join('');
-    // Разделы = «смыслы»: что где лежит, одной строкой. Дом живёт здесь (в навбаре его нет)
+    // Разделы = «смыслы»: что где лежит, одной строкой.
     const rows = [
       { tab: 'up', ic: ICON.bolt(17), t: 'Прокачка', d: 'Бизнесы приносят монеты сами' },
-      { tab: 'home', ic: ICON.paw(17), t: 'Дом', d: 'Питомец Василий — корми и играй', id: 'ck-hubrow-home' },
       { tab: 'dove', ic: ICON.dove(17), t: 'Голуби', d: 'Коллекция пород и гонки' },
       { tab: 'tasks', ic: ICON.gift(17), t: 'Призы', d: 'Награда дня, сундук, комбо' },
       { tab: 'top', ic: ICON.trophy(17), t: 'Рейтинг', d: 'Твоё место среди игроков' },
@@ -1715,8 +1716,18 @@
     if (!e || e.pointerId == null) return;
     activeTapPointers.delete(e.pointerId);
   }
+  function scheduleTapRender() {
+    if (tapRenderFrame) return;
+    tapRenderFrame = requestAnimationFrame(() => { tapRenderFrame = 0; if (st && ov && ov.classList.contains('on')) renderTop2(); });
+  }
+  function pulseCat() {
+    const cat = ov && ov.querySelector('#ck-cat'); if (!cat) return;
+    cat.classList.add('tap');
+    clearTimeout(catTapTimer);
+    catTapTimer = setTimeout(() => cat.classList.remove('tap'), 80);
+  }
   function onTap(e) {
-    e.preventDefault(); ac();
+    e.preventDefault();
     if (e.pointerId != null) {
       if (!activeTapPointers.has(e.pointerId) && activeTapPointers.size >= MAX_TAP_POINTERS) return;
       activeTapPointers.add(e.pointerId);
@@ -1733,7 +1744,6 @@
     if (signedIn) tapAccount = tapAccountNow;
     // Сначала персистим активный пассив. Раньше rawSave() тапа сдвигал _ts и
     // стирал уже показанный на экране гостевой доход с момента прошлого save.
-    if (!signedIn) st = guestDerive();
     if (st.energy < TAP_COST) { energyEmpty(); return; }
     const mult = turboOn() ? TURBO_MULT : 1;
     const eMult = (st.event && st.event.active && (!st.event.endsTs || Number(st.event.endsTs) > Date.now())) ? st.event.mult : 1; // ивент ×N (зеркало сервера)
@@ -1751,43 +1761,53 @@
     const gain = baseTapGain * (sweet ? SWEET_TAP_MULT : 1);
     st.energy -= TAP_COST; st.balance += gain; st.totalEarned += gain;
     if (signedIn) { pending++; pendingTapGain += gain; pendingTapEnergy += TAP_COST; }
-    else { const s = rawGet(); s.energy -= TAP_COST; s.balance += gain; s.totalEarned += gain; s.taps = (s.taps || 0) + 1; rawSave(s); st.taps = s.taps; }
+    else { const s = stageGuestTapState(true); st.taps = s.taps; }
     if (sweet) sweetTapFx(e.clientX, e.clientY, gain);
     else maybeCatSpeak();
     // комбо
     const now = performance.now(); combo = (now - comboT < 450) ? combo + 1 : 1; comboT = now;
-    // Монеты считаются на КАЖДЫЙ тап, но тяжёлые DOM/audio/haptic-эффекты ограничены
-    // ~20 кадрами/с: при мультитапе не копятся сотни узлов и таймеров.
-    const fxNow = performance.now(), drawTapFx = fxNow - lastTapFxAt >= 50;
+    // Монеты считаются на КАЖДЫЙ тап. Экран обновляется один раз за кадр, а тяжёлые
+    // DOM/audio-эффекты — не чаще 11 раз/с: так мультитап не забивает мобильный WebView.
+    const fxNow = performance.now(), drawTapFx = fxNow - lastTapFxAt >= 90;
     if (drawTapFx) {
       lastTapFxAt = fxNow;
-      const cat = ov.querySelector('#ck-cat'); cat.classList.add('tap'); setTimeout(() => cat.classList.remove('tap'), 80);
-      sfxTap(combo); window.haptic && window.haptic('light');
-      flyUp(e.clientX, e.clientY, '+' + gain, Math.min(40, 22 + combo));
-      ripple(e.clientX, e.clientY); flyCoin(e.clientX, e.clientY);
-      renderTop2();
+      pulseCat();
+      // Сладкий тап уже имеет собственный акцент — не наслаиваем поверх него
+      // обычные звук, вибрацию и три DOM-эффекта.
+      if (!sweet) {
+        sfxTap(combo);
+        if (fxNow - lastTapHapticAt >= 120) { lastTapHapticAt = fxNow; window.haptic && window.haptic('light'); }
+        const fx = ov.querySelector('#ck-fx'), fxRect = fx && fx.getBoundingClientRect();
+        flyUp(e.clientX, e.clientY, '+' + gain, Math.min(40, 22 + combo), fxRect);
+        ripple(e.clientX, e.clientY, fxRect); flyCoin(e.clientX, e.clientY, fxRect);
+      }
     }
     const comboBonus = comboBonusFor(baseTapGain, lifetime);
     if (comboBonus > 0) {
       st.balance += comboBonus; st.totalEarned += comboBonus;
       if (signedIn) { pendingComboBonus += comboBonus; pendingTapGain += comboBonus; }
-      else { const s = rawGet(); s.balance += comboBonus; s.totalEarned += comboBonus; rawSave(s); }
+      else stageGuestTapState(false);
       flyUp(e.clientX, e.clientY - 22, `комбо +${fmt(comboBonus)}`, 34);
     }
+    scheduleTapRender();
     if (combo >= 5 && drawTapFx) showCombo();
-    if (combo >= 30 && combo % 30 === 0) coinShower();
+    if (combo >= 30 && combo % 30 === 0) coinShower(4);
     tourOnTap();
     sessionTapCount++;
     if (sessionTapCount === 30) coach('level', COACH.level.t, '.ck-progwrap', { icon: ICON[COACH.level.icon](18) });
   }
-  let comboHideT = 0;
+  let comboHideT = 0, comboPulseAnim = null;
   function showCombo() {
     const el = ov.querySelector('#ck-combo');
     const tier = combo >= 30 ? 3 : combo >= 20 ? 2 : combo >= 10 ? 1 : 0;
     el.dataset.tier = tier;
     el.innerHTML = ICON.fire(Math.min(30, Math.round(18 + combo * 0.5))) + ' ×' + combo;
     el.style.fontSize = Math.min(46, 22 + combo) + 'px';
-    el.classList.add('show'); el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+    el.classList.add('show');
+    if (typeof el.animate === 'function') {
+      if (comboPulseAnim) comboPulseAnim.cancel();
+      comboPulseAnim = el.animate([{ transform: 'translateX(-50%) scale(.86)' }, { transform: 'translateX(-50%) scale(1.08)', offset: .55 }, { transform: 'translateX(-50%) scale(1)' }], { duration: 220, easing: 'ease-out' });
+    }
     clearTimeout(comboHideT); comboHideT = setTimeout(() => el.classList.remove('show'), 950);
     coach('combo', COACH.combo.t, '#ck-combo', { icon: ICON[COACH.combo.icon](18) });
     if (combo >= 10 && combo % 10 === 0) comboMilestone(tier);
@@ -1798,10 +1818,12 @@
     return lifetime % 10 === 0 ? Math.max(1, Math.floor(baseTapGain)) : 0;
   }
   function comboMilestone(tier) {
-    window.haptic && window.haptic('medium');
+    if (combo % 30 === 0) window.haptic && window.haptic('medium');
     const wrap = ov.querySelector('#ck-catwrap');
-    if (wrap) { wrap.classList.remove('ck-shake'); void wrap.offsetWidth; wrap.classList.add('ck-shake'); setTimeout(() => wrap.classList.remove('ck-shake'), 440); }
-    burstSparks(8 + tier * 4);
+    if (wrap && typeof wrap.animate === 'function') wrap.animate([
+      { transform: 'translateX(0)' }, { transform: 'translateX(-5px)' }, { transform: 'translateX(5px)' }, { transform: 'translateX(0)' },
+    ], { duration: 260, easing: 'ease-out' });
+    burstSparks(3 + Math.min(1, tier));
   }
   // ── «Сладкий тап» + реплики Василия (вкладка Котик, 31.07) ────────────────────
   function sweetTapFx(x, y, gain) {
@@ -1816,8 +1838,7 @@
       fx.appendChild(d);
       setTimeout(() => d.remove(), 1100);
     }
-    burstSparks(14);
-    coinShower();
+    burstSparks(4);
   }
   // Реплики — характер кота: редкие (не спамят), только на вкладке «Котик».
   const CAT_SPEAK = [
@@ -1888,17 +1909,18 @@
     el.querySelector('#ck-eh-act').onclick = () => { if (hasBoost) boost('energy'); else setTab('up'); close(); };
     setTimeout(close, 6500);
   }
-  function flyUp(x, y, txt, size) {
-    const fx = ov.querySelector('#ck-fx'); const r = fx.getBoundingClientRect();
+  function flyUp(x, y, txt, size, knownRect) {
+    const fx = ov.querySelector('#ck-fx'); if (!fx) return; const r = knownRect || fx.getBoundingClientRect();
     const el = document.createElement('div'); el.className = 'ck-up'; el.textContent = txt; el.style.fontSize = (size || 24) + 'px';
     el.style.left = ((x || r.width / 2) - r.left - 10) + 'px'; el.style.top = ((y || r.height / 2) - r.top - 10) + 'px';
     el.style.transition = 'transform .8s ease-out, opacity .8s'; fx.appendChild(el);
     requestAnimationFrame(() => { el.style.transform = `translate(${(Math.random() - .5) * 50}px,-80px)`; el.style.opacity = '0'; });
     setTimeout(() => el.remove(), 850);
   }
-  function coinShower() {
+  function coinShower(count) {
     const fx = ov.querySelector('#ck-fx'); const w = fx.clientWidth;
-    for (let i = 0; i < 8; i++) { const c = document.createElement('div'); c.className = 'ck-coin'; c.innerHTML = COIN(22); c.style.left = (Math.random() * w) + 'px'; c.style.top = '-30px'; c.style.transition = 'transform 1s ease-in, opacity 1s'; fx.appendChild(c); requestAnimationFrame(() => { c.style.transform = `translateY(${fx.clientHeight + 40}px) rotate(${(Math.random() - .5) * 360}deg)`; c.style.opacity = '0.2'; }); setTimeout(() => c.remove(), 1000); }
+    const total = Math.max(1, Number(count) || 8);
+    for (let i = 0; i < total; i++) { const c = document.createElement('div'); c.className = 'ck-coin'; c.innerHTML = COIN(22); c.style.left = (Math.random() * w) + 'px'; c.style.top = '-30px'; c.style.transition = 'transform 1s ease-in, opacity 1s'; fx.appendChild(c); requestAnimationFrame(() => { c.style.transform = `translateY(${fx.clientHeight + 40}px) rotate(${(Math.random() - .5) * 360}deg)`; c.style.opacity = '0.2'; }); setTimeout(() => c.remove(), 1000); }
   }
   // kind: 'error' (дефолт, с вибро) | 'light' (нейтральные сообщения). Плашка держится ~0.8с и гаснет — раньше гасла мгновенно и терялась.
   // Топ-слой (z 30000, крепится к ov, не к #ck-fx z6): сообщение видно над хабом «Игры»,
@@ -1914,33 +1936,40 @@
     if (rm) return;
     for (let i = 0; i < 3; i++) { const s = document.createElement('div'); s.className = 'ck-spark'; s.style.left = (14 + Math.random() * 72) + '%'; s.style.top = (55 + Math.random() * 28) + '%'; s.style.animationDuration = (4 + Math.random() * 3).toFixed(1) + 's'; s.style.animationDelay = (-Math.random() * 6).toFixed(1) + 's'; wrap.appendChild(s); }
   }
-  function ripple(x, y) { const fx = ov.querySelector('#ck-fx'); const r = fx.getBoundingClientRect(); const el = document.createElement('div'); el.className = 'ck-ripple'; el.style.left = (x - r.left) + 'px'; el.style.top = (y - r.top) + 'px'; fx.appendChild(el); setTimeout(() => el.remove(), 520); }
-  function bumpBalance() { const b = ov && ov.querySelector('#ck-bal'); if (!b) return; b.classList.remove('ck-balpop'); void b.offsetWidth; b.classList.add('ck-balpop'); }
-  function flyCoin(x, y) {
+  function ripple(x, y, knownRect) { const fx = ov.querySelector('#ck-fx'); if (!fx) return; const r = knownRect || fx.getBoundingClientRect(); const el = document.createElement('div'); el.className = 'ck-ripple'; el.style.left = (x - r.left) + 'px'; el.style.top = (y - r.top) + 'px'; fx.appendChild(el); setTimeout(() => el.remove(), 520); }
+  let balancePulseAnim = null;
+  function bumpBalance() {
+    const b = ov && ov.querySelector('#ck-bal'); if (!b) return;
+    if (typeof b.animate === 'function') {
+      if (balancePulseAnim) balancePulseAnim.cancel();
+      balancePulseAnim = b.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.08)', offset: .45 }, { transform: 'scale(1)' }], { duration: 240, easing: 'ease-out' });
+      return;
+    }
+    b.classList.add('ck-balpop'); setTimeout(() => b.classList.remove('ck-balpop'), 250);
+  }
+  function flyCoin(x, y, knownRect) {
     const now = performance.now(); if (now - lastFly < 70) return; lastFly = now;
     bumpBalance();
     let rm = false; try { rm = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
     if (rm) return;
-    const fx = ov.querySelector('#ck-fx'); const r = fx.getBoundingClientRect();
+    const fx = ov.querySelector('#ck-fx'); if (!fx) return; const r = knownRect || fx.getBoundingClientRect();
     const el = document.createElement('div'); el.className = 'ck-flyc'; el.innerHTML = COIN(20);
-    el.style.transition = 'none';
-    let px = x - r.left - 10, py = y - r.top - 10;
-    el.style.left = px + 'px'; el.style.top = py + 'px'; fx.appendChild(el);
-    // всплеск веером вверх: случайный угол + гравитация-дуга + вращение + затухание
-    const ang = -Math.PI / 2 + (Math.random() - 0.5) * 1.2;
-    const sp = 3.4 + Math.random() * 2.4;
-    let vx = Math.cos(ang) * sp, vy = Math.sin(ang) * sp;
-    let rot = (Math.random() - 0.5) * 50; const vr = (Math.random() - 0.5) * 26;
-    const start = now, dur = 600 + Math.random() * 220;
-    (function step() {
-      const e = performance.now() - start;
-      if (e >= dur || !el.isConnected) { el.remove(); return; }
-      vy += 0.18; px += vx; py += vy; rot += vr; const k = e / dur;
-      el.style.left = px + 'px'; el.style.top = py + 'px';
-      el.style.transform = 'rotate(' + rot.toFixed(1) + 'deg) scale(' + (1 - k * 0.55).toFixed(2) + ')';
-      el.style.opacity = (1 - k * k).toFixed(2);
-      requestAnimationFrame(step);
-    })();
+    const sx = x - r.left - 10, sy = y - r.top - 10;
+    const dx = (Math.random() - .5) * 120, spin = (Math.random() - .5) * 520;
+    const dur = 600 + Math.random() * 180;
+    fx.appendChild(el);
+    if (typeof el.animate === 'function') {
+      const anim = el.animate([
+        { transform: `translate3d(${sx}px,${sy}px,0) rotate(0deg) scale(1)`, opacity: 1 },
+        { transform: `translate3d(${sx + dx * .72}px,${sy - 88}px,0) rotate(${spin * .62}deg) scale(.82)`, opacity: .92, offset: .62 },
+        { transform: `translate3d(${sx + dx}px,${sy + 12}px,0) rotate(${spin}deg) scale(.45)`, opacity: 0 },
+      ], { duration: dur, easing: 'cubic-bezier(.2,.58,.36,1)', fill: 'forwards' });
+      anim.onfinish = () => el.remove();
+      return;
+    }
+    el.style.transform = `translate3d(${sx}px,${sy}px,0)`;
+    el.style.opacity = '0';
+    setTimeout(() => el.remove(), dur);
   }
   function flash() { const fx = ov.querySelector('#ck-fx'); const el = document.createElement('div'); el.className = 'ck-flash'; fx.appendChild(el); setTimeout(() => el.remove(), 720); }
   function confettiBurst() {
@@ -2457,16 +2486,6 @@
     if (tb) {
       const ready = (st.chestAvailable ? 1 : 0) + ((st.combo && st.combo.complete && !st.combo.claimed) ? 1 : 0);
       if (ready > 0 && !tabLocked('tasks')) { tb.textContent = String(ready); tb.hidden = false; } else tb.hidden = true;
-    }
-    // бейдж «Дом»: Василию нужна забота по одной из четырёх шкал (<30). Cross-module
-    // сигнал из catpet.js (window.catPetAlert) — читает локальный кэш + декей, без сервера.
-    // Дом теперь в «Разделах» экрана Главная (не в навбаре) — бейдж вешаем на его строку
-    const hb = ov.querySelector('#ck-hubrow-home .ck-row2__b b');
-    if (hb) {
-      const petAlert = !!(window.catPetAlert && window.catPetAlert());
-      let hbd = hb.querySelector('.ck-badge');
-      if (petAlert) { if (!hbd) { hbd = document.createElement('span'); hbd.className = 'ck-badge'; hb.appendChild(hbd); } hbd.textContent = '!'; hbd.hidden = false; }
-      else if (hbd) hbd.hidden = true;
     }
     // ивент-баннер (×N монеты)
     const evb = ov.querySelector('#ck-event');
@@ -3340,12 +3359,6 @@
       { text: 'Тапни свою породу: там звёзды, тюнинг и выбор любимых голубей для показа рядом с твоим именем в рейтинге', anchor: '#ck-dove-col .cd-card:not(.cd-locked)', anchorFn: function () { return ov.querySelector('#ck-dove-col .cd-card:not(.cd-locked)') || ov.querySelector('#ck-dove-col .cd-grid'); }, pos: 'bottom' },
       { text: 'В «Друзьях» нажми на человека: можно написать ему в Telegram или вызвать на дуэль со своей ставкой', anchor: '#cd-nav-friends', pos: 'bottom' },
     ],
-    home: [
-      { text: 'Мой дом! Наверху — мои потребности: сытость, настроение и сон. Не запускай их', anchor: '#pet-needs', pos: 'bottom', root: 'doc' },
-      { text: 'Большая кнопка — действие комнаты: покорми, уложи спать или поиграй со мной', anchor: '#pet-do', pos: 'top', root: 'doc' },
-      { text: 'Комнаты внизу: Кухня, Спальня, Игровая и Двор — в каждой своё занятие', anchor: '#pet-nav', pos: 'top', root: 'doc' },
-      { text: 'А тут гардероб — наряжай меня в шапки. За заботу капают монеты, между прочим!', anchor: '#pet-shop-btn', pos: 'bottom', root: 'doc' },
-    ],
   };
   const TAB_TOURS = { cat: 'cat', up: 'up', dove: 'col', tasks: 'tasks', top: 'top', hub: 'hub' };
   function tourRoot(s) { return (s && s.root === 'doc') ? document : ov; }
@@ -3504,7 +3517,7 @@
     if (!onboarded && !hasProgress && authed() && st && Number(st.taps || 0) === 0 && Number(st.cardsOwned || 0) === 0 && Number(st.totalEarned || 0) <= 500 && _seenTut) {
       try {
         localStorage.removeItem('ck_tut_v1');
-        ['cat', 'up', 'dove', 'col', 'tasks', 'top', 'home', 'hub'].forEach(k => localStorage.removeItem('ck_tour3_' + k));
+        ['cat', 'up', 'dove', 'col', 'tasks', 'top', 'hub'].forEach(k => localStorage.removeItem('ck_tour3_' + k));
         Object.keys(localStorage).filter(k => k.indexOf('ck_coach_') === 0).forEach(k => localStorage.removeItem(k));
       } catch (e) {}
       coachSeenMem.clear();
@@ -3932,7 +3945,7 @@
     });
   }
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { clearTimeout(resumeRetryTimer); cancelAnimationFrame(raf); void flushForPageExit(); }
+    if (document.hidden) { clearTimeout(resumeRetryTimer); cancelAnimationFrame(raf); flushGuestTapSave(); void flushForPageExit(); }
     else if (ov && ov.classList.contains('on')) {
       lastTs = 0; renderAcc = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
       refreshAfterResumeWithRetry();
@@ -3940,9 +3953,8 @@
   });
   // pagehide надёжнее beforeunload в Telegram WebView; keepalive позволяет короткому
   // запросу с последними тапами завершиться уже во время закрытия страницы.
-  window.addEventListener('pagehide', () => { void flushForPageExit(); });
-  window.ckSetTab = setTab; // для виджета «Дома кота»: открыть лестницу вех (setTab('tasks'))
-  window.ckCoach = coach; window.ckCoachClose = closeActiveCoach; // экспорт для коуч-хинта «Дом» из catpet.js
+  window.addEventListener('pagehide', () => { flushGuestTapSave(); void flushForPageExit(); });
+  window.ckSetTab = setTab;
   // Мост для catdove.js (сегмент «Коллекция» вкладки dove): api — тот же fetch-хелпер с
   // initData-заголовками, flashMsg — тост об ошибке, updateDoveBadge — бейдж непрочитанной
   // почты на кнопке навбара (учитывая, что мьютить его дальше будет Task 10 — почта).
@@ -3961,20 +3973,6 @@
   // энергии/ставки — иначе игрок видит устаревшие цифры, пока не откроет кликер заново.
   window.ckBalance = () => (st ? st.balance : 0);
   window.ckEnergy = () => (st ? st.energy : 0);
-  // Гостевой Дом использует тот же локальный кошелёк, что и сам кликер.
-  // Возвращает новый баланс либо null, если операция недопустима/не гостевая.
-  window.ckGuestWallet = (delta, earnedDelta) => {
-    if (authed() || !Number.isFinite(Number(delta))) return null;
-    const raw = rawGet();
-    const next = Number(raw.balance || 0) + Number(delta);
-    if (!Number.isFinite(next) || next < 0) return null;
-    raw.balance = next;
-    if (Number(earnedDelta) > 0) raw.totalEarned = Number(raw.totalEarned || 0) + Number(earnedDelta);
-    rawSave(raw);
-    applyServerState(guestDerive());
-    renderAll();
-    return Number(st && st.balance || 0);
-  };
   window.ckSyncState = (patch) => {
     if (!st || !patch) return;
     // Соседние режимы меняют тот же clicker_state. Их revision не даёт позднему
@@ -4041,7 +4039,7 @@
 
     const st_ = {
       platform: '…', initLen: '…', authed: '…', ss: '…', ls: '…',
-      clicker: '…', pet: '…', ver: 'catclick v114', errors: '…',
+      clicker: '…', ver: 'catclick v115', errors: '…',
     };
     function render() {
       body.innerHTML = ''
@@ -4051,7 +4049,6 @@
         + ckDiagLine('sessionStorage', st_.ss)
         + ckDiagLine('localStorage', st_.ls)
         + ckDiagLine('GET /api/clicker', st_.clicker)
-        + ckDiagLine('GET /api/pet', st_.pet)
         + ckDiagLine('ver', st_.ver)
         + ckDiagLine('errors', st_.errors);
     }
@@ -4067,7 +4064,6 @@
 
     const hdr = (window.App && App.authHeader) ? App.authHeader() : {};
     fetch('/api/clicker', { headers: hdr }).then(r => { st_.clicker = String(r.status); render(); }).catch(e => { st_.clicker = 'ERR ' + (e && e.message); render(); });
-    fetch('/api/pet', { headers: hdr }).then(r => { st_.pet = String(r.status); render(); }).catch(e => { st_.pet = 'ERR ' + (e && e.message); render(); });
     // ещё раз обновим errors чуть позже — на случай, если что-то упало во время самой диагностики
     setTimeout(() => { st_.errors = ckDiagErrors.length ? ckDiagErrors.join(' | ') : '—'; render(); }, 500);
   }

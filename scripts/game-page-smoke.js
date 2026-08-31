@@ -51,14 +51,12 @@ function serve() {
   // Первый визит показывает тьюториал поверх оверлея — реальный юзер тапнет «Поехали!»
   const tutGo = pg.locator('#ck-tut-go');
   if (await tutGo.isVisible().catch(() => false)) { await tutGo.click(); await pg.waitForTimeout(300); }
-  // Дом кота теперь в «Разделах» экрана Главная (в навбаре его нет): открыть через hub → строку Дома.
-  // В pure/guest реальные призы программы лояльности недоступны: виджет не должен
-  // обещать баллы или промокоды, которые здесь невозможно получить.
+  // «Дом Василия» и связанные мини-игры больше не входят в игровой бандл.
   await pg.locator('.ck-nav__b[data-tab="hub"]').click();
   await pg.waitForTimeout(400);
-  await pg.locator('.ck-row2[data-goto="home"]').click();
-  await pg.waitForTimeout(1500);
-  ok(await pg.locator('#pet-gift').isHidden().catch(() => false), 'pure: #pet-gift скрыт');
+  ok((await pg.locator('.ck-row2[data-goto="home"]').count()) === 0, 'pure: раздел Дом удалён');
+  ok(await pg.evaluate(() => typeof window.catPetOpen === 'undefined'), 'pure: модуль Дома не загружен');
+  ok(await pg.evaluate(() => !Array.from(document.scripts).some(s => /cat(?:pet|feed|game)\.js/.test(s.src))), 'pure: скрипты Дома и мини-игр не загружены');
   await pg.close();
 
   // ── 2. index.html: регресс (магазин + игра с коммерцией) ──
@@ -71,6 +69,12 @@ function serve() {
   ok(await pg.locator('.ck-nav__b[data-tab="tasks"]').isVisible(), 'регресс: вкладка Призы на месте');
   ok(((await pg.locator('.ck-nav__b[data-tab="tasks"]').textContent()) || '').includes('Призы'), 'регресс: вкладка называется «Призы»');
   ok(await pg.locator('#ck-x').isVisible(), 'регресс: крестик на месте');
+  const indexTutGo = pg.locator('#ck-tut-go');
+  if (await indexTutGo.isVisible().catch(() => false)) { await indexTutGo.click(); await pg.waitForTimeout(300); }
+  await pg.locator('.ck-nav__b[data-tab="hub"]').click();
+  await pg.waitForTimeout(300);
+  ok((await pg.locator('.ck-row2[data-goto="home"]').count()) === 0, 'регресс: раздел Дом удалён');
+  ok(await pg.evaluate(() => typeof window.catPetOpen === 'undefined'), 'регресс: модуль Дома не загружен');
   await pg.close();
 
   await br.close();

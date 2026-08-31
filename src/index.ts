@@ -38,18 +38,15 @@ import { createPigeonsRouter } from "./routes/pigeons";
 import { pool as _dbPoolForRouters } from "./db";
 import userRouter from "./routes/user";
 import gameRouter from "./routes/game";
-import petRouter from "./routes/pet";
 import appAuthRouter, { initAppAuthSchema, attachAppLoginChat, completeAppLogin } from "./routes/app-auth";
 import { initAccountLinkSchema } from "./account-link";
 import adminGameRouter from "./routes/admin-game";
 import adminSystemRouter from "./routes/admin-system";
-import { initPetSchema } from "./pet";
 import clickerRouter from "./routes/clicker";
 import { initClickerSchema, initSquadBankSchema, initCustomSquadSchema, joinSquadByCode, setClickerPushService, registerRef, closeWeeklySeason, pushWeeklyWinners, getRefOrderCandidates, markRefOrderRewarded } from "./clicker";
 import { initPigeonSchema, RACE_ENABLED, closeRaceWeek, expireTrades } from "./pigeons";
 import { initAnalyticsSchema, trackEvent, wasFunnelSent, markFunnelSent, getDormantPlayers } from "./analytics";
 import { initClickerPushSchema, runClickerRetentionPush } from "./clicker-push";
-import { runPetHungryPush, runPetEnergyPush } from "./pet-push";
 import { initBonusSchema, startBonusWorker } from "./bonus1c";
 import cartRouter from "./routes/cart";
 import purchasesRouter from "./routes/purchases";
@@ -277,10 +274,6 @@ const FUNNEL_REF_BONUS_ENABLED = process.env.FUNNEL_REF_BONUS_ENABLED === "1";
 const FUNNEL_EXPIRE_DAYS = Math.max(1, Number(process.env.FUNNEL_EXPIRE_DAYS) || 5);
 const FUNNEL_REACT_DAYS = Math.max(3, Number(process.env.FUNNEL_REACT_DAYS) || 14);
 const FUNNEL_REF_ORDER_POINTS = Math.max(0, Number(process.env.FUNNEL_REF_ORDER_POINTS) || 100);
-
-// Напоминания о питомце «Василий» (голод / энергия) — см. pet-push.ts.
-// По умолчанию (env не задан) ВЫКЛЮЧЕНЫ — включает Маша/владелец на VPS, когда готовы.
-const PET_REMINDERS_ENABLED = process.env.PET_REMINDERS_ENABLED === "1";
 
 function pluralRu(n: number, one: string, few: string, many: string): string {
   const m10 = n % 10, m100 = n % 100;
@@ -534,9 +527,8 @@ const WELCOME = `
 Расти кота Василия от Котёнка-стажёра до Императора выпечки:
 👆 Тапай — зарабатывай монеты и открывай 19 образов
 🏪 Заводи бизнесы — монеты капают даже офлайн
-🏠 Ухаживай за Василием в его Доме
 
-🎁 За уровни и заботу — настоящие призы: промокоды и баллы на карту «Марии». Всё — на вкладке «Призы».
+🎁 За уровни и достижения — настоящие призы: промокоды и баллы на карту «Марии». Всё — на вкладке «Призы».
 
 Жми «Играть» 👇
 `.trim();
@@ -588,7 +580,7 @@ const QR_WELCOME = `
 Вас ждёт игра *«Котик Комбат»*: растите кота Василия и получайте настоящие призы:
 🎁 Welcome-промокод за первую победу — сразу в игре
 💎 *100 баллов* на карту за подтверждение номера
-🎂 Промокоды и баллы за уровни и заботу о коте
+🎂 Промокоды и баллы за уровни и достижения
 
 Жмите «Играть» 👇
 `.trim();
@@ -1743,9 +1735,6 @@ app.use(clubRouter);
 // Game results → src/routes/game.ts
 app.use(gameRouter);
 
-// Виртуальный питомец → src/routes/pet.ts
-app.use(petRouter);
-
 // Вход maria-app через Telegram (device-flow) → src/routes/app-auth.ts
 app.use("/api/app", appAuthRouter);
 
@@ -1772,18 +1761,6 @@ app.post("/api/admin/holidays/push", requireAdminToken, requireAdminRole("operat
 app.post("/api/admin/clicker/push", requireAdminToken, requireAdminRole("operator"), async (_req, res) => {
   try { const r = await runClickerRetentionPush(_pushService); res.json({ ok: true, ...r }); }
   catch (e) { log.error({ err: e }, "[CLICKER PUSH MANUAL]"); res.status(500).json({ error: "internal" }); }
-});
-
-// Админ: ручные триггеры напоминаний о питомце (для теста — см. pet-push.ts).
-// ⚠️ Флаг PET_REMINDERS_ENABLED здесь НЕ проверяется — эти эндпоинты шлют
-// пуши по-настоящему реальным кандидатам. Не дёргать вне теста.
-app.post("/api/admin/pet/remind-hungry", requireAdminToken, requireAdminRole("operator"), async (_req, res) => {
-  try { const r = await runPetHungryPush(_pushService); res.json({ ok: true, ...r }); }
-  catch (e) { log.error({ err: e }, "[PET HUNGRY PUSH MANUAL]"); res.status(500).json({ error: "internal" }); }
-});
-app.post("/api/admin/pet/remind-energy", requireAdminToken, requireAdminRole("operator"), async (_req, res) => {
-  try { const r = await runPetEnergyPush(_pushService); res.json({ ok: true, ...r }); }
-  catch (e) { log.error({ err: e }, "[PET ENERGY PUSH MANUAL]"); res.status(500).json({ error: "internal" }); }
 });
 
 // Админ: ручные триггеры вороночных кронов (T2/T3/T4) — для теста.
@@ -2595,7 +2572,6 @@ async function sendBirthdayGreetings() {
 async function main() {
   await initDb();
   await initClubSchema();
-  await initPetSchema();
   await initClickerSchema();
   await initPigeonSchema();
   await initAnalyticsSchema();
@@ -2668,21 +2644,6 @@ async function main() {
     runClickerRetentionPush(_pushService).catch((e) => log.error({ err: e }, "[CLICKER PUSH CRON]"));
   });
   console.log("[STARTUP] Clicker retention-push cron scheduled (daily 17:00 Irkutsk)");
-
-  // Напоминание «Василий проголодался» — ежедневно 19:00 Иркутск (11:00 UTC).
-  // За флагом PET_REMINDERS_ENABLED: выключен ⇒ тик молча выходит (без похода в БД
-  // и без лога на каждый тик — состояние флага уже залогировано один раз ниже).
-  cron.schedule("0 11 * * *", () => {
-    if (!PET_REMINDERS_ENABLED) return;
-    runPetHungryPush(_pushService).catch((e) => log.error({ err: e }, "[PET HUNGRY CRON]"));
-  });
-  // Напоминание «Энергия восстановилась» — каждые 30 минут (:13 и :43, разнесено
-  // от других получасовых/часовых кронов, чтобы не пересекаться по нагрузке).
-  cron.schedule("13,43 * * * *", () => {
-    if (!PET_REMINDERS_ENABLED) return;
-    runPetEnergyPush(_pushService).catch((e) => log.error({ err: e }, "[PET ENERGY CRON]"));
-  });
-  console.log(`[STARTUP] Pet reminder crons scheduled (hungry=19:00 Irkutsk, energy=every 30min; enabled=${PET_REMINDERS_ENABLED})`);
 
   // Воронка T2 — «баллы сгорают»: ежедневно 11:00 Иркутск (03:00 UTC).
   cron.schedule("0 3 * * *", () => {

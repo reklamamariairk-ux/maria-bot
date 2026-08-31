@@ -96,6 +96,7 @@
   // Бейдж входящих обменов на кнопке «Обмены» + флаг «создаю обмен с доски» (для нумерации шагов).
   let incomingTrades = 0, tradesBadgeInit = false, tradeFromBoard = false;
   let tcState = null, msState = null, needsRerenderOnClose = false, tradeTargetFriend = null;
+  let missionAlbumOverflow = null;
 
   // ── стили (свой блок, не трогаем catclick-css — переменные --gold-*/--muted/--panel/
   // --line/--ink/--cream каскадируются от .ck-ov, наш контейнер лежит внутри него) ──
@@ -214,16 +215,64 @@
       .cd-setrow__n b{font-weight:700;font-size:13.5px;color:var(--ink);display:block}
       .cd-setrow__p{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:2px}
       .cd-setrow__done{flex:none;font-size:11.5px;font-weight:800;color:#9be7a8;white-space:nowrap}
-      .cd-mission-route{display:block;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:9px}
-      .cd-mission-route.is-locked{opacity:.68}
-      .cd-mission-route__grid{display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;margin:9px 0;font-size:11.5px;color:var(--muted)}
-      .cd-mission-route__grid b{color:var(--cream)}
-      .cd-mission-pick-btn{width:100%;box-sizing:border-box;display:flex;align-items:center;justify-content:center;border:1px solid rgba(183,155,255,.58);border-radius:11px;padding:9px 12px;font-weight:800;font-size:12px;background:rgba(155,92,255,.12);color:var(--grape-l,#B79BFF);cursor:pointer;min-height:38px}
-      .cd-mission-pick-btn:active{transform:scale(.97);filter:brightness(1.15)}
-      .cd-mission-send-btn{min-height:50px;font-size:14px;box-shadow:0 3px 12px rgba(192,255,51,.18)}
-      button[data-pick-mission]{width:100%;min-height:38px;padding:9px 12px;font-size:12px;background:rgba(155,92,255,.12);color:var(--grape-l,#B79BFF);border-color:rgba(183,155,255,.58);box-shadow:none}
-      button[data-pick-mission]:active{transform:scale(.97)}
-      button[data-route-id]:not(:disabled){min-height:38px;padding:9px 12px;font-size:12px;box-shadow:0 2px 8px rgba(192,255,51,.14)}
+      /* Задания — отдельный двухшаговый поток. Скроллится только viewport шага:
+         заголовок не исчезает, а альбом под шитом не получает scroll chaining. */
+      .cd-sheet.cd-mission-sheet{height:min(82vh,720px);max-height:82vh;overflow:hidden;padding:0;display:flex;flex-direction:column;overscroll-behavior:none;touch-action:none}
+      .cd-mission-head{position:relative;z-index:2;flex:none;display:grid;grid-template-columns:auto minmax(0,1fr) 34px;align-items:center;gap:10px;padding:14px 15px 12px;border-bottom:1px solid rgba(183,155,255,.22);background:linear-gradient(135deg,rgba(155,92,255,.25),rgba(27,21,38,.98) 72%)}
+      .cd-mission-sheet[data-stage="routes"] .cd-mission-head{border-bottom-color:rgba(192,255,51,.25);background:linear-gradient(135deg,rgba(192,255,51,.18),rgba(27,21,38,.98) 72%)}
+      .cd-mission-head__titles{min-width:0;display:flex;flex-direction:column}
+      .cd-mission-head__step{font-size:9.5px;font-weight:900;letter-spacing:.85px;text-transform:uppercase;color:var(--grape-l,#B79BFF)}
+      .cd-mission-sheet[data-stage="routes"] .cd-mission-head__step{color:var(--gold-l)}
+      .cd-mission-head__title{font-size:17px;font-weight:900;color:var(--cream);line-height:1.16;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .cd-mission-help{width:34px;height:34px;border-radius:11px;border:1px solid rgba(183,155,255,.42);background:rgba(155,92,255,.12);color:var(--grape-l,#B79BFF);font:900 15px 'Nunito',sans-serif;cursor:pointer}
+      .cd-mission-head__spacer{width:34px;height:1px}
+      .cd-mission-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:12px 14px calc(16px + env(safe-area-inset-bottom,0px));box-sizing:border-box;scrollbar-gutter:stable}
+      .cd-mission-note{display:flex;align-items:flex-start;gap:9px;border:1px solid rgba(183,155,255,.28);background:rgba(155,92,255,.08);border-radius:13px;padding:9px 11px;margin-bottom:12px;color:var(--muted);font-size:11.5px;line-height:1.4}
+      .cd-mission-note__step{display:flex;align-items:center;justify-content:center;width:22px;height:22px;flex:none;border-radius:8px;background:rgba(155,92,255,.24);color:var(--grape-l,#B79BFF);font-size:11px;font-weight:900}
+      .cd-mission-section{margin:3px 2px 8px;font-size:10px;font-weight:900;letter-spacing:.8px;text-transform:uppercase;color:var(--muted)}
+      .cd-birdcard{position:relative;width:100%;display:grid;grid-template-columns:66px minmax(0,1fr) 18px;align-items:center;gap:10px;box-sizing:border-box;border:1px solid rgba(183,155,255,.34);border-radius:16px;padding:10px;margin:0 0 9px;background:linear-gradient(135deg,rgba(155,92,255,.14),rgba(255,255,255,.025));color:var(--ink);font-family:'Nunito',sans-serif;text-align:left;cursor:pointer}
+      .cd-birdcard:active{transform:scale(.985);border-color:rgba(183,155,255,.68)}
+      .cd-birdcard--active{grid-template-columns:58px minmax(0,1fr);cursor:default;border-color:rgba(192,255,51,.32);background:linear-gradient(135deg,rgba(192,255,51,.10),rgba(255,255,255,.025))}
+      .cd-birdcard--active:active{transform:none}
+      .cd-birdcard__art{width:66px;height:66px;border-radius:13px;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 35%,rgba(183,155,255,.25),rgba(155,92,255,.04) 72%);overflow:hidden}
+      .cd-birdcard--active .cd-birdcard__art{width:58px;height:58px;background:radial-gradient(circle at 50% 35%,rgba(192,255,51,.18),rgba(192,255,51,.03) 72%)}
+      .cd-birdcard__art img{width:92%;height:92%;object-fit:contain;filter:drop-shadow(0 3px 5px rgba(0,0,0,.34))}
+      .cd-birdcard__body{min-width:0}
+      .cd-birdcard__top{display:flex;align-items:center;gap:7px;min-width:0}
+      .cd-birdcard__name{font-size:14px;font-weight:900;color:var(--cream);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .cd-birdcard__status{flex:none;border-radius:7px;padding:2px 6px;background:rgba(155,92,255,.22);color:var(--grape-l,#B79BFF);font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.45px}
+      .cd-birdcard__status--flight{background:rgba(192,255,51,.14);color:var(--gold-l)}
+      .cd-birdcard__rank{display:block;margin-top:2px;color:var(--muted);font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .cd-birdcard__stats{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+      .cd-birdcard__stat{display:inline-flex;align-items:baseline;gap:3px;border-radius:7px;padding:3px 6px;background:rgba(255,255,255,.055);color:var(--muted);font-size:9.5px}
+      .cd-birdcard__stat b{color:var(--cream);font-size:10.5px}
+      .cd-birdcard__next{display:block;margin-top:5px;color:var(--grape-l,#B79BFF);font-size:10px;line-height:1.3}
+      .cd-birdcard__chev{color:var(--grape-l,#B79BFF);font-size:25px;font-weight:500;text-align:center}
+      .cd-birdcard__mission{margin-top:3px;color:var(--muted);font-size:10.5px;line-height:1.35}
+      .cd-birdcard__claim{grid-column:1/-1;margin:1px 0 0!important;min-height:42px!important}
+      .cd-courier{display:grid;grid-template-columns:76px minmax(0,1fr);align-items:center;gap:11px;border:1px solid rgba(192,255,51,.34);border-radius:17px;padding:11px 12px;margin-bottom:12px;background:linear-gradient(135deg,rgba(192,255,51,.15),rgba(255,255,255,.025))}
+      .cd-courier__art{width:76px;height:76px;border-radius:15px;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 35%,rgba(192,255,51,.22),rgba(192,255,51,.03) 72%)}
+      .cd-courier__art img{width:92%;height:92%;object-fit:contain;filter:drop-shadow(0 3px 6px rgba(0,0,0,.36))}
+      .cd-courier__eyebrow{font-size:9px;font-weight:900;letter-spacing:.72px;text-transform:uppercase;color:var(--gold-l)}
+      .cd-courier__name{font-size:16px;font-weight:900;color:var(--cream);line-height:1.2;margin:1px 0 6px}
+      .cd-courier__meta{display:flex;flex-wrap:wrap;gap:5px}
+      .cd-courier__meta span{border-radius:7px;padding:3px 6px;background:rgba(0,0,0,.22);font-size:10px;color:var(--muted)}
+      .cd-courier__meta b{color:var(--cream)}
+      .cd-routelead{font-size:11.5px;line-height:1.4;color:var(--muted);margin:0 2px 10px}
+      .cd-mission-route{display:block;background:linear-gradient(180deg,rgba(192,255,51,.075),rgba(255,255,255,.025));border:1px solid rgba(192,255,51,.26);border-radius:16px;padding:12px;margin-bottom:10px}
+      .cd-mission-route.is-locked{background:rgba(255,255,255,.025);border-color:var(--line);opacity:.7}
+      .cd-mission-route__top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+      .cd-mission-route__name{font-size:14px;font-weight:900;color:var(--cream)}
+      .cd-mission-route__tier{flex:none;border-radius:7px;padding:3px 6px;background:rgba(192,255,51,.15);color:var(--gold-l);font-size:9px;font-weight:900;letter-spacing:.35px;text-transform:uppercase}
+      .cd-mission-route.is-locked .cd-mission-route__tier{background:rgba(255,255,255,.06);color:var(--muted)}
+      .cd-mission-route__desc{font-size:11px;color:var(--muted);line-height:1.35;margin-top:4px}
+      .cd-mission-route__grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:10px 0}
+      .cd-route-metric{display:flex;flex-direction:column;gap:1px;border-radius:9px;padding:6px 7px;background:rgba(0,0,0,.2);color:var(--muted);font-size:8.5px;text-transform:uppercase;letter-spacing:.4px}
+      .cd-route-metric b{color:var(--cream);font-size:11.5px;letter-spacing:0;text-transform:none}
+      .cd-route-metric--chance b{color:var(--gold-l)}
+      .cd-mission-route__foot{font-size:10px;color:var(--muted);margin:-2px 1px 8px}
+      .cd-mission-lock{border-radius:9px;padding:7px 9px;margin:0 0 8px;background:rgba(255,255,255,.05);color:var(--muted);font-size:10.5px;text-align:center}
+      button[data-route-id]:not(:disabled){min-height:44px;margin:0;font-size:13px;box-shadow:0 3px 11px rgba(192,255,51,.16)}
       .cd-claimbtn{flex:none;display:inline-flex;align-items:center;gap:5px;border:1px solid #DFFF8F;border-radius:12px;padding:9px 13px;font-weight:800;font-size:12px;background:linear-gradient(180deg,#D4FF6A,#A8F51E 56%,#8DBF20);color:#12210A;cursor:pointer;white-space:nowrap;min-height:38px}
       .cd-claimbtn:disabled{opacity:.6;cursor:default}
       .cd-scrim{position:fixed;inset:0;z-index:9400;background:rgba(10,6,5,.5);display:none}
@@ -535,7 +584,8 @@
     if (missionTimer) { clearInterval(missionTimer); missionTimer = null; }
     const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet');
     if (sc) sc.classList.remove('on');
-    if (sh) { sh.classList.remove('on'); sh.innerHTML = ''; }
+    if (sh) { sh.classList.remove('on', 'cd-mission-sheet'); sh.removeAttribute('data-stage'); sh.innerHTML = ''; }
+    if (missionAlbumOverflow !== null && container) { container.style.overflow = missionAlbumOverflow; missionAlbumOverflow = null; }
     if (needsRerenderOnClose) { needsRerenderOnClose = false; render(); }
   }
   // Уникальный DOM-якорь текущего содержимого шита. После «Назад» или перехода
@@ -555,7 +605,8 @@
     if (missionTimer) { clearInterval(missionTimer); missionTimer = null; }
     const sc = container && container.querySelector('#cd-scrim'), sh = container && container.querySelector('#cd-sheet');
     if (sc) sc.classList.remove('on');
-    if (sh) { sh.classList.remove('on'); sh.innerHTML = ''; }
+    if (sh) { sh.classList.remove('on', 'cd-mission-sheet'); sh.removeAttribute('data-stage'); sh.innerHTML = ''; }
+    if (missionAlbumOverflow !== null && container) { container.style.overflow = missionAlbumOverflow; missionAlbumOverflow = null; }
     const ps = container && container.querySelector('#cd-pop-scrim'); if (ps) ps.classList.remove('on');
     tcState = null; msState = null; tradeTargetFriend = null; tradeFromBoard = false;
   }
@@ -666,13 +717,23 @@
   async function openMissionsPage() {
     haptic('light');
     const sc = container.querySelector('#cd-scrim'), sh = container.querySelector('#cd-sheet'); if (!sc || !sh) return;
-    sh.innerHTML = `<div class="cd-sheet__hd"><button class="cd-sheet__back" id="cd-sheet-x">‹ Назад</button><div class="cd-sheet__t">Задания голубей</div></div><div id="cd-missions-body" style="padding:4px 0">Загрузка…</div>`;
+    if (missionAlbumOverflow === null) missionAlbumOverflow = container.style.overflow || '';
+    container.style.overflow = 'hidden';
+    sh.classList.add('cd-mission-sheet'); sh.dataset.stage = 'birds';
+    sh.innerHTML = `<div class="cd-mission-head">
+      <button class="cd-sheet__back" id="cd-mission-back" type="button">‹ Альбом</button>
+      <div class="cd-mission-head__titles"><span class="cd-mission-head__step">Шаг 1 из 2</span><span class="cd-mission-head__title">Выберите голубя</span></div>
+      <button class="cd-mission-help" id="cd-mission-help" type="button" aria-label="Как работают задания">?</button>
+    </div><div class="cd-mission-scroll" id="cd-missions-body"><div class="cd-sheet__hint" style="padding-top:18px">Загрузка…</div></div>`;
     sc.classList.add('on'); requestAnimationFrame(() => sh.classList.add('on'));
-    sh.querySelector('#cd-sheet-x').onclick = closeSheet;
+    sh.querySelector('#cd-mission-back').onclick = closeSheet;
+    sh.querySelector('#cd-mission-help').onclick = () => missionHelpPopup(false);
+    const missionScroll = sh.querySelector('#cd-missions-body');
+    ['wheel', 'touchstart', 'touchmove'].forEach(type => missionScroll.addEventListener(type, e => e.stopPropagation(), { passive: true }));
     const view = sheetViewToken();
     await renderMissions();
     if (!sheetViewActive(view)) return;
-    let introSeen = false; try { introSeen = localStorage.getItem('cd_missions_tutorial_v4') === '1'; } catch (_) {}
+    let introSeen = false; try { introSeen = localStorage.getItem('cd_missions_tutorial_v5') === '1'; } catch (_) {}
     if (!introSeen) missionHelpPopup(true);
     if (missionTimer) clearInterval(missionTimer);
     missionTimer = setInterval(updateMissionTimers, 1000);
@@ -689,27 +750,50 @@
 
   async function renderMissions() {
     const body = container.querySelector('#cd-missions-body'); if (!body) return;
-    const sheetTitle = container.querySelector('.cd-sheet__t'); if (sheetTitle) sheetTitle.textContent = 'Задания голубей';
+    const sh = container.querySelector('#cd-sheet'); if (!sh) return;
+    sh.dataset.stage = 'birds';
+    const step = sh.querySelector('.cd-mission-head__step'), title = sh.querySelector('.cd-mission-head__title');
+    const back = sh.querySelector('#cd-mission-back'), help = sh.querySelector('#cd-mission-help');
+    if (step) step.textContent = 'Шаг 1 из 2'; if (title) title.textContent = 'Выберите голубя';
+    if (back) { back.textContent = '‹ Альбом'; back.onclick = closeSheet; }
+    if (help) { help.hidden = false; help.onclick = () => missionHelpPopup(false); }
+    body.scrollTop = 0;
+    body.innerHTML = '<div class="cd-sheet__hint" style="padding-top:18px">Загрузка…</div>';
     const d = await apiRef('/api/pigeons/missions').catch(() => null);
-    if (!d || !Array.isArray(d.pigeons)) { body.innerHTML = '<div class="cd-sheet__hint">Не удалось загрузить задания</div>'; return; }
+    if (!body.isConnected) return;
+    if (!d || !Array.isArray(d.pigeons)) { body.innerHTML = '<div class="cd-sheet__hint" style="padding-top:18px">Не удалось загрузить задания</div>'; return; }
     const serverNow = Date.parse(d.serverNow || '');
     if (Number.isFinite(serverNow)) missionClockOffset = serverNow - Date.now();
     const defs = new Map((d.missions || []).map(m => [m.id, m]));
     const active = new Map((d.active || []).map(m => [m.breed, m]));
-    const cards = d.pigeons.map(p => {
+    const activeCards = d.pigeons.filter(p => active.has(p.breed)).map(p => {
       const b = BY_ID.get(p.breed) || { name: p.breed };
       const a = active.get(p.breed);
-      if (a) {
-        const def = defs.get(a.mission_id) || { name: 'Задание' };
-        return `<div class="cd-setrow" style="display:block;margin-bottom:9px"><div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:7px"><b>${b.name}</b><span style="color:var(--gold-l);font-size:11px">шанс ${num(a.chance)}%</span></div><div style="font-size:12px;color:var(--muted);margin-bottom:8px">${def.name} · награда ${fmt(a.reward)} (${fmt(a.consolation)} при провале)</div><button class="cd-sheet__act" style="margin:0" data-claim-mission="${a.id}" data-completes="${a.completes_at}"></button></div>`;
-      }
+      const def = defs.get(a.mission_id) || { name: 'Задание' };
+      return `<article class="cd-birdcard cd-birdcard--active">
+        <span class="cd-birdcard__art"><img src="/img/pigeons/${p.breed}.webp?v=2" alt="" onerror="this.style.display='none'"></span>
+        <span class="cd-birdcard__body"><span class="cd-birdcard__top"><span class="cd-birdcard__name">${esc(b.name)}</span><span class="cd-birdcard__status cd-birdcard__status--flight">В полёте</span></span>
+        <span class="cd-birdcard__mission">${esc(def.name)} · шанс ${num(a.chance)}%<br>Награда ${fmt(a.reward)} · при неудаче ${fmt(a.consolation)}</span></span>
+        <button class="cd-sheet__act cd-birdcard__claim" data-claim-mission="${a.id}" data-completes="${a.completes_at}"></button>
+      </article>`;
+    }).join('');
+    const readyCards = d.pigeons.filter(p => !active.has(p.breed)).map(p => {
+      const b = BY_ID.get(p.breed) || { name: p.breed };
       const rank = p.missionRank || { name: 'Новичок', completed: 0, rewardMult: 1, nextNeed: 3, nextName: 'Курьер' };
       const next = (d.missions || []).filter(m => num(m.minPower) > num(p.power)).sort((a, b) => num(a.minPower) - num(b.minPower))[0];
       const rankProgress = rank.nextNeed != null ? `до ранга «${rank.nextName}» ещё ${Math.max(0, num(rank.nextNeed) - num(rank.completed))}` : 'максимальный ранг';
-      return `<div class="cd-setrow" style="display:block;margin-bottom:9px"><div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:7px"><b>${b.name}</b><span style="color:var(--gold-l);font-size:11px">+${fmt(p.passivePerHour)}/час</span></div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Сила ${num(p.power)} · ★${p.stars} · тюнинг ${p.speed}/${p.stamina}/${p.luck}</div><div style="font-size:11px;color:var(--gold-l);margin-bottom:7px">Ранг: ${rank.name} · выполнено ${num(rank.completed)} · награда ×${num(rank.rewardMult).toFixed(2)}<br><span style="color:var(--muted)">${rankProgress}</span></div>${next ? `<div class="cd-sheet__hint" style="margin:0 0 7px">Следующий маршрут откроется при силе ${next.minPower}</div>` : `<div class="cd-sheet__hint" style="margin:0 0 7px">Открыты все маршруты</div>`}<button class="cd-sheet__act" style="margin:0" data-pick-mission="${p.breed}">Выбрать маршрут</button></div>`;
+      const nextText = next ? `Следующий маршрут: сила ${num(next.minPower)}` : 'Все маршруты открыты';
+      return `<button class="cd-birdcard" type="button" data-pick-mission="${p.breed}">
+        <span class="cd-birdcard__art"><img src="/img/pigeons/${p.breed}.webp?v=2" alt="" onerror="this.style.display='none'"></span>
+        <span class="cd-birdcard__body"><span class="cd-birdcard__top"><span class="cd-birdcard__name">${esc(b.name)}</span><span class="cd-birdcard__status">Готов</span></span>
+        <span class="cd-birdcard__rank">${esc(rank.name)} · ${rankProgress}</span>
+        <span class="cd-birdcard__stats"><span class="cd-birdcard__stat">Сила <b>${num(p.power)}</b></span><span class="cd-birdcard__stat">Звёзды <b>${num(p.stars)}</b></span><span class="cd-birdcard__stat">Доход <b>+${fmt(p.passivePerHour)}/ч</b></span></span>
+        <span class="cd-birdcard__next">${nextText} · награда ×${num(rank.rewardMult).toFixed(2)}</span></span><span class="cd-birdcard__chev">›</span>
+      </button>`;
     }).join('');
-    body.innerHTML = `<button class="cd-navbtn" id="cd-mission-help" style="width:100%;margin-bottom:9px" type="button">? Сила, задания и ранги</button><div class="cd-sheet__hint" style="margin-bottom:10px">Сила открывает маршруты, а каждое завершённое задание развивает ранг курьера и повышает награду.</div>${cards}`;
-    body.querySelector('#cd-mission-help').onclick = () => missionHelpPopup(false);
+    body.innerHTML = `<div class="cd-mission-note"><span class="cd-mission-note__step">1</span><span><b style="color:var(--cream)">Сначала выберите курьера.</b><br>Сила открывает маршруты, а ранг увеличивает награду.</span></div>
+      ${activeCards ? `<div class="cd-mission-section">Сейчас в полёте</div>${activeCards}` : ''}
+      ${readyCards ? `<div class="cd-mission-section">Готовы к заданию</div>${readyCards}` : '<div class="cd-sheet__hint">Нет свободных голубей</div>'}`;
     body.querySelectorAll('[data-pick-mission]').forEach(btn => { btn.onclick = () => openMissionPicker(d.pigeons.find(p => p.breed === btn.dataset.pickMission), d); });
     body.querySelectorAll('[data-claim-mission]').forEach(btn => { btn.onclick = () => claimMissionAct(num(btn.dataset.claimMission), btn); });
     updateMissionTimers();
@@ -720,7 +804,13 @@
 
   function openMissionPicker(p, d) {
     const body = container.querySelector('#cd-missions-body'); if (!body || !p) return;
-    const sheetTitle = container.querySelector('.cd-sheet__t'); if (sheetTitle) sheetTitle.textContent = 'Выбор маршрута';
+    const sh = container.querySelector('#cd-sheet'); if (!sh) return;
+    sh.dataset.stage = 'routes';
+    const step = sh.querySelector('.cd-mission-head__step'), title = sh.querySelector('.cd-mission-head__title');
+    const back = sh.querySelector('#cd-mission-back'), help = sh.querySelector('#cd-mission-help');
+    if (step) step.textContent = 'Шаг 2 из 2'; if (title) title.textContent = 'Выберите маршрут';
+    if (back) { back.textContent = '‹ Голуби'; back.onclick = () => { void renderMissions(); }; }
+    if (help) help.hidden = true;
     const b = BY_ID.get(p.breed) || { name: p.breed };
     const rank = p.missionRank || { name: 'Новичок', completed: 0, rewardMult: 1 };
     const routes = (d.missions || []).map(m => {
@@ -729,11 +819,19 @@
       const perHour = Math.round(reward * 3600 / num(m.durationSec));
       const consolation = Math.floor(reward * .2);
       const chance = missionChancePreview(p.power, m.difficulty);
-      return `<div class="cd-mission-route${locked ? ' is-locked' : ''}"><div style="display:flex;justify-content:space-between;gap:8px"><b>${m.name}</b><span style="font-size:10px;color:var(--gold-l);white-space:nowrap">${missionTierLabel(m.tier)}</span></div><div style="font-size:11.5px;color:var(--muted);margin-top:4px">${m.description}</div><div class="cd-mission-route__grid"><span>Время: <b>${durationText(num(m.durationSec))}</b></span><span>Шанс: <b>${chance}%</b></span><span>При успехе: <b>+${fmt(reward)}</b></span><span>Темп награды: <b>+${fmt(perHour)}/ч</b></span><span style="grid-column:1/-1">При провале: <b>+${fmt(consolation)}</b></span></div>${locked ? `<div class="cd-sheet__hint" style="margin:0 0 7px">Закрыто: нужна сила ${num(m.minPower)}, сейчас ${num(p.power)}</div>` : ''}<button class="cd-sheet__act" style="margin:0" data-route-id="${m.id}" ${locked ? 'disabled' : ''}>${locked ? `Нужна сила ${num(m.minPower)}` : 'Отправить на маршрут'}</button></div>`;
+      return `<article class="cd-mission-route${locked ? ' is-locked' : ''}">
+        <div class="cd-mission-route__top"><span class="cd-mission-route__name">${esc(m.name)}</span><span class="cd-mission-route__tier">${missionTierLabel(m.tier)}</span></div>
+        <div class="cd-mission-route__desc">${esc(m.description)}</div>
+        <div class="cd-mission-route__grid"><span class="cd-route-metric">Время<b>${durationText(num(m.durationSec))}</b></span><span class="cd-route-metric cd-route-metric--chance">Шанс<b>${chance}%</b></span><span class="cd-route-metric">Награда<b>+${fmt(reward)}</b></span></div>
+        <div class="cd-mission-route__foot">При неудаче +${fmt(consolation)} · темп +${fmt(perHour)}/час</div>
+        ${locked ? `<div class="cd-mission-lock">Нужна сила ${num(m.minPower)} · сейчас ${num(p.power)}</div>` : ''}
+        <button class="cd-sheet__act" data-route-id="${m.id}" ${locked ? 'disabled' : ''}>${locked ? `Маршрут закрыт` : 'Отправить голубя'}</button>
+      </article>`;
     }).join('');
-    body.innerHTML = `<button class="cd-sheet__back" id="cd-mission-list-back" type="button">‹ К голубям</button><div class="cd-summary" style="margin:10px 0;border-color:var(--gold);box-shadow:0 2px 10px rgba(192,255,51,.12)"><b>Шаг 2 из 2 · ${b.name}</b><br>Сила ${num(p.power)} · ранг ${rank.name} · награда ×${num(rank.rewardMult).toFixed(2)}<br><span style="color:var(--muted)">Пассивный доход +${fmt(p.passivePerHour)}/час продолжает идти в полёте.</span></div><div class="cd-sheet__hint" style="margin-bottom:9px"><b style="color:var(--cream)">Выбери один маршрут для этого голубя.</b><br>«Темп награды» — это пересчёт награды за час при успехе, а не отдельная дополнительная выплата. Награда придёт после завершения полёта.</div>${routes}`;
-    const sheet = container.querySelector('#cd-sheet'); if (sheet) sheet.scrollTop = 0;
-    body.querySelector('#cd-mission-list-back').onclick = renderMissions;
+    body.innerHTML = `<div class="cd-courier"><span class="cd-courier__art"><img src="/img/pigeons/${p.breed}.webp?v=2" alt="" onerror="this.style.display='none'"></span>
+      <span><span class="cd-courier__eyebrow">Выбранный курьер</span><div class="cd-courier__name">${esc(b.name)}</div><span class="cd-courier__meta"><span>Сила <b>${num(p.power)}</b></span><span>${esc(rank.name)}</span><span>Награда <b>×${num(rank.rewardMult).toFixed(2)}</b></span></span></span></div>
+      <p class="cd-routelead">Сравните время, шанс и итоговую награду. Доход голубя +${fmt(p.passivePerHour)}/час продолжит начисляться в полёте.</p>${routes}`;
+    body.scrollTop = 0;
     body.querySelectorAll('[data-route-id]').forEach(btn => { btn.onclick = () => startMissionAct(p.breed, btn, btn.dataset.routeId); });
   }
 
@@ -741,15 +839,13 @@
     const s = container.querySelector('#cd-pop-scrim'), p = container.querySelector('#cd-pop'); if (!s || !p) return;
     p.innerHTML = `<h3>${DOVE_ICON(21)} ${firstTime ? 'Новое: задания голубей' : 'Как работают задания'}</h3>
       <div style="font-size:13px;line-height:1.5;color:var(--cream);text-align:left;margin:8px 0 14px">
-        <p><b>1. Выберите голубя.</b> На его карточке видны сила, ранг и постоянный доход в час.</p>
-        <p><b>2. Нажмите «Выбрать маршрут».</b> Игра покажет все маршруты, включая ещё закрытые.</p>
-        <p><b>3. Сравните условия.</b> До отправки видны время, шанс успеха, полная награда, доход за час и 20% награды при провале.</p>
-        <p><b>4. Развивайте силу.</b> Её дают редкость, звёзды и тюнинг. Сила открывает новые маршруты и повышает шанс успеха.</p>
-        <p><b>5. Развивайте ранг.</b> 3 завершённых полёта — Курьер ×1,10; 10 — Опытный ×1,25; 25 — Мастер ×1,50; 50 — Легенда ×2,00.</p>
-        <p><b>Важно:</b> личный доход голубя в час продолжает начисляться и во время полёта.</p>
-      </div><button id="cd-mission-help-ok">Понятно, отправляем!</button>`;
+        <p><b>1. Выберите курьера.</b> Фиолетовый экран показывает свободных голубей и тех, кто уже в полёте.</p>
+        <p><b>2. Выберите маршрут.</b> Зелёный экран отдельно показывает время, шанс и итоговую награду.</p>
+        <p><b>Сила</b> открывает сложные маршруты и повышает шанс. <b>Ранг</b> растёт после полётов и умножает награду.</p>
+        <p><b>Важно:</b> постоянный доход голубя продолжает начисляться во время задания.</p>
+      </div><button id="cd-mission-help-ok">Понятно</button>`;
     s.classList.add('on');
-    const close = () => { try { localStorage.setItem('cd_missions_tutorial_v4', '1'); } catch (_) {} s.classList.remove('on'); };
+    const close = () => { try { localStorage.setItem('cd_missions_tutorial_v5', '1'); } catch (_) {} s.classList.remove('on'); };
     s.onclick = (e) => { if (e.target === s) close(); };
     p.querySelector('#cd-mission-help-ok').onclick = close;
   }

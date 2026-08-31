@@ -2582,27 +2582,13 @@ export const MILESTONES: { id: string; title: string; cond: { type: string; targ
   { id: "ms_col_all",  title: "Вся коллекция бизнесов",      cond: { type: "collect", target: "all" },   perk: "free_bento",  perkText: "Бенто-торт в подарок (от 2000₽)" },
   { id: "ms_ref3",     title: "Пригласил 3 друзей",        cond: { type: "ref", target: 3 },       points: 500 },
   { id: "ms_ref10",    title: "Пригласил 10 друзей",       cond: { type: "ref", target: 10 },      perk: "discount_10", perkText: "Промокод −10% (от 1000₽)" },
-  // Вехи заботы о Василии («Дом кота»). Условие — по РЕКОРДУ стрика (pet_state.care_streak_best):
-  // сброс текущего стрика не отбирает заслуженную веху. Числа — спека Фазы 2 (скромные, в духе лестницы).
-  { id: "ms_care7",   title: "Забота о Василии: 7 дней",   cond: { type: "care_streak", target: 7 },   points: 200 },
-  { id: "ms_care14",  title: "Забота о Василии: 14 дней",  cond: { type: "care_streak", target: 14 },  perk: "discount_5",   perkText: "Промокод −5% (от 500₽)" },
-  { id: "ms_care30",  title: "Забота о Василии: 30 дней",  cond: { type: "care_streak", target: 30 },  points: 500 },
-  { id: "ms_care60",  title: "Забота о Василии: 60 дней",  cond: { type: "care_streak", target: 60 },  perk: "free_dessert", perkText: "Бесплатный десерт (к торту от 2000₽)" },
-  { id: "ms_care100", title: "Забота о Василии: 100 дней", cond: { type: "care_streak", target: 100 }, points: 1000 },
 ];
 const MS_BY_ID = Object.fromEntries(MILESTONES.map((m) => [m.id, m]));
-// care_streak_best читаем прямым SQL (импорт pet.ts → цикл: pet.ts импортирует addClickerBalance отсюда)
-async function getCareStreakBest(chatId: number): Promise<number> {
-  const { rows } = await pool.query(`SELECT care_streak_best FROM pet_state WHERE chat_id=$1`, [chatId]);
-  return Number(rows[0]?.care_streak_best ?? 0);
-}
-const msReached = (m: any, s: ClickerState, careBest = 0) =>
-  m.cond.type === "care_streak" ? careBest >= m.cond.target
-    : taskClaimable({ type: m.cond.type, target: m.cond.target } as any, s);
+const msReached = (m: any, s: ClickerState) =>
+  taskClaimable({ type: m.cond.type, target: m.cond.target } as any, s);
 
 export async function getMilestones(chatId: number): Promise<{ milestones: any[]; phoneVerified: boolean }> {
   const s = await getClicker(chatId);
-  const careBest = await getCareStreakBest(chatId).catch(() => 0);
   const gr = await pool.query(`SELECT achievement, points_granted, perk_granted FROM clicker_gifts WHERE chat_id=$1`, [chatId]);
   const grants = new Map(gr.rows.map((r) => [r.achievement, r]));
   const phoneVerified = await isPhoneVerified(chatId).catch(() => false);
@@ -2612,7 +2598,7 @@ export async function getMilestones(chatId: number): Promise<{ milestones: any[]
       id: m.id, title: m.title,
       kind: m.perk && m.points ? "both" : (m.perk ? "perk" : "points"),
       points: m.points || 0, perkText: m.perkText || "",
-      reached: msReached(m, s, careBest),
+      reached: msReached(m, s),
       granted: (() => {
         const row = grants.get(m.id);
         return !!row && (!m.points || row.points_granted) && (!m.perk || row.perk_granted);
@@ -2626,8 +2612,7 @@ export async function claimMilestone(chatId: number, id: string): Promise<{ ok: 
   if (!GIFTS_ENABLED) return { ok: false, reason: "disabled" };
   const m: any = MS_BY_ID[id]; if (!m) return { ok: false, reason: "no_milestone" };
   const s = await getClicker(chatId);
-  const careBest = m.cond.type === "care_streak" ? await getCareStreakBest(chatId).catch(() => 0) : 0;
-  if (!msReached(m, s, careBest)) return { ok: false, reason: "not_ready" };
+  if (!msReached(m, s)) return { ok: false, reason: "not_ready" };
   if (!(await isPhoneVerified(chatId).catch(() => false))) return { ok: false, reason: "need_phone" };
   // Строка хранит прогресс двух внешних эффектов. Постоянные idempotency keys ниже
   // позволяют продолжить после сбоя между баллами и купоном без двойного начисления.
