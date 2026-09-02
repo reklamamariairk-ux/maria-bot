@@ -7,9 +7,9 @@ Wants=network-online.target
 Type=oneshot
 User=maria
 Group=maria
-WorkingDirectory=/opt/maria-bot-russia
+WorkingDirectory=/opt/maria-bot-current
 EnvironmentFile=/opt/maria-bot-russia/.env
 Environment=NODE_ENV=production
-ExecStart=/usr/local/bin/node /opt/maria-bot-russia/dist/migrate.js
+ExecStart=/usr/local/bin/node /opt/maria-bot-current/dist/migrate.js
 NoNewPrivileges=true
 ProtectSystem=full

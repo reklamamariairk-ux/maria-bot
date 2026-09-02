@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 User=maria
 Group=maria
-WorkingDirectory=/opt/maria-bot-russia
+WorkingDirectory=/opt/maria-bot-current
 EnvironmentFile=/opt/maria-bot-russia/.env
 Environment=NODE_ENV=production
 Environment=PROCESS_ROLE=api
@@ -15,7 +15,7 @@ Environment=RUN_SCHEMA_INIT=0
 Environment=PORT=%i
 Environment=PG_POOL_MAX=12
 Environment=MAX_INFLIGHT_REQUESTS=200
-ExecStart=/usr/local/bin/node /opt/maria-bot-russia/dist/index.js
+ExecStart=/usr/local/bin/node /opt/maria-bot-current/dist/index.js
 Restart=always
 RestartSec=2
 TimeoutStopSec=15

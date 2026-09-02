@@ -90,6 +90,9 @@ compose-файлом после основного `/opt/maria/docker-compose.ym
 
 На последующих выкладках порядок: build → migrate one-shot → rolling restart API
 по одному процессу → worker → smoke. Нельзя одновременно останавливать оба API.
+Российские units смотрят на атомарный symlink `/opt/maria-bot-current`; релизы
+хранятся в `/opt/maria-bot-releases/<commit>`, а `.env` и изменяемый `data/`
+остаются общими в `/opt/maria-bot-russia`.
 
 ## Нагрузочный тест
 
