@@ -20,7 +20,7 @@ trap cleanup EXIT
 
 # The root shell owns the redirection while pg_dump keeps PostgreSQL peer auth.
 runuser -u postgres -- pg_dump --format=custom --compress=6 --no-owner --no-acl "$database" > "$partial"
-test "$(stat -c%s "$partial")" -gt 10_000
+test "$(stat -c%s "$partial")" -gt 10000
 pg_restore --list "$partial" >/dev/null
 mv "$partial" "$final"
 sha256sum "$final" > "$checksum"
