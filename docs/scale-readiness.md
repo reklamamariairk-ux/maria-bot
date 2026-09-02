@@ -88,6 +88,11 @@ Hostinger API + worker ──────────────── PostgreS
 зафиксированы в `deploy/docker-compose.scale.yml`, который подключается вторым
 compose-файлом после основного `/opt/maria/docker-compose.yml`.
 
+`maria-bot-backup.timer` ежедневно создаёт custom-format dump в
+`/opt/maria-bot-backups/daily`, хранит 30 дней и по воскресеньям восстанавливает
+последний архив во временную базу. Первый запуск сервиса после установки должен
+завершиться `backup_ok` до включения timer.
+
 На последующих выкладках порядок: build → migrate one-shot → rolling restart API
 по одному процессу → worker → smoke. Нельзя одновременно останавливать оба API.
 Российские units смотрят на атомарный symlink `/opt/maria-bot-current`; релизы

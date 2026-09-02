@@ -1,0 +1,15 @@
+[Unit]
+Description=Maria Bot PostgreSQL backup and restore verification
+After=postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/maria-bot-backup
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=true
+PrivateTmp=false
+ProtectSystem=full
+ReadWritePaths=/opt/maria-bot-backups /tmp

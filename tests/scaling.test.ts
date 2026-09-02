@@ -48,6 +48,7 @@ describe("scale-readiness", () => {
     const index = fs.readFileSync(path.join(root, "src", "index.ts"), "utf8");
     const nginx = fs.readFileSync(path.join(root, "deploy", "nginx-bot-russia.conf"), "utf8");
     const pgbouncer = fs.readFileSync(path.join(root, "deploy", "pgbouncer.ini.example"), "utf8");
+    const backup = fs.readFileSync(path.join(root, "deploy", "backup-maria-bot.sh"), "utf8");
     expect(index).toContain('type ProcessRole = "all" | "api" | "worker"');
     expect(index).toContain('app.get("/ready"');
     expect(index).toContain('app.get("/metrics"');
@@ -55,5 +56,7 @@ describe("scale-readiness", () => {
     expect(nginx).toContain("gzip on;");
     expect(pgbouncer).toContain("pool_mode = transaction");
     expect(pgbouncer).toContain("max_db_connections = 32");
+    expect(backup).toContain("pg_restore --exit-on-error");
+    expect(backup).toContain("-mtime +30 -delete");
   });
 });

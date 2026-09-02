@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Maria Bot PostgreSQL backup
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+RandomizedDelaySec=5m
+Persistent=true
+Unit=maria-bot-backup.service
+
+[Install]
+WantedBy=timers.target
