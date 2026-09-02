@@ -1,22 +1,24 @@
 [databases]
 # Application DATABASE_URL should point to 127.0.0.1:6432/maria after rollout.
-maria = host=127.0.0.1 port=5432 dbname=maria
+maria_bot = host=127.0.0.1 port=5432 dbname=maria_bot
 
 [pgbouncer]
 listen_addr = 127.0.0.1
 listen_port = 6432
 unix_socket_dir = /var/run/postgresql
+logfile = /var/log/postgresql/pgbouncer.log
+pidfile = /var/run/postgresql/pgbouncer.pid
 auth_type = scram-sha-256
 auth_file = /etc/pgbouncer/userlist.txt
 
 # A transaction releases its PostgreSQL connection immediately after COMMIT.
 pool_mode = transaction
 max_client_conn = 1000
-default_pool_size = 40
+default_pool_size = 24
 min_pool_size = 8
 reserve_pool_size = 8
 reserve_pool_timeout = 2
-max_db_connections = 50
+max_db_connections = 32
 
 server_reset_query = DISCARD ALL
 server_check_delay = 10

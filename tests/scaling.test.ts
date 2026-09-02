@@ -54,6 +54,6 @@ describe("scale-readiness", () => {
     expect(nginx).toContain("proxy_cache maria_static");
     expect(nginx).toContain("gzip on;");
     expect(pgbouncer).toContain("pool_mode = transaction");
-    expect(pgbouncer).toContain("max_db_connections = 50");
+    expect(pgbouncer).toContain("max_db_connections = 32");
   });
 });
