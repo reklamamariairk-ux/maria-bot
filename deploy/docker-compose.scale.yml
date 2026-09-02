@@ -25,6 +25,8 @@ services:
       RUN_SCHEMA_INIT: "0"
       PURCHASE_SYNC_WORKER: "true"
       PG_POOL_MAX: "6"
+    healthcheck:
+      disable: true
     networks:
       - proxy
 
