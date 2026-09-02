@@ -6,6 +6,7 @@ import { initClickerSchema, initCustomSquadSchema, initSquadBankSchema } from ".
 import { initClubSchema } from "./club";
 import { initDb } from "./db";
 import { initPigeonSchema } from "./pigeons";
+import { initPetSchema } from "./pet";
 import { initPurchaseSchema } from "./purchase1c";
 import { initAppAuthSchema } from "./routes/app-auth";
 
@@ -14,6 +15,7 @@ export async function initSchema(): Promise<void> {
   await initDb();
   await initClubSchema();
   await initClickerSchema();
+  await initPetSchema();
   await initPigeonSchema();
   await initAnalyticsSchema();
   await initClickerPushSchema();
