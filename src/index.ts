@@ -35,6 +35,7 @@ import { registerVkAssetAliases } from "./static-assets";
 import { createReferralRouter } from "./routes/referral";
 import { createWheelStreakRouter } from "./routes/wheel-streak";
 import { createPigeonsRouter } from "./routes/pigeons";
+import petRouter from "./routes/pet";
 import { pool as _dbPoolForRouters } from "./db";
 import userRouter from "./routes/user";
 import gameRouter from "./routes/game";
@@ -1760,6 +1761,8 @@ app.use("/api/app", appAuthRouter);
 
 // Кликер «Котик Комбат» → src/routes/clicker.ts
 app.use(clickerRouter);
+// Питомец Василий → src/routes/pet.ts
+app.use(petRouter);
 app.use(purchasesRouter);
 
 // Админка игры: метрики/игроки/рассылка (UI: /admin/game.html, гейт ADMIN_TOKEN)
