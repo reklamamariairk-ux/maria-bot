@@ -99,6 +99,18 @@ compose-файлом после основного `/opt/maria/docker-compose.ym
 хранятся в `/opt/maria-bot-releases/<commit>`, а `.env` и изменяемый `data/`
 остаются общими в `/opt/maria-bot-russia`.
 
+Перед переключением нового российского release обязательно заменить созданную
+git-папку `data/` на симлинк. Обычный `ln -s ... "$release/data"`, когда папка
+уже существует, создаст вложенный `data/data` и оставит API без доступа на запись
+к общему каталогу.
+
+```bash
+# Только для нового, ещё не активного release.
+rm -rf -- "$release/data"
+ln -s /opt/maria-bot-russia/data "$release/data"
+test "$(readlink -f "$release/data")" = /opt/maria-bot-russia/data
+```
+
 ## Нагрузочный тест
 
 Сценарий никогда не атакует удалённый адрес без явного `ALLOW_REMOTE_LOAD=1`.

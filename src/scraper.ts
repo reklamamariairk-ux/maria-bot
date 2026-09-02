@@ -347,7 +347,9 @@ export async function scrapeCatalog(): Promise<Product[]> {
       source = "bitrix";
       console.log(`✅ Каталог из API: ${all.length} позиций`);
     } catch (err) {
-      console.error("[CATALOG_API] failed, fallback to scrape:", (err as Error).message);
+      // Внешний API может кратко вернуть HTML (например, при обслуживании).
+      // Скрейпер ниже — штатный fallback, поэтому это warning, а не авария API.
+      console.warn("[CATALOG_API] failed, fallback to scrape:", (err as Error).message);
     }
   }
 
