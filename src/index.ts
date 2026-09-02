@@ -121,6 +121,9 @@ const PROCESS_ROLE: ProcessRole = requestedRole === "api" || requestedRole === "
   : (PURCHASE_SYNC_WORKER ? "all" : "api");
 const RUN_HTTP = PROCESS_ROLE !== "worker";
 const RUN_WORKERS = PROCESS_ROLE !== "api";
+// В split-схеме webhook назначает только основной API на Hostinger. Российские
+// реплики получают BOT_TOKEN лишь для проверки подписи Mini App.
+const MANAGE_TELEGRAM_WEBHOOK = (process.env.MANAGE_TELEGRAM_WEBHOOK ?? "").trim().toLowerCase() === "true";
 const RUN_SCHEMA_INIT = !/^(?:0|false|no|off)$/i.test((process.env.RUN_SCHEMA_INIT ?? "true").trim());
 const MAX_INFLIGHT_REQUESTS = Math.max(20, Math.min(5_000, Number(process.env.MAX_INFLIGHT_REQUESTS) || 200));
 const ADMIN_IDS    = (process.env.ADMIN_IDS ?? "").split(",").map(Number).filter(Boolean);
@@ -2813,7 +2816,7 @@ async function main() {
     // Mini App + API работают; команды бота и push'и — нет (Telegram отвергнет
     // вызовы с dummy-токеном, ошибки проглатываются существующими try/catch).
     httpServer = app.listen(PORT, () => console.log(`🚀 Preview server on port ${PORT} (no Telegram bot)`));
-  } else if (WEBHOOK_URL && RUN_WORKERS) {
+  } else if (WEBHOOK_URL && (RUN_WORKERS || MANAGE_TELEGRAM_WEBHOOK)) {
     const webhookPath = `/webhook/${BOT_TOKEN}`;
     app.use(webhookPath, webhookCallback(bot, "express"));
     httpServer = app.listen(PORT, async () => {

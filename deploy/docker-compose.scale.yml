@@ -7,6 +7,7 @@ services:
       PROCESS_ROLE: api
       RUN_SCHEMA_INIT: "0"
       PURCHASE_SYNC_WORKER: "false"
+      MANAGE_TELEGRAM_WEBHOOK: "true"
       REDIS_URL: redis://maria-bot-redis:6379
       PG_POOL_MAX: "12"
       MAX_INFLIGHT_REQUESTS: "200"
