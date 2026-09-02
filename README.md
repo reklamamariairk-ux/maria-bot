@@ -10,7 +10,24 @@ Telegram-бот с Mini App (игры + ИИ-чат) для кондитерск
 | Сервер | Express.js |
 | ИИ | [Groq](https://groq.com/) (llama-3.1-8b-instant) |
 | Mini App | Vanilla JS / HTML / CSS |
-| Деплой | [Render.com](https://render.com) |
+| Деплой | Hostinger Docker + российские nginx/systemd/PostgreSQL |
+
+---
+
+## Production и высокая нагрузка
+
+Production работает на Node.js 24 LTS. API и фоновые задачи поддерживают
+раздельные роли `PROCESS_ROLE=api|worker`; для нескольких API-реплик используются
+Redis и PgBouncer. Полная схема, конфигурация, health checks, метрики и безопасный
+нагрузочный тест описаны в [docs/scale-readiness.md](docs/scale-readiness.md).
+
+Перед запуском приложения на новой схеме:
+
+```bash
+npm ci
+npm run build
+npm run migrate
+```
 
 ---
 
@@ -56,49 +73,14 @@ npm run dev
 
 ---
 
-## Деплой на Render.com
+## Production deploy
 
-### Шаг 1 — Подключить репозиторий
-
-1. Запушьте проект на GitHub:
-   ```bash
-   git init && git add . && git commit -m "init"
-   git remote add origin https://github.com/YOUR/maria-bot.git
-   git push -u origin main
-   ```
-2. Зайдите на [render.com](https://render.com) → **New → Web Service**
-3. Выберите репозиторий `maria-bot`
-
-### Шаг 2 — Настроить сервис
-
-| Поле | Значение |
-|------|---------|
-| **Build Command** | `npm install && npm run build` |
-| **Start Command** | `npm start` |
-| **Node version** | `18` |
-
-### Шаг 3 — Переменные окружения
-
-В разделе **Environment → Environment Variables** добавьте:
-
-| Ключ | Значение |
-|------|---------|
-| `BOT_TOKEN` | токен от @BotFather |
-| `GROQ_KEY` | ключ из console.groq.com |
-| `WEBHOOK_URL` | `https://<your-app>.onrender.com` |
-| `MINI_APP_URL` | `https://<your-app>.onrender.com` |
-
-### Шаг 4 — Зарегистрировать Mini App в Telegram
-
-1. Откройте @BotFather → `/newapp` или `/editapp`
-2. Укажите URL: `https://<your-app>.onrender.com`
-3. Скопируйте ссылку `t.me/YOUR_BOT/app` и вставьте в `MINI_APP_URL`
-
-### Шаг 5 — Deploy
-
-Нажмите **Create Web Service** — Render сам установит зависимости, соберёт TypeScript и запустит сервер.
-
-Первый деплой занимает ~2–3 минуты. После этого бот автоматически получит webhook.
+Production использует Node.js 24 LTS. Основной вход работает в Docker на
+Hostinger, быстрый игровой вход — две systemd API-реплики на российском VDS.
+PostgreSQL, PgBouncer и Redis находятся рядом с быстрыми репликами; единственный
+worker для cron/push работает на Hostinger. Пошаговый rolling rollout, backup,
+smoke, нагрузочный тест и откат описаны в
+[docs/scale-readiness.md](docs/scale-readiness.md).
 
 ---
 
@@ -110,14 +92,3 @@ npm run dev
 | `/games` | Описание игр + кнопка |
 | `/sale` | Акции недели + кнопка |
 | `/help` | Контакты + кнопка |
-
----
-
-## Free Tier Render — важно
-
-На бесплатном тарифе сервис засыпает через 15 минут без запросов.
-При первом обращении после сна — cold start ~30 сек.
-
-Чтобы бот отвечал быстро, настройте периодический ping (например через [UptimeRobot](https://uptimerobot.com)):
-- URL: `https://<your-app>.onrender.com/health`
-- Интервал: 14 минут

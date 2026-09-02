@@ -1,0 +1,31 @@
+[Unit]
+Description=Maria Bot API instance on port %i
+After=network-online.target postgresql.service pgbouncer.service redis-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=maria
+Group=maria
+WorkingDirectory=/opt/maria-bot-russia
+EnvironmentFile=/opt/maria-bot-russia/.env
+Environment=NODE_ENV=production
+Environment=PROCESS_ROLE=api
+Environment=RUN_SCHEMA_INIT=0
+Environment=PORT=%i
+Environment=PG_POOL_MAX=12
+Environment=MAX_INFLIGHT_REQUESTS=200
+ExecStart=/usr/local/bin/node /opt/maria-bot-russia/dist/index.js
+Restart=always
+RestartSec=2
+TimeoutStopSec=15
+KillSignal=SIGTERM
+NoNewPrivileges=true
+ProtectSystem=full
+# Uploads in /tmp must be visible to both replicas because nginx balances the
+# follow-up GET independently from the upload POST.
+ReadWritePaths=/tmp /opt/maria-bot-russia/data
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

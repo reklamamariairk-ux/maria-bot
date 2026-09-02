@@ -8,6 +8,7 @@
 
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
+import { consumeSharedRateLimit, sharedStateConfigured } from "./shared-state";
 
 export type AdminRole = "viewer" | "operator" | "superadmin";
 declare global {
@@ -30,6 +31,60 @@ export function safeEq(a: string | null | undefined, b: string | null | undefine
 // ── Rate limit ──────────────────────────────────────────────────────────────
 // Простой sliding window per-IP + per-path. Bucket очищается каждые 5 мин.
 const rateBuckets = new Map<string, number[]>();
+let inflightRequests = 0;
+
+export function getInflightRequests(): number {
+  return inflightRequests;
+}
+
+/**
+ * Bounded backpressure per API replica. Лучше быстро вернуть 503 с Retry-After,
+ * чем поставить тысячи запросов в очередь к 12 соединениям PostgreSQL и получить
+ * каскад таймаутов. Health endpoints всегда остаются доступными балансировщику.
+ */
+export function concurrencyLimit(maxInflight: number) {
+  const limit = Math.max(1, Math.floor(maxInflight));
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (req.path === "/live" || req.path === "/ready" || req.path === "/health") {
+      next();
+      return;
+    }
+    if (inflightRequests >= limit) {
+      res.setHeader("Retry-After", "1");
+      res.status(503).json({ ok: false, error: "overloaded", message: "Сервис занят. Повтори через секунду." });
+      return;
+    }
+    inflightRequests += 1;
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      inflightRequests = Math.max(0, inflightRequests - 1);
+    };
+    res.once("finish", release);
+    res.once("close", release);
+    next();
+  };
+}
+
+function rejectRateLimit(res: Response): void {
+  res.setHeader("Retry-After", "60");
+  res.status(429).json({
+    ok: false,
+    error: "rate_limited",
+    message: "Слишком много запросов. Подожди минуту.",
+  });
+}
+
+function consumeLocalRateLimit(key: string, maxPerMinute: number): boolean {
+  const now = Date.now();
+  const win = 60_000;
+  const arr = (rateBuckets.get(key) || []).filter((t) => now - t < win);
+  if (arr.length >= maxPerMinute) return false;
+  arr.push(now);
+  rateBuckets.set(key, arr);
+  return true;
+}
 
 export function rateLimit(maxPerMinute: number) {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -45,25 +100,29 @@ export function rateLimit(maxPerMinute: number) {
     // Если складывать их в один bucket, POST /tune + следующий GET /tune
     // преждевременно исчерпывают лимит друг друга при серийной прокачке.
     const key = `${who}:${req.method.toUpperCase()}:${req.path}`;
-    const now = Date.now();
-    const win = 60_000;
-    const arr = (rateBuckets.get(key) || []).filter((t) => now - t < win);
-    if (arr.length >= maxPerMinute) {
-      res.status(429).json({
-        ok: false,
-        error: "rate_limited",
-        message: "Слишком много запросов. Подожди минуту.",
-      });
+    if (!sharedStateConfigured()) {
+      if (!consumeLocalRateLimit(key, maxPerMinute)) rejectRateLimit(res);
+      else next();
       return;
     }
-    arr.push(now);
-    rateBuckets.set(key, arr);
-    next();
+    // Redis делает лимит общим для всех API-реплик. При его кратком сбое
+    // остаётся локальный fail-safe: сервис продолжает отвечать, но не открывается
+    // полностью для бесконтрольного потока.
+    void consumeSharedRateLimit(key, maxPerMinute, 60_000).then((sharedAllowed) => {
+      const allowed = sharedAllowed === null
+        ? consumeLocalRateLimit(key, maxPerMinute)
+        : sharedAllowed;
+      if (!allowed) rejectRateLimit(res);
+      else next();
+    }).catch(() => {
+      if (!consumeLocalRateLimit(key, maxPerMinute)) rejectRateLimit(res);
+      else next();
+    });
   };
 }
 
 // Чистим старые ведра раз в 5 минут чтобы Map не разрастался
-setInterval(() => {
+const rateBucketCleanup = setInterval(() => {
   const now = Date.now();
   for (const [k, arr] of rateBuckets) {
     const fresh = arr.filter((t) => now - t < 60_000);
@@ -71,6 +130,7 @@ setInterval(() => {
     else rateBuckets.set(k, fresh);
   }
 }, 5 * 60_000);
+rateBucketCleanup.unref?.();
 
 // ── Admin token middleware ─────────────────────────────────────────────────
 /** Проверяет `x-user-token` header или `body.token` против ADMIN_TOKEN env. */

@@ -20,6 +20,7 @@
 
 import pino from 'pino';
 import * as Sentry from '@sentry/node';
+import { observeHttpRequest } from './runtime-metrics';
 
 const isProd = process.env.NODE_ENV === 'production';
 const sentryDsn = process.env.SENTRY_DSN ?? '';
@@ -144,6 +145,7 @@ export function requestLogger() {
     res.on('finish', () => {
       const dur = Date.now() - t0;
       const status = res.statusCode;
+      observeHttpRequest(req.method, req.path, status, dur);
       const fn = status >= 500 ? 'error' : status >= 400 ? 'warn' : 'info';
       // Пропускаем /health и static — иначе спам
       if (req.path === '/health' || req.path === '/api/health') return;

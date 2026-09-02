@@ -16,6 +16,7 @@ import type { PushService } from "./push";
 import type { PoolClient } from "pg";
 import { log } from "./logger";
 import { canonicalChatId } from "./account-link";
+import { consumeSharedTokenBucket } from "./shared-state";
 
 type Queryable = Pick<PoolClient, "query">;
 
@@ -50,23 +51,39 @@ const MAX_TAPS_PER_REQ = 600;
 const MAX_TAP_FINGERS = 4;
 const MAX_TAPS_PER_FINGER_PER_SEC = 10;
 const MAX_TAPS_PER_SEC = MAX_TAP_FINGERS * MAX_TAPS_PER_FINGER_PER_SEC;
-const TAP_BUCKET_BURST_SEC = 2;
-const tapBuckets = new Map<number, { tokens: number; ts: number }>();
-function takeTapAllowance(chatId: number, requested: number): number {
+// Клиент синхронизирует тапы раз в 5 секунд. Ёмкость должна вмещать честную
+// пачку за этот интервал плюс сетевой джиттер, сохраняя средний предел 40 тап/с.
+const TAP_BUCKET_BURST_SEC = 6;
+const tapBuckets = new Map<number, { tokens: number; ts: number; lastIdentity?: string; lastAccepted?: number }>();
+function takeTapAllowance(chatId: number, requested: number, requestIdentity = ""): number {
   const want = Math.max(0, Math.min(MAX_TAPS_PER_REQ, Math.floor(requested)));
   if (want <= 0) return 0;
   const now = Date.now();
   const cap = MAX_TAPS_PER_SEC * TAP_BUCKET_BURST_SEC;
   const prev = tapBuckets.get(chatId) || { tokens: cap, ts: now };
+  if (requestIdentity && prev.lastIdentity === requestIdentity) return Math.max(0, Number(prev.lastAccepted) || 0);
   const elapsed = Math.max(0, (now - prev.ts) / 1000);
   const tokens = Math.min(cap, prev.tokens + elapsed * MAX_TAPS_PER_SEC);
   const take = Math.min(want, Math.floor(tokens));
-  tapBuckets.set(chatId, { tokens: tokens - take, ts: now });
+  tapBuckets.set(chatId, { tokens: tokens - take, ts: now, lastIdentity: requestIdentity || undefined, lastAccepted: take });
   if (tapBuckets.size > 10000) {
     for (const [id, b] of tapBuckets) if (now - b.ts > 10 * 60_000) tapBuckets.delete(id);
     if (tapBuckets.size > 10000) tapBuckets.delete(tapBuckets.keys().next().value!);
   }
   return take;
+}
+
+async function takeTapAllowanceShared(chatId: number, requested: number, requestIdentity: string): Promise<number> {
+  const want = Math.max(0, Math.min(MAX_TAPS_PER_REQ, Math.floor(requested)));
+  if (want <= 0) return 0;
+  const shared = await consumeSharedTokenBucket(
+    `clicker-taps:${chatId}`,
+    want,
+    MAX_TAPS_PER_SEC,
+    MAX_TAPS_PER_SEC * TAP_BUCKET_BURST_SEC,
+    requestIdentity,
+  );
+  return shared === null ? takeTapAllowance(chatId, want, requestIdentity) : shared;
 }
 const PASSIVE_CAP_HOURS = 3;
 export interface PassiveSettlement { earned: number; carry: number }
@@ -466,6 +483,34 @@ export interface ClickerState {
   acceptedTaps?: number;
 }
 
+/** Минимальный ответ горячего tap-маршрута — без карточек, голубей и полного HUD. */
+export interface TapReceipt {
+  compactTap: true;
+  revision: number;
+  balance: number;
+  totalEarned: number;
+  energy: number;
+  energyMax: number;
+  taps: number;
+  acceptedTaps: number;
+  earned: number;
+  duplicate: boolean;
+  bankMult?: number;
+  serverTime: number;
+}
+
+export function tapSessionReplay(
+  lastSequence: number,
+  incomingSequence: number,
+  lastAccepted: number,
+  lastEarned: number,
+): { acceptedTaps: number; earned: number } | null {
+  if (incomingSequence > lastSequence) return null;
+  return incomingSequence === lastSequence
+    ? { acceptedTaps: Math.max(0, Math.floor(lastAccepted)), earned: Math.max(0, Math.floor(lastEarned)) }
+    : { acceptedTaps: 0, earned: 0 };
+}
+
 export async function initClickerSchema(): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS clicker_state (
@@ -555,6 +600,19 @@ export async function initClickerSchema(): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS clicker_tap_runs_created_idx ON clicker_tap_runs (created_at);
     DELETE FROM clicker_tap_runs WHERE created_at < NOW() - INTERVAL '2 days';
+    -- Новые клиенты хранят одну строку на открытую игровую сессию вместо одной
+    -- строки на каждую пачку тапов. Это ограничивает рост таблицы при всплеске.
+    CREATE TABLE IF NOT EXISTS clicker_tap_sessions (
+      chat_id BIGINT NOT NULL,
+      session_id TEXT NOT NULL,
+      last_seq BIGINT NOT NULL DEFAULT 0,
+      last_accepted INT NOT NULL DEFAULT 0,
+      last_earned BIGINT NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (chat_id, session_id)
+    );
+    CREATE INDEX IF NOT EXISTS clicker_tap_sessions_updated_idx ON clicker_tap_sessions (updated_at);
+    DELETE FROM clicker_tap_sessions WHERE updated_at < NOW() - INTERVAL '2 days';
     -- Глобальные значения игры (key→ts): гейт чемпиона «1 раз в год на всех».
     CREATE TABLE IF NOT EXISTS game_globals (key TEXT PRIMARY KEY, ts TIMESTAMPTZ, val TEXT);
     CREATE TABLE IF NOT EXISTS clicker_cards (
@@ -638,7 +696,19 @@ export async function initClickerSchema(): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS clicker_week_player_stats_week_idx ON clicker_week_player_stats (week_key, points DESC);
     CREATE INDEX IF NOT EXISTS clicker_top_idx ON clicker_state (total_earned DESC);
+    CREATE INDEX IF NOT EXISTS clicker_season_rank_idx
+      ON clicker_state (week_key, ((total_earned - week_base)) DESC, chat_id)
+      WHERE admin_blocked=FALSE;
   `);
+}
+
+/** Уборка короткоживущей идемпотентности без зависимости от рестартов/миграций. */
+export async function cleanupTapDedupe(): Promise<{ legacy: number; sessions: number }> {
+  const [legacy, sessions] = await Promise.all([
+    pool.query(`DELETE FROM clicker_tap_runs WHERE created_at < NOW() - INTERVAL '2 days'`),
+    pool.query(`DELETE FROM clicker_tap_sessions WHERE updated_at < NOW() - INTERVAL '2 days'`),
+  ]);
+  return { legacy: legacy.rowCount ?? 0, sessions: sessions.rowCount ?? 0 };
 }
 
 /** Полностью удаляет игровой профиль «Котик Комбат» и связанную аналитику.
@@ -971,6 +1041,141 @@ export async function getClicker(chatId: number): Promise<ClickerState> {
     await client.query("COMMIT");
     return st;
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+}
+
+/**
+ * Горячий путь для новых клиентов. Пассивный доход намеренно не фиксируется на
+ * каждом tap-батче: его часы отдельны (`passive_updated_at`) и будут корректно
+ * рассчитаны при следующем полном чтении/покупке. Здесь нужны только поля тапа.
+ */
+export async function tapClickerFast(
+  chatId: number,
+  taps: number,
+  sessionId: string,
+  sequence: number,
+): Promise<TapReceipt> {
+  const want = Math.max(0, Math.min(MAX_TAPS_PER_REQ, Math.floor(taps)));
+  const sid = /^[a-zA-Z0-9_-]{8,80}$/.test(sessionId) ? sessionId : "";
+  const seq = Math.max(0, Math.floor(sequence));
+  if (!sid || seq <= 0) throw new Error("bad_tap_identity");
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    let selected = await client.query(
+      `SELECT balance, total_earned, taps, energy, energy_limit_level,
+              energy_updated_at, energy_carry, updated_at, multitap_level,
+              turbo_until, prestige, squad, state_revision, admin_blocked
+         FROM clicker_state WHERE chat_id=$1 FOR UPDATE`,
+      [chatId],
+    );
+    if (!selected.rows[0]) {
+      await client.query(`INSERT INTO clicker_state (chat_id) VALUES ($1) ON CONFLICT (chat_id) DO NOTHING`, [chatId]);
+      selected = await client.query(
+        `SELECT balance, total_earned, taps, energy, energy_limit_level,
+                energy_updated_at, energy_carry, updated_at, multitap_level,
+                turbo_until, prestige, squad, state_revision, admin_blocked
+           FROM clicker_state WHERE chat_id=$1 FOR UPDATE`,
+        [chatId],
+      );
+    }
+    const r = selected.rows[0];
+    if (!r) throw new Error("clicker_state_unavailable");
+    if (r.admin_blocked) throw new Error("account_blocked");
+
+    const now = Date.now();
+    const energyMax = energyMaxFor(Number(r.energy_limit_level));
+    const energySecs = Math.max(0, (now - new Date(r.energy_updated_at || r.updated_at).getTime()) / 1000);
+    const energySettlement = settleEnergyRegeneration(
+      Number(r.energy),
+      energyMax,
+      energySecs,
+      Number(r.energy_carry || 0),
+    );
+
+    const previous = await client.query(
+      `SELECT last_seq, last_accepted, last_earned
+         FROM clicker_tap_sessions WHERE chat_id=$1 AND session_id=$2`,
+      [chatId, sid],
+    );
+    const replay = previous.rows[0]
+      ? tapSessionReplay(
+        Number(previous.rows[0].last_seq),
+        seq,
+        Number(previous.rows[0].last_accepted || 0),
+        Number(previous.rows[0].last_earned || 0),
+      )
+      : null;
+    if (replay) {
+      await client.query("COMMIT");
+      return {
+        compactTap: true,
+        revision: Number(r.state_revision || 0),
+        balance: Number(r.balance),
+        totalEarned: Number(r.total_earned),
+        energy: energySettlement.energy,
+        energyMax,
+        taps: Number(r.taps || 0),
+        acceptedTaps: replay.acceptedTaps,
+        earned: replay.earned,
+        duplicate: true,
+        serverTime: now,
+      };
+    }
+
+    const energyCan = Math.floor(energySettlement.energy / TAP_COST);
+    const can = await takeTapAllowanceShared(chatId, Math.min(want, energyCan), `${sid}:${seq}`);
+    const turbo = r.turbo_until && new Date(r.turbo_until).getTime() > now ? TURBO_MULT : 1;
+    const previousTaps = Number(r.taps || 0);
+    const crits = sweetCritsIn(previousTaps, can);
+    const bankMult = (await squadBankActive(r.squad || null, client)) ? SQUAD_BANK_MULT : 1;
+    const baseTapGain = tapUnitGain(perTapFor(Number(r.multitap_level)), turbo, gainMult(Number(r.prestige)), bankMult);
+    const earned = (can + crits * (SWEET_TAP_MULT - 1) + comboMilestonesIn(previousTaps, can)) * baseTapGain;
+    const balance = Number(r.balance) + earned;
+    const totalEarned = Number(r.total_earned) + earned;
+    const totalTaps = previousTaps + can;
+    const energy = energySettlement.energy - can * TAP_COST;
+
+    const updated = await client.query(
+      `UPDATE clicker_state SET
+         balance=$2, total_earned=$3, taps=$4, energy=$5,
+         energy_carry=$6, energy_updated_at=NOW(), updated_at=NOW(),
+         state_revision=state_revision+1
+       WHERE chat_id=$1 RETURNING state_revision`,
+      [chatId, balance, totalEarned, totalTaps, energy, energySettlement.carry],
+    );
+    await client.query(
+      `INSERT INTO clicker_tap_sessions
+         (chat_id, session_id, last_seq, last_accepted, last_earned, updated_at)
+       VALUES ($1,$2,$3,$4,$5,NOW())
+       ON CONFLICT (chat_id, session_id) DO UPDATE SET
+         last_seq=EXCLUDED.last_seq,
+         last_accepted=EXCLUDED.last_accepted,
+         last_earned=EXCLUDED.last_earned,
+         updated_at=NOW()`,
+      [chatId, sid, seq, can, earned],
+    );
+    await client.query("COMMIT");
+    return {
+      compactTap: true,
+      revision: Number(updated.rows[0]?.state_revision || r.state_revision || 0),
+      balance,
+      totalEarned,
+      energy,
+      energyMax,
+      taps: totalTaps,
+      acceptedTaps: can,
+      earned,
+      duplicate: false,
+      bankMult,
+      serverTime: now,
+    };
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function tapClicker(chatId: number, taps: number, _clientComboBonus = 0, requestId = ""): Promise<ClickerState> {

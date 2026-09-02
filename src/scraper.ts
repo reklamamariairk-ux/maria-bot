@@ -369,7 +369,15 @@ export async function scrapeCatalog(): Promise<Product[]> {
 
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   const data: CatalogData = { updated: new Date().toISOString(), products: all, source };
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf-8");
+  // Несколько API-процессов могут обновиться одновременно. Уникальный temp +
+  // atomic rename не даёт соседнему процессу прочитать наполовину записанный JSON.
+  const tempFile = `${DATA_FILE}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), "utf-8");
+    fs.renameSync(tempFile, DATA_FILE);
+  } finally {
+    if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+  }
   console.log(`✅ Каталог сохранён: ${all.length} позиций (source=${source})`);
 
   return all;

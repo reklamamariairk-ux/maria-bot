@@ -11,6 +11,14 @@ export const pool = new Pool({
   keepAliveInitialDelayMillis: 10_000,
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 5_000,
+  // Не даём одному тяжёлому запросу удерживать дефицитное соединение бесконечно.
+  statement_timeout: Math.max(1_000, Math.min(60_000, Number(process.env.PG_STATEMENT_TIMEOUT_MS) || 15_000)),
+  query_timeout: Math.max(1_000, Math.min(65_000, Number(process.env.PG_QUERY_TIMEOUT_MS) || 20_000)),
+});
+
+pool.on("error", (error) => {
+  // Ошибка idle-клиента не должна превращаться в необработанное событие EventEmitter.
+  console.error("[DB] idle client error", error.message);
 });
 
 export async function initDb() {

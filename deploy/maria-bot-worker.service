@@ -1,0 +1,27 @@
+[Unit]
+Description=Maria Bot background worker
+After=network-online.target postgresql.service pgbouncer.service redis-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=maria
+Group=maria
+WorkingDirectory=/opt/maria-bot-russia
+EnvironmentFile=/opt/maria-bot-russia/.env
+Environment=NODE_ENV=production
+Environment=PROCESS_ROLE=worker
+Environment=RUN_SCHEMA_INIT=0
+Environment=PURCHASE_SYNC_WORKER=true
+Environment=PG_POOL_MAX=6
+ExecStart=/usr/local/bin/node /opt/maria-bot-russia/dist/index.js
+Restart=always
+RestartSec=3
+TimeoutStopSec=20
+KillSignal=SIGTERM
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=/tmp /opt/maria-bot-russia/data
+
+[Install]
+WantedBy=multi-user.target

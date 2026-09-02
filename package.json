@@ -5,13 +5,15 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
+    "migrate": "node dist/migrate.js",
     "start": "node dist/index.js",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "lint": "eslint src --ext .ts",
+    "load:clicker": "node scripts/load/clicker-load.mjs",
     "test": "vitest run"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=24.0.0"
   },
   "dependencies": {
     "@sentry/node": "^10.53.1",
@@ -24,13 +26,14 @@
     "node-cron": "^4.2.1",
     "pg": "^8.20.0",
     "pino": "^10.3.1",
+    "redis": "^5.12.1",
     "sharp": "^0.35.3"
   },
   "devDependencies": {
     "@types/cheerio": "^0.22.35",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
-    "@types/node": "^20.12.7",
+    "@types/node": "^24.13.3",
     "@types/node-cron": "^3.0.11",
     "@types/pg": "^8.20.0",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
@@ -39,6 +42,6 @@
     "pino-pretty": "^13.1.3",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.4.5",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }

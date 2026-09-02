@@ -5,7 +5,7 @@
  * POST /api/clicker/boost {type:turbo|energy} · GET /api/clicker/top
  */
 import { Router } from "express";
-import { getClicker, tapClicker, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, getAchievements, getRewards, redeemReward, claimBonus, openChest, openCase, getMilestones, claimMilestone, syncPurchaseBonus, migrateGuest, redeemCode, getSquads, joinSquad, squadBankStatus, donateSquadBank, createSquad, joinSquadByCode, requestJoinSquad, listSquadRequests, decideSquadRequest, prestigeReset, welcomePromoShown, markWelcomePromoShown, markOnboarded, getFtue, claimFtue, getSquadMembers, deleteClickerProfile } from "../clicker";
+import { getClicker, tapClicker, tapClickerFast, buyClicker, claimDaily, boostClicker, getTop, registerRef, getTasks, claimTask, claimCombo, getAchievements, getRewards, redeemReward, claimBonus, openChest, openCase, getMilestones, claimMilestone, syncPurchaseBonus, migrateGuest, redeemCode, getSquads, joinSquad, squadBankStatus, donateSquadBank, createSquad, joinSquadByCode, requestJoinSquad, listSquadRequests, decideSquadRequest, prestigeReset, welcomePromoShown, markWelcomePromoShown, markOnboarded, getFtue, claimFtue, getSquadMembers, deleteClickerProfile } from "../clicker";
 import { rateLimit, requireAdminToken } from "../middleware";
 import { requireTgUser as requireAnyTgUser, getTgUser, getUser } from "../auth";
 import { clearGameAccessCache, requireGameUser as requireTgUser } from "../game-auth";
@@ -94,11 +94,25 @@ router.post("/api/clicker/onboarded", requireTgUser, rateLimit(30), async (req, 
 });
 
 router.post("/api/clicker/tap", requireTgUser, rateLimit(120), async (req, res) => {
-  const u = getTgUser(req)!; const body = req.body as { taps?: number; comboBonus?: number; requestId?: string };
+  const u = getTgUser(req)!; const body = req.body as {
+    taps?: number;
+    comboBonus?: number;
+    requestId?: string;
+    compact?: boolean;
+    sessionId?: string;
+    sequence?: number;
+  };
   const taps = Number(body.taps) || 0; const comboBonus = Number(body.comboBonus) || 0;
   const requestId = typeof body.requestId === "string" && /^[a-zA-Z0-9_-]{8,80}$/.test(body.requestId) ? body.requestId : "";
   try {
-    const state = await tapClicker(u.id, taps, comboBonus, requestId);
+    const compact = body.compact === true
+      && typeof body.sessionId === "string"
+      && /^[a-zA-Z0-9_-]{8,80}$/.test(body.sessionId)
+      && Number.isSafeInteger(Number(body.sequence))
+      && Number(body.sequence) > 0;
+    const state = compact
+      ? await tapClickerFast(u.id, taps, body.sessionId!, Number(body.sequence))
+      : await tapClicker(u.id, taps, comboBonus, requestId);
     res.json(state);
     if (!state.duplicate && Number(state.acceptedTaps) > 0) trackActivity(u.id, { taps: Number(state.acceptedTaps) });
   } catch (e) { log.error({ err: e, chatId: u.id }, "[tap]"); res.status(500).json({ error: "internal" }); }

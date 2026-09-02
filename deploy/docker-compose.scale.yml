@@ -1,0 +1,51 @@
+services:
+  maria-bot:
+    image: maria-maria-bot-scale
+    environment:
+      PORT: "3000"
+      NODE_ENV: production
+      PROCESS_ROLE: api
+      RUN_SCHEMA_INIT: "0"
+      PURCHASE_SYNC_WORKER: "false"
+      REDIS_URL: redis://maria-bot-redis:6379
+      PG_POOL_MAX: "12"
+      MAX_INFLIGHT_REQUESTS: "200"
+    depends_on:
+      maria-bot-redis:
+        condition: service_healthy
+
+  maria-bot-worker:
+    image: maria-maria-bot-scale
+    container_name: maria-bot-worker
+    restart: unless-stopped
+    env_file: ./.env-files/bot.env
+    environment:
+      NODE_ENV: production
+      PROCESS_ROLE: worker
+      RUN_SCHEMA_INIT: "0"
+      PURCHASE_SYNC_WORKER: "true"
+      PG_POOL_MAX: "6"
+    networks:
+      - proxy
+
+  maria-bot-redis:
+    image: redis:7-alpine
+    container_name: maria-bot-redis
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - 128mb
+      - --maxmemory-policy
+      - allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - proxy

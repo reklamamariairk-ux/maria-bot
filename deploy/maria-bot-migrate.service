@@ -1,0 +1,15 @@
+[Unit]
+Description=Maria Bot database migration
+After=network-online.target postgresql.service pgbouncer.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=maria
+Group=maria
+WorkingDirectory=/opt/maria-bot-russia
+EnvironmentFile=/opt/maria-bot-russia/.env
+Environment=NODE_ENV=production
+ExecStart=/usr/local/bin/node /opt/maria-bot-russia/dist/migrate.js
+NoNewPrivileges=true
+ProtectSystem=full

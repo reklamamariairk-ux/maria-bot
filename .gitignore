@@ -3,5 +3,9 @@ node_modules/
 *.log
 data/catalog.json
 
-# Локальные dev-инструменты (Playwright audits + screenshots)
-scripts/
+# Локальные dev-инструменты (Playwright audits + screenshots). Production load
+# scenario is the only script intentionally versioned here.
+scripts/*
+!scripts/load/
+scripts/load/*
+!scripts/load/clicker-load.mjs

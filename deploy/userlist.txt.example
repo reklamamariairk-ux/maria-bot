@@ -1,0 +1,5 @@
+# Replace placeholders on the server. Never commit the real password/hash.
+# SCRAM secret can be copied from PostgreSQL role metadata by an administrator.
+"maria_app" "SCRAM-SHA-256$<iterations>:<salt>$<stored-key>:<server-key>"
+"pgbouncer_admin" "SCRAM-SHA-256$<iterations>:<salt>$<stored-key>:<server-key>"
+"pgbouncer_stats" "SCRAM-SHA-256$<iterations>:<salt>$<stored-key>:<server-key>"

@@ -246,6 +246,7 @@
   // при включении Машей вернуть витрину из git-истории (catclick v122).
 
   let ov, audio, raf, lastTs = 0, pending = 0, pendingComboBonus = 0, pendingTapGain = 0, pendingTapEnergy = 0, tapsInflight = 0, tapsInflightAccount = '', tapAccount = '', tapFlushPromise = null, tapRetryBatch = null, syncT = 0, curLevel = 1, tab = 'cat';
+  const TAP_SYNC_INTERVAL = 5;
   // Меняется при каждом реальном открытии/закрытии. Асинхронный ответ от уже
   // закрытого экземпляра не должен показывать попап в следующей сессии.
   let overlaySession = 0;
@@ -488,6 +489,10 @@
       ? window.crypto.randomUUID().replace(/-/g, '')
       : (Date.now().toString(36) + '_' + Math.random().toString(36).slice(2));
   }
+  // Одна строка идемпотентности на открытую игру, а не на каждый HTTP-батч.
+  // sequence увеличивается только для новой пачки; retry повторяет прежнее число.
+  const tapSessionId = clientRequestId();
+  let tapSequence = 0;
   function accountStorageKey(base) {
     let account = 'unknown';
     try {
@@ -551,6 +556,35 @@
       st.totalEarned = Number(st.totalEarned) + pendingGain + retryGain;
       st.energy = Math.max(0, Number(st.energy) - pendingEnergy - retryEnergy);
     }
+    return true;
+  }
+  function applyCompactTap(receipt, batch) {
+    if (!st || !receipt || receipt.compactTap !== true || receipt.error) return false;
+    const revision = Number(receipt.revision);
+    if (Number.isFinite(revision)) {
+      if (revision < appliedStateRevision) return false;
+      appliedStateRevision = revision;
+      st.revision = revision;
+    }
+    // UI уже оптимистично начислил всю пачку. Сервер возвращает реальную
+    // дельту: корректируем расхождение, не затирая пассивный доход и новые тапы,
+    // которые появились, пока запрос был в полёте.
+    const predicted = Number(batch && batch.gain || 0);
+    const earned = Number(receipt.earned || 0);
+    const correction = earned - predicted;
+    st.balance = Number(st.balance || 0) + correction;
+    st.totalEarned = Number(st.totalEarned || 0) + correction;
+    st.taps = Math.max(0, Number(receipt.taps || 0));
+    if (Number(receipt.bankMult) >= 1) st.bankMult = Number(receipt.bankMult);
+
+    // Серверное значение энергии относится к моменту обработки. Добавляем
+    // короткий сетевой интервал и вычитаем новые локальные тапы после этой пачки.
+    const maxEnergy = Math.max(0, Number(receipt.energyMax || st.energyMax || 0));
+    const sinceServer = Math.max(0, (Date.now() - Number(receipt.serverTime || Date.now())) / 1000);
+    const pendingEnergyNow = Math.max(0, Number(pendingTapEnergy || 0));
+    const serverEnergyNow = Math.min(maxEnergy, Number(receipt.energy || 0) + REGEN * sinceServer);
+    st.energyMax = maxEnergy || st.energyMax;
+    st.energy = Math.max(0, serverEnergyNow - pendingEnergyNow);
     return true;
   }
   // Анти-даблтап: пока летит запрос операции этого типа — повторные тапы игнорируются
@@ -750,6 +784,8 @@
         gain: pendingTapGain,
         energy: pendingTapEnergy,
         requestId: clientRequestId(),
+        sessionId: tapSessionId,
+        sequence: ++tapSequence,
         account,
       };
       tapRetryBatch = null;
@@ -757,13 +793,14 @@
       const n = batch.n;
       tapsInflight += n; tapsInflightAccount = batch.account || account;
       try {
-        const d = await stateApi('/api/clicker/tap', { method: 'POST', body: JSON.stringify({ taps: n, requestId: batch.requestId }), keepalive: true });
+        const d = await stateApi('/api/clicker/tap', { method: 'POST', body: JSON.stringify({ taps: n, requestId: batch.requestId, compact: true, sessionId: batch.sessionId, sequence: batch.sequence }), keepalive: true });
         if (!d || d.error) throw new Error('tap_sync_failed');
         if ((batch.account || account) !== accountStorageKey('ck_state_context')) return;
         // Пока запрос был в пути, игрок мог продолжить тапать. Ответ сервера уже
         // содержит отправленный батч, а ещё не отправленные тапы возвращаем поверх
         // него, иначе баланс визуально «откатывается» каждые 1,6 секунды.
-        applyServerState(d);
+        if (d.compactTap === true) applyCompactTap(d, batch);
+        else applyServerState(d);
       } catch (_) {
         // Не смешиваем неизвестную пачку с новыми тапами: повтор обязан уйти с тем
         // же количеством и requestId, иначе сервер не сможет отличить хвост от дубля.
@@ -3247,7 +3284,7 @@
       if (st.energy < st.energyMax) st.energy = Math.min(st.energyMax, st.energy + REGEN * dt);
       if (st.profitPerHour > 0) { const inc = st.profitPerHour / 3600 * dt * passiveIncomeMult(); st.balance += inc; st.totalEarned += inc; }
       if (combo && performance.now() - comboT > 700) { combo = 0; ov.querySelector('#ck-combo').classList.remove('show'); }
-      syncT += dt; if (syncT > 1.6) { syncT = 0; if (authed()) flush(); else st = guestDerive(); }
+      syncT += dt; if (syncT > TAP_SYNC_INTERVAL) { syncT = 0; if (authed()) flush(); else st = guestDerive(); }
       if (tab === 'cat') {
         renderTop2();
         // Полный HUD содержит SVG, подсказки, кнопки и проверки вкладок. Раньше он

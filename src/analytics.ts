@@ -19,6 +19,19 @@ import { LEAGUES } from "./clicker";
 // Сутки — по Иркутску (UTC+8), как и вся остальная игра.
 const irkToday = (): string => new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
 
+interface PendingActivity {
+  chatId: number;
+  day: string;
+  taps: number;
+  opens: number;
+  earned: number;
+}
+
+let activityBuffer = new Map<string, PendingActivity>();
+let activityFlush: Promise<void> | null = null;
+const ACTIVITY_FLUSH_MS = 5_000;
+const ACTIVITY_BATCH_MAX = 2_000;
+
 export async function initAnalyticsSchema(): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS clicker_activity (
@@ -91,25 +104,81 @@ export async function markFunnelSent(chatId: number, tag: string): Promise<void>
     .catch((e) => log.warn({ err: e, tag }, "[funnel dedup]"));
 }
 
-/** Fire-and-forget дневная активность (upsert по игроку+дню). */
+/**
+ * Дневная активность буферизуется: раньше каждый tap-батч создавал отдельный
+ * PostgreSQL upsert и практически удваивал write-нагрузку горячего маршрута.
+ */
 export function trackActivity(
   chatId: number,
   opts: { taps?: number; earned?: number; open?: boolean } = {}
 ): void {
   const { taps = 0, earned = 0, open = false } = opts;
-  pool
-    .query(
-      `INSERT INTO clicker_activity (chat_id, day, taps, opens, earned, last_seen)
-       VALUES ($1, $2, $3, $4, $5, NOW())
-       ON CONFLICT (chat_id, day) DO UPDATE SET
-         taps   = clicker_activity.taps + EXCLUDED.taps,
-         opens  = clicker_activity.opens + EXCLUDED.opens,
-         earned = clicker_activity.earned + EXCLUDED.earned,
-         last_seen = NOW()`,
-      [chatId, irkToday(), taps, open ? 1 : 0, earned]
-    )
-    .catch((e) => log.warn({ err: e }, "[analytics activity]"));
+  const day = irkToday();
+  const key = `${chatId}:${day}`;
+  const current = activityBuffer.get(key) || { chatId, day, taps: 0, opens: 0, earned: 0 };
+  current.taps += Math.max(0, Math.floor(Number(taps) || 0));
+  current.opens += open ? 1 : 0;
+  current.earned += Math.max(0, Math.floor(Number(earned) || 0));
+  activityBuffer.set(key, current);
+  if (activityBuffer.size >= ACTIVITY_BATCH_MAX) void flushActivity();
 }
+
+export function pendingActivityCount(): number {
+  return activityBuffer.size;
+}
+
+export async function flushActivity(): Promise<void> {
+  if (activityFlush) {
+    await activityFlush;
+    // Во время предыдущего INSERT могли прийти новые события. Это особенно
+    // важно на graceful shutdown: второго тика таймера уже не будет.
+    if (activityBuffer.size) return flushActivity();
+    return;
+  }
+  if (!activityBuffer.size) return;
+  const snapshot = activityBuffer;
+  activityBuffer = new Map();
+  activityFlush = (async () => {
+    const rows = [...snapshot.values()];
+    try {
+      await pool.query(
+        `INSERT INTO clicker_activity (chat_id, day, taps, opens, earned, last_seen)
+         SELECT a.chat_id, a.day, a.taps, a.opens, a.earned, NOW()
+         FROM UNNEST(
+           $1::bigint[], $2::text[], $3::bigint[], $4::int[], $5::bigint[]
+         ) AS a(chat_id, day, taps, opens, earned)
+         ON CONFLICT (chat_id, day) DO UPDATE SET
+           taps   = clicker_activity.taps + EXCLUDED.taps,
+           opens  = clicker_activity.opens + EXCLUDED.opens,
+           earned = clicker_activity.earned + EXCLUDED.earned,
+           last_seen = NOW()`,
+        [
+          rows.map((row) => row.chatId),
+          rows.map((row) => row.day),
+          rows.map((row) => row.taps),
+          rows.map((row) => row.opens),
+          rows.map((row) => row.earned),
+        ],
+      );
+    } catch (error) {
+      // Аналитика не влияет на экономику. Возвращаем счётчики в текущий буфер,
+      // чтобы краткий сбой БД не терял весь интервал.
+      for (const row of rows) {
+        const key = `${row.chatId}:${row.day}`;
+        const current = activityBuffer.get(key) || { chatId: row.chatId, day: row.day, taps: 0, opens: 0, earned: 0 };
+        current.taps += row.taps;
+        current.opens += row.opens;
+        current.earned += row.earned;
+        activityBuffer.set(key, current);
+      }
+      log.warn({ err: error, rows: rows.length }, "[analytics activity batch]");
+    }
+  })().finally(() => { activityFlush = null; });
+  await activityFlush;
+}
+
+const activityTimer = setInterval(() => { void flushActivity(); }, ACTIVITY_FLUSH_MS);
+activityTimer.unref?.();
 
 /** T3: игроки, «уснувшие» между minDays и maxDays назад (для реактивации). */
 export async function getDormantPlayers(minDays: number, maxDays = 90): Promise<number[]> {

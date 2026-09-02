@@ -8,7 +8,7 @@ import crypto from "crypto";
 import cron from "node-cron";
 import { Bot, webhookCallback, InlineKeyboard, Keyboard } from "grammy";
 import { log, requestLogger, sentryExpressErrorHandler } from "./logger";
-import { rateLimit, requireAdminRole, requireAdminToken, safeEq } from "./middleware";
+import { concurrencyLimit, getInflightRequests, rateLimit, requireAdminRole, requireAdminToken, safeEq } from "./middleware";
 import sweetCheckRouter, { loadSweetCheckPrizes } from "./routes/sweet-check";
 import holidaysRouter from "./routes/holidays";
 import { createCatalogRouter } from "./routes/catalog";
@@ -38,22 +38,20 @@ import { createPigeonsRouter } from "./routes/pigeons";
 import { pool as _dbPoolForRouters } from "./db";
 import userRouter from "./routes/user";
 import gameRouter from "./routes/game";
-import appAuthRouter, { initAppAuthSchema, attachAppLoginChat, completeAppLogin } from "./routes/app-auth";
-import { initAccountLinkSchema } from "./account-link";
+import appAuthRouter, { attachAppLoginChat, completeAppLogin } from "./routes/app-auth";
 import adminGameRouter from "./routes/admin-game";
 import adminSystemRouter from "./routes/admin-system";
 import clickerRouter from "./routes/clicker";
-import { initClickerSchema, initSquadBankSchema, initCustomSquadSchema, joinSquadByCode, setClickerPushService, registerRef, closeWeeklySeason, pushWeeklyWinners, getRefOrderCandidates, markRefOrderRewarded } from "./clicker";
-import { initPigeonSchema, RACE_ENABLED, closeRaceWeek, expireTrades } from "./pigeons";
-import { initAnalyticsSchema, trackEvent, wasFunnelSent, markFunnelSent, getDormantPlayers } from "./analytics";
-import { initClickerPushSchema, runClickerRetentionPush } from "./clicker-push";
-import { initBonusSchema, startBonusWorker } from "./bonus1c";
+import { cleanupTapDedupe, joinSquadByCode, setClickerPushService, registerRef, closeWeeklySeason, pushWeeklyWinners, getRefOrderCandidates, markRefOrderRewarded } from "./clicker";
+import { RACE_ENABLED, closeRaceWeek, expireTrades } from "./pigeons";
+import { flushActivity, pendingActivityCount, trackEvent, wasFunnelSent, markFunnelSent, getDormantPlayers } from "./analytics";
+import { runClickerRetentionPush } from "./clicker-push";
+import { startBonusWorker } from "./bonus1c";
 import cartRouter from "./routes/cart";
 import purchasesRouter from "./routes/purchases";
-import { initPurchaseSchema, runPurchaseSync, refreshAutoPurchaseTasks, setPurchaseNotifier } from "./purchase1c";
+import { runPurchaseSync, refreshAutoPurchaseTasks, setPurchaseNotifier } from "./purchase1c";
 import { scrapeCatalog, loadCatalog, catalogAge, reloadDietaryOverrides, detectDietary, Product } from "./scraper";
 import {
-  initDb,
   addSubscriber,
   setSubscriberSourceOnce,
   getAllSubscribers,
@@ -82,7 +80,6 @@ import {
 } from "./db";
 import { claimOrderRequest, lookupOrderRequest, completeOrderRequest, releaseOrderRequest, recordAppOrderOwner, findUserReward, markUserRewardUsed, releaseUserReward, finalizeUserRewardOrder, recordPromoUseGuarded, releasePromoUse, finalizePromoUseOrder, wasNotificationSent } from "./db";
 import {
-  initClubSchema,
   getBalance,
   isPhoneVerified,
   verifyPhone,
@@ -97,6 +94,9 @@ import { getHolidaysToPushToday, HOLIDAYS } from "./holidays";
 import { validatePromoSync, reloadPromoCodes } from "./promo";
 import { cleanupOldSelfies } from "./selfie-cake";
 import { isValidDayMonth, normalizeDeliveryDate } from "./date-utils";
+import { initSchema } from "./schema";
+import { closeSharedState, sharedStateHealth } from "./shared-state";
+import { prometheusMetrics } from "./runtime-metrics";
 
 // ─── Env ────────────────────────────────────────────────────────────────────
 const BOT_TOKEN    = process.env.BOT_TOKEN    ?? "";
@@ -111,6 +111,17 @@ const GAME_PUBLIC_URL = process.env.GAME_PUBLIC_URL ?? MINI_APP_URL;
 const PURCHASE_SYNC_WORKER = !/^(?:0|false|no|off)$/i.test(
   (process.env.PURCHASE_SYNC_WORKER ?? "true").trim()
 );
+type ProcessRole = "all" | "api" | "worker";
+const requestedRole = (process.env.PROCESS_ROLE || "").trim().toLowerCase();
+const PROCESS_ROLE: ProcessRole = requestedRole === "api" || requestedRole === "worker" || requestedRole === "all"
+  ? requestedRole
+  // Обратная совместимость с уже настроенным быстрым узлом: там worker sync
+  // выключен, поэтому без нового env он автоматически становится чистым API.
+  : (PURCHASE_SYNC_WORKER ? "all" : "api");
+const RUN_HTTP = PROCESS_ROLE !== "worker";
+const RUN_WORKERS = PROCESS_ROLE !== "api";
+const RUN_SCHEMA_INIT = !/^(?:0|false|no|off)$/i.test((process.env.RUN_SCHEMA_INIT ?? "true").trim());
+const MAX_INFLIGHT_REQUESTS = Math.max(20, Math.min(5_000, Number(process.env.MAX_INFLIGHT_REQUESTS) || 200));
 const ADMIN_IDS    = (process.env.ADMIN_IDS ?? "").split(",").map(Number).filter(Boolean);
 
 // Preview-режим (staging): если BOT_TOKEN пуст — поднимаем только HTTP-сервер
@@ -823,6 +834,7 @@ bot.on("message:text", async (ctx) => {
 
 // ─── Express ─────────────────────────────────────────────────────────────────
 const app = express();
+let httpServer: ReturnType<typeof app.listen> | null = null;
 
 // За Caddy / Cloudflare. Один hop — Caddy. Нужно чтобы req.protocol/req.ip
 // читались из X-Forwarded-*. Без этого Secure-cookies не выставятся, плюс
@@ -879,6 +891,7 @@ app.use((req, res, next) => {
 });
 // Structured request log — reqId + duration + status, /health пропускается
 app.use(requestLogger());
+app.use(concurrencyLimit(MAX_INFLIGHT_REQUESTS));
 
 // rateLimit и requireAdminToken вынесены в `./middleware`
 // (см. волну рефакторинга #5). Импортируются ниже.
@@ -2535,9 +2548,64 @@ app.post("/api/admin/shops/reload", requireAdminToken, requireAdminRole("operato
 // Sweet Check (недели + призы) вынесены в src/routes/sweet-check.ts
 app.use(sweetCheckRouter);
 
-app.get("/health", (_req, res) =>
-  res.json({ status: "ok", catalog: catalog.length, partners: getPartnersMeta() })
-);
+app.get("/live", (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ status: "ok", role: PROCESS_ROLE, uptimeSec: Math.round(process.uptime()) });
+});
+
+app.get("/ready", async (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const dbStarted = Date.now();
+  try {
+    await Promise.race([
+      _dbPoolForRouters.query("SELECT 1"),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("readiness_db_timeout")), 2_000)),
+    ]);
+    const redis = await sharedStateHealth();
+    const ready = redis.ok;
+    res.status(ready ? 200 : 503).json({
+      status: ready ? "ready" : "degraded",
+      role: PROCESS_ROLE,
+      db: {
+        ok: true,
+        latencyMs: Date.now() - dbStarted,
+        total: _dbPoolForRouters.totalCount,
+        idle: _dbPoolForRouters.idleCount,
+        waiting: _dbPoolForRouters.waitingCount,
+      },
+      redis,
+      inflight: getInflightRequests(),
+      analyticsBuffered: pendingActivityCount(),
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: "not_ready",
+      role: PROCESS_ROLE,
+      db: { ok: false, latencyMs: Date.now() - dbStarted },
+      inflight: getInflightRequests(),
+    });
+  }
+});
+
+// Legacy endpoint для существующих внешних проверок. Балансировщик должен
+// использовать /live и /ready с разной семантикой.
+app.get("/health", (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ status: "ok", role: PROCESS_ROLE, catalog: catalog.length, partners: getPartnersMeta() });
+});
+
+app.get("/metrics", rateLimit(120), (req, res) => {
+  const configured = process.env.METRICS_TOKEN || "";
+  const supplied = req.header("x-metrics-token")
+    || String(req.header("authorization") || "").replace(/^Bearer\s+/i, "");
+  if (!configured) { res.status(404).end(); return; }
+  if (!safeEq(supplied, configured)) { res.status(403).end(); return; }
+  res.type("text/plain; version=0.0.4; charset=utf-8").send(prometheusMetrics(_dbPoolForRouters, {
+    role: PROCESS_ROLE,
+    inflight: getInflightRequests(),
+    analyticsBuffered: pendingActivityCount(),
+  }));
+});
 
 // Версия билда — для верификации, что новый код задеплоился
 const buildInfo = getBuildInfo();
@@ -2577,23 +2645,13 @@ async function sendBirthdayGreetings() {
 }
 
 async function main() {
-  await initDb();
-  await initClubSchema();
-  await initClickerSchema();
-  await initPigeonSchema();
-  await initAnalyticsSchema();
-  await initClickerPushSchema();
-  await initBonusSchema();
-  await initPurchaseSchema();
-  await initAppAuthSchema();
-  await initAccountLinkSchema();
-  await initSquadBankSchema();
-  await initCustomSquadSchema();
-  startBonusWorker();
+  if (RUN_SCHEMA_INIT) await initSchema();
+  else await _dbPoolForRouters.query("SELECT 1");
+  if (RUN_WORKERS) startBonusWorker();
 
   // Импорт чеков физических точек через защищённый прокси sales-dashboard.
   // До настройки PURCHASE_SALES_API/KEY задача безопасно ничего не делает.
-  if (PURCHASE_SYNC_WORKER) {
+  if (RUN_WORKERS && PURCHASE_SYNC_WORKER) {
     cron.schedule("*/15 * * * *", () => {
       runPurchaseSync().catch((e) => log.error({ err: e }, "[PURCHASE SYNC CRON]"));
     });
@@ -2613,12 +2671,17 @@ async function main() {
     groqKey: GROQ_KEY ? "set" : "MISSING",
     webhookUrl: WEBHOOK_URL || "(empty — long polling)",
     gameUrl: GAME_URL,
+    processRole: PROCESS_ROLE,
+    runHttp: RUN_HTTP,
+    runWorkers: RUN_WORKERS,
+    runSchemaInit: RUN_SCHEMA_INIT,
     purchaseSyncWorker: PURCHASE_SYNC_WORKER,
     port: PORT,
     previewMode: PREVIEW_MODE,
     sentry: process.env.SENTRY_DSN ? "enabled" : "disabled",
   }, "startup");
 
+  if (RUN_WORKERS) {
   // Ежедневные поздравления с днём рождения в 10:00 по Иркутску (UTC+8 = 02:00 UTC)
   cron.schedule("0 2 * * *", () => {
     sendBirthdayGreetings().catch((e) => console.error("[BIRTHDAY CRON]", e));
@@ -2702,6 +2765,12 @@ async function main() {
   });
   console.log("[STARTUP] Pigeon-trades expire cron scheduled (daily 00:10 Irkutsk)");
 
+  cron.schedule("20 16 * * *", () => {
+    cleanupTapDedupe().then((removed) => log.info({ removed }, "[TAP DEDUPE CRON]"))
+      .catch((e) => log.error({ err: e }, "[TAP DEDUPE CRON]"));
+  });
+  console.log("[STARTUP] Tap-dedupe cleanup scheduled (daily 00:20 Irkutsk)");
+
   // Пуш победителям недели — понедельник 10:00 Иркутск (02:00 UTC), не в тихие часы.
   cron.schedule("0 2 * * 1", () => {
     pushWeeklyWinners(_pushService).catch((e) => log.error({ err: e }, "[WEEKLY PUSH CRON]"));
@@ -2730,16 +2799,21 @@ async function main() {
   } else {
     console.log("[STARTUP] PARTNERS_API not set — partners served from data/partners.json");
   }
+  } else {
+    console.log("[STARTUP] Background workers disabled on API role");
+  }
 
-  if (PREVIEW_MODE) {
+  if (!RUN_HTTP) {
+    log.info({ role: PROCESS_ROLE }, "worker process started without public HTTP listener");
+  } else if (PREVIEW_MODE) {
     // Staging preview: только Express, без TG-webhook и без bot.start().
     // Mini App + API работают; команды бота и push'и — нет (Telegram отвергнет
     // вызовы с dummy-токеном, ошибки проглатываются существующими try/catch).
-    app.listen(PORT, () => console.log(`🚀 Preview server on port ${PORT} (no Telegram bot)`));
+    httpServer = app.listen(PORT, () => console.log(`🚀 Preview server on port ${PORT} (no Telegram bot)`));
   } else if (WEBHOOK_URL) {
     const webhookPath = `/webhook/${BOT_TOKEN}`;
     app.use(webhookPath, webhookCallback(bot, "express"));
-    app.listen(PORT, async () => {
+    httpServer = app.listen(PORT, async () => {
       try {
         await bot.api.setWebhook(`${WEBHOOK_URL}${webhookPath}`);
         const info = await bot.api.getWebhookInfo();
@@ -2753,7 +2827,7 @@ async function main() {
       }
     });
   } else {
-    app.listen(PORT, () => console.log(`🚀 Server on port ${PORT} (long polling)`));
+    httpServer = app.listen(PORT, () => console.log(`🚀 Server on port ${PORT} (long polling)`));
     try {
       await bot.start();
     } catch (e) {
@@ -2776,3 +2850,30 @@ process.on("unhandledRejection", (reason) => {
 process.on("uncaughtException", (err) => {
   log.error({ err }, "uncaughtException");
 });
+
+let shuttingDown = false;
+async function shutdown(signal: string): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  log.info({ signal }, "graceful shutdown started");
+  const force = setTimeout(() => process.exit(1), 10_000);
+  force.unref?.();
+  try {
+    if (httpServer) {
+      await new Promise<void>((resolve) => httpServer!.close(() => resolve()));
+    }
+    try { bot.stop(); } catch { /* webhook/preview mode */ }
+    await flushActivity();
+    await closeSharedState();
+    await _dbPoolForRouters.end();
+    clearTimeout(force);
+    process.exit(0);
+  } catch (error) {
+    log.error({ err: error }, "graceful shutdown failed");
+    clearTimeout(force);
+    process.exit(1);
+  }
+}
+
+process.once("SIGTERM", () => { void shutdown("SIGTERM"); });
+process.once("SIGINT", () => { void shutdown("SIGINT"); });

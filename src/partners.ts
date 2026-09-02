@@ -39,11 +39,15 @@ function readDisk(): PartnersData | null {
 }
 
 function writeDisk(data: PartnersData): void {
+  const tempFile = `${DATA_FILE}.${process.pid}.${Date.now()}.tmp`;
   try {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf-8");
+    fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), "utf-8");
+    fs.renameSync(tempFile, DATA_FILE);
   } catch (e) {
     console.error("[PARTNERS] write error:", (e as Error).message);
+  } finally {
+    try { if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile); } catch {}
   }
 }
 
