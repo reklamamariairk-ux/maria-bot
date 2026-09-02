@@ -10,6 +10,9 @@ logfile = /var/log/postgresql/pgbouncer.log
 pidfile = /var/run/postgresql/pgbouncer.pid
 auth_type = scram-sha-256
 auth_file = /etc/pgbouncer/userlist.txt
+# node-postgres sends this option in the startup packet. PostgreSQL enforces
+# the same limit through ALTER ROLE; PgBouncer must ignore the duplicate.
+ignore_startup_parameters = statement_timeout
 
 # A transaction releases its PostgreSQL connection immediately after COMMIT.
 pool_mode = transaction
