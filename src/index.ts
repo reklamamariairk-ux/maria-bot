@@ -2813,7 +2813,7 @@ async function main() {
     // Mini App + API работают; команды бота и push'и — нет (Telegram отвергнет
     // вызовы с dummy-токеном, ошибки проглатываются существующими try/catch).
     httpServer = app.listen(PORT, () => console.log(`🚀 Preview server on port ${PORT} (no Telegram bot)`));
-  } else if (WEBHOOK_URL) {
+  } else if (WEBHOOK_URL && RUN_WORKERS) {
     const webhookPath = `/webhook/${BOT_TOKEN}`;
     app.use(webhookPath, webhookCallback(bot, "express"));
     httpServer = app.listen(PORT, async () => {
@@ -2829,6 +2829,10 @@ async function main() {
         log.error({ err: e }, "[STARTUP] Failed to set webhook");
       }
     });
+  } else if (WEBHOOK_URL) {
+    // API-реплики обслуживают Mini App, но не должны ходить в Telegram и
+    // переустанавливать webhook: это задача единственного worker-процесса.
+    httpServer = app.listen(PORT, () => console.log(`🚀 API server on port ${PORT} (webhook managed by worker)`));
   } else {
     httpServer = app.listen(PORT, () => console.log(`🚀 Server on port ${PORT} (long polling)`));
     try {

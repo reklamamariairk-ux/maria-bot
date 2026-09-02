@@ -24,6 +24,24 @@ import { observeHttpRequest } from './runtime-metrics';
 
 const isProd = process.env.NODE_ENV === 'production';
 const sentryDsn = process.env.SENTRY_DSN ?? '';
+const botToken = process.env.BOT_TOKEN ?? '';
+
+/** Не допускаем токен бота в URL/stack внешнего SDK в journald и Sentry. */
+export function redactTelegramToken(value: string): string {
+  let safe = value.replace(/(bot)?\d{6,}:[A-Za-z0-9_-]{20,}/g, (_match, prefix = '') => `${prefix}[REDACTED_TELEGRAM_TOKEN]`);
+  if (botToken) safe = safe.split(botToken).join('[REDACTED_TELEGRAM_TOKEN]');
+  return safe;
+}
+
+function safeErrorSerializer(error: Error): unknown {
+  const serialized = pino.stdSerializers.err(error) as Record<string, unknown> | undefined;
+  if (!serialized) return serialized;
+  const safe = { ...serialized };
+  for (const field of ['message', 'stack']) {
+    if (typeof safe[field] === 'string') safe[field] = redactTelegramToken(safe[field]);
+  }
+  return safe;
+}
 
 // ── Sentry init (opt-in через SENTRY_DSN) ─────────────────────────────────
 if (sentryDsn) {
@@ -36,6 +54,13 @@ if (sentryDsn) {
     // Не отправлять breadcrumbs для console.* (избегаем шума, у нас свой log)
     integrations: (defaults) => defaults.filter(i => i.name !== 'Console'),
     beforeSend(event) {
+      for (const value of event.exception?.values ?? []) {
+        if (value.value) value.value = redactTelegramToken(value.value);
+        for (const frame of value.stacktrace?.frames ?? []) {
+          if (frame.filename) frame.filename = redactTelegramToken(frame.filename);
+          if (frame.abs_path) frame.abs_path = redactTelegramToken(frame.abs_path);
+        }
+      }
       // Не шлём 4xx-ошибки бизнес-логики в Sentry (rate_limited, validation_error)
       const msg = String(event.message ?? event.exception?.values?.[0]?.value ?? '');
       if (/^(rate_limited|validation_error|forbidden|unauthorized)$/.test(msg)) return null;
@@ -62,7 +87,7 @@ const baseLog = pino({
   level: process.env.LOG_LEVEL ?? 'info',
   base: { service: 'maria-bot' },
   // Авто-форматирование ошибок: pino понимает поле `err: Error` и сериализует stack
-  serializers: { err: pino.stdSerializers.err },
+  serializers: { err: safeErrorSerializer },
   transport,
 });
 
