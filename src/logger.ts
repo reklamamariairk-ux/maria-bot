@@ -147,8 +147,15 @@ export function requestLogger() {
       const status = res.statusCode;
       observeHttpRequest(req.method, req.path, status, dur);
       const fn = status >= 500 ? 'error' : status >= 400 ? 'warn' : 'info';
-      // Пропускаем /health и static — иначе спам
-      if (req.path === '/health' || req.path === '/api/health') return;
+      // Liveness/readiness и статика могут давать тысячи запросов в минуту.
+      // Метрики выше сохраняем, но не превращаем stdout/journald в bottleneck.
+      const silentPath = req.path === '/health'
+        || req.path === '/api/health'
+        || req.path === '/live'
+        || req.path === '/ready'
+        || req.path === '/metrics'
+        || /\.[a-z0-9]{1,10}$/i.test(req.path);
+      if (silentPath) return;
       log[fn]({ reqId, method: req.method, path: req.path, status, dur }, 'http');
     });
     next();
